@@ -1,9 +1,9 @@
 use std::cmp::min;
 use std::sync::Arc;
-
+use clap::Parser;
 use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
 use nft_ingester::api::service::start_api;
-use nft_ingester::config::{init_logger, setup_config, ApiConfig};
+use nft_ingester::config::{init_logger, setup_config, ApiClapArgs, SynchronizerClapArgs};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_worker::JsonWorker;
@@ -25,17 +25,15 @@ use usecase::proofs::MaybeProofChecker;
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-pub const DEFAULT_ROCKSDB_PATH: &str = "./my_rocksdb";
-pub const DEFAULT_SECONDARY_ROCKSDB_PATH: &str = "./my_rocksdb_secondary";
-
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
+    let args = ApiClapArgs::parse();
+    init_logger(&args.log_level);
+
     tracing_subscriber::fmt::init();
     info!("Starting API server...");
-    let config: ApiConfig = setup_config("API_");
-    // init_logger(&config.get_log_level());
 
-    let guard = if config.run_profiling {
+    let guard = if args.is_run_profiling {
         Some(
             pprof::ProfilerGuardBuilder::default()
                 .frequency(100)
@@ -54,7 +52,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let json_downloader_metrics = Arc::new(JsonDownloaderMetricsConfig::new());
     json_downloader_metrics.register(&mut registry);
     tokio::spawn(async move {
-        match setup_metrics(registry, config.metrics_port).await {
+        match setup_metrics(registry, args.metrics_port).await {
             Ok(_) => {
                 info!("Setup metrics successfully")
             }
@@ -64,15 +62,10 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     });
 
-    let max_connections = config
-        .database_config
-        .get_max_postgres_connections()
-        .unwrap_or(250);
-    let min_connections = min(10, max_connections / 2);
     let pg_client = postgre_client::PgClient::new(
-        config.database_config.get_database_url()?.as_str(),
-        min_connections,
-        max_connections,
+        &args.pg_database_url,
+        args.pg_min_db_connections,
+        args.pg_max_db_connections,
         None,
         red_metrics.clone(),
     )
@@ -81,17 +74,9 @@ pub async fn main() -> Result<(), IngesterError> {
     let tasks = JoinSet::new();
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
-    let primary_storage_path = config
-        .rocks_db_path_container
-        .clone()
-        .unwrap_or(DEFAULT_ROCKSDB_PATH.to_string());
-    let secondary_storage_path = config
-        .rocks_db_secondary_path_container
-        .clone()
-        .unwrap_or(DEFAULT_SECONDARY_ROCKSDB_PATH.to_string());
     let storage = Storage::open_secondary(
-        &primary_storage_path,
-        &secondary_storage_path,
+        &args.rocks_db_path_container,
+        &args.rocks_db_secondary_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
@@ -100,20 +85,21 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let rocks_storage = Arc::new(storage);
 
-    let rpc_client = Arc::new(RpcClient::new(config.rpc_host));
+    let rpc_client = Arc::new(RpcClient::new(args.rpc_host.clone()));
     let account_balance_getter = Arc::new(AccountBalanceGetterImpl::new(rpc_client.clone()));
     let cloned_rocks_storage = rocks_storage.clone();
     let mut proof_checker = None;
-    if config.check_proofs {
+
+    if args.check_proofs {
         proof_checker = Some(Arc::new(MaybeProofChecker::new(
             rpc_client.clone(),
-            config.check_proofs_probability,
-            config.check_proofs_commitment,
+            args.check_proofs_probability,
+            args.check_proofs_commitment,
         )));
     }
 
     let json_worker = {
-        if let Some(middleware_config) = &config.json_middleware_config {
+        if let Some(middleware_config) = &args.json_middleware_config {
             if middleware_config.is_enabled {
                 Some(Arc::new(
                     JsonWorker::new(
@@ -121,7 +107,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         rocks_storage.clone(),
                         json_downloader_metrics.clone(),
                         red_metrics.clone(),
-                        nft_ingester::config::default_parallel_json_downloaders(),
+                        args.parallel_json_downloaders,
                     )
                     .await,
                 ))
@@ -136,7 +122,7 @@ pub async fn main() -> Result<(), IngesterError> {
     // it will check if asset which was requested is from the tree which has gaps in sequences
     // gap in sequences means missed transactions and  as a result incorrect asset data
     let tree_gaps_checker = {
-        if config.skip_check_tree_gaps {
+        if args.skip_check_tree_gaps {
             None
         } else {
             Some(cloned_rocks_storage.clone())
@@ -153,22 +139,22 @@ pub async fn main() -> Result<(), IngesterError> {
             cloned_rx,
             metrics.clone(),
             Some(red_metrics.clone()),
-            config.server_port,
+            args.server_port,
             proof_checker,
             tree_gaps_checker,
-            config.max_page_limit,
+            args.max_page_limit,
             json_worker,
             None,
-            config.json_middleware_config.clone(),
+            args.json_middleware_config.clone(),
             cloned_tasks,
-            config.archives_dir.as_ref(),
-            config.consistence_synchronization_api_threshold,
-            config.consistence_backfilling_slots_threshold,
-            config.batch_mint_service_port,
-            config.file_storage_path_container.as_str(),
+            &args.archives_dir,
+            args.consistence_synchronization_api_threshold,
+            args.consistence_backfilling_slots_threshold,
+            args.batch_mint_service_port,
+            args.file_storage_path_container.as_str(),
             account_balance_getter,
-            config.storage_service_base_url,
-            config.native_mint_pubkey,
+            args.storage_service_base_url,
+            args.native_mint_pubkey,
         )
         .await
         {
@@ -215,7 +201,7 @@ pub async fn main() -> Result<(), IngesterError> {
     // try synchronizing secondary rocksdb instance every config.rocks_sync_interval_seconds
     let cloned_rx = shutdown_rx.resubscribe();
     let cloned_rocks_storage = rocks_storage.clone();
-    let dur = tokio::time::Duration::from_secs(config.rocks_sync_interval_seconds);
+    let dur = tokio::time::Duration::from_secs(args.rocks_sync_interval_seconds);
     mutexed_tasks.lock().await.spawn(async move {
         while cloned_rx.is_empty() {
             if let Err(e) = cloned_rocks_storage.db.try_catch_up_with_primary() {
@@ -233,8 +219,8 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_tx,
         None,
         guard,
-        config.profiling_file_path_container,
-        &config.heap_path,
+        args.profiling_file_path_container,
+        &args.heap_path,
     )
     .await;
 
