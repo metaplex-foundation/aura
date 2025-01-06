@@ -60,7 +60,7 @@ impl PgClient {
         base_dump_path: Option<PathBuf>,
         metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self, Error> {
-        let mut options: PgConnectOptions = url.parse().unwrap();
+        let mut options: PgConnectOptions = url.parse()?;
         options.log_statements(LevelFilter::Off);
         options.log_slow_statements(LevelFilter::Off, Duration::from_secs(100));
 

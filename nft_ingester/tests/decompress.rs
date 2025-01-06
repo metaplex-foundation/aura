@@ -38,6 +38,7 @@ mod tests {
         6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220,
         26, 235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
     ]);
+    pub const API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC: u64 = 120;
 
     // 242856151 slot when decompress happened
 
@@ -236,6 +237,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -331,6 +333,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -426,6 +429,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
         );
 
         let buffer = Arc::new(Buffer::new());
@@ -521,6 +525,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
         );
 
         let buffer = Arc::new(Buffer::new());

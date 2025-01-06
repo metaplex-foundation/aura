@@ -110,6 +110,7 @@ pub struct IngesterClapArgs {
         requires = "rocks_backup_archives_dir"
     )]
     pub is_restore_rocks_db: bool,
+    
     #[clap(long, env, help = "Rocks backup url")]
     pub rocks_backup_url: Option<String>,
     #[clap(long, env, help = "Rocks backup archives dir")]
@@ -250,6 +251,9 @@ pub struct IngesterClapArgs {
     pub peer_grpc_max_gap_slots: u64,
     #[clap(long, env, default_value = "500", help = "#grpc retry interval millis")]
     pub rpc_retry_interval_millis: u64,
+
+    #[clap(long, env, default_value = "120", help= "Specifies the maximum execution time of a SQL query for API.")]
+    pub api_max_query_statement_timeout_sec: u64,
 
     #[clap(
         long,
@@ -429,6 +433,9 @@ pub struct ApiClapArgs {
 
     #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
+
+    #[clap(long, default_value = "120", help= "Specifies the maximum execution time of a SQL query for API.")]
+    pub api_query_max_statement_timeout_sec: u64,
 
     #[clap(
         long,

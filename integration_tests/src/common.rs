@@ -179,6 +179,7 @@ impl TestSetup {
                 None,
             )),
             "11111111111111111111111111111111".to_string(),
+            120
         );
 
         let message_parser = MessageParser::new();

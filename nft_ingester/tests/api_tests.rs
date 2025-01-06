@@ -12,7 +12,7 @@ mod tests {
 
     use std::str::FromStr;
     use std::{collections::HashMap, sync::Arc};
-
+    use std::time::Duration;
     use blockbuster::token_metadata::accounts::Metadata;
     use entities::api_req_params::{
         DisplayOptions, GetAssetProof, GetAssetSignatures, GetByMethodsOptions, GetCoreFees,
@@ -66,12 +66,16 @@ mod tests {
     use spl_pod::optional_keys::OptionalNonZeroPubkey;
     use spl_pod::primitives::{PodU16, PodU64};
     use spl_token_2022::extension::interest_bearing_mint::BasisPoints;
-    use sqlx::QueryBuilder;
+    use sqlx::{query, QueryBuilder};
     use testcontainers::clients::Cli;
     use tokio::{sync::Mutex, task::JoinSet};
+    use tokio::time::timeout;
     use usecase::proofs::MaybeProofChecker;
 
     const SLOT_UPDATED: u64 = 100;
+    // api_query_max_statement_timeout_sec
+    const API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC: u64 = 120;
+    
     // corresponds to So11111111111111111111111111111111111111112
     pub const NATIVE_MINT_PUBKEY: Pubkey = Pubkey::new_from_array([
         6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220,
@@ -104,6 +108,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -506,6 +511,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_api_query_timeout_expected() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let pg_pool = env.pg_env.pool.clone();
+
+        let query_timeout = Duration::from_secs(2); 
+
+        let result = timeout(query_timeout, query("SELECT pg_sleep(3)").execute(&pg_pool)).await;
+
+        match result {
+            Ok(Ok(res)) => assert!(false, "Query should have timed out, but completed successfully: {:?}", res),
+            Ok(Err(e)) => assert!(false, "Query should have timed out, but failed: {:?}", e),
+            Err(_) => println!("Query timed out as expected"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_api_query_timeout_not_expected() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let pg_pool = env.pg_env.pool.clone();
+
+        let query_timeout = Duration::from_secs(3);
+
+        let result = timeout(query_timeout, query("SELECT pg_sleep(1)").execute(&pg_pool)).await;
+
+        match result {
+            Ok(Ok(res)) => println!("Query completed successfully: {:?}", res),
+            Ok(Err(e)) => assert!(false, "Query should completed successfully, but failed: {:?}", e),
+            Err(_) => assert!(false, "Query should completed successfully but have timedout",),
+        }
+    }
+
+
+    #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_asset_none_grouping_with_token_standard() {
         let cnt = 20;
@@ -532,6 +574,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -686,6 +729,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -816,6 +860,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -989,6 +1034,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1164,6 +1210,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -1323,6 +1370,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
 
         let first_tree = Pubkey::new_unique();
@@ -1544,6 +1592,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
 
         let token_updates_processor =
@@ -1768,6 +1817,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
 
         let token_updates_processor =
@@ -2033,6 +2083,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2097,6 +2148,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2158,6 +2210,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2219,6 +2272,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2332,6 +2386,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
 
         let pb = Pubkey::new_unique();
@@ -2490,6 +2545,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let asset_id = Pubkey::new_unique();
         let tree_id = Pubkey::new_unique();
@@ -2550,6 +2606,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let asset_fees_count = 1000;
         let mut asset_ids = Vec::with_capacity(asset_fees_count);
@@ -2641,6 +2698,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2731,6 +2789,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -2862,6 +2921,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -3033,6 +3093,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -3249,6 +3310,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -3543,6 +3605,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -3729,6 +3792,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC,
         );
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));

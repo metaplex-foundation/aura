@@ -5,6 +5,7 @@ use interface::processing_possibility::ProcessingPossibilityChecker;
 use interface::proofs::ProofChecker;
 use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
@@ -32,6 +33,7 @@ use metrics_utils::ApiMetricsConfig;
 use rocks_db::Storage;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
+use tokio::time::timeout;
 use usecase::validation::{validate_opt_pubkey, validate_pubkey};
 
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
@@ -60,6 +62,7 @@ where
     storage_service_base_path: Option<String>,
     token_price_fetcher: Arc<TPF>,
     native_mint_pubkey: String,
+    max_query_statement_timeout_sec: u64,
 }
 
 pub fn not_found() -> DasApiError {
@@ -90,6 +93,7 @@ where
         storage_service_base_path: Option<String>,
         token_price_fetcher: Arc<TPF>,
         native_mint_pubkey: String,
+        max_query_statement_timeout_sec: u64,
     ) -> Self {
         DasApi {
             pg_client,
@@ -105,6 +109,7 @@ where
             storage_service_base_path,
             token_price_fetcher,
             native_mint_pubkey,
+            max_query_statement_timeout_sec,
         }
     }
 
@@ -116,7 +121,7 @@ where
         self.pg_client
             .check_health()
             .await
-            .map_err(|_| DasApiError::InternalDdError)?;
+            .map_err(|e| DasApiError::InternalDdError(e.to_string()))?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -714,7 +719,7 @@ where
         Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
         Self::validate_options(&options, &query)?;
 
-        let res = search_assets(
+        let res = timeout(Duration::from_secs(self.max_query_statement_timeout_sec), search_assets(
             pg_client,
             rocks_db,
             query,
@@ -735,9 +740,16 @@ where
             self.metrics.clone(),
             &self.tree_gaps_checker,
             &self.native_mint_pubkey,
-        )
-        .await?;
+        )).await;
 
-        Ok(res)
+        match res {
+            Ok(Ok(res)) => Ok(res),
+            Ok(Err(e)) => {
+                Err(DasApiError::InternalDdError(e.to_string()))
+            },
+            Err(_) => {
+                Err(DasApiError::QueryTimedOut)
+            }
+        }
     }
 }

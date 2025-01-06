@@ -64,6 +64,8 @@ use tokio::sync::broadcast;
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
+
+pub const API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC: u64 = 120;
 #[test]
 #[cfg(feature = "batch_mint_tests")]
 fn test_generate_1_000_batch_mint() {
@@ -427,6 +429,7 @@ async fn batch_mint_with_verified_creators_test() {
         None,
         Arc::new(RaydiumTokenPriceFetcher::default()),
         "".to_string(),
+        API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
     );
 
     let payload = GetAssetProof {
@@ -583,6 +586,7 @@ async fn batch_mint_with_unverified_creators_test() {
         None,
         Arc::new(RaydiumTokenPriceFetcher::default()),
         "".to_string(),
+        API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
     );
 
     let payload = GetAssetProof {
@@ -682,6 +686,7 @@ async fn batch_mint_persister_test() {
         None,
         Arc::new(RaydiumTokenPriceFetcher::default()),
         "".to_string(),
+        API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
     );
 
     let leaf_index = 4u32;

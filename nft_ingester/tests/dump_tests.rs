@@ -153,6 +153,7 @@ mod mtg_441_tests {
     use crate::tests::NATIVE_MINT_PUBKEY;
 
     const SLOT_UPDATED: u64 = 100;
+    pub const API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC: u64 = 120;
 
     fn get_das_api(
         env: &TestEnvironment,
@@ -185,6 +186,7 @@ mod mtg_441_tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
         )
     }
 
