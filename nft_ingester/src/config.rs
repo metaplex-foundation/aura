@@ -150,6 +150,49 @@ pub struct IngesterClapArgs {
     pub log_level: String,
 }
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+pub struct SynchronizerClapArgs {
+
+    #[clap(short('d'), long, help = "example: postgres://solana:solana@localhost:5432/aura_db")]
+    pub pg_database_url: String,
+
+    #[clap( long, default_value = "/tmp/sync_dump", help = "PG dump path")]
+    pub pg_dump_path: String,
+
+    #[clap(long, default_value = "100")]
+    pub pg_max_db_connections: u32,
+
+    #[clap(short('m'), long, default_value = "./my_rocksdb", help = "Rocks db path container")]
+    pub rocks_db_path_container: String,
+
+    #[clap( long, default_value = "./my_rocksdb_secondary", help = "Rocks db secondary path container")]
+    pub rocks_db_secondary_path: String,
+
+
+    #[clap(long("run_profiling"), default_value_t=false, help = "Start profiling (default: false)")]
+    pub is_run_profiling: bool,
+    #[clap(long, default_value = "/usr/src/app/heaps", help ="Heap path")]
+    pub heap_path: String,
+    #[clap(long, help ="Metrics port")]
+    pub metrics_port: Option<u16>,
+    pub profiling_file_path_container: Option<String>,
+
+    #[clap(long, default_value = "200000")]
+    pub dump_synchronizer_batch_size: usize,
+    #[clap(long, default_value = "100000000")]
+    pub dump_sync_threshold: i64,
+    #[clap(long, default_value = "20")]
+    pub synchronizer_parallel_tasks: usize,
+    #[clap(long, default_value = "0")]
+    pub timeout_between_syncs_sec: u64,
+
+
+    #[clap(long, default_value = "info", help = "info|debug")]
+    pub log_level: String,
+}
+
+
 fn parse_json_to_dict(s: &str) -> Result<Dict, String> {
     parse_json(s)
 }
@@ -219,21 +262,6 @@ pub struct RawBackfillConfig {
     pub heap_path: String,
 }
 
-const fn default_synchronizer_parallel_tasks() -> usize {
-    20
-}
-
-const fn default_dump_sync_threshold() -> i64 {
-    100_000_000
-}
-fn default_dump_path() -> String {
-    "/tmp/sync_dump".to_string()
-}
-
-const fn default_dump_synchronizer_batch_size() -> usize {
-    200_000
-}
-
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct JsonMigratorConfig {
     pub log_level: Option<String>,
@@ -260,34 +288,6 @@ impl JsonMigratorConfig {
 
 fn default_log_level() -> String {
     "warn".to_string()
-}
-
-#[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct SynchronizerConfig {
-    pub database_config: DatabaseConfig,
-
-    pub rocks_db_path_container: Option<String>,
-    pub rocks_db_secondary_path_container: Option<String>,
-    pub metrics_port: Option<u16>,
-    #[serde(default = "default_log_level")]
-    pub log_level: String,
-    #[serde(default)]
-    pub run_profiling: bool,
-    pub profiling_file_path_container: Option<String>,
-    #[serde(default = "default_dump_synchronizer_batch_size")]
-    pub dump_synchronizer_batch_size: usize,
-    #[serde(default = "default_dump_path")]
-    pub dump_path: String,
-    #[serde(default = "default_dump_sync_threshold")]
-    pub dump_sync_threshold: i64,
-    #[serde(default)]
-    pub timeout_between_syncs_sec: u64,
-    #[serde(default = "default_synchronizer_parallel_tasks")]
-    pub parallel_tasks: usize,
-    #[serde(default)]
-    pub run_temp_sync_during_dump: bool,
-    #[serde(default = "default_heap_path")]
-    pub heap_path: String,
 }
 
 fn default_native_mint() -> String {
@@ -397,7 +397,7 @@ impl DatabaseConfig {
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct BigTableConfig(figment::value::Dict);
+pub struct BigTableConfig(Dict);
 
 pub const BIG_TABLE_CREDS_KEY: &str = "creds";
 pub const BIG_TABLE_TIMEOUT_KEY: &str = "timeout";
@@ -485,5 +485,27 @@ mod tests {
         assert_eq!(args.is_run_backfiller, false);
         assert_eq!(args.backfiller_source_mode, BackfillerSourceMode::RPC);
         assert_eq!(args.backfiller_mode, BackfillerMode::IngestDirectly);
+        assert_eq!(args.heap_path, "/usr/src/app/heaps");
+        assert_eq!(args.log_level, "info");
+    }
+
+    #[test]
+    fn test_default_values_synchronizer() {
+        let args = SynchronizerClapArgs::parse_from(&[
+            "test",
+            "--pg_database_url", "postgres://solana:solana@localhost:5432/aura_db",
+        ]);
+
+        assert_eq!(args.pg_dump_path, "/tmp/sync_dump");
+        assert_eq!(args.pg_max_db_connections, 100);
+        assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
+        assert_eq!(args.rocks_db_secondary_path, "./my_rocksdb_secondary");
+        assert_eq!(args.is_run_profiling, false);
+        assert_eq!(args.heap_path, "/usr/src/app/heaps");
+        assert_eq!(args.dump_synchronizer_batch_size, 200000);
+        assert_eq!(args.dump_sync_threshold, 100000000);
+        assert_eq!(args.synchronizer_parallel_tasks, 20);
+        assert_eq!(args.timeout_between_syncs_sec, 0);
+        assert_eq!(args.log_level, "info");
     }
 }
