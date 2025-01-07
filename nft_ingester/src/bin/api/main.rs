@@ -51,6 +51,7 @@ pub async fn main() -> Result<(), IngesterError> {
     red_metrics.register(&mut registry);
     let json_downloader_metrics = Arc::new(JsonDownloaderMetricsConfig::new());
     json_downloader_metrics.register(&mut registry);
+
     tokio::spawn(async move {
         match setup_metrics(registry, args.metrics_port).await {
             Ok(_) => {
@@ -147,7 +148,7 @@ pub async fn main() -> Result<(), IngesterError> {
             None,
             args.json_middleware_config.clone(),
             cloned_tasks,
-            &args.archives_dir,
+            &args.rocks_archives_dir,
             args.consistence_synchronization_api_threshold,
             args.consistence_backfilling_slots_threshold,
             args.batch_mint_service_port,

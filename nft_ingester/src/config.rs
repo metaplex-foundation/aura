@@ -30,7 +30,7 @@ pub struct IngesterClapArgs {
     #[clap(
         short('f'),
         long,
-        default_value = "./temp_file_storage",
+        default_value = "./tmp/file_storage",
         help = "File storage path"
     )]
     pub file_storage_path_container: String,
@@ -64,7 +64,8 @@ pub struct IngesterClapArgs {
 
     #[clap(
         long("run_api"),
-        default_value_t = false,
+        default_value_t = true,
+        env = "IS_RUN_API",
         help = "Run API (default: false)"
     )]
     pub is_run_api: bool,
@@ -72,6 +73,7 @@ pub struct IngesterClapArgs {
     #[clap(
         long("run_gapfiller"),
         default_value_t = false,
+        env = "IS_RUN_GAPFILLER",
         help = "Start gapfiller",
         requires = "gapfiller_peer_addr"
     )]
@@ -83,6 +85,7 @@ pub struct IngesterClapArgs {
     #[clap(
         long("run_profiling"),
         default_value_t = false,
+        env = "IS_RUN_PROFILING",
         help = "Start profiling (default: false)"
     )]
     pub is_run_profiling: bool,
@@ -94,6 +97,7 @@ pub struct IngesterClapArgs {
     #[clap(
         long("restore_rocks_db"),
         default_value_t = false,
+        env = "IS_RESTORE_ROCKS_DB",
         help = "Try restore rocks (default: false)",
         requires = "rocks_backup_url",
         requires = "rocks_backup_archives_dir"
@@ -103,7 +107,7 @@ pub struct IngesterClapArgs {
     pub rocks_backup_url: Option<String>,
     #[clap(long, help = "Rocks backup archives dir")]
     pub rocks_backup_archives_dir: Option<String>,
-    #[clap(long, default_value_t = false, help = "Enable migration for rocksdb (default: false)")]
+    #[clap(long,  env = "IS_ENABLE_ROCKS_MIGRATION", default_value_t = false, help = "Enable migration for rocksdb (default: false)")]
     pub rocks_enable_migration: bool,
     #[clap(long, help = "Migration storage path dir")]
     pub rocks_migration_storage_path: Option<String>,
@@ -118,6 +122,7 @@ pub struct IngesterClapArgs {
 
     #[clap(
         long,
+        env = "CHECK_PROOFS",
         default_value_t = false,
         help = "#api Check proofs (default: false)"
     )]
@@ -140,11 +145,12 @@ pub struct IngesterClapArgs {
     pub archives_dir: String,
     #[clap(
         long,
+        env = "SKIP_CHECK_TREE_GAPS",
         default_value_t = false,
         help = "#api Skip check tree gaps. (default: false)"
     )]
     pub skip_check_tree_gaps: bool,
-    #[clap(long, default_value = "8990", help = "#api Server port")]
+    #[clap(long, env = "INGESTER_SERVER_PORT", default_value = "9092", help = "#api Server port")]
     pub server_port: u16,
     #[clap(long, default_value = "50", help = "#api Max page limit")]
     pub max_page_limit: usize,
@@ -165,22 +171,25 @@ pub struct IngesterClapArgs {
 
     #[clap(
         long,
-        default_value_t = false,
-        help = "Start backfiller (default: false)",
-        requires = "slots_db_path",
-        requires = "secondary_slots_db_path"
+        env = "IS_RUN_BACKFILLER",
+        default_value_t = true,
+        help = "Start backfiller (default: true)",
+        requires = "rocks_slots_db_path",
     )]
     pub is_run_backfiller: bool,
     #[clap(
         long,
         help = "#backfiller Path to the RocksDB instance with slots (required for the backfiller to work)"
     )]
-    pub slots_db_path: Option<String>,
+    pub rocks_slots_db_path: Option<String>,
+
     #[clap(
         long,
+        default_value = "./tmp/file_storage/rocks/secondary/ingester-slots",
         help = "#backfiller Path to the secondary RocksDB instance with slots (required for the backfiller to work)"
     )]
-    pub secondary_slots_db_path: Option<String>,
+    pub rocks_secondary_slots_db_path: String,
+
     #[clap(long, help = "#backfiller Backfill rpc address")]
     pub backfill_rpc_address: Option<String>,
     #[clap(
@@ -194,32 +203,29 @@ pub struct IngesterClapArgs {
 
     #[clap(
         long,
-        default_value_t = false,
+        env = "IS_RUN_BUBBLEGUM_BACKFILLER",
+        default_value_t = true,
         help = "#bubbl Start bubblegum backfiller (default: false)"
     )]
     pub is_run_bubblegum_backfiller: bool,
     #[clap(
         long,
+        env = "SHOULD_REINGEST",
         default_value_t = false,
         help = "#bubbl Should reingest, deleting last backfilled slot. (default: false)"
     )]
     pub should_reingest: bool,
-    #[clap(
-        long,
-        default_value = "ingest-directly",
-        help = "#bubbl Backfiller mode."
-    )]
-    pub backfiller_mode: BackfillerMode,
 
+    #[clap(long,  default_value = "9099", help = "#grpc Grpc port")]
+    pub peer_grpc_port: u16,
     #[clap(long, default_value = "1000000", help = "#grpc Max gap slots")]
     pub peer_grpc_max_gap_slots: u64,
-    #[clap(long, default_value = "9099", help = "#grpc Grpc port")]
-    pub peer_grpc_port: u16,
     #[clap(long, default_value = "500", help = "#grpc retry interval millis")]
     pub rpc_retry_interval_millis: u64,
 
-    #[clap(long, help = "Metrics port")]
+    #[clap(long, env = "INGESTER_METRICS_PORT", help = "Metrics port. Start HTTP server to report metrics if port exist.")]
     pub metrics_port: Option<u16>,
+
     pub profiling_file_path_container: Option<String>,
     #[clap(long, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
@@ -237,7 +243,7 @@ pub struct SynchronizerClapArgs {
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
-    #[clap(long, default_value = "/tmp/sync_dump", help = "PG dump path")]
+    #[clap(long, default_value = "./tmp/sync_dump", help = "PG dump path")]
     pub pg_dump_path: String,
     #[clap(long, default_value = "100")]
     pub pg_max_db_connections: u32,
@@ -258,21 +264,23 @@ pub struct SynchronizerClapArgs {
 
     #[clap(
         long("run_profiling"),
+        env = "IS_RUN_PROFILING",
         default_value_t = false,
         help = "Start profiling (default: false)"
     )]
     pub is_run_profiling: bool,
     #[clap(long, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
-    #[clap(long, help = "Metrics port")]
+
+    #[clap(long, env = "SYNCHRONIZER_METRICS_PORT", help = "Metrics port. Start HTTP server to report metrics if port exist.")]
     pub metrics_port: Option<u16>,
     pub profiling_file_path_container: Option<String>,
 
     #[clap(long, default_value = "200000")]
     pub dump_synchronizer_batch_size: usize,
-    #[clap(long, default_value = "100000000")]
+    #[clap(long, default_value = "150000000", help="Threshold on the number of updates not being synchronized for the synchronizer to dump-load on start. 150M - that's a rough threshold after which the synchronizer will likely complete a full dymp-load cycle faster then doing an incremental sync ")]
     pub dump_sync_threshold: i64,
-    #[clap(long, default_value = "20")]
+    #[clap(long, default_value = "30")]
     pub synchronizer_parallel_tasks: usize,
     #[clap(long, default_value = "0")]
     pub timeout_between_syncs_sec: u64,
@@ -298,14 +306,14 @@ pub struct MigratorClapArgs {
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
-    #[clap(long, default_value = "/tmp/sync_dump", help = "PG dump path")]
+    #[clap(long, default_value = "./tmp/sync_dump", help = "PG dump path")]
     pub pg_dump_path: String,
     #[clap(long, default_value = "10")]
     pub pg_min_db_connections: u32,
     #[clap(long, default_value = "250")]
     pub pg_max_db_connections: u32,
 
-    #[clap(long, help = "Metrics port")]
+    #[clap(long, env = "MIGRATOR_METRICS_PORT", help = "Metrics port. Start HTTP server to report metrics if port exist.")]
     pub metrics_port: Option<u16>,
 
     #[clap(long, default_value = "info", help = "warn|info|debug")]
@@ -324,7 +332,7 @@ pub struct ApiClapArgs {
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
-    #[clap(long, default_value = "/tmp/sync_dump", help = "PG dump path")]
+    #[clap(long, default_value = "./tmp/sync_dump", help = "PG dump path")]
     pub pg_dump_path: String,
     #[clap(long, default_value = "10")]
     pub pg_min_db_connections: u32,
@@ -349,23 +357,26 @@ pub struct ApiClapArgs {
 
     #[clap(long, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
-    #[clap(long, help = "Metrics port")]
+
+    #[clap(long, env = "API_METRICS_PORT", help = "Metrics port. Start HTTP server to report metrics if port exist.")]
     pub metrics_port: Option<u16>,
     pub profiling_file_path_container: Option<String>,
     #[clap(
         long,
+        env = "SKIP_CHECK_TREE_GAPS",
         default_value_t = false,
         help = "#api Skip check tree gaps. (default: false) It will check if asset which was requested is from the tree which has gaps in sequences, gap in sequences means missed transactions and  as a result incorrect asset data."
     )]
     pub skip_check_tree_gaps: bool,
     #[clap(
+        env = "IS_RUN_PROFILING",
         long("run_profiling"),
         default_value_t = false,
         help = "Start profiling (default: false)"
     )]
     pub is_run_profiling: bool,
 
-    #[clap(long, default_value_t = false, help = "Check proofs (default: false)")]
+    #[clap(long, env = "CHECK_PROOFS", default_value_t = false, help = "Check proofs (default: false)")]
     pub check_proofs: bool,
     #[clap(long, default_value = "0.1", help = "Check proofs probability")]
     pub check_proofs_probability: f64,
@@ -380,7 +391,7 @@ pub struct ApiClapArgs {
     #[clap(
         short('f'),
         long,
-        default_value = "./temp_file_storage",
+        default_value = "./tmp/file_storage",
         help = "File storage path"
     )]
     pub file_storage_path_container: String,
@@ -389,8 +400,8 @@ pub struct ApiClapArgs {
         default_value = "/rocksdb/_rocks_backup_archives",
         help = "#api Archives directory"
     )]
-    pub archives_dir: String,
-    #[clap(long, default_value = "8990", help = "#api Server port")]
+    pub rocks_archives_dir: String,
+    #[clap(long, env = "API_SERVER_PORT", default_value = "8990", help = "#api Server port")]
     pub server_port: u16,
     #[clap(long, default_value = "50", help = "#api Max page limit")]
     pub max_page_limit: usize,
@@ -436,15 +447,6 @@ fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
 
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
 
-#[derive(Deserialize, Default, PartialEq, Debug, Clone, ValueEnum)]
-pub enum BackfillerMode {
-    None,
-    Persist,
-    PersistAndIngest,
-    IngestPersisted,
-    #[default]
-    IngestDirectly,
-}
 
 #[derive(Deserialize, Default, PartialEq, Debug, Clone, Copy, ValueEnum)]
 pub enum BackfillerSourceMode {
@@ -522,7 +524,7 @@ mod tests {
         ]);
 
         assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
-        assert_eq!(args.file_storage_path_container, "./temp_file_storage");
+        assert_eq!(args.file_storage_path_container, "./tmp/file_storage");
         assert_eq!(args.pg_max_db_connections, 100);
         assert_eq!(args.redis_accounts_parsing_workers, 20);
         assert_eq!(args.redis_transactions_parsing_workers, 20);
@@ -530,20 +532,19 @@ mod tests {
         assert_eq!(args.account_processor_buffer_size, 250);
         assert_eq!(args.account_processor_mpl_fees_buffer_size, 50);
         assert_eq!(args.parallel_json_downloaders, 100);
-        assert_eq!(args.is_run_api, false);
+        assert_eq!(args.is_run_api, true);
         assert_eq!(args.is_run_gapfiller, false);
         assert_eq!(args.is_run_profiling, false);
         assert_eq!(args.is_restore_rocks_db, false);
-        assert_eq!(args.is_run_bubblegum_backfiller, false);
+        assert_eq!(args.is_run_bubblegum_backfiller, true);
         assert_eq!(args.run_sequence_consistent_checker, false);
         assert_eq!(args.should_reingest, false);
         assert_eq!(args.check_proofs, false);
         assert_eq!(args.check_proofs_commitment, CommitmentLevel::Finalized);
         assert_eq!(args.archives_dir, "/rocksdb/_rocks_backup_archives");
         assert_eq!(args.skip_check_tree_gaps, false);
-        assert_eq!(args.is_run_backfiller, false);
+        assert_eq!(args.is_run_backfiller, true);
         assert_eq!(args.backfiller_source_mode, BackfillerSourceMode::RPC);
-        assert_eq!(args.backfiller_mode, BackfillerMode::IngestDirectly);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.log_level, "info");
     }
@@ -556,7 +557,7 @@ mod tests {
             "postgres://solana:solana@localhost:5432/aura_db",
         ]);
 
-        assert_eq!(args.pg_dump_path, "/tmp/sync_dump");
+        assert_eq!(args.pg_dump_path, "./tmp/sync_dump");
         assert_eq!(args.pg_max_db_connections, 100);
         assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
         assert_eq!(args.rocks_db_secondary_path, "./my_rocksdb_secondary");
@@ -588,8 +589,8 @@ mod tests {
         assert_eq!(args.check_proofs, false);
         assert_eq!(args.check_proofs_probability, 0.1);
         assert_eq!(args.check_proofs_commitment, CommitmentLevel::Finalized);
-        assert_eq!(args.archives_dir, "/rocksdb/_rocks_backup_archives");
-        assert_eq!(args.server_port, 8990);
+        assert_eq!(args.rocks_archives_dir, "/rocksdb/_rocks_backup_archives");
+        assert_eq!(args.server_port, 9092);
         assert_eq!(args.max_page_limit, 50);
         assert_eq!(
             args.native_mint_pubkey,

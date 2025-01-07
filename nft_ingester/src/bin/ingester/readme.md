@@ -33,6 +33,7 @@ Run indexer with minimum functionality. (without API/Back Filler/Bubblegum BackF
 ### Main components that can be run with ingester
 
 * --start_api: API service.
+* --run_backfiller:       
 * --run_gapfiller: Gapfiller service.
 * --run_profiling: Enable profiling.
 * --restore_rocks_db: Try to restore rocksDb.

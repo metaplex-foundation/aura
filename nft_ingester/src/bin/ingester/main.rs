@@ -37,7 +37,7 @@ use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
 use nft_ingester::backfiller::{BackfillSource, DirectBlockParser};
 use nft_ingester::batch_mint::batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender};
-use nft_ingester::config::{BackfillerMode, IngesterClapArgs};
+use nft_ingester::config::{IngesterClapArgs};
 use nft_ingester::gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller};
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration, init_primary_storage};
 use nft_ingester::json_worker::JsonWorker;
@@ -263,14 +263,13 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rx = shutdown_rx.resubscribe();
     let file_storage_path = args.file_storage_path_container.clone();
 
-    let middleware_json_downloader = args
-        .json_middleware_config
-        .as_ref()
-        .filter(|conf| conf.is_enabled)
-        .map(|_| json_processor.clone());
-
     if args.is_run_api {
         info!("Starting API (Ingester)...");
+        let middleware_json_downloader = args
+            .json_middleware_config
+            .as_ref()
+            .filter(|conf| conf.is_enabled)
+            .map(|_| json_processor.clone());
 
         // it will check if asset which was requested is from the tree which has gaps in sequences
         // gap in sequences means missed transactions and  as a result incorrect asset data
@@ -339,12 +338,10 @@ pub async fn main() -> Result<(), IngesterError> {
 
         let slot_db = Arc::new(
             SlotStorage::open_secondary(
-                args.slots_db_path
+                args.rocks_slots_db_path
                     .clone()
                     .expect("slots_db_path is required for SlotStorage"),
-                args.secondary_slots_db_path
-                    .clone()
-                    .expect("secondary_slots_db_path is required for SlotStorage"),
+                args.rocks_secondary_slots_db_path.clone(),
                 mutexed_tasks.clone(),
                 metrics_state.red_metrics.clone(),
             )
@@ -373,36 +370,21 @@ pub async fn main() -> Result<(), IngesterError> {
                     .await?;
             }
 
-            match args.backfiller_mode {
-                BackfillerMode::IngestDirectly => {
-                    panic!("IngestDirectly mode is not supported any more.");
-                }
-                BackfillerMode::Persist => {
-                    panic!("Persist mode is not supported any more. Use slot_persister binary instead.");
-                }
-                BackfillerMode::IngestPersisted => {
-                    panic!("IngestDirectly mode is not supported any more. Use backfill binary instead.");
-                }
-                BackfillerMode::PersistAndIngest => {
-                    let consumer = Arc::new(DirectBlockParser::new(
-                        tx_ingester.clone(),
-                        primary_rocks_storage.clone(),
-                        metrics_state.backfiller_metrics.clone(),
-                    ));
-                    let shutdown_token = shutdown_token.clone();
-                    let db = primary_rocks_storage.clone();
-                    let metrics: Arc<BackfillerMetricsConfig> = metrics_state.backfiller_metrics.clone();
-                    let slot_db = slot_db.clone();
-                    mutexed_tasks.lock().await.spawn(async move {
-                        nft_ingester::backfiller::run_backfill_slots(shutdown_token, db, slot_db, consumer, metrics)
-                            .await;
-                        Ok(())
-                    });
-                }
-                BackfillerMode::None => {
-                    info!("Not running Backfiller.");
-                }
-            };
+            let consumer = Arc::new(DirectBlockParser::new(
+                tx_ingester.clone(),
+                primary_rocks_storage.clone(),
+                metrics_state.backfiller_metrics.clone(),
+            ));
+            let shutdown_token = shutdown_token.clone();
+            let db = primary_rocks_storage.clone();
+            let metrics: Arc<BackfillerMetricsConfig> = metrics_state.backfiller_metrics.clone();
+            let slot_db = slot_db.clone();
+            mutexed_tasks.lock().await.spawn(async move {
+                nft_ingester::backfiller::run_backfill_slots(shutdown_token, db, slot_db, consumer, metrics)
+                    .await;
+                Ok(())
+            });
+
         }
 
         if args.run_sequence_consistent_checker {
