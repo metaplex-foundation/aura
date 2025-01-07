@@ -243,8 +243,6 @@ pub struct SynchronizerClapArgs {
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
-    #[clap(long, default_value = "./tmp/sync_dump", help = "PG dump path")]
-    pub pg_dump_path: String,
     #[clap(long, default_value = "100")]
     pub pg_max_db_connections: u32,
 
@@ -261,6 +259,8 @@ pub struct SynchronizerClapArgs {
         help = "Rocks db secondary path container"
     )]
     pub rocks_db_secondary_path: String,
+    #[clap(long, default_value = "./tmp/rocks_dump", help = "RocksDb dump path")]
+    pub rocks_dump_path: String,
 
     #[clap(
         long("run_profiling"),
@@ -296,6 +296,8 @@ pub struct MigratorClapArgs {
     pub rocks_json_source_db: String,
     #[clap(long, help = "Rocks json target db dir")]
     pub rocks_json_target_db: String,
+    #[clap(long, default_value = "./tmp/rocks_dump", help = "RocksDb dump path")]
+    pub rocks_dump_path: String,
 
     #[clap(long, default_value = "full", help = "Json migrator mode")]
     pub migrator_mode: JsonMigratorMode,
@@ -306,8 +308,6 @@ pub struct MigratorClapArgs {
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
-    #[clap(long, default_value = "./tmp/sync_dump", help = "PG dump path")]
-    pub pg_dump_path: String,
     #[clap(long, default_value = "10")]
     pub pg_min_db_connections: u32,
     #[clap(long, default_value = "250")]
@@ -332,8 +332,6 @@ pub struct ApiClapArgs {
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
-    #[clap(long, default_value = "./tmp/sync_dump", help = "PG dump path")]
-    pub pg_dump_path: String,
     #[clap(long, default_value = "10")]
     pub pg_min_db_connections: u32,
     #[clap(long, default_value = "250")]
@@ -354,6 +352,8 @@ pub struct ApiClapArgs {
     pub rocks_db_secondary_path: String,
     #[clap(long, default_value = "2")]
     pub rocks_sync_interval_seconds: u64,
+    #[clap(long, default_value = "./tmp/rocks_dump", help = "RocksDb dump path")]
+    pub rocks_dump_path: String,
 
     #[clap(long, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
@@ -557,15 +557,15 @@ mod tests {
             "postgres://solana:solana@localhost:5432/aura_db",
         ]);
 
-        assert_eq!(args.pg_dump_path, "./tmp/sync_dump");
+        assert_eq!(args.rocks_dump_path, "./tmp/rocks_dump");
         assert_eq!(args.pg_max_db_connections, 100);
         assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
         assert_eq!(args.rocks_db_secondary_path, "./my_rocksdb_secondary");
         assert_eq!(args.is_run_profiling, false);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.dump_synchronizer_batch_size, 200000);
-        assert_eq!(args.dump_sync_threshold, 100000000);
-        assert_eq!(args.synchronizer_parallel_tasks, 20);
+        assert_eq!(args.dump_sync_threshold, 150000000);
+        assert_eq!(args.synchronizer_parallel_tasks, 30);
         assert_eq!(args.timeout_between_syncs_sec, 0);
         assert_eq!(args.log_level, "info");
     }
@@ -590,7 +590,7 @@ mod tests {
         assert_eq!(args.check_proofs_probability, 0.1);
         assert_eq!(args.check_proofs_commitment, CommitmentLevel::Finalized);
         assert_eq!(args.rocks_archives_dir, "/rocksdb/_rocks_backup_archives");
-        assert_eq!(args.server_port, 9092);
+        assert_eq!(args.server_port, 8990);
         assert_eq!(args.max_page_limit, 50);
         assert_eq!(
             args.native_mint_pubkey,
