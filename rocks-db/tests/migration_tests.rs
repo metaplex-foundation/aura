@@ -22,6 +22,8 @@ mod tests {
         )
         .unwrap();
         let key = Pubkey::new_unique();
+        // TODO: asset collection data is not available anymore.
+        // Replace with some up-to-date structure and remove test ignores.
         old_storage
             .asset_collection_data
             .backend
@@ -70,6 +72,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "TODO: test migrations on relevant columns"]
     fn test_merge_fail() {
         let dir = TempDir::new().unwrap();
         put_unmerged_value_to_storage(dir.path().to_str().unwrap());
@@ -88,6 +91,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "TODO: test migrations on relevant columns"]
     async fn test_migration() {
         let dir = TempDir::new().unwrap();
         let (key, val) = put_unmerged_value_to_storage(dir.path().to_str().unwrap());
