@@ -1,3 +1,4 @@
+#![deprecated = "Deprecated in favor of `ingester` binary"]
 use std::sync::Arc;
 
 use clap::{arg, Parser};
@@ -36,7 +37,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let secondary_rocks_dir = TempDir::new().unwrap();
     let source_storage = Storage::open_secondary(
-        &config.source_db,
+        config.source_db.as_str(),
         secondary_rocks_dir.path().to_str().unwrap(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
@@ -51,15 +52,6 @@ pub async fn main() -> Result<(), IngesterError> {
         MigrationState::Last,
     )
     .unwrap();
-
-    let cf = &target_storage.db.cf_handle(RawBlock::NAME).unwrap();
-    info!("Copying raw blocks...");
-    source_storage
-        .raw_blocks_cbor
-        .iter_start()
-        .filter_map(|k| k.ok())
-        .for_each(|(k, v)| target_storage.db.put_cf(cf, k, v).unwrap());
-    info!("Done copying raw blocks");
 
     let cf = &target_storage.db.cf_handle(OffChainData::NAME).unwrap();
     info!("Copying offchain data...");

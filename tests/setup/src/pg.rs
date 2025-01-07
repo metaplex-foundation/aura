@@ -74,7 +74,7 @@ impl<'a> TestEnvironment<'a> {
         let node = cli.run(image);
         let (pool, db_name) = setup_database(&node).await;
         let client =
-            PgClient::new_with_pool(pool.clone(), Arc::new(RequestErrorDurationMetrics::new()));
+            PgClient::new_with_pool(pool.clone(), None, Arc::new(RequestErrorDurationMetrics::new()));
 
         TestEnvironment {
             client: Arc::new(client),
@@ -89,7 +89,7 @@ impl<'a> TestEnvironment<'a> {
         let node = cli.run(image);
         let (pool, db_name) = setup_database(&node).await;
         let client =
-            PgClient::new_with_pool(pool.clone(), Arc::new(RequestErrorDurationMetrics::new()));
+            PgClient::new_with_pool(pool.clone(), None, Arc::new(RequestErrorDurationMetrics::new()));
 
         TestEnvironment {
             client: Arc::new(client),
@@ -170,6 +170,7 @@ pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres
 
     let asset_index_storage = PgClient::new_with_pool(
         test_db_pool.clone(),
+        None,
         Arc::new(RequestErrorDurationMetrics::new()),
     );
 

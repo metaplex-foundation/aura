@@ -513,10 +513,12 @@ mod tests {
     fn test_default_values() {
         let args = IngesterClapArgs::parse_from(&[
             "test",
-            "--pg_database_url",
+            "--pg-database-url",
             "postgres://solana:solana@localhost:5432/aura_db",
-            "--rpc_host",
+            "--rpc-host",
             "https://mainnet-aura.metaplex.com",
+            "--redis-connection-config",
+            "{}",
         ]);
 
         assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
@@ -550,7 +552,7 @@ mod tests {
     fn test_default_values_synchronizer() {
         let args = SynchronizerClapArgs::parse_from(&[
             "test",
-            "--pg_database_url",
+            "--pg-database-url",
             "postgres://solana:solana@localhost:5432/aura_db",
         ]);
 
@@ -571,9 +573,9 @@ mod tests {
     fn test_default_values_api() {
         let args = ApiClapArgs::parse_from(&[
             "test",
-            "--rpc_host",
+            "--rpc-host",
             "https://mainnet-aura.metaplex.com",
-            "--pg_database_url",
+            "--pg-database-url",
             "postgres://solana:solana@localhost:5432/aura_db",
         ]);
 
