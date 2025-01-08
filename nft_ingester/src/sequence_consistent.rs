@@ -1,7 +1,6 @@
 use entities::models::TreeState;
 use interface::signature_persistence::BlockConsumer;
 use interface::slot_getter::FinalizedSlotGetter;
-use interface::slots_dumper::SlotsDumper;
 use interface::{
     sequence_consistent::SequenceConsistentManager, signature_persistence::BlockProducer,
 };

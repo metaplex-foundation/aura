@@ -109,7 +109,7 @@ mod tests {
         let blockhash = "blockhash";
         slot_storage
             .raw_blocks_cbor
-            .put_cbor_encoded(
+            .put(
                 slot,
                 RawBlock {
                     slot,

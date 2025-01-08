@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use entities::models::{OffChainData, Updated};
+use entities::models::Updated;
 use rand::{random, Rng};
-use rocks_db::asset::AssetCompleteDetails;
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::asset::AssetCompleteDetails;
+use rocks_db::columns::offchain_data::OffChainData;
+use rocks_db::ToFlatbuffersConverter;
 use solana_sdk::pubkey::Pubkey;
+use sqlx::types::chrono::Utc;
 use tempfile::TempDir;
 
 use entities::enums::SpecificationAssetClass;
@@ -12,8 +15,10 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::errors::StorageError;
 use rocks_db::migrator::MigrationState;
 use rocks_db::{
-    asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
-    Storage, SlotStorage,
+    columns::asset::{
+        AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+    },
+    SlotStorage, Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};
 
@@ -55,7 +60,8 @@ impl RocksTestEnvironment {
             slot_storage_temp_dir.path().to_str().unwrap(),
             join_set,
             red_metrics.clone(),
-        ).expect("Failed to create slot storage database");
+        )
+        .expect("Failed to create slot storage database");
 
         for &(slot, ref pubkey) in keys {
             storage
@@ -147,8 +153,10 @@ impl RocksTestEnvironment {
         self.storage.asset_offchain_data.put(
             ToOwned::to_owned(DEFAULT_TEST_URL),
             OffChainData {
-                url: ToOwned::to_owned(DEFAULT_TEST_URL),
-                metadata: ToOwned::to_owned("{}"),
+                url: Some(ToOwned::to_owned(DEFAULT_TEST_URL)),
+                metadata: Some(ToOwned::to_owned("{}")),
+                last_read_at: Utc::now().timestamp(),
+                storage_mutability: DEFAULT_TEST_URL.into(),
             },
         )?;
 

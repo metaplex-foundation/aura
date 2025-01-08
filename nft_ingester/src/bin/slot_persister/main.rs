@@ -406,7 +406,7 @@ async fn process_slots(
                 );
                 if let Err(e) = target_db
                     .raw_blocks_cbor
-                    .put_batch_cbor(successful_blocks.clone())
+                    .put_batch(successful_blocks.clone())
                     .await
                 {
                     error!("Failed to save blocks to RocksDB: {}", e);

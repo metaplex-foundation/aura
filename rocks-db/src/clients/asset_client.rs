@@ -6,9 +6,9 @@ use crate::asset::{
     AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx,
     FungibleAssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey,
 };
-use crate::asset_generated::asset as fb;
 use crate::column::{Column, TypedColumn};
 use crate::errors::StorageError;
+use crate::generated::asset_generated::asset as fb;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::{Result, Storage, BATCH_GET_ACTION, ROCKS_COMPONENT};
 use entities::api_req_params::Options;
@@ -16,6 +16,16 @@ use entities::enums::{AssetType, SpecificationAssetClass, TokenMetadataEdition};
 use entities::models::{EditionData, PubkeyWithSlot};
 use futures_util::FutureExt;
 use std::collections::HashMap;
+
+#[macro_export]
+macro_rules! to_map {
+    ($res:expr) => {{
+        $res.map_err(|e| StorageError::Common(e.to_string()))?
+            .into_iter()
+            .filter_map(|asset| asset.map(|a| (a.pubkey, a)))
+            .collect::<HashMap<_, _>>()
+    }};
+}
 
 impl Storage {
     fn get_next_fungible_asset_update_seq(&self) -> Result<u64> {
@@ -131,27 +141,13 @@ impl Storage {
 
         Ok(())
     }
-}
 
-#[macro_export]
-macro_rules! to_map {
-    ($res:expr) => {{
-        $res.map_err(|e| StorageError::Common(e.to_string()))?
-            .into_iter()
-            .filter_map(|asset| asset.map(|a| (a.pubkey, a)))
-            .collect::<HashMap<_, _>>()
-    }};
-}
-
-impl Storage {
     pub async fn get_asset_selected_maps_async(
         &self,
         asset_ids: Vec<Pubkey>,
         owner_address: &Option<Pubkey>,
         options: &Options,
     ) -> Result<AssetSelectedMaps> {
-        let assets_with_collections_and_urls_fut =
-            self.get_assets_with_collections_and_urls(asset_ids.clone());
         let assets_leaf_fut = self.asset_leaf_data.batch_get(asset_ids.clone());
         let token_accounts_fut = if let Some(owner_address) = owner_address {
             self.get_raw_token_accounts(Some(*owner_address), None, None, None, None, None, true)
@@ -166,8 +162,9 @@ impl Storage {
         } else {
             async { Ok(Vec::new()) }.boxed()
         };
-        let (mut assets_data, assets_collection_pks, mut urls) =
-            assets_with_collections_and_urls_fut.await?;
+        let (mut assets_data, assets_collection_pks, mut urls) = self
+            .get_assets_with_collections_and_urls(asset_ids.clone())
+            .await?;
         let mut mpl_core_collections = HashMap::new();
         // todo: consider async/future here, but not likely as the very next call depends on urls from this one
         if !assets_collection_pks.is_empty() {
@@ -221,8 +218,14 @@ impl Storage {
             .into_iter()
             .filter_map(|asset| {
                 asset
-                    .filter(|a| !a.metadata.is_empty())
-                    .map(|a| (a.url.clone(), a))
+                    .filter(|a| {
+                        if let Some(metadata) = a.metadata.as_ref() {
+                            !metadata.is_empty() && a.url.is_some()
+                        } else {
+                            false
+                        }
+                    })
+                    .map(|a| (a.url.clone().unwrap(), a))
             })
             .collect::<HashMap<_, _>>();
 
@@ -305,7 +308,7 @@ impl Storage {
     ) -> Result<HashMap<Pubkey, EditionData>> {
         let first_batch = self
             .token_metadata_edition_cbor
-            .batch_get_cbor(edition_keys)
+            .batch_get(edition_keys)
             .await?;
         let mut edition_data_list = Vec::new();
         let mut parent_keys = Vec::new();
@@ -330,7 +333,7 @@ impl Storage {
         if !parent_keys.is_empty() {
             let master_edition_map = self
                 .token_metadata_edition_cbor
-                .batch_get_cbor(parent_keys)
+                .batch_get(parent_keys)
                 .await?
                 .into_iter()
                 .filter_map(|e| {
@@ -385,6 +388,8 @@ impl Storage {
         &self,
         assets: HashMap<Pubkey, AssetCompleteDetails>,
     ) -> Result<()> {
+        use crate::ToFlatbuffersConverter;
+
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for (pubkey, asset) in assets {
             batch.put_cf(

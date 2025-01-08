@@ -6,6 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::asset::{AssetCompleteDetails, SourcedAssetLeaf};
 use crate::column::TypedColumn;
 use crate::parameters::Parameter;
+use crate::ToFlatbuffersConverter;
 use crate::{
     parameters,
     signature_client::SignatureIdx,
@@ -38,8 +39,13 @@ impl Storage {
         is_from_finalized_source: bool,
     ) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatch::default();
-        self.store_transaction_result_with_batch(&mut batch, tx, with_signatures, is_from_finalized_source)
-            .await?;
+        self.store_transaction_result_with_batch(
+            &mut batch,
+            tx,
+            with_signatures,
+            is_from_finalized_source,
+        )
+        .await?;
         self.write_batch(batch)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?;
@@ -138,7 +144,7 @@ impl Storage {
             if let Some(ref offchain_data) = update.offchain_data_update {
                 if let Err(e) = self.asset_offchain_data.merge_with_batch(
                     batch,
-                    offchain_data.url.clone(),
+                    offchain_data.url.clone().expect("Url should not be empty"),
                     offchain_data,
                 ) {
                     tracing::error!("Failed to merge offchain data: {}", e);

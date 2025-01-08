@@ -52,9 +52,9 @@ mod tests {
         config::JsonMiddlewareConfig, json_worker::JsonWorker,
         processors::account_based::token_updates_processor::TokenAccountsProcessor,
     };
-    use rocks_db::asset::{AssetCompleteDetails, AssetLeaf};
     use rocks_db::batch_savers::BatchSaveStorage;
-    use rocks_db::inscriptions::{Inscription, InscriptionData};
+    use rocks_db::columns::asset::{AssetCompleteDetails, AssetLeaf};
+    use rocks_db::columns::inscriptions::{Inscription, InscriptionData};
     use rocks_db::tree_seq::TreesGaps;
     use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
     use serde_json::{json, Value};

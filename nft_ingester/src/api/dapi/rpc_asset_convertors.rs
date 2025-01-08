@@ -2,11 +2,12 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 
-use entities::models::{AssetSignatureWithPagination, OffChainData};
+use entities::models::AssetSignatureWithPagination;
 use entities::models::{CoreFeesAccountWithSortingID, TokenAccResponse};
 use jsonpath_lib::JsonPathError;
 use mime_guess::Mime;
 use num_traits::Pow;
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::errors::StorageError;
 use serde_json::Value;
 use solana_program::pubkey::Pubkey;
@@ -28,8 +29,9 @@ use crate::api::dapi::response::InscriptionResponse;
 use crate::api::dapi::rpc_asset_models::{PriceInfo, TokenInfo};
 use entities::api_req_params::Pagination;
 use entities::enums::{Interface, SpecificationVersions};
-use rocks_db::asset::AssetCollection;
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetStaticDetails};
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetStaticDetails,
+};
 use usecase::response_prettier::filter_non_null_fields;
 
 pub fn to_uri(uri: String) -> Option<Url> {
@@ -89,7 +91,8 @@ pub fn get_content(
     offchain_data: &OffChainData,
 ) -> Result<Content, StorageError> {
     let json_uri = asset_dynamic.url.value.clone();
-    let metadata: Value = serde_json::from_str(&offchain_data.metadata).unwrap_or(Value::Null);
+    let metadata = serde_json::from_str(&offchain_data.metadata.clone().unwrap_or_default())
+        .unwrap_or(Value::Null);
     let chain_data: Value = serde_json::from_str(
         asset_dynamic
             .onchain_data
@@ -232,7 +235,8 @@ fn extract_collection_metadata(
     asset_dynamic: &AssetDynamicDetails,
     offchain_data: &OffChainData,
 ) -> MetadataMap {
-    let metadata: Value = serde_json::from_str(&offchain_data.metadata).unwrap_or(Value::Null);
+    let metadata = serde_json::from_str(&offchain_data.metadata.clone().unwrap_or_default())
+        .unwrap_or(Value::Null);
     let chain_data: Value = serde_json::from_str(
         asset_dynamic
             .onchain_data

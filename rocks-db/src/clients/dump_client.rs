@@ -1,6 +1,6 @@
 use crate::asset::MplCoreCollectionAuthority;
-use crate::asset_generated::asset as fb;
 use crate::column::TypedColumn;
+use crate::generated::asset_generated::asset as fb;
 use crate::key_encoders::encode_u64x2_pubkey;
 use crate::storage_traits::AssetUpdatedKey;
 use crate::{column::Column, storage_traits::Dumper, Storage};

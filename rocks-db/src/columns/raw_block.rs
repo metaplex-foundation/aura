@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::errors::StorageError;
 use crate::SlotStorage;
 use crate::{column::TypedColumn, key_encoders};
 use async_trait::async_trait;
@@ -20,6 +21,14 @@ impl TypedColumn for RawBlock {
     fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
         key_encoders::decode_u64(bytes)
     }
+
+    fn decode(bytes: &[u8]) -> crate::Result<Self::ValueType> {
+        serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string()))
+    }
+
+    fn encode(v: &Self::ValueType) -> crate::Result<Vec<u8>> {
+        serde_cbor::to_vec(&v).map_err(|e| StorageError::Common(e.to_string()))
+    }
 }
 
 #[async_trait]
@@ -31,7 +40,7 @@ impl BlockProducer for SlotStorage {
     ) -> Result<solana_transaction_status::UiConfirmedBlock, InterfaceStorageError> {
         let raw_block = self
             .raw_blocks_cbor
-            .get_cbor_encoded(slot)
+            .get_async(slot)
             .await
             .map_err(|e| InterfaceStorageError::Common(e.to_string()))?;
         if raw_block.is_none() {

@@ -109,7 +109,7 @@ impl TestSetup {
                 red_metrics.clone(),
                 MIN_PG_CONNECTIONS,
                 POSTGRE_MIGRATIONS_PATH,
-                Some("".into()),
+                Some(PathBuf::from_str("./dump").unwrap()),
             )
             .await
             .unwrap(),

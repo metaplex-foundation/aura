@@ -7,7 +7,8 @@ use axum::{
 use clap::Parser;
 use metrics_utils::ApiMetricsConfig;
 use prometheus_client::registry::Registry;
-use rocks_db::{asset, migrator::MigrationState};
+use rocks_db::Storage;
+use rocks_db::{columns::asset, migrator::MigrationState};
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 use serde::Deserialize;
 use std::net::SocketAddr;

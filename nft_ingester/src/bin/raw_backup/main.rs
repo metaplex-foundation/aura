@@ -2,11 +2,11 @@
 use std::sync::Arc;
 
 use clap::{arg, Parser};
-use entities::models::OffChainData;
 use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::config::init_logger;
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::offchain_data::OffChainData;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
