@@ -214,7 +214,7 @@ pub struct IngesterClapArgs {
         long,
         env = "IS_RUN_BUBBLEGUM_BACKFILLER",
         default_value_t = true,
-        help = "#bubbl Start bubblegum backfiller (default: false)"
+        help = "#bubbl Start bubblegum backfiller (default: true)"
     )]
     pub is_run_bubblegum_backfiller: bool,
     #[clap(
