@@ -40,7 +40,7 @@ services:
     network_mode: host
     volumes:
       - ${ROCKS_DB_PATH_CONTAINER}:${ROCKS_DB_PATH_CONTAINER}:ro
-      - ${ROCKS_DB_SECONDARY_PATH_CONTAINER}:${ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_SECONDARY_PATH_CONTAINER}/api:${ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
       - ${ARCHIVES_DIR}:${ARCHIVES_DIR}:ro
       - ${FILE_STORAGE_PATH}:${FILE_STORAGE_PATH_CONTAINER}:rw
       - ./heaps:/usr/src/app/heaps:rw
@@ -64,7 +64,7 @@ services:
     volumes:
       - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH_CONTAINER}:rw
       - ${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:rw
-      - ${ROCKS_DB_SECONDARY_PATH_CONTAINER}:${ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_SECONDARY_PATH_CONTAINER}/synchronizer:${ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
       - ./heaps:/usr/src/app/heaps:rw
       - ./migrations:/usr/src/app/migrations
     depends_on:
@@ -130,7 +130,6 @@ services:
       - .env
     environment:
       SLOTS_DB_PRIMARY_PATH: ${SLOTS_DB_PATH}
-      RPC_HOST: ${RPC_HOST}
       # BIG_TABLE_CREDENTIALS: /usr/src/app/creds.json # refactored this to account for the file doesn't exist case
       METRICS_PORT: 9090
     network_mode: host
