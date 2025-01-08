@@ -110,8 +110,8 @@ pub struct IngesterClapArgs {
     #[clap(
         long,
         env = "IS_ENABLE_ROCKS_MIGRATION",
-        default_value_t = false,
-        help = "Enable migration for rocksdb (default: false)"
+        default_value_t = true,
+        help = "Enable migration for rocksdb (default: true)"
     )]
     pub rocks_enable_migration: bool,
     #[clap(long, help = "Migration storage path dir")]
