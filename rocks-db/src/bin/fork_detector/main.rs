@@ -59,8 +59,13 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
     let primary_path: PathBuf = todo!();
     let secondary_path: PathBuf = todo!();
     let slots_db = Arc::new(
-        SlotStorage::open_secondary(primary_path, secondary_path, js.clone(), red_metrics.clone())
-            .expect("should open slots db"),
+        SlotStorage::open_secondary(
+            primary_path,
+            secondary_path,
+            js.clone(),
+            red_metrics.clone(),
+        )
+        .expect("should open slots db"),
     );
 
     println!("Iterating over column family...");

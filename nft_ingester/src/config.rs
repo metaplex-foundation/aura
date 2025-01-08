@@ -107,12 +107,16 @@ pub struct IngesterClapArgs {
     pub rocks_backup_url: Option<String>,
     #[clap(long, help = "Rocks backup archives dir")]
     pub rocks_backup_archives_dir: Option<String>,
-    #[clap(long,  env = "IS_ENABLE_ROCKS_MIGRATION", default_value_t = false, help = "Enable migration for rocksdb (default: false)")]
+    #[clap(
+        long,
+        env = "IS_ENABLE_ROCKS_MIGRATION",
+        default_value_t = false,
+        help = "Enable migration for rocksdb (default: false)"
+    )]
     pub rocks_enable_migration: bool,
     #[clap(long, help = "Migration storage path dir")]
     pub rocks_migration_storage_path: Option<String>,
-    
-    
+
     #[clap(
         long,
         default_value_t = false,
@@ -150,7 +154,12 @@ pub struct IngesterClapArgs {
         help = "#api Skip check tree gaps. (default: false)"
     )]
     pub skip_check_tree_gaps: bool,
-    #[clap(long, env = "INGESTER_SERVER_PORT", default_value = "9092", help = "#api Server port")]
+    #[clap(
+        long,
+        env = "INGESTER_SERVER_PORT",
+        default_value = "9092",
+        help = "#api Server port"
+    )]
     pub server_port: u16,
     #[clap(long, default_value = "50", help = "#api Max page limit")]
     pub max_page_limit: usize,
@@ -174,7 +183,7 @@ pub struct IngesterClapArgs {
         env = "IS_RUN_BACKFILLER",
         default_value_t = true,
         help = "Start backfiller (default: true)",
-        requires = "rocks_slots_db_path",
+        requires = "rocks_slots_db_path"
     )]
     pub is_run_backfiller: bool,
     #[clap(
@@ -216,14 +225,18 @@ pub struct IngesterClapArgs {
     )]
     pub should_reingest: bool,
 
-    #[clap(long,  default_value = "9099", help = "#grpc Grpc port")]
+    #[clap(long, default_value = "9099", help = "#grpc Grpc port")]
     pub peer_grpc_port: u16,
     #[clap(long, default_value = "1000000", help = "#grpc Max gap slots")]
     pub peer_grpc_max_gap_slots: u64,
     #[clap(long, default_value = "500", help = "#grpc retry interval millis")]
     pub rpc_retry_interval_millis: u64,
 
-    #[clap(long, env = "INGESTER_METRICS_PORT", help = "Metrics port. Start HTTP server to report metrics if port exist.")]
+    #[clap(
+        long,
+        env = "INGESTER_METRICS_PORT",
+        help = "Metrics port. Start HTTP server to report metrics if port exist."
+    )]
     pub metrics_port: Option<u16>,
 
     pub profiling_file_path_container: Option<String>,
@@ -272,13 +285,21 @@ pub struct SynchronizerClapArgs {
     #[clap(long, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
 
-    #[clap(long, env = "SYNCHRONIZER_METRICS_PORT", help = "Metrics port. Start HTTP server to report metrics if port exist.")]
+    #[clap(
+        long,
+        env = "SYNCHRONIZER_METRICS_PORT",
+        help = "Metrics port. Start HTTP server to report metrics if port exist."
+    )]
     pub metrics_port: Option<u16>,
     pub profiling_file_path_container: Option<String>,
 
     #[clap(long, default_value = "200000")]
     pub dump_synchronizer_batch_size: usize,
-    #[clap(long, default_value = "150000000", help="Threshold on the number of updates not being synchronized for the synchronizer to dump-load on start. 150M - that's a rough threshold after which the synchronizer will likely complete a full dymp-load cycle faster then doing an incremental sync ")]
+    #[clap(
+        long,
+        default_value = "150000000",
+        help = "Threshold on the number of updates not being synchronized for the synchronizer to dump-load on start. 150M - that's a rough threshold after which the synchronizer will likely complete a full dymp-load cycle faster then doing an incremental sync "
+    )]
     pub dump_sync_threshold: i64,
     #[clap(long, default_value = "30")]
     pub synchronizer_parallel_tasks: usize,
@@ -313,7 +334,11 @@ pub struct MigratorClapArgs {
     #[clap(long, default_value = "250")]
     pub pg_max_db_connections: u32,
 
-    #[clap(long, env = "MIGRATOR_METRICS_PORT", help = "Metrics port. Start HTTP server to report metrics if port exist.")]
+    #[clap(
+        long,
+        env = "MIGRATOR_METRICS_PORT",
+        help = "Metrics port. Start HTTP server to report metrics if port exist."
+    )]
     pub metrics_port: Option<u16>,
 
     #[clap(long, default_value = "info", help = "warn|info|debug")]
@@ -358,7 +383,11 @@ pub struct ApiClapArgs {
     #[clap(long, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
 
-    #[clap(long, env = "API_METRICS_PORT", help = "Metrics port. Start HTTP server to report metrics if port exist.")]
+    #[clap(
+        long,
+        env = "API_METRICS_PORT",
+        help = "Metrics port. Start HTTP server to report metrics if port exist."
+    )]
     pub metrics_port: Option<u16>,
     pub profiling_file_path_container: Option<String>,
     #[clap(
@@ -376,7 +405,12 @@ pub struct ApiClapArgs {
     )]
     pub is_run_profiling: bool,
 
-    #[clap(long, env = "CHECK_PROOFS", default_value_t = false, help = "Check proofs (default: false)")]
+    #[clap(
+        long,
+        env = "CHECK_PROOFS",
+        default_value_t = false,
+        help = "Check proofs (default: false)"
+    )]
     pub check_proofs: bool,
     #[clap(long, default_value = "0.1", help = "Check proofs probability")]
     pub check_proofs_probability: f64,
@@ -401,7 +435,12 @@ pub struct ApiClapArgs {
         help = "#api Archives directory"
     )]
     pub rocks_archives_dir: String,
-    #[clap(long, env = "API_SERVER_PORT", default_value = "8990", help = "#api Server port")]
+    #[clap(
+        long,
+        env = "API_SERVER_PORT",
+        default_value = "8990",
+        help = "#api Server port"
+    )]
     pub server_port: u16,
     #[clap(long, default_value = "50", help = "#api Max page limit")]
     pub max_page_limit: usize,
@@ -446,7 +485,6 @@ fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
 }
 
 pub const INGESTER_BACKUP_NAME: &str = "snapshot.tar.lz4";
-
 
 #[derive(Deserialize, Default, PartialEq, Debug, Clone, Copy, ValueEnum)]
 pub enum BackfillerSourceMode {

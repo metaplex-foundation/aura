@@ -32,12 +32,16 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_token_price_fetch() {
         let token_price_fetcher = RaydiumTokenPriceFetcher::default();
-        let token_rocket =
-            "J4YFAQRJg9Us4wiGBewHuHxHG7bjDgZ2mRG7z4HT84Nm".to_owned();
+        let token_rocket = "J4YFAQRJg9Us4wiGBewHuHxHG7bjDgZ2mRG7z4HT84Nm".to_owned();
         let token_z = "Hqc9MLy4ebx2z6PNgS1w7PiU3umYdciQZfno6wR33iqy".to_owned();
         let token_pie = "HmwZ7aL6GtQZBAd7w9mSJMVy5fRU9ra57c6bnuPCinvD".to_owned();
         let non_existed_token = Pubkey::new_unique().to_string();
-        let tokens = &[token_rocket.clone(), token_z.clone(), token_pie.clone(), non_existed_token.clone()];
+        let tokens = &[
+            token_rocket.clone(),
+            token_z.clone(),
+            token_pie.clone(),
+            non_existed_token.clone(),
+        ];
         let prices = token_price_fetcher
             .fetch_token_prices(tokens)
             .await

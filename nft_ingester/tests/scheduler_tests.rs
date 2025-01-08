@@ -1,8 +1,8 @@
 use assertables::assert_contains;
 use assertables::assert_contains_as_result;
-use entities::models::OffChainData;
 use nft_ingester::scheduler::Scheduler;
 use rocks_db::columns::asset_previews::UrlToDownload;
+use rocks_db::columns::offchain_data::OffChainData;
 use setup::await_async_for;
 use setup::rocks::RocksTestEnvironment;
 
@@ -62,14 +62,16 @@ async fn test_collect_urls_to_download() {
     let nfts = [NFT_1, NFT_2];
     nfts.iter()
         .map(|(url, metadata)| OffChainData {
-            url: url.to_string(),
-            metadata: metadata.to_string(),
+            url: Some(url.to_string()),
+            metadata: Some(metadata.to_string()),
+            storage_mutability: rocks_db::columns::offchain_data::StorageMutability::Mutable,
+            last_read_at: 0,
         })
         .for_each(|entity| {
             rocks_env
                 .storage
                 .asset_offchain_data
-                .put(entity.url.clone(), entity)
+                .put(entity.url.clone().unwrap(), entity)
                 .unwrap()
         });
 

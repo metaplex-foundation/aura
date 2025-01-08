@@ -387,7 +387,9 @@ impl std::fmt::Debug for UnprocessedAccount {
             UnprocessedAccount::BurnMplCore(_) => write!(f, "UnprocessedAccount::BurnMplCore"),
             UnprocessedAccount::MplCore(_) => write!(f, "UnprocessedAccount::MplCore"),
             UnprocessedAccount::Inscription(_) => write!(f, "UnprocessedAccount::Inscription"),
-            UnprocessedAccount::InscriptionData(_) => write!(f, "UnprocessedAccount::InscriptionData"),
+            UnprocessedAccount::InscriptionData(_) => {
+                write!(f, "UnprocessedAccount::InscriptionData")
+            }
             UnprocessedAccount::MplCoreFee(_) => write!(f, "UnprocessedAccount::MplCoreFee"),
         }
     }

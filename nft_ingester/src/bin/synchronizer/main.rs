@@ -53,7 +53,7 @@ pub async fn main() -> Result<(), IngesterError> {
             red_metrics.clone(),
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
-            Some(PathBuf::from(args.pg_dump_path.clone())),
+            Some(PathBuf::from(args.rocks_dump_path.clone())),
         )
         .await?,
     );
@@ -95,7 +95,7 @@ pub async fn main() -> Result<(), IngesterError> {
         rocks_storage.clone(),
         index_storage.clone(),
         args.dump_synchronizer_batch_size,
-        args.pg_dump_path.clone(),
+        args.rocks_dump_path.clone(),
         metrics.clone(),
         args.synchronizer_parallel_tasks,
     ));

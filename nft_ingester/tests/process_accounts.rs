@@ -29,8 +29,9 @@ mod tests {
     use nft_ingester::processors::account_based::token_updates_processor::TokenAccountsProcessor;
     use rocks_db::batch_savers::BatchSaveStorage;
     use rocks_db::column::TypedColumn;
+    use rocks_db::columns::asset::AssetAuthority;
     use rocks_db::columns::asset::AssetCompleteDetails;
-    use rocks_db::columns::assetAuthority;
+    use rocks_db::ToFlatbuffersConverter;
     use solana_program::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::str::FromStr;

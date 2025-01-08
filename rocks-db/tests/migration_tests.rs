@@ -31,54 +31,15 @@ mod tests {
             MigrationState::Version(0),
         )
         .unwrap();
-        let key = Pubkey::new_unique();
-        // TODO: asset collection data is not available anymore.
-        // Replace with some up-to-date structure and remove test ignores.
         old_storage
             .asset_offchain_data_deprecated
             .put(v1.url.clone(), v1.clone())
             .expect("should put");
         old_storage
-            .asset_collection_data
-            .backend
-            .merge_cf(
-                &old_storage
-                    .asset_collection_data
-                    .backend
-                    .cf_handle(AssetCollection::NAME)
-                    .unwrap(),
-                AssetCollection::encode_key(key),
-                serialize(&new_val).unwrap(),
-            )
-            .unwrap();
-        // close connection in the end of the scope
-        (key, new_val)
-    }
-
-    #[test]
-    #[ignore = "TODO: test migrations on relevant columns"]
-    fn test_merge_fail() {
-        let dir = TempDir::new().unwrap();
-        put_unmerged_value_to_storage(dir.path().to_str().unwrap());
-        assert_eq!(
-            Storage::open(
-                dir.path().to_str().unwrap(),
-                Arc::new(Mutex::new(JoinSet::new())),
-                Arc::new(RequestErrorDurationMetrics::new()),
-                MigrationState::Last,
-            )
-            .err()
-            .unwrap()
-            .to_string(),
-            "storage error: RocksDb(Error { message: \"Corruption: Merge operator failed\" })"
-        );
-    }
-
-    #[tokio::test]
-    #[ignore = "TODO: test migrations on relevant columns"]
-    async fn test_migration() {
-        let dir = TempDir::new().unwrap();
-        let (key, val) = put_unmerged_value_to_storage(dir.path().to_str().unwrap());
+            .asset_offchain_data_deprecated
+            .put(v2.url.clone(), v2.clone())
+            .expect("should put data");
+        drop(old_storage);
         let secondary_storage_dir = TempDir::new().unwrap();
         let migration_version_manager = Storage::open_secondary(
             path,
@@ -148,5 +109,24 @@ mod tests {
         assert_eq!(migrated_v2.url, Some(v2.url.to_string()));
         assert_eq!(migrated_v2.metadata, Some(v2.metadata));
         assert_eq!(migrated_v2.last_read_at, 0);
+    }
+
+    #[test]
+    #[ignore = "TODO: test migrations on relevant columns"]
+    fn test_merge_fail() {
+        let dir = TempDir::new().unwrap();
+        // put_unmerged_value_to_storage(dir.path().to_str().unwrap());
+        assert_eq!(
+            Storage::open(
+                dir.path().to_str().unwrap(),
+                Arc::new(Mutex::new(JoinSet::new())),
+                Arc::new(RequestErrorDurationMetrics::new()),
+                MigrationState::Last,
+            )
+            .err()
+            .unwrap()
+            .to_string(),
+            "storage error: RocksDb(Error { message: \"Corruption: Merge operator failed\" })"
+        );
     }
 }

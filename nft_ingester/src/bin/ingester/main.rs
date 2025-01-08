@@ -37,7 +37,7 @@ use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
 use nft_ingester::api::service::start_api;
 use nft_ingester::backfiller::{BackfillSource, DirectBlockParser};
 use nft_ingester::batch_mint::batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender};
-use nft_ingester::config::{IngesterClapArgs};
+use nft_ingester::config::IngesterClapArgs;
 use nft_ingester::gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller};
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration, init_primary_storage};
 use nft_ingester::json_worker::JsonWorker;
@@ -380,11 +380,9 @@ pub async fn main() -> Result<(), IngesterError> {
             let metrics: Arc<BackfillerMetricsConfig> = metrics_state.backfiller_metrics.clone();
             let slot_db = slot_db.clone();
             mutexed_tasks.lock().await.spawn(async move {
-                nft_ingester::backfiller::run_backfill_slots(shutdown_token, db, slot_db, consumer, metrics)
-                    .await;
+                nft_ingester::backfiller::run_backfill_slots(shutdown_token, db, slot_db, consumer, metrics).await;
                 Ok(())
             });
-
         }
 
         if args.run_sequence_consistent_checker {

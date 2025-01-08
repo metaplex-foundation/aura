@@ -125,7 +125,6 @@ mod tests {
                     },
                 },
             )
-            .await
             .unwrap();
         // Call get_asset_details_stream_in_range on a database
         let response = slot_storage.get_raw_blocks_stream_in_range(100, 200).await;
