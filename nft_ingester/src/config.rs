@@ -120,7 +120,7 @@ pub struct IngesterClapArgs {
     #[clap(
         long,
         default_value_t = false,
-        help = "Start onsistent checker (default: false)"
+        help = "Start consistent checker (default: false)"
     )]
     pub run_sequence_consistent_checker: bool,
 
