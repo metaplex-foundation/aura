@@ -15,6 +15,7 @@ pub struct IngesterClapArgs {
     #[clap(
         short('d'),
         long,
+        env,
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
@@ -22,6 +23,7 @@ pub struct IngesterClapArgs {
     #[clap(
         short('m'),
         long,
+        env,
         default_value = "./my_rocksdb",
         help = "Rocks db path container"
     )]
@@ -30,36 +32,42 @@ pub struct IngesterClapArgs {
     #[clap(
         short('f'),
         long,
+        env,
         default_value = "./tmp/file_storage",
         help = "File storage path"
     )]
     pub file_storage_path_container: String,
 
-    #[clap(short('p'), long, help = "example: https://mainnet-aura.metaplex.com")]
+    #[clap(
+        short('p'),
+        long,
+        env,
+        help = "example: https://mainnet-aura.metaplex.com"
+    )]
     pub rpc_host: String,
 
-    #[clap(long, default_value = "100")]
+    #[clap(long, env, default_value = "100")]
     pub pg_max_db_connections: u32,
 
-    #[clap(short('r'), long, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
+    #[clap(short('r'), long, env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
     pub redis_connection_config: Dict,
 
-    #[clap(long, default_value = "20")]
+    #[clap(long, env, default_value = "20")]
     pub redis_accounts_parsing_workers: u32,
 
-    #[clap(long, default_value = "20")]
+    #[clap(long, env, default_value = "20")]
     pub redis_transactions_parsing_workers: u32,
 
-    #[clap(long, default_value = "60")]
+    #[clap(long, env, default_value = "60")]
     pub sequence_consistent_checker_wait_period_sec: u64,
 
-    #[clap(long, default_value = "250")]
+    #[clap(long, env, default_value = "250")]
     pub account_processor_buffer_size: usize,
 
-    #[clap(long, default_value = "50")]
+    #[clap(long, env, default_value = "50")]
     pub account_processor_mpl_fees_buffer_size: usize,
 
-    #[clap(long, default_value = "100")]
+    #[clap(long, env, default_value = "100")]
     pub parallel_json_downloaders: i32,
 
     #[clap(
@@ -79,7 +87,7 @@ pub struct IngesterClapArgs {
     )]
     pub is_run_gapfiller: bool,
 
-    #[clap(long, default_value = "0.0.0.0", help = "Gapfiller peer address")]
+    #[clap(long, env, default_value = "0.0.0.0", help = "Gapfiller peer address")]
     pub gapfiller_peer_addr: String,
 
     #[clap(
@@ -90,7 +98,7 @@ pub struct IngesterClapArgs {
     )]
     pub is_run_profiling: bool,
 
-    #[clap(long, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
 
     // Group: Rocks DB Configuration
@@ -103,9 +111,9 @@ pub struct IngesterClapArgs {
         requires = "rocks_backup_archives_dir"
     )]
     pub is_restore_rocks_db: bool,
-    #[clap(long, help = "Rocks backup url")]
+    #[clap(long, env, help = "Rocks backup url")]
     pub rocks_backup_url: Option<String>,
-    #[clap(long, help = "Rocks backup archives dir")]
+    #[clap(long, env, help = "Rocks backup archives dir")]
     pub rocks_backup_archives_dir: Option<String>,
     #[clap(
         long,
@@ -114,11 +122,12 @@ pub struct IngesterClapArgs {
         help = "Enable migration for rocksdb (default: true)"
     )]
     pub rocks_enable_migration: bool,
-    #[clap(long, help = "Migration storage path dir")]
+    #[clap(long, env, help = "Migration storage path dir")]
     pub rocks_migration_storage_path: Option<String>,
 
     #[clap(
         long,
+        env,
         default_value_t = false,
         help = "Start consistent checker (default: false)"
     )]
@@ -131,10 +140,16 @@ pub struct IngesterClapArgs {
         help = "#api Check proofs (default: false)"
     )]
     pub check_proofs: bool,
-    #[clap(long, default_value = "0.1", help = "#api Check proofs probability")]
+    #[clap(
+        long,
+        env,
+        default_value = "0.1",
+        help = "#api Check proofs probability"
+    )]
     pub check_proofs_probability: f64,
     #[clap(
         long,
+        env,
         default_value = "finalized",
         value_enum,
         help = "#api Check proofs commitment. [possible values: max, recent, root, single, singleGossip, processed, confirmed, finalized]"
@@ -143,6 +158,7 @@ pub struct IngesterClapArgs {
 
     #[clap(
         long,
+        env,
         default_value = "/rocksdb/_rocks_backup_archives",
         help = "#api Archives directory"
     )]
@@ -161,21 +177,22 @@ pub struct IngesterClapArgs {
         help = "#api Server port"
     )]
     pub server_port: u16,
-    #[clap(long, default_value = "50", help = "#api Max page limit")]
+    #[clap(long, env, default_value = "50", help = "#api Max page limit")]
     pub max_page_limit: usize,
     #[clap(
         long,
+        env,
         default_value = "So11111111111111111111111111111111111111112",
         help = "#api Native mint pubkey"
     )]
     pub native_mint_pubkey: String,
-    #[clap(long, help = "#api Consistence synchronization api threshold")]
+    #[clap(long, env, help = "#api Consistence synchronization api threshold")]
     pub consistence_synchronization_api_threshold: Option<u64>,
-    #[clap(long, help = "#api Consistence backfilling slots threshold")]
+    #[clap(long, env, help = "#api Consistence backfilling slots threshold")]
     pub consistence_backfilling_slots_threshold: Option<u64>,
-    #[clap(long, help = "#api Batch mint service port")]
+    #[clap(long, env, help = "#api Batch mint service port")]
     pub batch_mint_service_port: Option<u16>,
-    #[clap(long, help = "#api Storage service base url")]
+    #[clap(long, env, help = "#api Storage service base url")]
     pub storage_service_base_url: Option<String>,
 
     #[clap(
@@ -188,26 +205,29 @@ pub struct IngesterClapArgs {
     pub is_run_backfiller: bool,
     #[clap(
         long,
+        env,
         help = "#backfiller Path to the RocksDB instance with slots (required for the backfiller to work)"
     )]
     pub rocks_slots_db_path: Option<String>,
 
     #[clap(
         long,
+        env,
         default_value = "./tmp/file_storage/rocks/secondary/ingester-slots",
         help = "#backfiller Path to the secondary RocksDB instance with slots (required for the backfiller to work)"
     )]
     pub rocks_secondary_slots_db_path: String,
 
-    #[clap(long, help = "#backfiller Backfill rpc address")]
+    #[clap(long, env, help = "#backfiller Backfill rpc address")]
     pub backfill_rpc_address: Option<String>,
     #[clap(
         long,
+        env,
         default_value = "rpc",
         help = "#backfiller Backfill source mode."
     )]
     pub backfiller_source_mode: BackfillerSourceMode,
-    #[clap(long, value_parser = parse_json_to_big_table_config, help ="#backfiller Big table config")]
+    #[clap(long, env, value_parser = parse_json_to_big_table_config, help ="#backfiller Big table config")]
     pub big_table_config: Option<BigTableConfig>,
 
     #[clap(
@@ -225,11 +245,11 @@ pub struct IngesterClapArgs {
     )]
     pub should_reingest: bool,
 
-    #[clap(long, default_value = "9099", help = "#grpc Grpc port")]
+    #[clap(long, env, default_value = "9099", help = "#grpc Grpc port")]
     pub peer_grpc_port: u16,
-    #[clap(long, default_value = "1000000", help = "#grpc Max gap slots")]
+    #[clap(long, env, default_value = "1000000", help = "#grpc Max gap slots")]
     pub peer_grpc_max_gap_slots: u64,
-    #[clap(long, default_value = "500", help = "#grpc retry interval millis")]
+    #[clap(long, env, default_value = "500", help = "#grpc retry interval millis")]
     pub rpc_retry_interval_millis: u64,
 
     #[clap(
@@ -240,10 +260,10 @@ pub struct IngesterClapArgs {
     pub metrics_port: Option<u16>,
 
     pub profiling_file_path_container: Option<String>,
-    #[clap(long, default_value = "/usr/src/app/heaps", help = "Heap path")]
+    #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
 
-    #[clap(long, default_value = "info", help = "info|debug")]
+    #[clap(long, env, default_value = "info", help = "info|debug")]
     pub log_level: String,
 }
 
@@ -253,26 +273,34 @@ pub struct SynchronizerClapArgs {
     #[clap(
         short('d'),
         long,
+        env,
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
-    #[clap(long, default_value = "100")]
+    #[clap(long, env, default_value = "100")]
     pub pg_max_db_connections: u32,
 
     #[clap(
         short('m'),
         long,
+        env,
         default_value = "./my_rocksdb",
         help = "Rocks db path container"
     )]
     pub rocks_db_path_container: String,
     #[clap(
         long,
+        env,
         default_value = "./my_rocksdb_secondary",
         help = "Rocks db secondary path container"
     )]
     pub rocks_db_secondary_path: String,
-    #[clap(long, default_value = "./tmp/rocks_dump", help = "RocksDb dump path")]
+    #[clap(
+        long,
+        env,
+        default_value = "./tmp/rocks_dump",
+        help = "RocksDb dump path"
+    )]
     pub rocks_dump_path: String,
 
     #[clap(
@@ -282,7 +310,7 @@ pub struct SynchronizerClapArgs {
         help = "Start profiling (default: false)"
     )]
     pub is_run_profiling: bool,
-    #[clap(long, default_value = "/usr/src/app/heaps", help = "Heap path")]
+    #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
 
     #[clap(
@@ -293,45 +321,52 @@ pub struct SynchronizerClapArgs {
     pub metrics_port: Option<u16>,
     pub profiling_file_path_container: Option<String>,
 
-    #[clap(long, default_value = "200000")]
+    #[clap(long, env, default_value = "200000")]
     pub dump_synchronizer_batch_size: usize,
     #[clap(
         long,
+        env,
         default_value = "150000000",
         help = "Threshold on the number of updates not being synchronized for the synchronizer to dump-load on start. 150M - that's a rough threshold after which the synchronizer will likely complete a full dymp-load cycle faster then doing an incremental sync "
     )]
     pub dump_sync_threshold: i64,
-    #[clap(long, default_value = "30")]
+    #[clap(long, env, default_value = "30")]
     pub synchronizer_parallel_tasks: usize,
-    #[clap(long, default_value = "0")]
+    #[clap(long, env, default_value = "0")]
     pub timeout_between_syncs_sec: u64,
 
-    #[clap(long, default_value = "info", help = "warn|info|debug")]
+    #[clap(long, env, default_value = "info", help = "warn|info|debug")]
     pub log_level: String,
 }
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct MigratorClapArgs {
-    #[clap(long, help = "Rocks json source db dir")]
+    #[clap(long, env, help = "Rocks json source db dir")]
     pub rocks_json_source_db: String,
-    #[clap(long, help = "Rocks json target db dir")]
+    #[clap(long, env, help = "Rocks json target db dir")]
     pub rocks_json_target_db: String,
-    #[clap(long, default_value = "./tmp/rocks_dump", help = "RocksDb dump path")]
+    #[clap(
+        long,
+        env,
+        default_value = "./tmp/rocks_dump",
+        help = "RocksDb dump path"
+    )]
     pub rocks_dump_path: String,
 
-    #[clap(long, default_value = "full", help = "Json migrator mode")]
+    #[clap(long, env, default_value = "full", help = "Json migrator mode")]
     pub migrator_mode: JsonMigratorMode,
 
     #[clap(
         short('d'),
         long,
+        env,
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
-    #[clap(long, default_value = "10")]
+    #[clap(long, env, default_value = "10")]
     pub pg_min_db_connections: u32,
-    #[clap(long, default_value = "250")]
+    #[clap(long, env, default_value = "250")]
     pub pg_max_db_connections: u32,
 
     #[clap(
@@ -341,46 +376,59 @@ pub struct MigratorClapArgs {
     )]
     pub metrics_port: Option<u16>,
 
-    #[clap(long, default_value = "info", help = "warn|info|debug")]
+    #[clap(long, env, default_value = "info", help = "warn|info|debug")]
     pub log_level: String,
 }
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct ApiClapArgs {
-    #[clap(short('p'), long, help = "example: https://mainnet-aura.metaplex.com")]
+    #[clap(
+        short('p'),
+        long,
+        env,
+        help = "example: https://mainnet-aura.metaplex.com"
+    )]
     pub rpc_host: String,
 
     #[clap(
         short('d'),
         long,
+        env,
         help = "example: postgres://solana:solana@localhost:5432/aura_db"
     )]
     pub pg_database_url: String,
-    #[clap(long, default_value = "10")]
+    #[clap(long, env, default_value = "10")]
     pub pg_min_db_connections: u32,
-    #[clap(long, default_value = "250")]
+    #[clap(long, env, default_value = "250")]
     pub pg_max_db_connections: u32,
 
     #[clap(
         short('m'),
         long,
+        env,
         default_value = "./my_rocksdb",
         help = "Rocks db path container"
     )]
     pub rocks_db_path_container: String,
     #[clap(
         long,
+        env,
         default_value = "./my_rocksdb_secondary",
         help = "Rocks db secondary path container"
     )]
     pub rocks_db_secondary_path: String,
-    #[clap(long, default_value = "2")]
+    #[clap(long, env, default_value = "2")]
     pub rocks_sync_interval_seconds: u64,
-    #[clap(long, default_value = "./tmp/rocks_dump", help = "RocksDb dump path")]
+    #[clap(
+        long,
+        env,
+        default_value = "./tmp/rocks_dump",
+        help = "RocksDb dump path"
+    )]
     pub rocks_dump_path: String,
 
-    #[clap(long, default_value = "/usr/src/app/heaps", help = "Heap path")]
+    #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
 
     #[clap(
@@ -412,10 +460,11 @@ pub struct ApiClapArgs {
         help = "Check proofs (default: false)"
     )]
     pub check_proofs: bool,
-    #[clap(long, default_value = "0.1", help = "Check proofs probability")]
+    #[clap(long, env, default_value = "0.1", help = "Check proofs probability")]
     pub check_proofs_probability: f64,
     #[clap(
         long,
+        env,
         default_value = "finalized",
         value_enum,
         help = "Check proofs commitment. [possible values: max, recent, root, single, singleGossip, processed, confirmed, finalized]"
@@ -425,12 +474,14 @@ pub struct ApiClapArgs {
     #[clap(
         short('f'),
         long,
+        env,
         default_value = "./tmp/file_storage",
         help = "File storage path"
     )]
     pub file_storage_path_container: String,
     #[clap(
         long,
+        env,
         default_value = "/rocksdb/_rocks_backup_archives",
         help = "#api Archives directory"
     )]
@@ -442,29 +493,30 @@ pub struct ApiClapArgs {
         help = "#api Server port"
     )]
     pub server_port: u16,
-    #[clap(long, default_value = "50", help = "#api Max page limit")]
+    #[clap(long, env, default_value = "50", help = "#api Max page limit")]
     pub max_page_limit: usize,
     #[clap(
         long,
+        env,
         default_value = "So11111111111111111111111111111111111111112",
         help = "#api Native mint pubkey"
     )]
     pub native_mint_pubkey: String,
-    #[clap(long, help = "#api Consistence synchronization api threshold")]
+    #[clap(long, env, help = "#api Consistence synchronization api threshold")]
     pub consistence_synchronization_api_threshold: Option<u64>,
-    #[clap(long, help = "#api Consistence backfilling slots threshold")]
+    #[clap(long, env, help = "#api Consistence backfilling slots threshold")]
     pub consistence_backfilling_slots_threshold: Option<u64>,
-    #[clap(long, help = "#api Batch mint service port")]
+    #[clap(long, env, help = "#api Batch mint service port")]
     pub batch_mint_service_port: Option<u16>,
-    #[clap(long, help = "#api Storage service base url")]
+    #[clap(long, env, help = "#api Storage service base url")]
     pub storage_service_base_url: Option<String>,
 
-    #[clap(long, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
-    #[clap(long, default_value = "100")]
+    #[clap(long, env, default_value = "100")]
     pub parallel_json_downloaders: i32,
 
-    #[clap(long, default_value = "info", help = "info|debug")]
+    #[clap(long, env, default_value = "info", help = "info|debug")]
     pub log_level: String,
 }
 
