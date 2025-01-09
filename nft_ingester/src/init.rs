@@ -1,4 +1,3 @@
-use crate::config::IngesterConfig;
 use crate::error::IngesterError;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::MetricState;
@@ -18,7 +17,8 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::log::log;
+use tracing::{error, info};
 
 const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
 
@@ -50,16 +50,12 @@ pub async fn init_index_storage_with_migration(
 }
 
 pub async fn init_primary_storage(
-    config: &IngesterConfig,
+    db_path: &str,
+    enable_migration_rocksdb: bool,
+    migration_storage_path: &Option<String>,
     metrics_state: &MetricState,
     mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-    default_rocksdb_path: &str,
 ) -> Result<Storage, IngesterError> {
-    let db_path = config
-        .rocks_db_path_container
-        .as_deref()
-        .unwrap_or(default_rocksdb_path);
-
     Storage::open(
         db_path,
         mutexed_tasks.clone(),
@@ -67,21 +63,27 @@ pub async fn init_primary_storage(
         MigrationState::CreateColumnFamilies,
     )?;
 
-    let migration_version_manager_dir = TempDir::new()?;
-    let migration_version_manager = Storage::open_secondary(
-        db_path,
-        migration_version_manager_dir.path().to_str().unwrap(),
-        mutexed_tasks.clone(),
-        metrics_state.red_metrics.clone(),
-        MigrationState::Last,
-    )?;
+    if enable_migration_rocksdb {
+        let migration_version_manager_dir = TempDir::new()?;
+        let migration_version_manager = Storage::open_secondary(
+            db_path,
+            migration_version_manager_dir.path().to_str().unwrap(),
+            mutexed_tasks.clone(),
+            metrics_state.red_metrics.clone(),
+            MigrationState::Last,
+        )?;
 
-    Storage::apply_all_migrations(
-        db_path,
-        &config.migration_storage_path,
-        Arc::new(migration_version_manager),
-    )
-    .await?;
+        Storage::apply_all_migrations(
+            db_path,
+            migration_storage_path
+                .as_deref()
+                .ok_or(IngesterError::ConfigurationError {
+                    msg: "Migration storage path is not set".to_string(),
+                })?,
+            Arc::new(migration_version_manager),
+        )
+        .await?;
+    }
 
     Ok(Storage::open(
         db_path,

@@ -522,7 +522,8 @@ pub async fn index_transaction(setup: &TestSetup, sig: Signature) {
 
     setup
         .tx_processor
-        .process_transaction(ready_to_process_tx)
+        .process_transaction(ready_to_process_tx, false) // TODO:
+        // is from finalized source or not?
         .await
         .unwrap();
 

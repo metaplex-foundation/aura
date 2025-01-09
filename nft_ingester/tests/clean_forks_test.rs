@@ -28,9 +28,13 @@ use tokio::sync::broadcast;
 async fn test_clean_forks() {
     use std::collections::{HashMap, HashSet};
 
-    use rocks_db::{cl_items::ClItemKey, leaf_signatures::LeafSignature};
+    use rocks_db::{columns::cl_items::ClItemKey, columns::leaf_signatures::LeafSignature};
 
-    let storage = RocksTestEnvironment::new(&[]).storage;
+    let RocksTestEnvironment {
+        storage,
+        slot_storage,
+        ..
+    } = RocksTestEnvironment::new(&[]);
     let first_tree_key =
         solana_program::pubkey::Pubkey::from_str("5zYdh7eB538fv5Xnjbqg2rZfapY993vwwNYUoP59uz61")
             .unwrap();
@@ -448,7 +452,7 @@ async fn test_clean_forks() {
         .await
         .unwrap();
 
-    storage
+    slot_storage
         .raw_blocks_cbor
         .put_async(
             10000,
@@ -468,7 +472,7 @@ async fn test_clean_forks() {
         )
         .await
         .unwrap();
-    storage
+    slot_storage
         .raw_blocks_cbor
         .put_async(
             10001,
@@ -488,7 +492,7 @@ async fn test_clean_forks() {
         )
         .await
         .unwrap();
-    storage
+    slot_storage
         .raw_blocks_cbor
         .put_async(
             10002,
@@ -508,7 +512,7 @@ async fn test_clean_forks() {
         )
         .await
         .unwrap();
-    storage
+    slot_storage
         .raw_blocks_cbor
         .put_async(
             10005,
@@ -528,7 +532,7 @@ async fn test_clean_forks() {
         )
         .await
         .unwrap();
-    storage
+    slot_storage
         .raw_blocks_cbor
         .put_async(
             10006,
@@ -549,7 +553,7 @@ async fn test_clean_forks() {
         .await
         .unwrap();
     // Need for SLOT_CHECK_OFFSET
-    storage
+    slot_storage
         .raw_blocks_cbor
         .put_async(
             30000,
@@ -642,7 +646,7 @@ async fn test_clean_forks() {
     let rx = shutdown_rx.resubscribe();
     let fork_cleaner = ForkCleaner::new(
         storage.clone(),
-        storage.clone(),
+        slot_storage.clone(),
         metrics_state.fork_cleaner_metrics.clone(),
     );
     fork_cleaner.clean_forks(rx.resubscribe()).await;
@@ -715,7 +719,11 @@ async fn test_clean_forks() {
 #[tokio::test]
 async fn test_process_forked_transaction() {
     let metrics_state = MetricState::new();
-    let storage = RocksTestEnvironment::new(&[]).storage;
+    let RocksTestEnvironment {
+        storage,
+        slot_storage,
+        ..
+    } = RocksTestEnvironment::new(&[]);
 
     let tree = Pubkey::new_unique();
 
@@ -899,7 +907,7 @@ async fn test_process_forked_transaction() {
     };
 
     storage
-        .store_transaction_result(&normal_transaction, true)
+        .store_transaction_result(&normal_transaction, true, true)
         .await
         .unwrap();
 
@@ -915,7 +923,7 @@ async fn test_process_forked_transaction() {
     };
 
     storage
-        .store_transaction_result(&forked_transaction, true)
+        .store_transaction_result(&forked_transaction, true, true)
         .await
         .unwrap();
 
@@ -923,7 +931,7 @@ async fn test_process_forked_transaction() {
     // if some slot is not in raw_blocks_cbor - it's forked one
     //
     // for this test all we need is key from Rocks raw_blocks_cbor column family, so RawBlock data could be arbitrary
-    storage
+    slot_storage
         .raw_blocks_cbor
         .put(
             slot_normal_tx,
@@ -941,12 +949,11 @@ async fn test_process_forked_transaction() {
                 },
             },
         )
-        .await
         .unwrap();
 
     // Required for SLOT_CHECK_OFFSET
     // 16000 is arbitrary number
-    storage
+    slot_storage
         .raw_blocks_cbor
         .put(
             slot_normal_tx + 16000,
@@ -964,14 +971,13 @@ async fn test_process_forked_transaction() {
                 },
             },
         )
-        .await
         .unwrap();
 
     let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
     let fork_cleaner = ForkCleaner::new(
         storage.clone(),
-        storage.clone(),
+        slot_storage.clone(),
         metrics_state.fork_cleaner_metrics.clone(),
     );
     fork_cleaner.clean_forks(shutdown_rx.resubscribe()).await;

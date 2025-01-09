@@ -18,7 +18,7 @@ use rocks_db::{
     columns::asset::{
         AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
     },
-    Storage,
+    SlotStorage, Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};
 
@@ -26,7 +26,9 @@ const DEFAULT_TEST_URL: &str = "http://example.com";
 
 pub struct RocksTestEnvironment {
     pub storage: Arc<Storage>,
-    _temp_dir: TempDir,
+    pub slot_storage: Arc<SlotStorage>,
+    // holds references to storage & slot storage temp dirs
+    _temp_dirs: (TempDir, TempDir),
 }
 
 pub struct RocksTestEnvironmentSetup;
@@ -43,16 +45,23 @@ pub struct GeneratedAssets {
 
 impl RocksTestEnvironment {
     pub fn new(keys: &[(u64, Pubkey)]) -> Self {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+        let storage_temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+        let slot_storage_temp_dir = TempDir::new().expect("Failed to create a temporary directory");
         let join_set = Arc::new(Mutex::new(JoinSet::new()));
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let storage = Storage::open(
-            temp_dir.path().to_str().unwrap(),
-            join_set,
+            storage_temp_dir.path().to_str().unwrap(),
+            join_set.clone(),
             red_metrics.clone(),
             MigrationState::Last,
         )
-        .expect("Failed to create a database");
+        .expect("Failed to create storage database");
+        let slot_storage = SlotStorage::open(
+            slot_storage_temp_dir.path().to_str().unwrap(),
+            join_set,
+            red_metrics.clone(),
+        )
+        .expect("Failed to create slot storage database");
 
         for &(slot, ref pubkey) in keys {
             storage
@@ -62,7 +71,8 @@ impl RocksTestEnvironment {
 
         RocksTestEnvironment {
             storage: Arc::new(storage),
-            _temp_dir: temp_dir,
+            slot_storage: Arc::new(slot_storage),
+            _temp_dirs: (storage_temp_dir, slot_storage_temp_dir),
         }
     }
 

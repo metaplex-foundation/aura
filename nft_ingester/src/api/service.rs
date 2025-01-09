@@ -206,7 +206,7 @@ async fn run_api(
     }
 
     let server = server.unwrap();
-    info!("API Server Started");
+    info!("API Server Started {}", server.address().to_string());
 
     loop {
         if !shutdown_rx.is_empty() {

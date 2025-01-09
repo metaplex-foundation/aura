@@ -5,7 +5,6 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
-use itertools::Itertools;
 use metrics_utils::ApiMetricsConfig;
 use prometheus_client::registry::Registry;
 use rocks_db::Storage;
@@ -15,8 +14,6 @@ use serde::Deserialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tempfile::TempDir;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
 
 #[derive(Parser)]
 struct Config {

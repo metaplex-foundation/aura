@@ -93,7 +93,11 @@ impl SlotStorage {
     }
 
     pub fn cf_names() -> Vec<&'static str> {
-        vec![RawBlock::NAME, MigrationVersions::NAME, OffChainDataDeprecated::NAME]
+        vec![
+            RawBlock::NAME,
+            MigrationVersions::NAME,
+            OffChainDataDeprecated::NAME,
+        ]
     }
 
     pub fn open<P>(

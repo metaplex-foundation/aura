@@ -37,6 +37,8 @@ pub async fn main() -> Result<(), String> {
 }
 
 async fn find_forks(source_path: &str) -> Result<(), String> {
+    use std::path::PathBuf;
+
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     // Open source and destination databases
     let start = Instant::now();
@@ -54,10 +56,16 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
 
     println!("Opened in {:?}", start.elapsed());
 
+    let primary_path: PathBuf = todo!();
+    let secondary_path: PathBuf = todo!();
     let slots_db = Arc::new(
-        // where secondary path comes from?
-        SlotStorage::open_secondary(source_path, source_path, js.clone(), red_metrics.clone())
-            .expect("should open slots db"),
+        SlotStorage::open_secondary(
+            primary_path,
+            secondary_path,
+            js.clone(),
+            red_metrics.clone(),
+        )
+        .expect("should open slots db"),
     );
 
     println!("Iterating over column family...");

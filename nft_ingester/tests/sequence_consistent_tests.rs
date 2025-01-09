@@ -56,10 +56,10 @@ mod tests {
 
         let mut tree_iterator = storage.tree_seq_idx.iter_start();
         let (key, _) = tree_iterator.next().unwrap().unwrap();
-        let key = decode_pubkey_u64(key.to_vec()).unwrap();
+        let key = rocks_db::key_encoders::decode_pubkey_u64(key.to_vec()).unwrap();
         assert_eq!(key, (first_tree_key, 102));
         let (key, _) = tree_iterator.next().unwrap().unwrap();
-        let key = decode_pubkey_u64(key.to_vec()).unwrap();
+        let key = rocks_db::key_encoders::decode_pubkey_u64(key.to_vec()).unwrap();
         assert_eq!(key, (second_tree_key, 103));
         assert_eq!(tree_iterator.next(), None);
     }

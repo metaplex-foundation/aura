@@ -73,8 +73,8 @@ impl<'a> TestEnvironment<'a> {
         let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
-            BATCH_SIZE,
-            "".to_string(),
+            200000,
+            "/tmp/sync_dump".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
         );

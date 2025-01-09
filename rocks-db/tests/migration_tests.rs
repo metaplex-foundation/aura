@@ -110,4 +110,23 @@ mod tests {
         assert_eq!(migrated_v2.metadata, Some(v2.metadata));
         assert_eq!(migrated_v2.last_read_at, 0);
     }
+
+    #[test]
+    #[ignore = "TODO: test migrations on relevant columns"]
+    fn test_merge_fail() {
+        let dir = TempDir::new().unwrap();
+        // put_unmerged_value_to_storage(dir.path().to_str().unwrap());
+        assert_eq!(
+            Storage::open(
+                dir.path().to_str().unwrap(),
+                Arc::new(Mutex::new(JoinSet::new())),
+                Arc::new(RequestErrorDurationMetrics::new()),
+                MigrationState::Last,
+            )
+            .err()
+            .unwrap()
+            .to_string(),
+            "storage error: RocksDb(Error { message: \"Corruption: Merge operator failed\" })"
+        );
+    }
 }
