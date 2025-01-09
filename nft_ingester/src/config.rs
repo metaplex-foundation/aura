@@ -49,7 +49,7 @@ pub struct IngesterClapArgs {
     #[clap(long, env, default_value = "100")]
     pub pg_max_db_connections: u32,
 
-    #[clap(short('r'), long,env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
+    #[clap(short('r'), long, env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
     pub redis_connection_config: Dict,
 
     #[clap(long, env, default_value = "20")]
@@ -98,7 +98,7 @@ pub struct IngesterClapArgs {
     )]
     pub is_run_profiling: bool,
 
-    #[clap(long,env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
 
     // Group: Rocks DB Configuration
@@ -227,7 +227,7 @@ pub struct IngesterClapArgs {
         help = "#backfiller Backfill source mode."
     )]
     pub backfiller_source_mode: BackfillerSourceMode,
-    #[clap(long,env, value_parser = parse_json_to_big_table_config, help ="#backfiller Big table config")]
+    #[clap(long, env, value_parser = parse_json_to_big_table_config, help ="#backfiller Big table config")]
     pub big_table_config: Option<BigTableConfig>,
 
     #[clap(
@@ -511,7 +511,7 @@ pub struct ApiClapArgs {
     #[clap(long, env, help = "#api Storage service base url")]
     pub storage_service_base_url: Option<String>,
 
-    #[clap(long,env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     #[clap(long, env, default_value = "100")]
     pub parallel_json_downloaders: i32,
