@@ -30,7 +30,6 @@ pub async fn main() -> Result<(), IngesterError> {
     let args = ApiClapArgs::parse();
     init_logger(&args.log_level);
 
-    tracing_subscriber::fmt::init();
     info!("Starting API server...");
 
     let guard = if args.is_run_profiling {
