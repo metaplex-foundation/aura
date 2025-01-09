@@ -1,10 +1,9 @@
 use clap::{Parser, ValueEnum};
 use figment::value::Dict;
-use interface::asset_streaming_and_discovery::PeerDiscovery;
+
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
-use std::fmt::Display;
-use std::net::ToSocketAddrs;
+
 use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;

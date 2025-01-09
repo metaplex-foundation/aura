@@ -1,12 +1,12 @@
 use clap::Parser;
-use grpc::gapfiller::gap_filler_service_server::GapFillerServiceServer;
+
 use nft_ingester::api::service::start_api;
-use nft_ingester::config::{init_logger, ApiClapArgs, SynchronizerClapArgs};
+use nft_ingester::config::{init_logger, ApiClapArgs};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
 use nft_ingester::json_worker::JsonWorker;
 use prometheus_client::registry::Registry;
-use std::cmp::min;
+
 use std::sync::Arc;
 use tracing::{error, info};
 
@@ -18,7 +18,7 @@ use rocks_db::Storage;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinSet;
-use tonic::transport::Server;
+
 use usecase::proofs::MaybeProofChecker;
 
 #[cfg(feature = "profiling")]

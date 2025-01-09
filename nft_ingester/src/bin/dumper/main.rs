@@ -153,8 +153,8 @@ pub async fn main() -> Result<(), IngesterError> {
         let metadata_file = File::create(metadata_path.clone())
             .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
 
-        let start = start.clone();
-        let end = end.clone();
+        let start = *start;
+        let end = *end;
         let shutdown_rx = shutdown_rx.resubscribe();
         let metrics = metrics.clone();
         let rocks_storage = rocks_storage.clone();
@@ -189,8 +189,8 @@ pub async fn main() -> Result<(), IngesterError> {
         let fungible_tokens_file = File::create(fungible_tokens_path.clone())
             .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
 
-        let start = start.clone();
-        let end = end.clone();
+        let start = *start;
+        let end = *end;
         let shutdown_rx = shutdown_rx.resubscribe();
         let metrics = metrics.clone();
         let rocks_storage = rocks_storage.clone();
@@ -211,7 +211,7 @@ pub async fn main() -> Result<(), IngesterError> {
         let cnt = task
             .map_err(|e| e.to_string())?
             .map_err(|e| e.to_string())?;
-        total_assets = total_assets + cnt;
+        total_assets += cnt;
     }
     let duration = start_time.elapsed();
     tracing::info!(

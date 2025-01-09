@@ -16,10 +16,7 @@ pub enum StorageMutability {
 
 impl StorageMutability {
     pub fn is_mutable(&self) -> bool {
-        match self {
-            StorageMutability::Immutable => false,
-            StorageMutability::Mutable => true,
-        }
+        self == &StorageMutability::Mutable
     }
 }
 
@@ -31,9 +28,9 @@ impl From<&str> for StorageMutability {
             || storage_mutability.starts_with("https://arweave")
             || storage_mutability.starts_with("https://www.arweave")
         {
-            return StorageMutability::Immutable;
+            StorageMutability::Immutable
         } else {
-            return StorageMutability::Mutable;
+            StorageMutability::Mutable
         }
     }
 }
@@ -58,7 +55,7 @@ impl<'a> From<fb::OffChainData<'a>> for OffChainData {
     }
 }
 
-impl<'a> From<fb::StorageMutability> for StorageMutability {
+impl From<fb::StorageMutability> for StorageMutability {
     fn from(storage_mutability: fb::StorageMutability) -> Self {
         match storage_mutability.variant_name() {
             Some("Immutable") => StorageMutability::Immutable,
@@ -101,11 +98,11 @@ impl<'a> ToFlatbuffersConverter<'a> for OffChainData {
 
     fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target> {
         let storage_mutability = self.storage_mutability.clone().into();
-        let url = self.url.as_ref().map(|url| builder.create_string(&url));
+        let url = self.url.as_ref().map(|url| builder.create_string(url));
         let metadata = self
             .metadata
             .as_ref()
-            .map(|metadata| builder.create_string(&metadata));
+            .map(|metadata| builder.create_string(metadata));
 
         fb::OffChainData::create(
             builder,

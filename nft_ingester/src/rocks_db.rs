@@ -56,20 +56,20 @@ pub async fn restore_rocksdb(
     rocks_backup_archives_dir: &str,
     rocks_db_path_container: &str,
 ) -> Result<(), BackupServiceError> {
-    create_dir_all(&rocks_backup_archives_dir)?;
+    create_dir_all(rocks_backup_archives_dir)?;
 
     let backup_path = format!("{}/{}", rocks_backup_archives_dir, INGESTER_BACKUP_NAME);
 
-    backup_service::download_backup_archive(&rocks_backup_url, &backup_path).await?;
-    backup_service::unpack_backup_archive(&backup_path, &rocks_backup_archives_dir)?;
+    backup_service::download_backup_archive(rocks_backup_url, &backup_path).await?;
+    backup_service::unpack_backup_archive(&backup_path, rocks_backup_archives_dir)?;
 
     let unpacked_archive = format!(
         "{}/{}",
         &rocks_backup_archives_dir,
-        backup_service::get_backup_dir_name(&rocks_backup_url)
+        backup_service::get_backup_dir_name(rocks_backup_url)
     );
 
-    backup_service::restore_external_backup(&unpacked_archive, &rocks_db_path_container)?;
+    backup_service::restore_external_backup(&unpacked_archive, rocks_db_path_container)?;
 
     // remove unpacked files
     remove_dir_all(unpacked_archive)?;

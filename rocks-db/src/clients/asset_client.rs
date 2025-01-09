@@ -268,10 +268,9 @@ impl Storage {
                     .map(|spl_mint| spl_mint.is_nft())
                     .unwrap_or(false)
                 {
-                    asset
-                        .static_details
-                        .as_mut()
-                        .map(|sd| sd.specification_asset_class = SpecificationAssetClass::Nft);
+                    if let Some(sd) = asset.static_details.as_mut() {
+                        sd.specification_asset_class = SpecificationAssetClass::Nft
+                    }
                 }
             });
         Ok(AssetSelectedMaps {

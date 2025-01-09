@@ -23,7 +23,7 @@ use asset::{
     AssetDynamicDetailsDeprecated, AssetOwnerDeprecated, AssetStaticDetailsDeprecated,
     FungibleAssetsUpdateIdx, MetadataMintMap, MplCoreCollectionAuthority, SlotAssetIdx,
 };
-use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, DB};
+use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
 use crate::migrator::{MigrationState, MigrationVersions};
 
@@ -791,10 +791,12 @@ impl Storage {
 
         for cf in column_families_to_remove {
             let cf_handler = self.db.cf_handle(cf).unwrap();
-            for res in self.db.full_iterator_cf(&cf_handler, IteratorMode::Start) {
-                if let Ok((key, _value)) = res {
-                    self.db.delete_cf(&cf_handler, key).unwrap();
-                }
+            for (key, _) in self
+                .db
+                .full_iterator_cf(&cf_handler, rocksdb::IteratorMode::Start)
+                .flatten()
+            {
+                self.db.delete_cf(&cf_handler, key).unwrap();
             }
         }
     }

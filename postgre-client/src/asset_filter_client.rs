@@ -147,7 +147,7 @@ impl PgClient {
 }
 
 fn add_filter_clause<'a>(
-    mut query_builder: &mut QueryBuilder<'a, Postgres>,
+    query_builder: &mut QueryBuilder<'a, Postgres>,
     filter: &'a SearchAssetsFilter,
     options: &'a GetByMethodsOptions,
 ) -> bool {
@@ -202,7 +202,7 @@ fn add_filter_clause<'a>(
                     SpecificationAssetClass::FungibleToken,
                     SpecificationAssetClass::FungibleAsset,
                 ];
-                push_asset_class_filter(&mut query_builder, &classes, None);
+                push_asset_class_filter(query_builder, &classes, None);
             }
             TokenType::NonFungible => {
                 let classes = vec![
@@ -211,7 +211,7 @@ fn add_filter_clause<'a>(
                     SpecificationAssetClass::Nft,
                     SpecificationAssetClass::ProgrammableNft,
                 ];
-                push_asset_class_filter(&mut query_builder, &classes, None);
+                push_asset_class_filter(query_builder, &classes, None);
             }
             TokenType::RegularNFT => {
                 let classes = vec![
@@ -220,14 +220,14 @@ fn add_filter_clause<'a>(
                     SpecificationAssetClass::Nft,
                     SpecificationAssetClass::ProgrammableNft,
                 ];
-                push_asset_class_filter(&mut query_builder, &classes, Some(false));
+                push_asset_class_filter(query_builder, &classes, Some(false));
             }
             TokenType::CompressedNFT => {
                 let classes = vec![
                     SpecificationAssetClass::Nft,
                     SpecificationAssetClass::ProgrammableNft,
                 ];
-                push_asset_class_filter(&mut query_builder, &classes, Some(true));
+                push_asset_class_filter(query_builder, &classes, Some(true));
             }
             TokenType::All => {}
         }

@@ -141,7 +141,7 @@ impl Dumper for Storage {
         // Iteration over `asset_data` column via CUSTOM iterator.
         let mut iter = self.db.raw_iterator_cf(&self.asset_data.handle());
         if let Some(start_pubkey) = start_pubkey {
-            iter.seek(&start_pubkey.to_bytes());
+            iter.seek(start_pubkey.to_bytes());
         } else {
             iter.seek_to_first();
         }
@@ -394,7 +394,7 @@ impl Dumper for Storage {
             .from_writer(buf_writer);
 
         if let Some(start_pubkey) = start_pubkey {
-            iter.seek(&start_pubkey.to_bytes());
+            iter.seek(start_pubkey.to_bytes());
         } else {
             iter.seek_to_first();
         }
@@ -413,8 +413,7 @@ impl Dumper for Storage {
             if let Some(token) = iter
                 .value()
                 .map(deserialize::<TokenAccount>)
-                .map(|v| v.ok())
-                .flatten()
+                .and_then(|v| v.ok())
             {
                 if let Err(e) = writer
                     .serialize((

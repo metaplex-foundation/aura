@@ -307,8 +307,8 @@ where
             .await?;
 
         let shards = shard_pubkeys(num_shards);
-        let mut tasks: JoinSet<Result<(usize, String, String, String, String), String>> =
-            JoinSet::new();
+        type ResultWithPaths = Result<(usize, String, String, String, String), String>;
+        let mut tasks: JoinSet<ResultWithPaths> = JoinSet::new();
         for (start, end) in shards.iter() {
             let name_postfix = if num_shards > 1 {
                 format!("_shard_{}_{}", start, end)
@@ -352,8 +352,8 @@ where
             let metadata_file = File::create(metadata_path.clone())
                 .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
 
-            let start = start.clone();
-            let end = end.clone();
+            let start = *start;
+            let end = *end;
             let shutdown_rx = rx.resubscribe();
             let metrics = self.metrics.clone();
             let rocks_storage = self.primary_storage.clone();
@@ -441,8 +441,8 @@ where
             let fungible_tokens_file = File::create(fungible_tokens_path.clone())
                 .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
 
-            let start = start.clone();
-            let end = end.clone();
+            let start = *start;
+            let end = *end;
             let shutdown_rx = rx.resubscribe();
             let metrics = self.metrics.clone();
             let rocks_storage = self.primary_storage.clone();
@@ -721,7 +721,7 @@ where
 /// Returns a vector of tuples (start_pubkey, end_pubkey) for each shard.
 pub fn shard_pubkeys(num_shards: u64) -> Vec<(Pubkey, Pubkey)> {
     // Total keyspace as BigUint
-    let total_keyspace = BigUint::from_bytes_be(&[0xffu8; 32].as_slice());
+    let total_keyspace = BigUint::from_bytes_be([0xffu8; 32].as_slice());
     let shard_size = &total_keyspace / num_shards;
 
     let mut shards = Vec::new();

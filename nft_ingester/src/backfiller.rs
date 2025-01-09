@@ -20,11 +20,10 @@ use solana_transaction_status::{
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time;
-use tokio::sync::broadcast::Receiver;
-use tokio::task::JoinError;
+
 use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use usecase::bigtable::{is_bubblegum_transaction_encoded, BigTableClient};
 use usecase::slots_collector::SlotsGetter;
 
@@ -202,7 +201,7 @@ where
                     continue;
                 }
             };
-            let block_time = raw_block.block.block_time.clone();
+            let block_time = raw_block.block.block_time;
             if let Err(e) = consumer.consume_block(slot, raw_block.block).await {
                 error!("Error processing slot {}: {}", slot, e);
             }

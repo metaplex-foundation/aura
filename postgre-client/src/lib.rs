@@ -239,7 +239,7 @@ impl PgClient {
             .await?;
         self.recreate_asset_constraints(&mut transaction).await?;
 
-        transaction.commit().await.map_err(|e| e)?;
+        transaction.commit().await?;
         // those await above will not always rollback the tx
         // take this into account if we use this function somewhere else except the tests
 

@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use clap::{arg, Parser};
-use entities::models::RawBlock;
+
 use metrics_utils::red::RequestErrorDurationMetrics;
 use nft_ingester::config::init_logger;
 use rocks_db::column::TypedColumn;

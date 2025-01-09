@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -74,6 +75,12 @@ impl InMemorySlotsDumper {
     pub async fn clear(&self) {
         let mut slots = self.slots.lock().await;
         slots.clear();
+    }
+}
+
+impl Default for InMemorySlotsDumper {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -330,41 +337,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if let Some(db_slot) = current_db_slot {
-            if slot == db_slot {
-                // Slot exists in RocksDB
-                // Advance both iterators
-                next_slot = slots_iter.next();
-                db_iter.next();
-                current_db_slot = if db_iter.valid() {
-                    if let Some(key_bytes) = db_iter.key() {
-                        RawBlock::decode_key(key_bytes.to_vec()).ok()
+            match slot.cmp(&db_slot) {
+                Ordering::Equal => {
+                    // Slot exists in RocksDB
+                    // Advance both iterators
+                    next_slot = slots_iter.next();
+                    db_iter.next();
+                    current_db_slot = if db_iter.valid() {
+                        if let Some(key_bytes) = db_iter.key() {
+                            RawBlock::decode_key(key_bytes.to_vec()).ok()
+                        } else {
+                            None
+                        }
                     } else {
                         None
-                    }
-                } else {
-                    None
-                };
-            } else if slot < db_slot {
-                // Slot is missing in RocksDB
-                {
-                    let mut missing_slots_lock = missing_slots.lock().unwrap();
-                    missing_slots_lock.push(slot);
+                    };
                 }
-                // Advance slots iterator
-                next_slot = slots_iter.next();
-            } else {
-                // slot > db_slot
-                // Advance RocksDB iterator
-                db_iter.next();
-                current_db_slot = if db_iter.valid() {
-                    if let Some(key_bytes) = db_iter.key() {
-                        RawBlock::decode_key(key_bytes.to_vec()).ok()
+                Ordering::Less => {
+                    // Slot is missing in RocksDB
+                    {
+                        let mut missing_slots_lock = missing_slots.lock().unwrap();
+                        missing_slots_lock.push(slot);
+                    }
+                    // Advance slots iterator
+                    next_slot = slots_iter.next();
+                }
+                Ordering::Greater => {
+                    // slot > db_slot
+                    // Advance RocksDB iterator
+                    db_iter.next();
+                    current_db_slot = if db_iter.valid() {
+                        if let Some(key_bytes) = db_iter.key() {
+                            RawBlock::decode_key(key_bytes.to_vec()).ok()
+                        } else {
+                            None
+                        }
                     } else {
                         None
-                    }
-                } else {
-                    None
-                };
+                    };
+                }
             }
         } else {
             // No more slots in RocksDB, remaining slots are missing
