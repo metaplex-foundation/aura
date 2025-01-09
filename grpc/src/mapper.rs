@@ -822,7 +822,6 @@ impl_from_enum!(
     FungibleToken,
     FungibleAsset,
     Nft,
-    PrintableNft,
     ProgrammableNft,
     MplCoreAsset,
     MplCoreCollection

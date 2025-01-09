@@ -23,7 +23,6 @@ pub enum SpecificationAssetClass {
     FungibleToken,
     FungibleAsset,
     Nft,
-    PrintableNft,
     ProgrammableNft,
     MplCoreAsset,
     MplCoreCollection,

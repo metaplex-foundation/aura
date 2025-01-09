@@ -33,9 +33,6 @@ impl From<entities::enums::SpecificationAssetClass> for SpecificationAssetClass 
                 SpecificationAssetClass::FungibleAsset
             }
             entities::enums::SpecificationAssetClass::Nft => SpecificationAssetClass::Nft,
-            entities::enums::SpecificationAssetClass::PrintableNft => {
-                SpecificationAssetClass::PrintableNft
-            }
             entities::enums::SpecificationAssetClass::ProgrammableNft => {
                 SpecificationAssetClass::ProgrammableNft
             }

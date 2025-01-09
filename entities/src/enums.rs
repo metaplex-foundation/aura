@@ -31,7 +31,6 @@ pub enum SpecificationAssetClass {
     FungibleToken,
     FungibleAsset,
     Nft,
-    PrintableNft,
     ProgrammableNft,
     MplCoreAsset,
     MplCoreCollection,
@@ -153,9 +152,11 @@ impl From<Interface> for SpecificationAssetClass {
             Interface::FungibleAsset => Self::FungibleAsset,
             Interface::FungibleToken => Self::FungibleToken,
             Interface::Nft | Interface::V1NFT | Interface::LegacyNft => Self::Nft,
-            Interface::V1PRINT => Self::PrintableNft,
             Interface::ProgrammableNFT => Self::ProgrammableNft,
-            Interface::Custom | Interface::Executable | Interface::Identity => Self::Unknown,
+            Interface::V1PRINT
+            | Interface::Custom
+            | Interface::Executable
+            | Interface::Identity => Self::Unknown,
             Interface::MplCoreAsset => Self::MplCoreAsset,
             Interface::MplCoreCollection => Self::MplCoreCollection,
         }
@@ -166,7 +167,6 @@ impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
     fn from(i: (&SpecificationVersions, &SpecificationAssetClass)) -> Self {
         match i {
             (SpecificationVersions::V1, SpecificationAssetClass::Nft) => Interface::V1NFT,
-            (SpecificationVersions::V1, SpecificationAssetClass::PrintableNft) => Interface::V1NFT,
             (SpecificationVersions::V0, SpecificationAssetClass::Nft) => Interface::LegacyNft,
             (SpecificationVersions::V1, SpecificationAssetClass::ProgrammableNft) => {
                 Interface::ProgrammableNFT
@@ -189,7 +189,6 @@ impl From<Interface> for (SpecificationVersions, SpecificationAssetClass) {
                 SpecificationVersions::V1,
                 SpecificationAssetClass::ProgrammableNft,
             ),
-            Interface::V1PRINT => (SpecificationVersions::V1, SpecificationAssetClass::PrintableNft),
             Interface::FungibleAsset => (
                 SpecificationVersions::V1,
                 SpecificationAssetClass::FungibleAsset,
