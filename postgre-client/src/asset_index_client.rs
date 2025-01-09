@@ -383,7 +383,7 @@ impl AssetIndexStorage for PgClient {
                 "base_dump_path is not set".to_string(),
             ));
         };
-        let temp_postfix = Uuid::new_v4().to_string().replace("-", "");
+        let temp_postfix = Uuid::new_v4().to_string().replace('-', "");
         let mut copy_tasks: JoinSet<Result<(), IndexDbError>> = JoinSet::new();
         for (file_path, table, columns, semaphore) in [
             ( base_path.join(creators_file_name),

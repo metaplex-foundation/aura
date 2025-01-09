@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -126,12 +125,8 @@ async fn main() {
         }
 
         // Remove duplicates and sort slots
-        let mut slots_set = HashSet::new();
-        slots_to_process = slots_to_process
-            .into_iter()
-            .filter(|x| slots_set.insert(*x))
-            .collect();
         slots_to_process.sort_unstable();
+        slots_to_process.dedup();
 
         if slots_to_process.is_empty() {
             error!("No valid slots to process. Exiting.");

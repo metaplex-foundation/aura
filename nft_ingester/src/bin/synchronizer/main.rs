@@ -1,6 +1,6 @@
 use clap::Parser;
 use entities::enums::ASSET_TYPES;
-use nft_ingester::config::{init_logger, IngesterClapArgs, SynchronizerClapArgs};
+use nft_ingester::config::{init_logger, SynchronizerClapArgs};
 use nft_ingester::error::IngesterError;
 use nft_ingester::index_syncronizer::{SyncStatus, Synchronizer};
 use nft_ingester::init::{graceful_stop, init_index_storage_with_migration};
@@ -151,7 +151,7 @@ pub async fn main() -> Result<(), IngesterError> {
     }
     while let Some(task) = sync_tasks.join_next().await {
         task.map_err(|e| {
-            IngesterError::UnrecoverableTaskError(format!("joining task failed: {}", e.to_string()))
+            IngesterError::UnrecoverableTaskError(format!("joining task failed: {}", e))
         })?;
     }
 

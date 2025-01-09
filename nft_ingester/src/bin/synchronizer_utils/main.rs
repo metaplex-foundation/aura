@@ -68,7 +68,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .into_vec()
             .expect("index after should be base58 encoded");
         let starting_key = decode_u64x2_pubkey(decoded_data).expect("Failed to decode index after");
-        let (updated_keys, last_included_key) = storage
+        let (updated_keys, _last_included_key) = storage
             .fetch_nft_asset_updated_keys(Some(starting_key), None, 500, None)
             .unwrap();
         let index = storage
@@ -90,7 +90,7 @@ pub async fn main() -> Result<(), IngesterError> {
         while it.valid() {
             total_assets_processed += 1;
             if let Some(value_bytes) = it.value() {
-                let data = fb::root_as_asset_complete_details(&value_bytes)
+                let data = fb::root_as_asset_complete_details(value_bytes)
                     .expect("Failed to deserialize asset");
 
                 // Check if owner matches
@@ -103,7 +103,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 {
                     let asset: AssetCompleteDetails = AssetCompleteDetails::from(data);
                     println!("Matching asset: {:?}", asset);
-                    matching_pubkeys.insert(asset.pubkey.clone());
+                    matching_pubkeys.insert(asset.pubkey);
                 }
             }
             it.next();

@@ -4,7 +4,7 @@ use crate::gapfiller::{GetRawBlockRequest, RangeRequest};
 use async_trait::async_trait;
 use futures::StreamExt;
 use interface::asset_streaming_and_discovery::{
-    AssetDetailsConsumer, AssetDetailsStreamNonSync, AsyncError, PeerDiscovery, RawBlocksConsumer,
+    AssetDetailsConsumer, AssetDetailsStreamNonSync, AsyncError, RawBlocksConsumer,
     RawBlocksStreamNonSync,
 };
 use interface::error::StorageError;

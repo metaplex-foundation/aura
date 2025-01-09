@@ -410,7 +410,7 @@ impl AssetIndexReader for Storage {
                 || asset_index.specification_asset_class == SpecificationAssetClass::FungibleAsset)
                 && is_nft_map
                     .get(&asset_index.pubkey)
-                    .map(|v| *v)
+                    .copied()
                     .unwrap_or_default()
             {
                 asset_index.specification_asset_class = SpecificationAssetClass::Nft;

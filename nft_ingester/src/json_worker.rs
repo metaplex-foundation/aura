@@ -281,16 +281,14 @@ impl JsonDownloader for JsonWorker {
             // Choose an IPFS gateway (you can change this to your preferred gateway)
             let gateway_url = format!("https://ipfs.io/ipfs/{}", ipfs_path);
             // Parse the rewritten URL
-            let parsed_url = Url::parse(&gateway_url).map_err(|e| {
+            Url::parse(&gateway_url).map_err(|e| {
                 JsonDownloaderError::ErrorDownloading(format!("Failed to parse IPFS URL: {:?}", e))
-            })?;
-            parsed_url
+            })?
         } else {
             // Parse the original URL
-            let parsed_url = Url::parse(&url).map_err(|e| {
+            Url::parse(&url).map_err(|e| {
                 JsonDownloaderError::ErrorDownloading(format!("Failed to parse URL: {:?}", e))
-            })?;
-            parsed_url
+            })?
         };
 
         let host = parsed_url.host_str().unwrap_or("no_host");

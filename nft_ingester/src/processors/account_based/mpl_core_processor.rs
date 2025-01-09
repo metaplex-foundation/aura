@@ -143,7 +143,7 @@ impl MplCoreProcessor {
             .iter()
             .map(|(key, value)| (format!("{:?}", key), value))
             .collect();
-        let mut plugins_json = serde_json::to_value(&ordered_plugins)
+        let mut plugins_json = serde_json::to_value(ordered_plugins)
             .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
 
         // Improve JSON output.

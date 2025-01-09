@@ -17,8 +17,8 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
-use tracing::log::log;
-use tracing::{error, info};
+
+use tracing::error;
 
 const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
 

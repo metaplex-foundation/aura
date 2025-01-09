@@ -12,6 +12,7 @@ use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 
 use crate::inmemory_slots_dumper::InMemorySlotsDumper;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn collect_sequences_gaps<R, S, F, BP, BC>(
     finalized_slot_getter: Arc<F>,
     sequence_consistent_manager: Arc<S>,

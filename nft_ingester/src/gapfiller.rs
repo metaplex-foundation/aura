@@ -14,7 +14,7 @@ use tokio::time::sleep as tokio_sleep;
 use tokio::time::Instant;
 use tracing::error;
 use tracing::log::info;
-use usecase::slots_collector::{SlotsCollector, SlotsGetter};
+use usecase::slots_collector::SlotsGetter;
 
 pub async fn process_asset_details_stream_wrapper(
     cloned_rx: Receiver<()>,
@@ -51,6 +51,7 @@ pub async fn process_asset_details_stream_wrapper(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_sequence_consistent_gapfiller<R, BP, BC>(
     rocks_storage: Arc<Storage>,
     backfiller_source: Arc<R>,
@@ -107,12 +108,13 @@ pub async fn run_sequence_consistent_gapfiller<R, BP, BC>(
 }
 
 /// Method returns the number of successfully processed assets
+#[allow(clippy::let_and_return)]
 pub async fn process_raw_blocks_stream(
-    rx: Receiver<()>,
-    storage: Arc<Storage>,
-    start_slot: u64,
-    end_slot: u64,
-    mut raw_blocks_consumer: impl RawBlocksConsumer,
+    _rx: Receiver<()>,
+    _storage: Arc<Storage>,
+    _start_slot: u64,
+    _end_slot: u64,
+    _raw_blocks_consumer: impl RawBlocksConsumer,
 ) -> u64 {
     // TODO: move to slot persister
     // let mut raw_blocks_streamer = match raw_blocks_consumer
@@ -126,7 +128,7 @@ pub async fn process_raw_blocks_stream(
     //     }
     // };
 
-    let mut processed_slots = 0;
+    let processed_slots = 0;
 
     // while rx.is_empty() {
     //     match raw_blocks_streamer.next().await {

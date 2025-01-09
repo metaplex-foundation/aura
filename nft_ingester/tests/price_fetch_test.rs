@@ -4,7 +4,7 @@ mod tests {
     use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater, SOLANA_CURRENCY};
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use solana_program::pubkey::Pubkey;
-    use std::str::FromStr;
+
     use testcontainers::clients::Cli;
 
     #[tokio::test(flavor = "multi_thread")]

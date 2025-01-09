@@ -127,7 +127,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let index_pg_storage = Arc::new(
         init_index_storage_with_migration(
             &args.pg_database_url,
-            args.pg_max_db_connections.clone(),
+            args.pg_max_db_connections,
             metrics_state.red_metrics.clone(),
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
@@ -216,7 +216,6 @@ pub async fn main() -> Result<(), IngesterError> {
         let gaped_data_client = Client::connect(&args.gapfiller_peer_addr)
             .await
             .map_err(|e| error!("GRPC Client new: {e}"))
-            .ok()
             .expect("Failed to create GRPC Client");
 
         while first_processed_slot.load(Ordering::Relaxed) == 0 && shutdown_rx.is_empty() {

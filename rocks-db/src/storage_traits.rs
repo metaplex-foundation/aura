@@ -55,6 +55,7 @@ pub trait AssetIndexReader {
 
 #[automock]
 pub trait Dumper {
+    #[allow(clippy::too_many_arguments)]
     fn dump_nft_csv(
         &self,
         assets_file: File,

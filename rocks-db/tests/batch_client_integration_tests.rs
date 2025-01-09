@@ -3,8 +3,6 @@ mod tests {
     use std::collections::HashSet;
     use std::sync::Arc;
 
-    use entities::enums::OwnerType;
-    use entities::models::{UpdateVersion, Updated};
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
 
@@ -12,16 +10,11 @@ mod tests {
     use rocks_db::key_encoders::encode_u64x2_pubkey;
     use rocks_db::migrator::MigrationState;
     use rocks_db::storage_traits::{AssetUpdateIndexStorage, AssetUpdatedKey};
-    use rocks_db::{
-        columns::asset::{AssetDynamicDetails, AssetOwner},
-        Storage,
-    };
+    use rocks_db::Storage;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
 
-    use setup::rocks::{
-        create_test_dynamic_data, RocksTestEnvironment, DEFAULT_PUBKEY_OF_ONES, PUBKEY_OF_TWOS,
-    };
+    use setup::rocks::{RocksTestEnvironment, DEFAULT_PUBKEY_OF_ONES, PUBKEY_OF_TWOS};
 
     #[test]
     fn test_process_asset_updates_batch_empty_db() {

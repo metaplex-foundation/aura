@@ -563,7 +563,7 @@ pub fn get_compression_info(full_asset: &FullAsset) -> Compression {
                 .asset_dynamic
                 .seq
                 .clone()
-                .and_then(|u| u.value.try_into().ok())
+                .map(|u| u.value)
                 .unwrap_or(0),
             full_asset.asset_leaf.leaf_seq.unwrap_or(0),
         ),
