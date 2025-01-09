@@ -87,7 +87,7 @@ pub struct IngesterClapArgs {
     pub is_run_gapfiller: bool,
 
     #[clap(long, env, default_value = "0.0.0.0", help = "Gapfiller peer address")]
-    pub gapfiller_peer_addr: String,
+    pub gapfiller_peer_addr: Option<String>,
 
     #[clap(
         long("run_profiling"),
@@ -106,7 +106,7 @@ pub struct IngesterClapArgs {
         default_value_t = false,
         env = "IS_RESTORE_ROCKS_DB",
         help = "Try restore rocks (default: false)",
-        requires = "rocks_backup_url",
+        requires = "rocks_backup_url", //todo: if true
         requires = "rocks_backup_archives_dir"
     )]
     pub is_restore_rocks_db: bool,

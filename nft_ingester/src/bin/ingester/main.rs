@@ -213,7 +213,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     if args.is_run_gapfiller {
         info!("Start gapfiller...");
-        let gaped_data_client = Client::connect(&args.gapfiller_peer_addr)
+        let gaped_data_client = Client::connect(&args.gapfiller_peer_addr.expect("gapfiller peer address is expected"))
             .await
             .map_err(|e| error!("GRPC Client new: {e}"))
             .expect("Failed to create GRPC Client");
