@@ -81,6 +81,8 @@ impl From<AssetCompleteDetailsGrpc> for AssetDetails {
             master_edition: value.master_edition.map(|e| e.into()),
             offchain_data: value.offchain_data.map(|e| e.into()),
             spl_mint: value.spl_mint.map(|e| e.into()),
+            is_current_owner: Some(value.is_current_owner.into()),
+            owner_record_pubkey: value.owner_record_pubkey.to_bytes().to_vec(),
         }
     }
 }
@@ -188,8 +190,9 @@ impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
                 .transpose()?
                 .ok_or(GrpcError::MissingField("owner_type".to_string()))?,
             owner_delegate_seq,
-            is_current_owner: todo!(),
-            owner_record_pubkey: todo!(),
+            is_current_owner: value.is_current_owner.map(Into::into).unwrap_or_default(),
+            owner_record_pubkey: Pubkey::try_from(value.owner_record_pubkey)
+                .map_err(GrpcError::PubkeyFrom)?,
             asset_leaf: value.asset_leaf.map(TryInto::try_into).transpose()?,
             collection: value.collection.map(TryInto::try_into).transpose()?,
             onchain_data: value.chain_data.map(TryInto::try_into).transpose()?,
