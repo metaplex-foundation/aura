@@ -164,6 +164,9 @@ fn test_token_account_uninitialized() {
 #[cfg(feature = "rpc_tests")]
 #[tokio::test]
 async fn test_edition_pda() {
+    use std::str::FromStr;
+
+    use flatbuffers::FlatBufferBuilder;
     use blockbuster::program_handler::ProgramParser;
     use blockbuster::programs::token_metadata::{TokenMetadataAccountData, TokenMetadataParser};
     use blockbuster::programs::ProgramParseResult;
