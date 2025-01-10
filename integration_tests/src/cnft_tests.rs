@@ -44,9 +44,12 @@ pub async fn run_get_asset_scenario_test(
 }
 
 #[tokio::test]
+#[tracing_test::traced_test]
 #[serial]
 #[named]
 async fn test_asset_decompress() {
+    env_logger::init();
+
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),

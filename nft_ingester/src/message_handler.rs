@@ -164,9 +164,12 @@ fn test_token_account_uninitialized() {
 #[cfg(feature = "rpc_tests")]
 #[tokio::test]
 async fn test_edition_pda() {
+    use std::str::FromStr;
+
     use blockbuster::program_handler::ProgramParser;
     use blockbuster::programs::token_metadata::{TokenMetadataAccountData, TokenMetadataParser};
     use blockbuster::programs::ProgramParseResult;
+    use flatbuffers::FlatBufferBuilder;
     use mpl_token_metadata::accounts::MasterEdition;
     use plerkle_serialization::deserializer::PlerkleOptionalU8Vector;
     use plerkle_serialization::solana_geyser_plugin_interface_shims::ReplicaAccountInfoV2;

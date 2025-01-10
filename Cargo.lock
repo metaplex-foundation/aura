@@ -3738,6 +3738,7 @@ dependencies = [
  "anyhow",
  "borsh 0.10.3",
  "entities",
+ "env_logger 0.10.2",
  "flatbuffers 23.5.26",
  "function_name",
  "futures",
@@ -3764,6 +3765,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-test",
  "usecase",
 ]
 
