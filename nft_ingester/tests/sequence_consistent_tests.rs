@@ -1,17 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use backfill_rpc::rpc::BackfillRPC;
-    use metrics_utils::MetricState;
-    use nft_ingester::backfiller::DirectBlockParser;
-    use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
-    use nft_ingester::sequence_consistent::collect_sequences_gaps;
-    use nft_ingester::transaction_ingester::BackfillTransactionIngester;
-    use rocks_db::tree_seq::TreeSeqIdx;
-    use setup::rocks::RocksTestEnvironment;
-    use std::str::FromStr;
-    use std::sync::Arc;
-    use tokio::sync::broadcast;
-    use usecase::bigtable::BigTableClient;
+    #[cfg(any(feature = "integration_tests", feature = "rpc_tests"))]
+    use {rocks_db::tree_seq::TreeSeqIdx, setup::rocks::RocksTestEnvironment, std::str::FromStr};
 
     #[cfg(feature = "integration_tests")]
     #[tracing_test::traced_test]
@@ -68,6 +58,16 @@ mod tests {
     #[tracing_test::traced_test]
     #[tokio::test]
     async fn test_fill_gap() {
+        use std::sync::Arc;
+
+        use backfill_rpc::rpc::BackfillRPC;
+        use metrics_utils::MetricState;
+        use nft_ingester::backfiller::DirectBlockParser;
+        use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
+        use nft_ingester::sequence_consistent::collect_sequences_gaps;
+        use nft_ingester::transaction_ingester::BackfillTransactionIngester;
+        use tokio::sync::broadcast;
+        use usecase::bigtable::BigTableClient;
         // Tests the following gap is filled: Gap found for MRKt4uPZY5ytQzxvAYEkeGAd3A8ir12khRUNfZvNb5U tree. Sequences: [39739, 39742], slots: [305441204, 305441218]
         // slot 305441204 also contains seq 39738, which will be in the result set as well
 

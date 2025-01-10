@@ -57,12 +57,10 @@ use solana_sdk::transaction::Transaction;
 use solana_transaction_status::TransactionStatusMeta;
 use solana_transaction_status::{InnerInstruction, InnerInstructions};
 use spl_account_compression::ConcurrentMerkleTree;
-use std::collections::VecDeque;
 use tempfile::TempDir;
 use testcontainers::clients::Cli;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast;
-use tokio::sync::Mutex;
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 

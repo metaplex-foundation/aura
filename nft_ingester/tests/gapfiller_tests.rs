@@ -4,7 +4,7 @@ use interface::asset_streaming_and_discovery::{
     AsyncError, MockAssetDetailsConsumer, MockRawBlocksConsumer,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
-use nft_ingester::gapfiller::{process_asset_details_stream, process_raw_blocks_stream};
+use nft_ingester::gapfiller::process_asset_details_stream;
 use rocks_db::generated::asset_generated::asset as fb;
 use rocks_db::{
     column::TypedColumn, columns::asset::AssetCompleteDetails, migrator::MigrationState,
@@ -118,7 +118,7 @@ async fn test_process_raw_blocks_stream() {
     let mut mock = MockRawBlocksConsumer::new();
     mock.expect_get_raw_blocks_consumable_stream_in_range()
         .returning(move |_, _| Ok(Box::pin(stream::iter(vec![Ok(block.clone())]))));
-    let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
+    let (_, _rx) = tokio::sync::broadcast::channel::<()>(1);
 
     // TODO: this method currently does nothing. uncomment once fixed
 

@@ -2758,39 +2758,42 @@ mod tests {
         let cnt = 100;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let mut collection_dynamic_details = HashMap::<Pubkey, AssetCompleteDetails>::new();
         generated_assets.collections.iter().for_each(|collection| {
-            env.rocks_env.storage.db.put_cf(
-                &env.rocks_env
-                    .storage
-                    .db
-                    .cf_handle(AssetCompleteDetails::NAME)
-                    .unwrap(),
-                collection.collection.value,
-                AssetCompleteDetails {
-                    pubkey: collection.collection.value,
-                    dynamic_details: Some(AssetDynamicDetails {
+            env.rocks_env
+                .storage
+                .db
+                .put_cf(
+                    &env.rocks_env
+                        .storage
+                        .db
+                        .cf_handle(AssetCompleteDetails::NAME)
+                        .unwrap(),
+                    collection.collection.value,
+                    AssetCompleteDetails {
                         pubkey: collection.collection.value,
-                        url: Updated::new(
-                            100,
-                            Some(UpdateVersion::Sequence(100)),
-                            "http://example.com".to_string(),
-                        ),
-                        onchain_data: Some(Updated::new(
-                            100,
-                            Some(UpdateVersion::Sequence(100)),
-                            "{
+                        dynamic_details: Some(AssetDynamicDetails {
+                            pubkey: collection.collection.value,
+                            url: Updated::new(
+                                100,
+                                Some(UpdateVersion::Sequence(100)),
+                                "http://example.com".to_string(),
+                            ),
+                            onchain_data: Some(Updated::new(
+                                100,
+                                Some(UpdateVersion::Sequence(100)),
+                                "{
                             \"name\": \"WIF Drop\",
                             \"symbol\": \"6WIF\"\
                          }"
-                            .to_string(),
-                        )),
+                                .to_string(),
+                            )),
+                            ..Default::default()
+                        }),
                         ..Default::default()
-                    }),
-                    ..Default::default()
-                }
-                .convert_to_fb_bytes(),
-            );
+                    }
+                    .convert_to_fb_bytes(),
+                )
+                .expect("insert asset complete details");
         });
         let o = env.rocks_env.storage.asset_offchain_data.put_async(
             "http://example.com".to_string(),
