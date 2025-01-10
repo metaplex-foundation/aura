@@ -9,14 +9,12 @@ mod tests {
     use nft_ingester::json_worker::JsonWorker;
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use nft_ingester::{
-        backfiller::DirectBlockParser,
-        buffer::Buffer,
+        backfiller::DirectBlockParser, buffer::Buffer,
         processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
-        transaction_ingester::{self, BackfillTransactionIngester},
+        transaction_ingester,
     };
     use rocks_db::columns::offchain_data::OffChainData;
     use rocks_db::migrator::MigrationState;
-    use rocks_db::SlotStorage;
     use rocks_db::Storage;
     use solana_program::pubkey::Pubkey;
     use std::fs::File;
@@ -39,7 +37,7 @@ mod tests {
     #[ignore = "FIXME: column families not opened error (probably outdated)"]
     async fn test_bubblegum_proofs() {
         // write slots we need to parse because backfiller dropped it during raw transactions saving
-        let slots_to_parse = &[
+        let _slots_to_parse = &[
             242049108, 242049247, 242049255, 242050728, 242050746, 242143893, 242143906, 242239091,
             242239108, 242248687, 242560746, 242847845, 242848373, 242853752, 242856151, 242943141,
             242943774, 242947970, 242948187, 242949333, 242949940, 242951695, 242952638,
@@ -95,7 +93,7 @@ mod tests {
             NATIVE_MINT_PUBKEY.to_string(),
         );
 
-        let buffer = Arc::new(Buffer::new());
+        let _buffer = Arc::new(Buffer::new());
 
         let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
             env.rocks_env.storage.clone(),
@@ -106,16 +104,14 @@ mod tests {
             bubblegum_updates_processor.clone(),
         ));
 
-        let consumer = Arc::new(DirectBlockParser::new(
+        let _consumer = Arc::new(DirectBlockParser::new(
             tx_ingester.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(BackfillerMetricsConfig::new()),
         ));
-        let producer = rocks_storage.clone();
+        let _producer = rocks_storage.clone();
 
-        let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
-        let none: Option<Arc<Storage>> = None;
+        let (_shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
 
         let file = File::open("./tests/artifacts/expected_proofs.json").unwrap();
         let mut reader = io::BufReader::new(file);
@@ -153,7 +149,7 @@ mod tests {
     #[ignore = "FIXME: column families not opened error (probably outdated)"]
     async fn test_asset_compression_info() {
         // write slots we need to parse because backfiller dropped it during raw transactions saving
-        let slots_to_parse = &[
+        let _slots_to_parse = &[
             242049108, 242049247, 242049255, 242050728, 242050746, 242143893, 242143906, 242239091,
             242239108, 242248687, 242560746, 242847845, 242848373, 242853752, 242856151, 242943141,
             242943774, 242947970, 242948187, 242949333, 242949940, 242951695, 242952638,
@@ -209,7 +205,7 @@ mod tests {
             NATIVE_MINT_PUBKEY.to_string(),
         );
 
-        let buffer = Arc::new(Buffer::new());
+        let _buffer = Arc::new(Buffer::new());
 
         let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
             env.rocks_env.storage.clone(),
@@ -220,16 +216,14 @@ mod tests {
             bubblegum_updates_processor.clone(),
         ));
 
-        let consumer = Arc::new(DirectBlockParser::new(
+        let _consumer = Arc::new(DirectBlockParser::new(
             tx_ingester.clone(),
             env.rocks_env.storage.clone(),
             Arc::new(BackfillerMetricsConfig::new()),
         ));
-        let producer = rocks_storage.clone();
+        let _producer = rocks_storage.clone();
 
-        let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
-        let none: Option<Arc<Storage>> = None;
+        let (_shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
 
         let metadata = OffChainData {
             url: Some("https://supersweetcollection.notarealurl/token.json".to_string()),

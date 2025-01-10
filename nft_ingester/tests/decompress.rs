@@ -13,16 +13,14 @@ mod tests {
     use nft_ingester::processors::account_based::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use nft_ingester::{
-        backfiller::DirectBlockParser,
-        buffer::Buffer,
+        backfiller::DirectBlockParser, buffer::Buffer,
         processors::account_based::token_updates_processor::TokenAccountsProcessor,
         processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
-        transaction_ingester::{self, BackfillTransactionIngester},
+        transaction_ingester,
     };
     use rocks_db::batch_savers::BatchSaveStorage;
     use rocks_db::columns::offchain_data::OffChainData;
     use rocks_db::migrator::MigrationState;
-    use rocks_db::SlotStorage;
     use rocks_db::Storage;
     use solana_sdk::pubkey::Pubkey;
     use std::fs::File;
@@ -46,10 +44,10 @@ mod tests {
     async fn process_bubblegum_transactions(
         mutexed_tasks: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         env_rocks: Arc<rocks_db::Storage>,
-        buffer: Arc<Buffer>,
+        _buffer: Arc<Buffer>,
     ) {
         // write slots we need to parse because backfiller dropped it during raw transactions saving
-        let slots_to_parse = &[
+        let _slots_to_parse = &[
             242049108, 242049247, 242049255, 242050728, 242050746, 242143893, 242143906, 242239091,
             242239108, 242248687, 242560746, 242847845, 242848373, 242853752, 242856151, 242943141,
             242943774, 242947970, 242948187, 242949333, 242949940, 242951695, 242952638,
@@ -85,14 +83,14 @@ mod tests {
             bubblegum_updates_processor.clone(),
         ));
 
-        let consumer = Arc::new(DirectBlockParser::new(
+        let _consumer = Arc::new(DirectBlockParser::new(
             tx_ingester.clone(),
             rocks_storage.clone(),
             Arc::new(BackfillerMetricsConfig::new()),
         ));
-        let producer = rocks_storage.clone();
+        let _producer = rocks_storage.clone();
 
-        let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+        let (_shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
     }
 
     async fn process_accounts(

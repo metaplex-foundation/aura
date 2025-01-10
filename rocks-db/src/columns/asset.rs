@@ -4037,8 +4037,6 @@ mod tests {
 
         // Generate all permutations of the updates
         let permutations = updates.iter().permutations(updates.len());
-        let mut expected_result: Option<Vec<u8>> = None;
-
         let merge_result = merge_complete_details_fb_simple_raw(
             &[],
             Some(&original_data_bytes.as_slice()),
@@ -4051,7 +4049,7 @@ mod tests {
             .into_iter(), //perm.into_iter().map(|d| *d),
         )
         .expect("expected merge to return some value");
-        expected_result = Some(merge_result);
+        let expected_result = merge_result;
 
         for perm in permutations {
             let merge_result = merge_complete_details_fb_simple_raw(
@@ -4101,13 +4099,11 @@ mod tests {
                     .value(),
                 false
             );
-            if let Some(expected) = &expected_result {
-                assert_eq!(
-                    &merge_result, expected,
-                    "Merge result differs for one permutation {}",
-                    perm_name,
-                );
-            }
+            assert_eq!(
+                merge_result, expected_result,
+                "Merge result differs for one permutation {}",
+                perm_name,
+            );
         }
     }
 }
