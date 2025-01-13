@@ -22,7 +22,7 @@ jobs:
     - name: Install Rust specific version
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: 1.75
+        toolchain: 1.84
         profile: minimal
         components: clippy, rustfmt
         override: true
@@ -89,7 +89,7 @@ jobs:
       - name: Install Rust specific version
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.75
+          toolchain: 1.84
           profile: minimal
           components: clippy, rustfmt
           override: true
