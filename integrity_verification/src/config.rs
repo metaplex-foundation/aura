@@ -2,6 +2,7 @@ use figment::providers::Env;
 use figment::Figment;
 use serde_derive::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
+use std::path::PathBuf;
 
 #[derive(Deserialize, Default, PartialEq, Debug, Clone)]
 pub enum TestSourceMode {
@@ -20,6 +21,7 @@ pub struct IntegrityVerificationConfig {
     pub reference_host: String,
     pub testing_host: String,
     pub database_url: Option<String>,
+    pub base_dump_path: Option<PathBuf>,
     #[serde(default)]
     pub run_secondary_indexes_tests: bool,
     #[serde(default)]

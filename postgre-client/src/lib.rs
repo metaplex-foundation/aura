@@ -2,12 +2,14 @@ use entities::enums::TaskStatus;
 use entities::models::UrlWithStatus;
 use error::IndexDbError;
 use metrics_utils::red::RequestErrorDurationMetrics;
+use sqlx::Executor;
 use sqlx::Row;
 use sqlx::{
     migrate::Migrator,
     postgres::{PgConnectOptions, PgPoolOptions},
     ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
 };
+use std::path::PathBuf;
 use std::{sync::Arc, time::Duration};
 use tracing::log::LevelFilter;
 
@@ -22,7 +24,6 @@ pub mod load_client;
 pub mod model;
 pub mod storage_traits;
 pub mod tasks;
-pub mod temp_index_client;
 
 pub const SQL_COMPONENT: &str = "sql";
 pub const SELECT_ACTION: &str = "select";
@@ -47,6 +48,7 @@ pub const PG_MIGRATIONS_PATH: &str = "./migrations";
 #[derive(Clone)]
 pub struct PgClient {
     pub pool: PgPool,
+    pub base_dump_path: Option<PathBuf>,
     pub metrics: Arc<RequestErrorDurationMetrics>,
 }
 
@@ -55,6 +57,7 @@ impl PgClient {
         url: &str,
         min_connections: u32,
         max_connections: u32,
+        base_dump_path: Option<PathBuf>,
         metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self, Error> {
         let mut options: PgConnectOptions = url.parse().unwrap();
@@ -64,14 +67,28 @@ impl PgClient {
         let pool = PgPoolOptions::new()
             .min_connections(min_connections)
             .max_connections(max_connections)
+            // 1 hour of a timeout, this is set specifically due to synchronizer needing up to 200 connections to do a full sync load
+            .acquire_timeout(Duration::from_secs(3600))
             .connect_with(options)
             .await?;
 
-        Ok(Self { pool, metrics })
+        Ok(Self {
+            pool,
+            base_dump_path,
+            metrics,
+        })
     }
 
-    pub fn new_with_pool(pool: PgPool, metrics: Arc<RequestErrorDurationMetrics>) -> Self {
-        Self { pool, metrics }
+    pub fn new_with_pool(
+        pool: PgPool,
+        base_dump_path: Option<PathBuf>,
+        metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Self {
+        Self {
+            pool,
+            base_dump_path,
+            metrics,
+        }
     }
 
     pub async fn check_health(&self) -> Result<(), String> {
@@ -185,6 +202,47 @@ impl PgClient {
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "rollback", start_time);
+        Ok(())
+    }
+
+    #[cfg(feature = "integration_tests")]
+    pub async fn clean_db(&self) -> Result<(), IndexDbError> {
+        let mut transaction = self.pool.begin().await?;
+
+        self.drop_fungible_indexes(&mut transaction).await?;
+        self.drop_nft_indexes(&mut transaction).await?;
+        self.drop_constraints(&mut transaction).await?;
+        for table in [
+            "assets_v3",
+            "assets_authorities",
+            "asset_creators_v3",
+            "batch_mints",
+            "core_fees",
+            "fungible_tokens",
+        ] {
+            self.truncate_table(&mut transaction, table).await?;
+        }
+
+        transaction
+            .execute(sqlx::query(
+                "update last_synced_key set last_synced_asset_update_key = null where id = 1 or id = 2;",
+            ))
+            .await?;
+
+        self.recreate_fungible_indexes(&mut transaction).await?;
+        self.recreate_asset_indexes(&mut transaction).await?;
+        self.recreate_authorities_indexes(&mut transaction).await?;
+        self.recreate_creators_indexes(&mut transaction).await?;
+        self.recreate_asset_authorities_constraints(&mut transaction)
+            .await?;
+        self.recreate_asset_creators_constraints(&mut transaction)
+            .await?;
+        self.recreate_asset_constraints(&mut transaction).await?;
+
+        transaction.commit().await?;
+        // those await above will not always rollback the tx
+        // take this into account if we use this function somewhere else except the tests
+
         Ok(())
     }
 }

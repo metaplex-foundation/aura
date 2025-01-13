@@ -3,7 +3,7 @@ use std::{env, str::FromStr, sync::Arc, time::Instant};
 use bincode::deserialize;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::{
-    cl_items::{ClItemKey, ClLeaf},
+    columns::cl_items::{ClItemKey, ClLeaf},
     migrator::MigrationState,
     Storage,
 };
@@ -135,27 +135,25 @@ async fn process_leaf(storage: Arc<Storage>, data: Vec<u8>) -> Option<(Pubkey, u
 
     if !storage.cl_items.has_key(key).await.unwrap() {
         let asset_id = get_asset_id(&cl_leaf_data.cli_tree_key, &cl_leaf_data.cli_leaf_idx).await;
+        let asset_leaf_data_fut = storage.asset_leaf_data.batch_get(vec![asset_id]);
+        let asset_complete_data = storage.get_complete_asset_details(asset_id);
+        let asset_leaf_data = asset_leaf_data_fut.await;
 
-        let (asset_dynamic_data, asset_leaf_data) = tokio::join!(
-            storage.asset_dynamic_data.batch_get(vec![asset_id]),
-            storage.asset_leaf_data.batch_get(vec![asset_id])
-        );
-
-        let asset_dynamic_data = asset_dynamic_data
+        let asset_dynamic_seq = asset_complete_data
             .ok()
-            .and_then(|vec| vec.into_iter().next())
             .and_then(|data_opt| data_opt)
+            .and_then(|acd| acd.dynamic_details)
             .and_then(|data| data.seq.map(|s| s.value))
             .unwrap_or_default();
 
-        let asset_leaf_data = asset_leaf_data
+        let asset_leaf_seq = asset_leaf_data
             .ok()
             .and_then(|vec| vec.into_iter().next())
             .and_then(|data_opt| data_opt)
             .and_then(|data| data.leaf_seq)
             .unwrap_or_default();
 
-        let max_asset_sequence = std::cmp::max(asset_dynamic_data, asset_leaf_data);
+        let max_asset_sequence = std::cmp::max(asset_dynamic_seq, asset_leaf_seq);
 
         // if seq is 0 means asset does not exist at all
         // found a few such assets during testing, not sure how it happened yet

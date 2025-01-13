@@ -136,7 +136,7 @@ impl MessageProcessMetricsConfig {
     pub fn new() -> Self {
         Self {
             data_read: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.4, 10))
+                Histogram::new(exponential_buckets(50.0, 2.0, 11))
             }),
         }
     }
@@ -163,6 +163,7 @@ pub struct BackfillerMetricsConfig {
     slots_collected: Family<MetricLabelWithStatus, Counter>,
     data_processed: Family<MetricLabel, Counter>, // slots & transactions
     last_processed_slot: Family<MetricLabel, Gauge>,
+    slot_delay: Family<MetricLabel, Histogram>,
 }
 
 impl Default for BackfillerMetricsConfig {
@@ -177,7 +178,18 @@ impl BackfillerMetricsConfig {
             slots_collected: Family::<MetricLabelWithStatus, Counter>::default(),
             data_processed: Family::<MetricLabel, Counter>::default(),
             last_processed_slot: Family::<MetricLabel, Gauge>::default(),
+            slot_delay: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets(400.0, 1.8, 10))
+            }),
         }
+    }
+
+    pub fn set_slot_delay_time(&self, label: &str, duration: f64) {
+        self.slot_delay
+            .get_or_create(&MetricLabel {
+                name: label.to_string(),
+            })
+            .observe(duration);
     }
 
     pub fn inc_slots_collected(&self, label: &str, status: MetricStatus) -> u64 {
@@ -222,6 +234,12 @@ impl BackfillerMetricsConfig {
             format!("{}last_processed_slot", prefix),
             "The last processed slot by backfiller",
             self.last_processed_slot.clone(),
+        );
+
+        registry.register(
+            format!("{}slot_delay", prefix),
+            "The delay between the slot time and the time when it was processed by the backfiller",
+            self.slot_delay.clone(),
         );
     }
 
@@ -1157,7 +1175,7 @@ impl IntegrityVerificationMetricsConfig {
 #[derive(Debug, Clone)]
 pub struct SequenceConsistentGapfillMetricsConfig {
     start_time: Gauge,
-    total_tree_with_gaps: Gauge,
+    gaps_count: Counter,
     total_scans: Counter,
     scans_latency: Histogram,
 }
@@ -1172,7 +1190,7 @@ impl SequenceConsistentGapfillMetricsConfig {
     pub fn new() -> Self {
         Self {
             start_time: Default::default(),
-            total_tree_with_gaps: Default::default(),
+            gaps_count: Default::default(),
             total_scans: Default::default(),
             scans_latency: Histogram::new(exponential_buckets(1.0, 2.0, 12)),
         }
@@ -1181,8 +1199,8 @@ impl SequenceConsistentGapfillMetricsConfig {
     pub fn start_time(&self) -> i64 {
         self.start_time.set(Utc::now().timestamp())
     }
-    pub fn set_total_tree_with_gaps(&self, count: i64) -> i64 {
-        self.total_tree_with_gaps.set(count)
+    pub fn inc_gaps_count(&self) -> u64 {
+        self.gaps_count.inc()
     }
     pub fn inc_total_scans(&self) -> u64 {
         self.total_scans.inc()
@@ -1198,9 +1216,9 @@ impl SequenceConsistentGapfillMetricsConfig {
         );
 
         registry.register(
-            "total_inconsistent_trees",
-            "Total count of inconsistent trees",
-            self.total_tree_with_gaps.clone(),
+            "gaps_count",
+            "Number of gaps found",
+            self.gaps_count.clone(),
         );
 
         registry.register(

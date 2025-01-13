@@ -33,11 +33,12 @@ impl UrlWithStatus {
         }
     }
     pub fn get_metadata_id(&self) -> Vec<u8> {
+        Self::get_metadata_id_for(&self.metadata_url)
+    }
+
+    pub fn get_metadata_id_for(url: &str) -> Vec<u8> {
         let mut hasher = Sha256::new();
-        // triming the url to remove any leading or trailing whitespaces,
-        // as some of the legacy versions of the database have contained the urls with whitespaces
-        let url = self.metadata_url.trim();
-        hasher.update(url);
+        hasher.update(url.trim());
         hasher.finalize().to_vec()
     }
 }
@@ -106,13 +107,13 @@ pub struct Creator {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct OffChainData {
+pub struct OffChainDataGrpc {
     pub url: String,
     pub metadata: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct CompleteAssetDetails {
+pub struct AssetCompleteDetailsGrpc {
     // From AssetStaticDetails
     pub pubkey: Pubkey,
     pub specification_asset_class: SpecificationAssetClass,
@@ -127,7 +128,7 @@ pub struct CompleteAssetDetails {
     pub supply: Option<Updated<u64>>,
     pub seq: Option<Updated<u64>>,
     pub is_burnt: Updated<bool>,
-    pub was_decompressed: Updated<bool>,
+    pub was_decompressed: Option<Updated<bool>>,
     pub onchain_data: Option<Updated<ChainDataV1>>,
     pub creators: Updated<Vec<Creator>>,
     pub royalty_amount: Updated<u16>,
@@ -155,6 +156,8 @@ pub struct CompleteAssetDetails {
     pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
     pub owner_delegate_seq: Updated<Option<u64>>,
+    pub is_current_owner: Updated<bool>,
+    pub owner_record_pubkey: Pubkey,
 
     // Separate fields
     pub asset_leaf: Option<Updated<AssetLeaf>>,
@@ -169,7 +172,7 @@ pub struct CompleteAssetDetails {
     pub master_edition: Option<MasterEdition>,
 
     // OffChainData
-    pub offchain_data: Option<OffChainData>,
+    pub offchain_data: Option<OffChainDataGrpc>,
 
     // SplMint
     pub spl_mint: Option<SplMint>,
@@ -625,6 +628,11 @@ pub struct SplMint {
     pub token_program: Pubkey,
     pub slot_updated: i64,
     pub write_version: u64,
+}
+impl SplMint {
+    pub fn is_nft(&self) -> bool {
+        self.supply == 1 && self.decimals == 0
+    }
 }
 
 impl From<&Mint> for SplMint {

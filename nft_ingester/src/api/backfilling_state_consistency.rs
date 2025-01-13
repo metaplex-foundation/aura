@@ -28,22 +28,23 @@ impl BackfillingStateConsistencyChecker {
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
         rx: tokio::sync::broadcast::Receiver<()>,
         rocks_db: Arc<Storage>,
-        consistence_backfilling_slots_threshold: u64,
+        _consistence_backfilling_slots_threshold: u64,
     ) {
         for asset_type in ASSET_TYPES {
-            let rocks_db = rocks_db.clone();
+            let _rocks_db = rocks_db.clone();
             let mut rx = rx.resubscribe();
-            let overwhelm_backfill_gap = match asset_type {
+            let _overwhelm_backfill_gap = match asset_type {
                 AssetType::NonFungible => self.overwhelm_nft_backfill_gap.clone(),
                 AssetType::Fungible => self.overwhelm_fungible_backfill_gap.clone(),
             };
             tasks.lock().await.spawn(async move {
             while rx.is_empty() {
-                overwhelm_backfill_gap.store(
-                    rocks_db.bubblegum_slots.iter_start().count().saturating_add(rocks_db.ingestable_slots.iter_start().count())
-                        >= consistence_backfilling_slots_threshold as usize,
-                    Ordering::Relaxed,
-                );
+                // TODO: refactor this to use parameter from storage and last slot from slot storage
+                // overwhelm_backfill_gap.store(
+                //     rocks_db.bubblegum_slots.iter_start().count().saturating_add(rocks_db.ingestable_slots.iter_start().count())
+                //         >= consistence_backfilling_slots_threshold as usize,
+                //     Ordering::Relaxed,
+                // );
                 tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)) => {},
                     _ = rx.recv() => {

@@ -1,0 +1,156 @@
+---
+source: integration_tests/src/mpl_core_tests.rs
+assertion_line: 496
+expression: response
+snapshot_kind: text
+---
+{
+  "interface": "MplCoreAsset",
+  "id": "Aw7KSaeRECbjLW7BYTUtMwGkaiAGhxrQxdLnpLYRnmbB",
+  "content": {
+    "$schema": "https://schema.metaplex.com/nft1.0.json",
+    "json_uri": "https://example.com/asset",
+    "files": [],
+    "metadata": {
+      "name": "Test Asset",
+      "symbol": ""
+    },
+    "links": {}
+  },
+  "authorities": [
+    {
+      "address": "APrZTeVysBJqAznfLXS71NAzjr2fCVTSF1A66MeErzM7",
+      "scopes": [
+        "full"
+      ]
+    }
+  ],
+  "compression": {
+    "eligible": false,
+    "compressed": false,
+    "data_hash": "",
+    "creator_hash": "",
+    "asset_hash": "",
+    "tree": "",
+    "seq": 0,
+    "leaf_id": 0
+  },
+  "grouping": [],
+  "royalty": {
+    "royalty_model": "creators",
+    "target": null,
+    "percent": 0.0005,
+    "basis_points": 5,
+    "primary_sale_happened": false,
+    "locked": false
+  },
+  "creators": [
+    {
+      "address": "APrZTeVysBJqAznfLXS71NAzjr2fCVTSF1A66MeErzM7",
+      "share": 100,
+      "verified": true
+    }
+  ],
+  "ownership": {
+    "frozen": false,
+    "delegated": true,
+    "delegate": "APrZTeVysBJqAznfLXS71NAzjr2fCVTSF1A66MeErzM7",
+    "ownership_model": "single",
+    "owner": "APrZTeVysBJqAznfLXS71NAzjr2fCVTSF1A66MeErzM7"
+  },
+  "supply": null,
+  "mutable": true,
+  "burnt": false,
+  "lamports": 4882560,
+  "executable": false,
+  "rent_epoch": 18446744073709551615,
+  "plugins": {
+    "royalties": {
+      "authority": {
+        "type": "UpdateAuthority",
+        "address": null
+      },
+      "index": 2,
+      "offset": 155,
+      "data": {
+        "creators": [
+          {
+            "address": "APrZTeVysBJqAznfLXS71NAzjr2fCVTSF1A66MeErzM7",
+            "percentage": 100
+          }
+        ],
+        "basis_points": 5,
+        "rule_set": "None"
+      }
+    },
+    "freeze_delegate": {
+      "authority": {
+        "type": "Address",
+        "address": "JDnbeBUv9MaMGg28sGjUjfo7aUwBwHAFQHkvYZGA1aPh"
+      },
+      "index": 4,
+      "offset": 231,
+      "data": {
+        "frozen": false
+      }
+    },
+    "transfer_delegate": {
+      "authority": {
+        "type": "Owner",
+        "address": null
+      },
+      "index": 0,
+      "offset": 119,
+      "data": {}
+    }
+  },
+  "mpl_core_info": {
+    "plugins_json_version": 1
+  },
+  "external_plugins": [
+    {
+      "type": "Oracle",
+      "index": 1,
+      "offset": 120,
+      "authority": {
+        "type": "UpdateAuthority",
+        "address": null
+      },
+      "lifecycle_checks": {
+        "create": [
+          "CanReject"
+        ],
+        "transfer": [
+          "CanReject"
+        ]
+      },
+      "adapter_config": {
+        "base_address_config": null,
+        "base_address": "4dbE64e2ALgNGMJLRBTei2qjzR5SKApKmvoLnA1aqPZB",
+        "results_offset": "Anchor"
+      }
+    },
+    {
+      "type": "Oracle",
+      "index": 3,
+      "offset": 196,
+      "authority": {
+        "type": "UpdateAuthority",
+        "address": null
+      },
+      "lifecycle_checks": {
+        "update": [
+          "CanReject"
+        ],
+        "burn": [
+          "CanReject"
+        ]
+      },
+      "adapter_config": {
+        "base_address_config": null,
+        "base_address": "8v4xtK8C69wEGhfpGm7LN8dsWBwyEYLamHEYjcKfqdCg",
+        "results_offset": "Anchor"
+      }
+    }
+  ]
+}

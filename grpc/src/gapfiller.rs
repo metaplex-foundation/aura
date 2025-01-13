@@ -192,6 +192,10 @@ pub struct AssetDetails {
     pub mint_extensions: ::core::option::Option<DynamicStringField>,
     #[prost(message, optional, tag = "43")]
     pub spl_mint: ::core::option::Option<SplMint>,
+    #[prost(message, optional, tag = "44")]
+    pub is_current_owner: ::core::option::Option<DynamicBoolField>,
+    #[prost(bytes = "vec", tag = "45")]
+    pub owner_record_pubkey: ::prost::alloc::vec::Vec<u8>,
 }
 /// This field is a cbor encoded object of RawBlock type depending on
 /// a "~1.17" version of the solana-transaction-status package

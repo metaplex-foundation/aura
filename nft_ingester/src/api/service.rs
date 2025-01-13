@@ -1,6 +1,7 @@
 use hyper::{header::CONTENT_TYPE, Body, Method, Request, Response, Server, StatusCode};
 use jsonrpc_http_server::hyper;
 use jsonrpc_http_server::hyper::service::{make_service_fn, service_fn};
+use metrics_utils::red::RequestErrorDurationMetrics;
 use multer::Multipart;
 use postgre_client::PgClient;
 use std::sync::Arc;
@@ -53,6 +54,7 @@ pub async fn start_api(
     rocks_db: Arc<Storage>,
     rx: Receiver<()>,
     metrics: Arc<ApiMetricsConfig>,
+    red_metrics: Option<Arc<RequestErrorDurationMetrics>>,
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
     tree_gaps_checker: Option<Arc<Storage>>,
@@ -68,6 +70,7 @@ pub async fn start_api(
     file_storage_path: &str,
     account_balance_getter: Arc<AccountBalanceGetterImpl>,
     storage_service_base_url: Option<String>,
+    native_mint_pubkey: String,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -118,7 +121,12 @@ pub async fn start_api(
         json_middleware_config.unwrap_or_default(),
         account_balance_getter,
         storage_service_base_url,
-        Arc::new(RaydiumTokenPriceFetcher::default()),
+        Arc::new(RaydiumTokenPriceFetcher::new(
+            "https://api-v3.raydium.io".to_string(),
+            crate::raydium_price_fetcher::CACHE_TTL,
+            red_metrics,
+        )),
+        native_mint_pubkey,
     );
 
     run_api(
@@ -198,7 +206,7 @@ async fn run_api(
     }
 
     let server = server.unwrap();
-    info!("API Server Started");
+    info!("API Server Started {}", server.address().to_string());
 
     loop {
         if !shutdown_rx.is_empty() {

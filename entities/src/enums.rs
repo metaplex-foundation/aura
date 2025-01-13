@@ -33,9 +33,13 @@ pub enum SpecificationAssetClass {
     Nft,
     PrintableNft,
     ProgrammableNft,
+    // legacy, doesn't exist
     Print,
+    // legacy, doesn't exist
     TransferRestrictedNft,
+    // legacy, doesn't exist
     NonTransferableNft,
+    // legacy, doesn't exist
     IdentityNft,
     MplCoreAsset,
     MplCoreCollection,
@@ -110,7 +114,7 @@ impl From<blockbuster::token_metadata::types::UseMethod> for UseMethod {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy, PartialEq)]
 pub enum ChainMutability {
     // Original implementation also contain "Unknown"
     // enum variant, which is default. But we do not saved any
@@ -370,6 +374,25 @@ pub enum UnprocessedAccount {
     Inscription(InscriptionInfo),
     InscriptionData(InscriptionDataInfo),
     MplCoreFee(CoreAssetFee),
+}
+
+impl std::fmt::Debug for UnprocessedAccount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnprocessedAccount::MetadataInfo(_) => write!(f, "UnprocessedAccount::MetadataInfo"),
+            UnprocessedAccount::Token(_) => write!(f, "UnprocessedAccount::Token"),
+            UnprocessedAccount::Mint(_) => write!(f, "UnprocessedAccount::Mint"),
+            UnprocessedAccount::Edition(_) => write!(f, "UnprocessedAccount::Edition"),
+            UnprocessedAccount::BurnMetadata(_) => write!(f, "UnprocessedAccount::BurnMetadata"),
+            UnprocessedAccount::BurnMplCore(_) => write!(f, "UnprocessedAccount::BurnMplCore"),
+            UnprocessedAccount::MplCore(_) => write!(f, "UnprocessedAccount::MplCore"),
+            UnprocessedAccount::Inscription(_) => write!(f, "UnprocessedAccount::Inscription"),
+            UnprocessedAccount::InscriptionData(_) => {
+                write!(f, "UnprocessedAccount::InscriptionData")
+            }
+            UnprocessedAccount::MplCoreFee(_) => write!(f, "UnprocessedAccount::MplCoreFee"),
+        }
+    }
 }
 
 impl From<UnprocessedAccount> for &str {

@@ -1,6 +1,7 @@
 use entities::models::ForkedItem;
 use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
 use metrics_utils::ForkCleanerMetricsConfig;
+use rocks_db::SlotStorage;
 use rocks_db::Storage;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -16,7 +17,7 @@ const CI_ITEMS_DELETE_BATCH_SIZE: usize = 100;
 const SLOT_CHECK_OFFSET: u64 = 1500;
 
 pub async fn run_fork_cleaner(
-    fork_cleaner: ForkCleaner<Storage, Storage>,
+    fork_cleaner: ForkCleaner<Storage, SlotStorage>,
     metrics: Arc<ForkCleanerMetricsConfig>,
     mut rx: Receiver<()>,
     sequence_consistent_checker_wait_period_sec: u64,

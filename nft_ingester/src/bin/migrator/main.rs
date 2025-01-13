@@ -1,61 +1,58 @@
-use std::sync::Arc;
-
+use clap::Parser;
 use entities::enums::TaskStatus;
-use entities::models::{OffChainData, Task};
+use entities::models::Task;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::utils::start_metrics;
 use metrics_utils::{JsonMigratorMetricsConfig, MetricState, MetricStatus, MetricsTrait};
 use postgre_client::PgClient;
+use rocks_db::column::TypedColumn;
+use rocks_db::columns::asset::AssetCompleteDetails;
+use rocks_db::columns::offchain_data::OffChainData;
+use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::{broadcast, Mutex};
 use tokio::task::{JoinError, JoinSet};
 use tracing::{error, info};
 
-use nft_ingester::config::{
-    init_logger, setup_config, JsonMigratorConfig, JsonMigratorMode, JSON_MIGRATOR_CONFIG_PREFIX,
-};
+use nft_ingester::config::{init_logger, JsonMigratorMode, MigratorClapArgs};
 use nft_ingester::error::IngesterError;
 use nft_ingester::init::graceful_stop;
+use rocks_db::generated::asset_generated::asset as fb;
 use rocks_db::migrator::MigrationState;
-use rocks_db::{AssetDynamicDetails, Storage};
+use rocks_db::Storage;
 
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 100;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
-    let config: JsonMigratorConfig = setup_config(JSON_MIGRATOR_CONFIG_PREFIX);
+    let args = MigratorClapArgs::parse();
+    init_logger(&args.log_level);
 
-    init_logger(&config.get_log_level());
-
-    info!("Started...");
-
-    let max_postgre_connections = config
-        .database_config
-        .get_max_postgres_connections()
-        .unwrap_or(DEFAULT_MAX_POSTGRES_CONNECTIONS);
+    info!("Migrator started...");
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
 
     let pg_client = Arc::new(
         PgClient::new(
-            &config.database_config.get_database_url().unwrap(),
-            DEFAULT_MIN_POSTGRES_CONNECTIONS,
-            max_postgre_connections,
+            &args.pg_database_url,
+            args.pg_min_db_connections,
+            args.pg_max_db_connections,
+            None,
             metrics_state.red_metrics.clone(),
         )
         .await
         .unwrap(),
     );
 
-    start_metrics(metrics_state.registry, Some(config.metrics_port)).await;
+    start_metrics(metrics_state.registry, args.metrics_port).await;
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
 
     let storage = Storage::open(
-        &config.json_target_db.clone(),
+        args.rocks_json_target_db.clone(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
@@ -63,9 +60,8 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
 
     let target_storage = Arc::new(storage);
-
     let source_storage = Storage::open(
-        &config.json_source_db,
+        args.rocks_json_source_db.clone(),
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
@@ -78,7 +74,7 @@ pub async fn main() -> Result<(), IngesterError> {
         source_storage.clone(),
         target_storage.clone(),
         metrics_state.json_migrator_metrics.clone(),
-        config,
+        args.migrator_mode,
     );
 
     let cloned_tasks = mutexed_tasks.clone();
@@ -91,7 +87,7 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
-    graceful_stop(mutexed_tasks, shutdown_tx, None, None, "").await;
+    graceful_stop(mutexed_tasks, shutdown_tx, None, None, None, "").await;
 
     Ok(())
 }
@@ -101,7 +97,7 @@ pub struct JsonMigrator {
     pub source_rocks_db: Arc<Storage>,
     pub target_rocks_db: Arc<Storage>,
     pub metrics: Arc<JsonMigratorMetricsConfig>,
-    pub config: JsonMigratorConfig,
+    pub migrator_mode: JsonMigratorMode,
 }
 
 impl JsonMigrator {
@@ -110,23 +106,19 @@ impl JsonMigrator {
         source_rocks_db: Arc<Storage>,
         target_rocks_db: Arc<Storage>,
         metrics: Arc<JsonMigratorMetricsConfig>,
-        config: JsonMigratorConfig,
+        migrator_mode: JsonMigratorMode,
     ) -> Self {
         Self {
             database_pool,
             source_rocks_db,
             target_rocks_db,
             metrics,
-            config,
+            migrator_mode,
         }
     }
 
-    pub async fn run(
-        &self,
-        rx: Receiver<()>,
-        tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
-    ) {
-        match self.config.work_mode {
+    pub async fn run(&self, rx: Receiver<()>, tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>) {
+        match self.migrator_mode {
             JsonMigratorMode::Full => {
                 info!("Launch JSON migrator in full mode");
 
@@ -165,15 +157,14 @@ impl JsonMigrator {
 
             match json {
                 Ok((_key, value)) => {
-                    let metadata = bincode::deserialize::<OffChainData>(&value);
+                    let metadata = OffChainData::decode(&value);
 
                     match metadata {
                         Ok(metadata) => {
-                            match self
-                                .target_rocks_db
-                                .asset_offchain_data
-                                .put(metadata.url.clone(), metadata)
-                            {
+                            match self.target_rocks_db.asset_offchain_data.put(
+                                metadata.url.clone().expect("Metadata URL cannot be empty"),
+                                metadata,
+                            ) {
                                 Ok(_) => {
                                     self.metrics
                                         .inc_jsons_migrated("json_migrated", MetricStatus::SUCCESS);
@@ -206,7 +197,13 @@ impl JsonMigrator {
         rx: Receiver<()>,
         tasks: Arc<Mutex<JoinSet<core::result::Result<(), JoinError>>>>,
     ) {
-        let dynamic_asset_details = self.target_rocks_db.asset_dynamic_data.iter_end();
+        let mut assets_iter = self.target_rocks_db.db.raw_iterator_cf(
+            &self
+                .target_rocks_db
+                .db
+                .cf_handle(AssetCompleteDetails::NAME)
+                .unwrap(),
+        );
 
         let tasks_buffer = Arc::new(Mutex::new(Vec::new()));
 
@@ -270,22 +267,23 @@ impl JsonMigrator {
             Ok(())
         });
 
-        for dynamic_details in dynamic_asset_details {
+        assets_iter.seek_to_first();
+        while assets_iter.valid() {
             if !rx.is_empty() {
                 info!("Setting tasks for JSONs is stopped");
                 break;
             }
-
-            match dynamic_details {
-                Ok((_key, value)) => {
-                    let dynamic_details = bincode::deserialize::<AssetDynamicDetails>(&value);
-
-                    match dynamic_details {
-                        Ok(data) => {
-                            let downloaded_json = self
-                                .target_rocks_db
-                                .asset_offchain_data
-                                .get(data.url.value.clone());
+            if let Some(value) = assets_iter.value() {
+                match fb::root_as_asset_complete_details(value) {
+                    Ok(asset) => {
+                        if let Some(url) = asset
+                            .dynamic_details()
+                            .and_then(|d| d.url())
+                            .and_then(|u| u.value())
+                        {
+                            let url = url.trim().replace('\0', "").clone();
+                            let downloaded_json =
+                                self.target_rocks_db.asset_offchain_data.get(url.clone());
 
                             if let Err(e) = downloaded_json {
                                 error!("asset_offchain_data.get: {}", e);
@@ -293,7 +291,7 @@ impl JsonMigrator {
                             }
 
                             let mut task = Task {
-                                ofd_metadata_url: data.url.value.trim().replace('\0', "").clone(),
+                                ofd_metadata_url: url,
                                 ofd_locked_until: None,
                                 ofd_attempts: 0,
                                 ofd_max_attempts: 10,
@@ -317,15 +315,13 @@ impl JsonMigrator {
                             self.metrics
                                 .set_tasks_buffer("tasks_buffer", buff.len() as i64);
                         }
-                        Err(e) => {
-                            error!("bincode::deserialize: {}", e)
-                        }
+                    }
+                    Err(e) => {
+                        error!("root_as_asset_complete_details: {}", e);
                     }
                 }
-                Err(e) => {
-                    error!("asset_dynamic_data.iter_end: {}", e)
-                }
             }
+            assets_iter.next();
         }
     }
 }

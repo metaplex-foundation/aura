@@ -1,84 +1,64 @@
-use asset_previews::{AssetPreviews, UrlToDownload};
+use clients::signature_client;
+use columns::asset::{
+    self, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
+};
+use columns::asset_previews::{AssetPreviews, UrlToDownload};
+use columns::batch_mint::{self, BatchMintWithStaker};
+use columns::inscriptions::{Inscription, InscriptionData};
+use columns::leaf_signatures::LeafSignature;
+use columns::offchain_data::{OffChainData, OffChainDataDeprecated};
+use columns::parameters::ParameterColumn;
+use columns::token_accounts::{self, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+use columns::token_prices::TokenPrice;
+use columns::{bubblegum_slots, cl_items, parameters};
 use entities::schedule::ScheduledJob;
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use inflector::Inflector;
-use leaf_signatures::LeafSignature;
+use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
 
 use asset::{
-    AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetOwnerDeprecated,
-    FungibleAssetsUpdateIdx, MetadataMintMap, SlotAssetIdx,
+    AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetCompleteDetails,
+    AssetDynamicDetailsDeprecated, AssetOwnerDeprecated, AssetStaticDetailsDeprecated,
+    FungibleAssetsUpdateIdx, MetadataMintMap, MplCoreCollectionAuthority, SlotAssetIdx,
 };
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
-use crate::asset::{AssetDynamicDetailsDeprecated, AssetStaticDetailsDeprecated};
-use crate::migrator::{MigrationState, MigrationVersions, RocksMigration};
-pub use asset::{
-    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
-};
+use crate::migrator::{MigrationState, MigrationVersions};
+
 use column::{Column, TypedColumn};
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, SplMint,
-    TokenAccount,
+    AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
-use crate::batch_mint::BatchMintWithStaker;
 use crate::errors::StorageError;
-use crate::inscriptions::{Inscription, InscriptionData};
-use crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration;
-use crate::migrations::collection_authority::{
-    AssetCollectionVersion0, CollectionAuthorityMigration,
-};
-use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
-use crate::migrations::spl2022::{
-    AssetDynamicDetailsWithoutExtentions, DynamicDataToken2022MintExtentionsMigration,
-    TokenAccounts2022ExtentionsMigration,
-};
-use crate::parameters::ParameterColumn;
-use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use crate::token_prices::TokenPrice;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
-pub mod asset;
-mod asset_client;
-pub mod asset_previews;
-pub mod asset_signatures;
-pub mod asset_streaming_client;
 pub mod backup_service;
-mod batch_client;
-pub mod batch_mint;
 pub mod batch_savers;
-pub mod bubblegum_slots;
-pub mod cl_items;
+pub mod clients;
 pub mod column;
-pub mod dump_client;
-pub mod editions;
+pub mod columns;
 pub mod errors;
 pub mod fork_cleaner;
-pub mod inscriptions;
 pub mod key_encoders;
-pub mod leaf_signatures;
 pub mod migrations;
 pub mod migrator;
-pub mod offchain_data;
-pub mod parameters;
 pub mod processing_possibility;
-pub mod raw_block;
-pub mod raw_blocks_streaming_client;
 pub mod schedule;
 pub mod sequence_consistent;
-pub mod signature_client;
-pub mod slots_dumper;
 pub mod storage_traits;
-pub mod token_accounts;
-pub mod token_prices;
 pub mod transaction;
-pub mod transaction_client;
 pub mod tree_seq;
+// import the flatbuffers runtime library
+extern crate flatbuffers;
+pub mod generated;
+pub mod mappers;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
@@ -89,27 +69,112 @@ const FULL_ITERATION_ACTION: &str = "full_iteration";
 const BATCH_ITERATION_ACTION: &str = "batch_iteration";
 const BATCH_GET_ACTION: &str = "batch_get";
 const ITERATOR_TOP_ACTION: &str = "iterator_top";
+const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
+pub struct SlotStorage {
+    pub db: Arc<DB>,
+    pub raw_blocks_cbor: Column<RawBlock>,
+    join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+    red_metrics: Arc<RequestErrorDurationMetrics>,
+}
+
+impl SlotStorage {
+    pub fn new(
+        db: Arc<DB>,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Self {
+        let raw_blocks_cbor = Storage::column(db.clone(), red_metrics.clone());
+        Self {
+            db,
+            raw_blocks_cbor,
+            red_metrics,
+            join_set,
+        }
+    }
+
+    pub fn cf_names() -> Vec<&'static str> {
+        vec![
+            RawBlock::NAME,
+            MigrationVersions::NAME,
+            OffChainDataDeprecated::NAME,
+        ]
+    }
+
+    pub fn open<P>(
+        db_path: P,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let cf_descriptors = Storage::cfs_to_column_families(Self::cf_names());
+        let db = Arc::new(DB::open_cf_descriptors(
+            &Storage::get_db_options(),
+            db_path,
+            cf_descriptors,
+        )?);
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+
+    pub fn open_secondary<P>(
+        primary_path: P,
+        secondary_path: P,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let cf_descriptors = Storage::cfs_to_column_families(Self::cf_names());
+        let db = Arc::new(DB::open_cf_descriptors_as_secondary(
+            &Storage::get_db_options(),
+            primary_path,
+            secondary_path,
+            cf_descriptors,
+        )?);
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+    pub fn open_readonly<P>(
+        db_path: P,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let db = Arc::new(Storage::open_readonly_with_cfs_only_db(
+            db_path,
+            Self::cf_names(),
+        )?);
+
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+}
 
 pub struct Storage {
+    pub asset_data: Column<AssetCompleteDetails>,
+    pub mpl_core_collection_authorities: Column<MplCoreCollectionAuthority>,
+
+    // TODO: Deprecated, remove start
     pub asset_static_data: Column<AssetStaticDetails>,
     pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
     pub asset_dynamic_data: Column<AssetDynamicDetails>,
     pub asset_dynamic_data_deprecated: Column<AssetDynamicDetailsDeprecated>,
-    pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_authority_data: Column<AssetAuthority>,
     pub asset_authority_deprecated: Column<AssetAuthorityDeprecated>,
     pub asset_owner_data_deprecated: Column<AssetOwnerDeprecated>,
     pub asset_owner_data: Column<AssetOwner>,
-    pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_collection_data: Column<asset::AssetCollection>,
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
+    pub asset_offchain_data_deprecated: Column<OffChainDataDeprecated>,
+    // Deprecated, remove end
+    pub metadata_mint_map: Column<MetadataMintMap>,
+    pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_offchain_data: Column<OffChainData>,
     pub cl_items: Column<cl_items::ClItem>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
-    pub bubblegum_slots: Column<bubblegum_slots::BubblegumSlots>,
-    pub ingestable_slots: Column<bubblegum_slots::IngestableSlots>,
     pub force_reingestable_slots: Column<bubblegum_slots::ForceReingestableSlots>,
-    pub raw_blocks_cbor: Column<RawBlock>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
     pub fungible_assets_update_idx: Column<FungibleAssetsUpdateIdx>,
@@ -148,6 +213,8 @@ impl Storage {
         let asset_static_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_data = Self::column(db.clone(), red_metrics.clone());
+        let mpl_core_collection_authorities = Self::column(db.clone(), red_metrics.clone());
         let metadata_mint_map = Self::column(db.clone(), red_metrics.clone());
         let asset_authority_data = Self::column(db.clone(), red_metrics.clone());
         let asset_authority_deprecated = Self::column(db.clone(), red_metrics.clone());
@@ -156,15 +223,13 @@ impl Storage {
         let asset_leaf_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_offchain_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_offchain_data = Self::column(db.clone(), red_metrics.clone());
 
         let cl_items = Self::column(db.clone(), red_metrics.clone());
         let cl_leafs = Self::column(db.clone(), red_metrics.clone());
 
-        let bubblegum_slots = Self::column(db.clone(), red_metrics.clone());
-        let ingestable_slots = Self::column(db.clone(), red_metrics.clone());
         let force_reingestable_slots = Self::column(db.clone(), red_metrics.clone());
-        let raw_blocks = Self::column(db.clone(), red_metrics.clone());
         let assets_update_idx = Self::column(db.clone(), red_metrics.clone());
         let fungible_assets_update_idx = Self::column(db.clone(), red_metrics.clone());
         let slot_asset_idx = Self::column(db.clone(), red_metrics.clone());
@@ -190,6 +255,10 @@ impl Storage {
         let spl_mints = Self::column(db.clone(), red_metrics.clone());
 
         Self {
+            asset_offchain_data_deprecated,
+            asset_data,
+            mpl_core_collection_authorities,
+
             asset_static_data,
             asset_dynamic_data,
             asset_dynamic_data_deprecated,
@@ -204,10 +273,7 @@ impl Storage {
             asset_offchain_data,
             cl_items,
             cl_leafs,
-            bubblegum_slots,
-            ingestable_slots,
             force_reingestable_slots,
-            raw_blocks_cbor: raw_blocks,
             db,
             assets_update_idx,
             fungible_assets_update_idx,
@@ -239,12 +305,15 @@ impl Storage {
         }
     }
 
-    pub fn open(
-        db_path: &str,
+    pub fn open<P>(
+        db_path: P,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         migration_state: MigrationState,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db = Arc::new(DB::open_cf_descriptors(
             &Self::get_db_options(),
@@ -254,13 +323,16 @@ impl Storage {
         Ok(Self::new(db, join_set, red_metrics))
     }
 
-    pub fn open_secondary(
-        primary_path: &str,
-        secondary_path: &str,
+    pub fn open_secondary<P>(
+        primary_path: P,
+        secondary_path: P,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         migration_state: MigrationState,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db = Arc::new(DB::open_cf_descriptors_as_secondary(
             &Self::get_db_options(),
@@ -271,35 +343,71 @@ impl Storage {
         Ok(Self::new(db, join_set, red_metrics))
     }
 
+    pub fn open_cfs<P>(
+        db_path: P,
+        c_names: Vec<&str>,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let cf_descriptors = Self::cfs_to_column_families(c_names);
+        let db = Arc::new(DB::open_cf_descriptors(
+            &Self::get_db_options(),
+            db_path,
+            cf_descriptors,
+        )?);
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+
+    pub fn open_readonly_with_cfs<P>(
+        db_path: P,
+        c_names: Vec<&str>,
+        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+        red_metrics: Arc<RequestErrorDurationMetrics>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let db = Arc::new(Self::open_readonly_with_cfs_only_db(db_path, c_names)?);
+        Ok(Self::new(db, join_set, red_metrics))
+    }
+
+    fn cfs_to_column_families(cfs: Vec<&str>) -> Vec<ColumnFamilyDescriptor> {
+        cfs.iter()
+            .map(|name| ColumnFamilyDescriptor::new(*name, Self::get_default_cf_options()))
+            .collect()
+    }
+
+    pub fn open_readonly_with_cfs_only_db<P>(db_path: P, c_names: Vec<&str>) -> Result<DB>
+    where
+        P: AsRef<Path>,
+    {
+        let cf_descriptors = Self::cfs_to_column_families(c_names);
+        DB::open_cf_descriptors_read_only(&Self::get_db_options(), db_path, cf_descriptors, false)
+            .map_err(StorageError::RocksDb)
+    }
+
     fn create_cf_descriptors(migration_state: &MigrationState) -> Vec<ColumnFamilyDescriptor> {
         vec![
             Self::new_cf_descriptor::<OffChainData>(migration_state),
-            Self::new_cf_descriptor::<AssetStaticDetails>(migration_state),
-            Self::new_cf_descriptor::<AssetDynamicDetails>(migration_state),
-            Self::new_cf_descriptor::<AssetDynamicDetailsDeprecated>(migration_state),
+            Self::new_cf_descriptor::<OffChainDataDeprecated>(migration_state),
+            Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
+            Self::new_cf_descriptor::<MplCoreCollectionAuthority>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
-            Self::new_cf_descriptor::<AssetAuthority>(migration_state),
-            Self::new_cf_descriptor::<AssetAuthorityDeprecated>(migration_state),
-            Self::new_cf_descriptor::<AssetOwnerDeprecated>(migration_state),
             Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
-            Self::new_cf_descriptor::<asset::AssetCollection>(migration_state),
-            Self::new_cf_descriptor::<AssetCollectionDeprecated>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItem>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClLeaf>(migration_state),
-            Self::new_cf_descriptor::<bubblegum_slots::BubblegumSlots>(migration_state),
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::FungibleAssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::SlotAssetIdx>(migration_state),
             Self::new_cf_descriptor::<signature_client::SignatureIdx>(migration_state),
-            Self::new_cf_descriptor::<RawBlock>(migration_state),
             Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(migration_state),
-            Self::new_cf_descriptor::<bubblegum_slots::IngestableSlots>(migration_state),
             Self::new_cf_descriptor::<bubblegum_slots::ForceReingestableSlots>(migration_state),
-            Self::new_cf_descriptor::<AssetOwner>(migration_state),
             Self::new_cf_descriptor::<TreeSeqIdx>(migration_state),
             Self::new_cf_descriptor::<TreesGaps>(migration_state),
             Self::new_cf_descriptor::<TokenMetadataEdition>(migration_state),
-            Self::new_cf_descriptor::<AssetStaticDetailsDeprecated>(migration_state),
             Self::new_cf_descriptor::<AssetSignature>(migration_state),
             Self::new_cf_descriptor::<TokenAccount>(migration_state),
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(migration_state),
@@ -369,9 +477,7 @@ impl Storage {
         options
     }
 
-    fn get_cf_options<C: TypedColumn>(migration_state: &MigrationState) -> Options {
-        const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
-
+    fn get_default_cf_options() -> Options {
         let mut cf_options = Options::default();
         // 256 * 8 = 2GB. 6 of these columns should take at most 12GB of RAM
         cf_options.set_max_write_buffer_number(8);
@@ -385,6 +491,11 @@ impl Storage {
         cf_options.set_level_zero_file_num_compaction_trigger(file_num_compaction_trigger as i32);
         cf_options.set_max_bytes_for_level_base(total_size_base);
         cf_options.set_target_file_size_base(file_size_base);
+        cf_options
+    }
+
+    fn get_cf_options<C: TypedColumn>(migration_state: &MigrationState) -> Options {
+        let mut cf_options = Self::get_default_cf_options();
 
         if matches!(migration_state, &MigrationState::CreateColumnFamilies) {
             cf_options.set_merge_operator_associative(
@@ -395,6 +506,19 @@ impl Storage {
         }
         // Optional merges
         match C::NAME {
+            // todo: add migration version
+            asset::AssetCompleteDetails::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_complete_details",
+                    asset::merge_complete_details_fb_simplified,
+                );
+            }
+            MplCoreCollectionAuthority::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_mpl_core_collection_authority",
+                    asset::MplCoreCollectionAuthority::merge,
+                );
+            }
             AssetStaticDetails::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_static_details",
@@ -403,18 +527,9 @@ impl Storage {
             }
             asset::AssetDynamicDetails::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => match *version {
-                        CollectionAuthorityMigration::VERSION
-                            ..=ExternalPluginsMigration::VERSION => {
-                            AssetDynamicDetailsV0::merge_dynamic_details
-                        }
-                        CleanCollectionAuthoritiesMigration::VERSION
-                            ..=DynamicDataToken2022MintExtentionsMigration::VERSION => {
-                            AssetDynamicDetailsWithoutExtentions::merge_dynamic_details
-                        }
-                        _ => asset::AssetDynamicDetails::merge_dynamic_details,
-                    },
-                    MigrationState::Last => asset::AssetDynamicDetails::merge_dynamic_details,
+                    MigrationState::Last | MigrationState::Version(_) => {
+                        asset::AssetDynamicDetails::merge_dynamic_details
+                    }
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
                     }
@@ -458,15 +573,10 @@ impl Storage {
                 );
             }
             asset::AssetCollection::NAME => {
-                let mf = if matches!(
-                    migration_state,
-                    &MigrationState::Version(CollectionAuthorityMigration::VERSION)
-                ) {
-                    AssetCollectionVersion0::merge_asset_collection
-                } else {
-                    asset::AssetCollection::merge_asset_collection
-                };
-                cf_options.set_merge_operator_associative("merge_fn_asset_collection", mf);
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_asset_collection",
+                    asset::AssetCollection::merge_asset_collection,
+                );
             }
             cl_items::ClItem::NAME => {
                 cf_options.set_merge_operator_associative(
@@ -492,10 +602,14 @@ impl Storage {
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
+            OffChainDataDeprecated::NAME => cf_options.set_merge_operator_associative(
+                "merge_fn_off_chain_data_keep_existing_deprecated",
+                asset::AssetStaticDetails::merge_keep_existing,
+            ),
             OffChainData::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_off_chain_data_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
+                    OffChainData::merge_off_chain_data,
                 );
             }
             cl_items::ClLeaf::NAME => {
@@ -504,27 +618,9 @@ impl Storage {
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
-            bubblegum_slots::BubblegumSlots::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_bubblegum_slots_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
-                );
-            }
-            bubblegum_slots::IngestableSlots::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_ingestable_slots_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
-                );
-            }
             bubblegum_slots::ForceReingestableSlots::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_force_reingestable_slots_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
-                );
-            }
-            RawBlock::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_raw_block_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
@@ -561,7 +657,7 @@ impl Storage {
             TokenMetadataEdition::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_metadata_edition_keep_existing",
-                    crate::editions::merge_token_metadata_edition,
+                    crate::columns::editions::merge_token_metadata_edition,
                 );
             }
             AssetStaticDetailsDeprecated::NAME => {
@@ -578,14 +674,9 @@ impl Storage {
             }
             TokenAccount::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => match *version {
-                        CollectionAuthorityMigration::VERSION
-                            ..=TokenAccounts2022ExtentionsMigration::VERSION => {
-                            AssetDynamicDetailsV0::merge_dynamic_details
-                        }
-                        _ => token_accounts::merge_token_accounts,
-                    },
-                    MigrationState::Last => crate::token_accounts::merge_token_accounts,
+                    MigrationState::Last | MigrationState::Version(_) => {
+                        token_accounts::merge_token_accounts
+                    }
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
                     }
@@ -662,4 +753,58 @@ impl Storage {
         }
         cf_options
     }
+
+    #[cfg(feature = "integration_tests")]
+    pub async fn clean_db(&self) {
+        let column_families_to_remove = [
+            MetadataMintMap::NAME,
+            asset::AssetLeaf::NAME,
+            OffChainData::NAME,
+            cl_items::ClItem::NAME,
+            cl_items::ClLeaf::NAME,
+            bubblegum_slots::ForceReingestableSlots::NAME,
+            AssetsUpdateIdx::NAME,
+            FungibleAssetsUpdateIdx::NAME,
+            SlotAssetIdx::NAME,
+            TreeSeqIdx::NAME,
+            TreesGaps::NAME,
+            TokenMetadataEdition::NAME,
+            TokenAccount::NAME,
+            TokenAccountOwnerIdx::NAME,
+            TokenAccountMintOwnerIdx::NAME,
+            AssetSignature::NAME,
+            BatchMintToVerify::NAME,
+            FailedBatchMint::NAME,
+            BatchMintWithStaker::NAME,
+            MigrationVersions::NAME,
+            TokenPrice::NAME,
+            AssetPreviews::NAME,
+            UrlToDownload::NAME,
+            ScheduledJob::NAME,
+            Inscription::NAME,
+            InscriptionData::NAME,
+            LeafSignature::NAME,
+            SplMint::NAME,
+            AssetCompleteDetails::NAME,
+            MplCoreCollectionAuthority::NAME,
+        ];
+
+        for cf in column_families_to_remove {
+            let cf_handler = self.db.cf_handle(cf).unwrap();
+            for (key, _) in self
+                .db
+                .full_iterator_cf(&cf_handler, rocksdb::IteratorMode::Start)
+                .flatten()
+            {
+                self.db.delete_cf(&cf_handler, key).unwrap();
+            }
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub trait ToFlatbuffersConverter<'a> {
+    type Target: 'a;
+    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target>;
+    fn convert_to_fb_bytes(&self) -> Vec<u8>;
 }

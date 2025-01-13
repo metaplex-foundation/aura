@@ -82,10 +82,10 @@ pub async fn start_metrics(register: Registry, port: Option<u16>) {
     tokio::spawn(async move {
         match setup_metrics(register, port).await {
             Ok(_) => {
-                info!("Setup metrics successfully")
+                info!("Metrics server stopped successfully");
             }
             Err(e) => {
-                error!("Setup metrics failed: {:?}", e)
+                error!("Metrics server stopped with an error: {:?}", e)
             }
         }
     });

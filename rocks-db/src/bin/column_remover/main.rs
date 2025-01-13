@@ -1,27 +1,16 @@
 use std::sync::Arc;
 
-use rocks_db::asset::{
-    self, AssetAuthorityDeprecated, AssetDynamicDetailsDeprecated, AssetOwnerDeprecated,
-    AssetStaticDetailsDeprecated, MetadataMintMap,
-};
 use rocks_db::column::TypedColumn;
-use rocks_db::tree_seq::{TreeSeqIdx, TreesGaps};
-use rocks_db::{
-    cl_items, signature_client, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
-};
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+
 use tracing::info;
 
 use rocksdb::{Options, DB};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
-use entities::enums::TokenMetadataEdition;
-use entities::models::{AssetSignature, TokenAccount};
+use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::migrator::MigrationState;
-use rocks_db::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+
 use std::env;
 
 #[tokio::main(flavor = "multi_thread")]
@@ -38,30 +27,9 @@ pub async fn main() -> Result<(), String> {
 
     // Specify the column families you plan to remove
     let columns_to_remove = vec![
-        AssetStaticDetails::NAME,
-        AssetDynamicDetails::NAME,
-        AssetAuthority::NAME,
-        AssetAuthorityDeprecated::NAME,
-        AssetOwnerDeprecated::NAME,
-        asset::AssetLeaf::NAME,
-        asset::AssetCollection::NAME,
-        asset::AssetCollectionDeprecated::NAME,
-        cl_items::ClItem::NAME,
-        cl_items::ClLeaf::NAME,
-        asset::AssetsUpdateIdx::NAME,
-        asset::SlotAssetIdx::NAME,
-        AssetOwner::NAME,
-        TreeSeqIdx::NAME,
-        signature_client::SignatureIdx::NAME,
-        AssetDynamicDetailsDeprecated::NAME,
-        MetadataMintMap::NAME,
-        TreesGaps::NAME,
-        TokenMetadataEdition::NAME,
-        AssetStaticDetailsDeprecated::NAME,
-        AssetSignature::NAME,
-        TokenAccount::NAME,
-        TokenAccountOwnerIdx::NAME,
-        TokenAccountMintOwnerIdx::NAME,
+        "BUBBLEGUM_SLOTS",  // bubblegum_slots::BubblegumSlots::NAME,
+        "INGESTABLE_SLOTS", // bubblegum_slots::IngestableSlots::NAME,
+        RawBlock::NAME,
     ];
 
     // Print the column families to be removed
@@ -95,22 +63,13 @@ pub async fn main() -> Result<(), String> {
 }
 
 fn remove_column_families(db_path: String, columns_to_remove: &[&str]) {
-    let mut options = Options::default();
-    options.create_if_missing(true);
-    options.create_missing_column_families(true);
+    let options = Options::default();
 
     // Get the existing column families
     let cf_names = DB::list_cf(&options, &db_path).expect("Failed to list column families.");
 
-    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
-    let db = rocks_db::Storage::open(
-        &db_path,
-        Arc::new(Mutex::new(JoinSet::new())),
-        red_metrics.clone(),
-        MigrationState::Last,
-    )
-    .expect("Failed to open DB.");
-    let db = db.db;
+    let _red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let db = DB::open_cf(&options, &db_path, &cf_names).expect("Failed to open DB.");
     columns_to_remove.iter().for_each(|cf_name| {
         if !cf_names.contains(&cf_name.to_string()) {
             println!("Column family {} does not exist. Skipping it", cf_name);

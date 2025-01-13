@@ -17,7 +17,7 @@ pub const GET_SIGNATURES_LIMIT: i64 = 2000;
 #[automock]
 #[async_trait]
 pub trait SlotsGetter {
-    async fn get_slots(
+    async fn get_slots_sorted_desc(
         &self,
         collected_key: &solana_program::pubkey::Pubkey,
         start_at: u64,
@@ -27,7 +27,7 @@ pub trait SlotsGetter {
 
 #[async_trait]
 impl SlotsGetter for BigTableConnection {
-    async fn get_slots(
+    async fn get_slots_sorted_desc(
         &self,
         collected_key: &solana_program::pubkey::Pubkey,
         start_at: u64,
@@ -110,7 +110,7 @@ where
             }
             let slots = self
                 .row_keys_getter
-                .get_slots(collected_pubkey, start_at_slot, GET_SIGNATURES_LIMIT)
+                .get_slots_sorted_desc(collected_pubkey, start_at_slot, GET_SIGNATURES_LIMIT)
                 .await;
             match slots {
                 Ok(s) => {

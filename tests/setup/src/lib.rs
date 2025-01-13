@@ -7,8 +7,9 @@ use std::sync::Arc;
 use crate::rocks::RocksTestEnvironmentSetup;
 use entities::enums::{AssetType, ASSET_TYPES};
 use metrics_utils::MetricsTrait;
-use rocks_db::asset::AssetCollection;
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+};
 use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
 
@@ -18,7 +19,7 @@ pub struct TestEnvironment<'a> {
     pub rocks_env: rocks::RocksTestEnvironment,
     pub pg_env: pg::TestEnvironment<'a>,
 }
-const BATCH_SIZE: usize = 200_000;
+
 impl<'a> TestEnvironment<'a> {
     pub async fn create(
         cli: &'a Cli,
@@ -72,12 +73,10 @@ impl<'a> TestEnvironment<'a> {
         let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
-            env.pg_env.client.clone(),
-            BATCH_SIZE,
-            "".to_string(),
+            200000,
+            "/tmp/sync_dump".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
-            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(syncronizer);

@@ -82,9 +82,9 @@ mod tests {
     async fn test_get_asset_details_stream_in_range_data() {
         let cnt = 1000;
         let env = RocksTestEnvironment::new(&[]);
-        let storage = &env.storage;
         let slot = 100;
         let pks = env.generate_assets(cnt, slot).await;
+        let storage = &env.storage;
         // Call get_asset_details_stream_in_range on a database
         let response = storage.get_asset_details_stream_in_range(100, 200).await;
 
@@ -104,12 +104,12 @@ mod tests {
     #[tokio::test]
     async fn test_get_raw_blocks_stream_in_range_data() {
         let env = RocksTestEnvironment::new(&[]);
-        let storage = &env.storage;
+        let slot_storage = &env.slot_storage;
         let slot = 153;
         let blockhash = "blockhash";
-        storage
+        slot_storage
             .raw_blocks_cbor
-            .put_cbor_encoded(
+            .put(
                 slot,
                 RawBlock {
                     slot,
@@ -125,10 +125,9 @@ mod tests {
                     },
                 },
             )
-            .await
             .unwrap();
         // Call get_asset_details_stream_in_range on a database
-        let response = storage.get_raw_blocks_stream_in_range(100, 200).await;
+        let response = slot_storage.get_raw_blocks_stream_in_range(100, 200).await;
 
         assert!(response.is_ok());
         let mut stream = response.unwrap();

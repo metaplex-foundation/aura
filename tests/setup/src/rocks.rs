@@ -1,8 +1,13 @@
 use std::sync::Arc;
 
-use entities::models::{OffChainData, Updated};
+use entities::models::Updated;
 use rand::{random, Rng};
+use rocks_db::column::TypedColumn;
+use rocks_db::columns::asset::AssetCompleteDetails;
+use rocks_db::columns::offchain_data::OffChainData;
+use rocks_db::ToFlatbuffersConverter;
 use solana_sdk::pubkey::Pubkey;
+use sqlx::types::chrono::Utc;
 use tempfile::TempDir;
 
 use entities::enums::SpecificationAssetClass;
@@ -10,8 +15,10 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::errors::StorageError;
 use rocks_db::migrator::MigrationState;
 use rocks_db::{
-    asset::AssetCollection, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
-    Storage,
+    columns::asset::{
+        AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+    },
+    SlotStorage, Storage,
 };
 use tokio::{sync::Mutex, task::JoinSet};
 
@@ -19,7 +26,9 @@ const DEFAULT_TEST_URL: &str = "http://example.com";
 
 pub struct RocksTestEnvironment {
     pub storage: Arc<Storage>,
-    _temp_dir: TempDir,
+    pub slot_storage: Arc<SlotStorage>,
+    // holds references to storage & slot storage temp dirs
+    _temp_dirs: (TempDir, TempDir),
 }
 
 pub struct RocksTestEnvironmentSetup;
@@ -36,16 +45,23 @@ pub struct GeneratedAssets {
 
 impl RocksTestEnvironment {
     pub fn new(keys: &[(u64, Pubkey)]) -> Self {
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+        let storage_temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+        let slot_storage_temp_dir = TempDir::new().expect("Failed to create a temporary directory");
         let join_set = Arc::new(Mutex::new(JoinSet::new()));
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let storage = Storage::open(
-            temp_dir.path().to_str().unwrap(),
-            join_set,
+            storage_temp_dir.path().to_str().unwrap(),
+            join_set.clone(),
             red_metrics.clone(),
             MigrationState::Last,
         )
-        .expect("Failed to create a database");
+        .expect("Failed to create storage database");
+        let slot_storage = SlotStorage::open(
+            slot_storage_temp_dir.path().to_str().unwrap(),
+            join_set,
+            red_metrics.clone(),
+        )
+        .expect("Failed to create slot storage database");
 
         for &(slot, ref pubkey) in keys {
             storage
@@ -55,7 +71,8 @@ impl RocksTestEnvironment {
 
         RocksTestEnvironment {
             storage: Arc::new(storage),
-            _temp_dir: temp_dir,
+            slot_storage: Arc::new(slot_storage),
+            _temp_dirs: (storage_temp_dir, slot_storage_temp_dir),
         }
     }
 
@@ -136,55 +153,49 @@ impl RocksTestEnvironment {
         self.storage.asset_offchain_data.put(
             ToOwned::to_owned(DEFAULT_TEST_URL),
             OffChainData {
-                url: ToOwned::to_owned(DEFAULT_TEST_URL),
-                metadata: ToOwned::to_owned("{}"),
+                url: Some(ToOwned::to_owned(DEFAULT_TEST_URL)),
+                metadata: Some(ToOwned::to_owned("{}")),
+                last_read_at: Utc::now().timestamp(),
+                storage_mutability: DEFAULT_TEST_URL.into(),
             },
         )?;
 
-        let static_data_batch = self.storage.asset_static_data.put_batch(
-            generated_assets
-                .static_details
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-        let authority_batch = self.storage.asset_authority_data.put_batch(
-            generated_assets
-                .authorities
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-        let owners_batch = self.storage.asset_owner_data.put_batch(
-            generated_assets
-                .owners
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-        let dynamic_details_batch = self.storage.asset_dynamic_data.put_batch(
-            generated_assets
-                .dynamic_details
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-        let collections_batch = self.storage.asset_collection_data.put_batch(
-            generated_assets
-                .collections
-                .iter()
-                .map(|value| (value.pubkey, value.clone()))
-                .collect(),
-        );
-
-        tokio::try_join!(
-            static_data_batch,
-            authority_batch,
-            owners_batch,
-            dynamic_details_batch,
-            collections_batch
-        )?;
-
+        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
+        let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+        generated_assets
+            .pubkeys
+            .iter()
+            .zip(generated_assets.static_details.iter())
+            .zip(generated_assets.dynamic_details.iter())
+            .zip(generated_assets.collections.iter())
+            .zip(generated_assets.owners.iter())
+            .enumerate()
+            .for_each(
+                |(index, ((((pubkey, static_details), dynamic_details), collection), owner))| {
+                    let authority = generated_assets.authorities.get(index);
+                    let complete_asset = AssetCompleteDetails {
+                        pubkey: *pubkey,
+                        static_details: Some(static_details.clone()),
+                        dynamic_details: Some(dynamic_details.clone()),
+                        authority: authority.cloned(),
+                        collection: Some(collection.clone()),
+                        owner: Some(owner.clone()),
+                    };
+                    let asset_data = complete_asset.convert_to_fb(&mut builder);
+                    builder.finish_minimal(asset_data);
+                    batch.put_cf(
+                        &self
+                            .storage
+                            .db
+                            .cf_handle(AssetCompleteDetails::NAME)
+                            .unwrap(),
+                        *pubkey,
+                        builder.finished_data(),
+                    );
+                    builder.reset();
+                },
+            );
+        self.storage.db.write(batch)?;
         Ok(())
     }
 }
@@ -242,6 +253,7 @@ impl RocksTestEnvironmentSetup {
                     rand::thread_rng().gen_range(0..100),
                 )),
                 delegate: generate_test_updated(Some(Pubkey::new_unique())),
+                is_current_owner: generate_test_updated(true),
             })
             .collect()
     }
@@ -286,7 +298,7 @@ pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> Asset
         supply: Some(Updated::new(slot, None, 1)),
         seq: None,
         is_burnt: Updated::new(slot, None, false),
-        was_decompressed: Updated::new(slot, None, false),
+        was_decompressed: Some(Updated::new(slot, None, false)),
         onchain_data: None,
         creators: Updated::new(slot, None, vec![generate_test_creator()]),
         royalty_amount: Updated::new(slot, None, 0),
