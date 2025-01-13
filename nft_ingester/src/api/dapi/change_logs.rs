@@ -85,9 +85,12 @@ pub async fn get_proof_for_assets<
     // Batch get cl_items
     let cl_items_first_leaf = rocks_db.cl_items.batch_get(cl_item_keys.clone()).await?;
 
-    let last_seen_slot =
-        rocks_db.get_last_ingested_slot().await.unwrap_or_default().unwrap_or_default();
-    let slot_for_cutoff = last_seen_slot.wrapping_sub(OFFSET_SLOTS);
+    let slot_for_cutoff = if let Ok(Some(last_seen_slot)) = rocks_db.get_last_ingested_slot().await
+    {
+        last_seen_slot.wrapping_sub(OFFSET_SLOTS)
+    } else {
+        0
+    };
     // Build the leaves map directly by iterating over tree_pubkeys and the fetched items in parallel
     let leaves: HashMap<Vec<u8>, (model::ClItemsModel, u64)> = tree_pubkeys
         .into_iter()
