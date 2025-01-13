@@ -1653,7 +1653,7 @@ dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
  "blockbuster",
- "borsh 0.9.3",
+ "borsh 0.10.3",
  "bytemuck",
  "chrono",
  "mpl-bubblegum",
@@ -2982,6 +2982,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c2141d6d6c8512188a7891b4b01590a45f6dac67afb4f255c4124dbb86d4eaa"
 
 [[package]]
+name = "function_name"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1ab577a896d09940b5fe12ec5ae71f9d8211fff62c919c03a3750a9901e98a7"
+dependencies = [
+ "function_name-proc-macro",
+]
+
+[[package]]
+name = "function_name-proc-macro"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "673464e1e314dd67a0fd9544abc99e8eb28d0c7e3b69b033bcff9b2d00b87333"
+
+[[package]]
 name = "futures"
 version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3695,12 +3710,63 @@ dependencies = [
 ]
 
 [[package]]
+name = "insta"
+version = "1.41.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e9ffc4d4892617c50a928c52b2961cb5174b6fc6ebf252b2fac9d21955c48b8"
+dependencies = [
+ "console",
+ "lazy_static",
+ "linked-hash-map",
+ "serde",
+ "similar",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
 dependencies = [
  "cfg-if 1.0.0",
+]
+
+[[package]]
+name = "integration_tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "borsh 0.10.3",
+ "entities",
+ "env_logger 0.10.2",
+ "flatbuffers 23.5.26",
+ "function_name",
+ "futures",
+ "insta",
+ "itertools 0.12.1",
+ "metrics-utils",
+ "mpl-token-metadata",
+ "nft_ingester",
+ "once_cell",
+ "plerkle_serialization",
+ "postgre-client",
+ "rocks-db",
+ "rocksdb",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-sdk",
+ "solana-transaction-status",
+ "spl-token 4.0.0",
+ "sqlx",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-test",
+ "usecase",
 ]
 
 [[package]]
@@ -3955,11 +4021,11 @@ dependencies = [
 
 [[package]]
 name = "lazy_static"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 dependencies = [
- "spin 0.5.2",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -4130,6 +4196,12 @@ dependencies = [
  "num-bigint 0.4.5",
  "thiserror",
 ]
+
+[[package]]
+name = "linked-hash-map"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linux-raw-sys"
@@ -4562,9 +4634,7 @@ dependencies = [
  "clap 4.5.4",
  "coingecko",
  "criterion",
- "csv",
  "entities",
- "env_logger 0.10.2",
  "figment",
  "flatbuffers 23.5.26",
  "futures",
@@ -4588,24 +4658,21 @@ dependencies = [
  "mpl-bubblegum",
  "mpl-token-metadata",
  "multer",
+ "num-bigint 0.4.5",
  "num-traits",
- "open-rpc-schema",
  "plerkle_messenger",
  "plerkle_serialization",
  "postgre-client",
  "pprof",
  "prometheus-client",
- "rand 0.8.5",
  "reqwest",
  "rocks-db",
  "rocksdb",
  "schemars",
  "serde",
  "serde_cbor",
- "serde_derive",
  "serde_json",
  "setup",
- "solana-bigtable-connection",
  "solana-client",
  "solana-program",
  "solana-sdk",
@@ -4628,7 +4695,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-test",
- "triomphe",
  "url",
  "usecase",
  "utils",
@@ -4936,18 +5002,6 @@ name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
-
-[[package]]
-name = "open-rpc-schema"
-version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6919654a78166b8d8f266f702ce763c0880c11a2e75e1de9cc3e51704abf620"
-dependencies = [
- "schemars",
- "schemars_derive",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "openssl"
@@ -6273,6 +6327,7 @@ dependencies = [
  "hex",
  "indicatif",
  "interface",
+ "itertools 0.12.1",
  "lz4",
  "metrics-utils",
  "mockall",
@@ -6812,6 +6867,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "serial_test"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e56dd856803e253c8f298af3f4d7eb0ae5e23a737252cd90bb4f3b435033b2d"
+dependencies = [
+ "dashmap",
+ "futures",
+ "lazy_static",
+ "log",
+ "parking_lot 0.12.3",
+ "serial_test_derive",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91d129178576168c589c9ec973feedf7d3126c01ac2bf08795109aa35b69fb8f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+]
+
+[[package]]
 name = "setup"
 version = "0.1.0"
 dependencies = [
@@ -6986,6 +7066,12 @@ name = "signature"
 version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74233d3b3b2f6d4b006dc19dee745e73e2a6bfb6f93607cd3b02bd5b00797d7c"
+
+[[package]]
+name = "similar"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1de1d4f81173b03af4c0cbed3c898f6bff5b870e4a7f5d6f4057d62a7a4b686e"
 
 [[package]]
 name = "simpl"

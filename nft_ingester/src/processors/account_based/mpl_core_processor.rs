@@ -7,13 +7,16 @@ use entities::models::{
 };
 use heck::ToSnakeCase;
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::asset::{AssetCollection, AssetCompleteDetails};
 use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetOwner,
+    AssetStaticDetails,
+};
 use rocks_db::errors::StorageError;
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
 use serde_json::Map;
 use serde_json::{json, Value};
 use solana_program::pubkey::Pubkey;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 use usecase::save_metrics::result_to_metrics;
@@ -76,9 +79,9 @@ impl MplCoreProcessor {
         // If it is an `Address` type, use the value directly.  If it is a `Collection`, search for and
         // use the collection's authority.
         let update_authority = match asset.update_authority {
-            UpdateAuthority::Address(address) => address,
+            UpdateAuthority::Address(address) => Some(address),
             UpdateAuthority::Collection(address) => storage.get_authority(address),
-            UpdateAuthority::None => Pubkey::default(),
+            UpdateAuthority::None => None,
         };
 
         let name = asset.name.clone();
@@ -112,10 +115,9 @@ impl MplCoreProcessor {
         let ownership_type = OwnerType::Single;
         let (owner, class) = match account_data.indexable_asset.clone() {
             MplCoreAccountData::Asset(_) => (asset.owner, SpecificationAssetClass::MplCoreAsset),
-            MplCoreAccountData::Collection(_) => (
-                Some(update_authority),
-                SpecificationAssetClass::MplCoreCollection,
-            ),
+            MplCoreAccountData::Collection(_) => {
+                (update_authority, SpecificationAssetClass::MplCoreCollection)
+            }
             _ => return Ok(None),
         };
 
@@ -133,7 +135,15 @@ impl MplCoreProcessor {
             })
             .unwrap_or((0, &default_creators));
 
-        let mut plugins_json = serde_json::to_value(&asset.plugins)
+        // convert HashMap plugins into BTreeMap to have always same plugins order
+        // for example without ordering 2 assets with same plugins can have different order saved in DB
+        // it affects only API response and tests
+        let ordered_plugins: BTreeMap<_, _> = asset
+            .plugins
+            .iter()
+            .map(|(key, value)| (format!("{:?}", key), value))
+            .collect();
+        let mut plugins_json = serde_json::to_value(ordered_plugins)
             .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
 
         // Improve JSON output.
@@ -186,7 +196,7 @@ impl MplCoreProcessor {
                 .get(&PluginType::TransferDelegate)
                 .and_then(|plugin_schema| match &plugin_schema.authority {
                     PluginAuthority::Owner => owner,
-                    PluginAuthority::UpdateAuthority => Some(update_authority),
+                    PluginAuthority::UpdateAuthority => update_authority,
                     PluginAuthority::Address { address } => Some(*address),
                     PluginAuthority::None => None,
                 });
@@ -210,7 +220,7 @@ impl MplCoreProcessor {
                 account_data.indexable_asset,
                 MplCoreAccountData::Collection(_)
             ) {
-                Some(update_authority)
+                update_authority
             } else {
                 None
             };
@@ -254,12 +264,16 @@ impl MplCoreProcessor {
             created_at: account_data.slot_updated as i64,
             edition_address: None,
         });
-        models.asset_authority = Some(AssetAuthority {
-            pubkey: asset_key,
-            authority: update_authority,
-            slot_updated: account_data.slot_updated,
-            write_version: Some(account_data.write_version),
-        });
+        if let Some(upd_auth) = update_authority {
+            models.asset_authority = Some(AssetAuthority {
+                pubkey: asset_key,
+                authority: upd_auth,
+                slot_updated: account_data.slot_updated,
+                write_version: Some(account_data.write_version),
+            });
+        } else {
+            models.asset_authority = None;
+        }
         models.asset_owner = Some(AssetOwner {
             pubkey: asset_key,
             owner: Updated::new(
@@ -277,6 +291,11 @@ impl MplCoreProcessor {
                 account_data.slot_updated,
                 Some(UpdateVersion::WriteVersion(account_data.write_version)),
                 ownership_type,
+            ),
+            is_current_owner: Updated::new(
+                account_data.slot_updated,
+                Some(UpdateVersion::WriteVersion(account_data.write_version)),
+                true,
             ),
             ..Default::default()
         });
@@ -313,11 +332,8 @@ impl MplCoreProcessor {
                 Some(UpdateVersion::WriteVersion(account_data.write_version)),
                 false,
             ),
-            was_decompressed: Updated::new(
-                account_data.slot_updated,
-                Some(UpdateVersion::WriteVersion(account_data.write_version)),
-                false,
-            ),
+            // should not set this value for Core assets
+            was_decompressed: None,
             onchain_data: Some(Updated::new(
                 account_data.slot_updated,
                 Some(UpdateVersion::WriteVersion(account_data.write_version)),

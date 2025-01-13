@@ -1,0 +1,52 @@
+@startuml
+scale 1.5
+queue "Solana\ndata" as SolanaTransactions
+box ingester
+    control "Solana\nService" as SolanaService
+    participant "Account\nProcessor" as AccountProcessor
+    queue "mpsc" as mpsc
+    participant "Checksum\nCalculator" as ChecksumCalc
+end box
+box RocksDB
+    database "Assets\nStorage" as AssetsStorage
+    database "Account\nchanges" as AccChanges
+    database "Account\nlast state" as AccState
+    database "Account\nbuckets" as AccBuckets
+    database "Account\ngrand buckets" as AccGrandBuckets
+end box
+
+== Process next account ==
+
+SolanaTransactions -> AccountProcessor : process next account
+AccountProcessor -> AssetsStorage : save account\nasset change\nin Rocks
+AccountProcessor -> AccChanges : track account change
+group if epoch(msg.slot) < current_epoch()
+    AccountProcessor -> AccBuckets : mark the bucket INVALIDATED
+end group
+
+== Triggering calculation ==
+
+loop
+SolanaTransactions -> SolanaService : get last\nslot num
+group if epoch(slot) > current_epoch()
+    SolanaService -> SolanaService : increment\ncurrent epoch
+    SolanaService -> mpsc : Calc(epoch)
+end group
+end loop
+
+== Calculation of a bucket checksum ==
+
+mpsc -> ChecksumCalc : read next cmd
+
+ChecksumCalc <- AccChanges : fetch changes
+ChecksumCalc -> ChecksumCalc : group,\ncalc buckets
+ChecksumCalc -> AccBuckets : INVALIDATE corresponding buckets
+ChecksumCalc -> AccGrandBuckets : INVALIDATE corresponding grand buckets
+ChecksumCalc -> AccState : update account with last change
+ChecksumCalc <- AccState : iterate accounts for buckets to re-calc
+ChecksumCalc -> ChecksumCalc : calc bucket\nchecksums
+ChecksumCalc -> AccBuckets : Set buckets checksum
+ChecksumCalc -> AccGrandBuckets : Set grand buckets checksum
+ChecksumCalc -> AccChanges : delete processed change records
+
+@enduml

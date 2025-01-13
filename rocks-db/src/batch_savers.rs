@@ -1,6 +1,7 @@
 use crate::asset::{AssetCollection, AssetCompleteDetails, MetadataMintMap};
-use crate::asset_generated::asset as fb;
 use crate::column::TypedColumn;
+use crate::columns::inscriptions::InscriptionData;
+use crate::generated::asset_generated::asset as fb;
 use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
 use crate::Result;
 use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
@@ -43,6 +44,7 @@ impl From<&MetadataModels> for AssetCompleteDetails {
                 .map(|s| s.pubkey)
                 .or_else(|| value.asset_dynamic.as_ref().map(|d| d.pubkey))
                 .or_else(|| value.asset_authority.as_ref().map(|a| a.pubkey))
+                // this might be wrong for token accounts, where the owner is the token account pubkey, rather than the NFT mint pubkey, but in 2 cases where it's used - it's ok, as static data is passed along with the owner, so that one is used.
                 .or_else(|| value.asset_owner.as_ref().map(|o| o.pubkey))
                 .or_else(|| value.asset_collection.as_ref().map(|c| c.pubkey))
                 .unwrap_or_default(),
@@ -54,6 +56,7 @@ impl From<&MetadataModels> for AssetCompleteDetails {
         }
     }
 }
+
 #[macro_export]
 macro_rules! store_assets {
     ($self:expr, $asset:expr, $db_field:ident, $metric_name:expr) => {{
@@ -103,18 +106,8 @@ impl BatchSaveStorage {
     }
 
     pub fn store_complete(&mut self, data: &AssetCompleteDetails) -> Result<()> {
-        let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
-        let acd = data.convert_to_fb(&mut builder);
-        builder.finish_minimal(acd);
-        self.batch.merge_cf(
-            &self
-                .storage
-                .db
-                .cf_handle(AssetCompleteDetails::NAME)
-                .unwrap(),
-            data.pubkey,
-            builder.finished_data(),
-        );
+        self.storage
+            .merge_compete_details_with_batch(&mut self.batch, data)?;
         let res = Ok(());
         result_to_metrics(
             self.metrics.clone(),
@@ -154,7 +147,7 @@ impl BatchSaveStorage {
     pub fn store_edition(&mut self, key: Pubkey, edition: &TokenMetadataEdition) -> Result<()> {
         self.storage
             .token_metadata_edition_cbor
-            .merge_with_batch_cbor(&mut self.batch, key, edition)?;
+            .merge_with_batch(&mut self.batch, key, edition)?;
         Ok(())
     }
     pub fn store_inscription(&mut self, inscription: &InscriptionInfo) -> Result<()> {
@@ -173,7 +166,7 @@ impl BatchSaveStorage {
         self.storage.inscription_data.merge_with_batch(
             &mut self.batch,
             key,
-            &crate::inscriptions::InscriptionData {
+            &InscriptionData {
                 pubkey: key,
                 data: inscription_data.inscription_data.clone(),
                 write_version: inscription_data.write_version,
@@ -181,6 +174,12 @@ impl BatchSaveStorage {
         )?;
         Ok(())
     }
+    pub fn fungible_asset_updated_with_batch(&mut self, slot: u64, pubkey: Pubkey) -> Result<()> {
+        self.storage
+            .fungible_asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
+        Ok(())
+    }
+
     pub fn asset_updated_with_batch(&mut self, slot: u64, pubkey: Pubkey) -> Result<()> {
         self.storage
             .asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
@@ -219,7 +218,7 @@ impl BatchSaveStorage {
         )
     }
 
-    pub fn get_authority(&self, address: Pubkey) -> Pubkey {
+    pub fn get_authority(&self, address: Pubkey) -> Option<Pubkey> {
         if let Ok(Some(data)) = self.storage.db.get_pinned_cf(
             &self
                 .storage
@@ -233,10 +232,9 @@ impl BatchSaveStorage {
                 .ok()
                 .and_then(|a| a.authority())
                 .and_then(|auth| auth.authority())
-                .map(|k| Pubkey::try_from(k.bytes()).unwrap())
-                .unwrap_or_default();
+                .map(|k| Pubkey::try_from(k.bytes()).unwrap());
         }
-        Pubkey::default()
+        None
     }
 
     pub fn get_mint_map(&self, key: Pubkey) -> Result<Option<MetadataMintMap>> {

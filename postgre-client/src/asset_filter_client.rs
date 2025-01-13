@@ -12,7 +12,7 @@ use crate::{
     error::IndexDbError,
     model::{
         AssetSortBy, AssetSortDirection, AssetSortedIndex, AssetSorting, AssetSupply,
-        SearchAssetsFilter,
+        SearchAssetsFilter, SpecificationAssetClass,
     },
     storage_traits::AssetPubkeyFilteredFetcher,
     PgClient, COUNT_ACTION, SELECT_ACTION, SQL_COMPONENT,
@@ -136,12 +136,10 @@ impl PgClient {
         filter: &'a SearchAssetsFilter,
         options: &'a GetByMethodsOptions,
     ) -> Result<QueryBuilder<'a, Postgres>, IndexDbError> {
-        let mut query_builder = QueryBuilder::new("SELECT count(*) FROM assets_v3 ");
-        let group_clause_required = add_filter_clause(&mut query_builder, filter, options);
-        // Add GROUP BY clause if necessary
-        if group_clause_required {
-            query_builder.push(" GROUP BY assets_v3.ast_pubkey, assets_v3.ast_slot_created, assets_v3.ast_slot_updated ");
-        }
+        let mut query_builder = QueryBuilder::new(
+            "SELECT COUNT(DISTINCT (assets_v3.ast_pubkey)) AS total_groups FROM assets_v3 ",
+        );
+        add_filter_clause(&mut query_builder, filter, options);
         query_builder.push(";");
 
         Ok(query_builder)
@@ -197,7 +195,43 @@ fn add_filter_clause<'a>(
         query_builder.push(" AND assets_v3.ast_specification_asset_class = ");
         query_builder.push_bind(asset_class);
     }
-
+    if let Some(ref token_type) = filter.token_type {
+        match token_type {
+            TokenType::Fungible => {
+                let classes = vec![
+                    SpecificationAssetClass::FungibleToken,
+                    SpecificationAssetClass::FungibleAsset,
+                ];
+                push_asset_class_filter(query_builder, &classes, None);
+            }
+            TokenType::NonFungible => {
+                let classes = vec![
+                    SpecificationAssetClass::MplCoreAsset,
+                    SpecificationAssetClass::MplCoreCollection,
+                    SpecificationAssetClass::Nft,
+                    SpecificationAssetClass::ProgrammableNft,
+                ];
+                push_asset_class_filter(query_builder, &classes, None);
+            }
+            TokenType::RegularNFT => {
+                let classes = vec![
+                    SpecificationAssetClass::MplCoreAsset,
+                    SpecificationAssetClass::MplCoreCollection,
+                    SpecificationAssetClass::Nft,
+                    SpecificationAssetClass::ProgrammableNft,
+                ];
+                push_asset_class_filter(query_builder, &classes, Some(false));
+            }
+            TokenType::CompressedNFT => {
+                let classes = vec![
+                    SpecificationAssetClass::Nft,
+                    SpecificationAssetClass::ProgrammableNft,
+                ];
+                push_asset_class_filter(query_builder, &classes, Some(true));
+            }
+            TokenType::All => {}
+        }
+    }
     if let Some(owner_address) = &filter.owner_address {
         if let Some(ref token_type) = filter.token_type {
             match *token_type {
@@ -269,7 +303,8 @@ fn add_filter_clause<'a>(
     }
 
     if !options.show_unverified_collections {
-        query_builder.push(" AND assets_v3.ast_is_collection_verified = true");
+        // if there is no collection for asset it doesn't mean that it's unverified
+        query_builder.push(" AND assets_v3.ast_is_collection_verified IS DISTINCT FROM FALSE");
     }
 
     if let Some(delegate) = &filter.delegate {
@@ -336,6 +371,26 @@ fn add_filter_clause<'a>(
         query_builder.push_bind(json_uri);
     }
     group_clause_required
+}
+
+fn push_asset_class_filter(
+    query_builder: &mut QueryBuilder<Postgres>,
+    classes: &[SpecificationAssetClass],
+    compressed: Option<bool>,
+) {
+    if !classes.is_empty() {
+        query_builder.push(" AND assets_v3.ast_specification_asset_class IN (");
+        let mut qb = query_builder.separated(", ");
+        for cl in classes.iter() {
+            qb.push_bind(*cl);
+        }
+        query_builder.push(") ");
+    }
+    if let Some(is_compressed) = compressed {
+        query_builder.push(" AND assets_v3.ast_is_compressed = ");
+        query_builder.push_bind(is_compressed);
+        query_builder.push(" ");
+    }
 }
 
 fn add_slot_and_key_comparison(

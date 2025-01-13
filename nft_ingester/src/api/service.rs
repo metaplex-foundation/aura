@@ -70,6 +70,7 @@ pub async fn start_api(
     file_storage_path: &str,
     account_balance_getter: Arc<AccountBalanceGetterImpl>,
     storage_service_base_url: Option<String>,
+    native_mint_pubkey: String,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -120,7 +121,12 @@ pub async fn start_api(
         json_middleware_config.unwrap_or_default(),
         account_balance_getter,
         storage_service_base_url,
-        Arc::new(RaydiumTokenPriceFetcher::new("https://api-v3.raydium.io".to_string(), crate::raydium_price_fetcher::CACHE_TTL, red_metrics)),
+        Arc::new(RaydiumTokenPriceFetcher::new(
+            "https://api-v3.raydium.io".to_string(),
+            crate::raydium_price_fetcher::CACHE_TTL,
+            red_metrics,
+        )),
+        native_mint_pubkey,
     );
 
     run_api(
@@ -200,7 +206,7 @@ async fn run_api(
     }
 
     let server = server.unwrap();
-    info!("API Server Started");
+    info!("API Server Started {}", server.address().to_string());
 
     loop {
         if !shutdown_rx.is_empty() {

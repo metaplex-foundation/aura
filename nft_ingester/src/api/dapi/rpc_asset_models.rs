@@ -9,10 +9,15 @@ use {
 
 use crate::api::dapi::response::InscriptionResponse;
 use entities::enums::{Interface, OwnershipModel, RoyaltyModel, UseMethod};
-use entities::models::{EditionData, OffChainData, SplMint, TokenAccount};
-use rocks_db::asset::{AssetCollection, AssetLeaf};
-use rocks_db::inscriptions::{Inscription, InscriptionData};
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
+use entities::models::{EditionData, SplMint, TokenAccount};
+use rocks_db::columns::{
+    asset::{
+        AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner,
+        AssetStaticDetails,
+    },
+    inscriptions::{Inscription, InscriptionData},
+    offchain_data::OffChainData,
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AssetProof {
@@ -131,7 +136,7 @@ pub struct Authority {
     pub scopes: Vec<Scope>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema, Default)]
 pub struct Compression {
     pub eligible: bool,
     pub compressed: bool,
@@ -139,8 +144,8 @@ pub struct Compression {
     pub creator_hash: String,
     pub asset_hash: String,
     pub tree: String,
-    pub seq: i64,
-    pub leaf_id: i64,
+    pub seq: u64,
+    pub leaf_id: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -294,7 +299,7 @@ pub struct FullAsset {
     pub asset_leaf: AssetLeaf,
     pub offchain_data: OffChainData,
     pub asset_collections: Option<AssetCollection>,
-    pub assets_authority: AssetAuthority,
+    pub assets_authority: Option<AssetAuthority>,
     pub edition_data: Option<EditionData>,
     pub mpl_core_collections: Option<AssetCollection>,
     pub collection_dynamic_data: Option<AssetDynamicDetails>,

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use interface::slot_getter::LastProcessedSlotGetter;
-    use rocks_db::parameters::Parameter;
+    use rocks_db::columns::parameters::Parameter;
     use setup::rocks::*;
 
     #[tokio::test]

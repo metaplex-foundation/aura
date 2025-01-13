@@ -1,41 +1,109 @@
+use std::sync::Arc;
+
 use crate::error::IndexDbError;
 use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
-use crate::temp_index_client::TempClient;
 use async_trait::async_trait;
 use entities::api_req_params::GetByMethodsOptions;
-use entities::models::AssetIndex;
+use entities::enums::AssetType;
+use entities::models::{AssetIndex, FungibleAssetIndex};
 use mockall::{automock, mock};
+
+pub struct NFTSemaphores {
+    pub assets: Arc<tokio::sync::Semaphore>,
+    pub creators: Arc<tokio::sync::Semaphore>,
+    pub authority: Arc<tokio::sync::Semaphore>,
+    pub metadata: Arc<tokio::sync::Semaphore>,
+}
+
+impl NFTSemaphores {
+    pub fn new() -> Self {
+        Self {
+            assets: Arc::new(tokio::sync::Semaphore::new(1)),
+            creators: Arc::new(tokio::sync::Semaphore::new(1)),
+            authority: Arc::new(tokio::sync::Semaphore::new(1)),
+            metadata: Arc::new(tokio::sync::Semaphore::new(1)),
+        }
+    }
+}
+
+impl Default for NFTSemaphores {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[async_trait]
 pub trait AssetIndexStorage {
-    async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError>;
-    async fn update_asset_indexes_batch(
+    async fn fetch_last_synced_id(
+        &self,
+        asset_type: AssetType,
+    ) -> Result<Option<Vec<u8>>, IndexDbError>;
+    async fn update_nft_asset_indexes_batch(
         &self,
         asset_indexes: &[AssetIndex],
     ) -> Result<(), IndexDbError>;
-    async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError>;
-    async fn load_from_dump(
+    async fn update_fungible_asset_indexes_batch(
         &self,
-        base_path: &std::path::Path,
-        last_key: &[u8],
+        asset_indexes: &[FungibleAssetIndex],
     ) -> Result<(), IndexDbError>;
+    async fn update_last_synced_key(
+        &self,
+        last_key: &[u8],
+        asset_type: AssetType,
+    ) -> Result<(), IndexDbError>;
+
+    async fn load_from_dump_nfts(
+        &self,
+        assets_file_name: &str,
+        creators_file_name: &str,
+        authority_file_name: &str,
+        metadata_file_name: &str,
+        semaphores: Arc<NFTSemaphores>,
+    ) -> Result<(), IndexDbError>;
+    async fn load_from_dump_fungibles(
+        &self,
+        fungible_tokens_path: &str,
+        semaphore: Arc<tokio::sync::Semaphore>,
+    ) -> Result<(), IndexDbError>;
+    async fn destructive_prep_to_batch_nft_load(&self) -> Result<(), IndexDbError>;
+    async fn finalize_batch_nft_load(&self) -> Result<(), IndexDbError>;
+
+    async fn destructive_prep_to_batch_fungible_load(&self) -> Result<(), IndexDbError>;
+    async fn finalize_batch_fungible_load(&self) -> Result<(), IndexDbError>;
 }
 
 mock!(
     pub AssetIndexStorageMock {}
     #[async_trait]
     impl AssetIndexStorage for AssetIndexStorageMock {
-        async fn fetch_last_synced_id(&self) -> Result<Option<Vec<u8>>, IndexDbError>;
-        async fn update_asset_indexes_batch(
+        async fn fetch_last_synced_id(&self, asset_type: AssetType) -> Result<Option<Vec<u8>>, IndexDbError>;
+        async fn update_nft_asset_indexes_batch(
             &self,
             asset_indexes: &[AssetIndex],
         ) -> Result<(), IndexDbError>;
-        async fn load_from_dump(
+        async fn update_fungible_asset_indexes_batch(
             &self,
-            base_path: &std::path::Path,
-            last_key: &[u8],
+            asset_indexes: &[FungibleAssetIndex],
         ) -> Result<(), IndexDbError>;
-        async fn update_last_synced_key(&self, last_key: &[u8]) -> Result<(), IndexDbError>;
+        async fn update_last_synced_key(&self, last_key: &[u8], assset_type: AssetType) -> Result<(), IndexDbError>;
+
+        async fn load_from_dump_nfts(
+            &self,
+            assets_file_name: &str,
+            creators_file_name: &str,
+            authority_file_name: &str,
+            metadata_file_name: &str,
+            semaphores: Arc<NFTSemaphores>,
+        ) -> Result<(), IndexDbError>;
+        async fn load_from_dump_fungibles(
+            &self,
+            fungible_tokens_path: &str,
+            semaphore: Arc<tokio::sync::Semaphore>,
+        ) -> Result<(), IndexDbError>;
+        async fn destructive_prep_to_batch_nft_load(&self) -> Result<(), IndexDbError>;
+        async fn finalize_batch_nft_load(&self) -> Result<(), IndexDbError>;
+        async fn destructive_prep_to_batch_fungible_load(&self) -> Result<(), IndexDbError>;
+        async fn finalize_batch_fungible_load(&self) -> Result<(), IndexDbError>;
     }
 
     impl Clone for AssetIndexStorageMock {
@@ -77,19 +145,3 @@ pub trait IntegrityVerificationKeysFetcher {
         &self,
     ) -> Result<Vec<String>, IndexDbError>;
 }
-
-#[async_trait]
-pub trait TempClientProvider {
-    async fn create_temp_client(&self) -> Result<TempClient, IndexDbError>;
-}
-
-mockall::mock!(
-pub TempClientProviderMock {}
-impl Clone for TempClientProviderMock {
-    fn clone(&self) -> Self;
-}
-#[async_trait]
-impl TempClientProvider for TempClientProviderMock {
-    async fn create_temp_client(&self) -> Result<TempClient, IndexDbError>;
-}
-);

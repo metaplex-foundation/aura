@@ -15,7 +15,7 @@ use entities::enums::{
     SpecificationAssetClass, TokenStandard, UseMethod,
 };
 use entities::models::{
-    BatchMintToVerify, BufferedTransaction, OffChainData, SignatureWithSlot, UpdateVersion, Updated,
+    BatchMintToVerify, BufferedTransaction, SignatureWithSlot, UpdateVersion, Updated,
 };
 use entities::models::{ChainDataV1, Creator, Uses};
 use lazy_static::lazy_static;
@@ -23,10 +23,10 @@ use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::types::LeafSchema;
 use mpl_bubblegum::InstructionName;
 use num_traits::FromPrimitive;
-use rocks_db::asset::AssetOwner;
-use rocks_db::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetStaticDetails,
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetStaticDetails,
 };
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::transaction::{
     AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
     TreeUpdate,
@@ -86,6 +86,7 @@ impl BubblegumTxProcessor {
     pub async fn process_transaction(
         &self,
         data: BufferedTransaction,
+        is_from_finalized_source: bool,
     ) -> Result<(), IngesterError> {
         if data == BufferedTransaction::default() {
             return Ok(());
@@ -100,7 +101,7 @@ impl BubblegumTxProcessor {
 
         let res = self
             .rocks_client
-            .store_transaction_result(&result, true)
+            .store_transaction_result(&result, true, is_from_finalized_source)
             .await
             .map_err(|e| IngesterError::DatabaseError(e.to_string()));
 
@@ -400,6 +401,11 @@ impl BubblegumTxProcessor {
                             Some(UpdateVersion::Sequence(cl.seq)),
                             Some(cl.seq),
                         ),
+                        is_current_owner: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
+                        ),
                     };
                     let asset_update = AssetUpdateEvent {
                         update: Some(AssetDynamicUpdate {
@@ -643,6 +649,11 @@ impl BubblegumTxProcessor {
                             Some(UpdateVersion::Sequence(cl.seq)),
                             Some(cl.seq),
                         ),
+                        is_current_owner: Updated::new(
+                            slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
+                        ),
                     };
                     asset_update.owner_update = Some(AssetUpdate {
                         pk: id,
@@ -732,9 +743,10 @@ impl BubblegumTxProcessor {
             pk: *asset_id,
             details: AssetDynamicDetails {
                 pubkey: *asset_id,
-                was_decompressed: Updated::new(bundle.slot, None, true),
+                was_decompressed: Some(Updated::new(bundle.slot, None, true)),
                 is_compressible: Updated::new(bundle.slot, None, false),
                 supply: Some(Updated::new(bundle.slot, None, 1)),
+                seq: Some(Updated::new(bundle.slot, None, 0)),
                 ..Default::default()
             },
         }
@@ -846,6 +858,11 @@ impl BubblegumTxProcessor {
                             bundle.slot,
                             Some(UpdateVersion::Sequence(cl.seq)),
                             Some(cl.seq),
+                        ),
+                        is_current_owner: Updated::new(
+                            bundle.slot,
+                            Some(UpdateVersion::Sequence(cl.seq)),
+                            true,
                         ),
                     };
                     asset_update.owner_update = Some(AssetUpdate {
@@ -1126,10 +1143,13 @@ impl BubblegumTxProcessor {
             if let Some(dynamic_info) = &update.update {
                 if let Some(data) = &dynamic_info.dynamic_data {
                     let url = data.url.value.clone();
+
                     if let Some(metadata) = batch_mint.raw_metadata_map.get(&url) {
                         update.offchain_data_update = Some(OffChainData {
-                            url,
-                            metadata: metadata.to_string(),
+                            url: Some(url.clone()),
+                            metadata: Some(metadata.to_string()),
+                            storage_mutability: url.as_str().into(),
+                            last_read_at: Utc::now().timestamp(),
                         });
                     }
                 }
@@ -1147,16 +1167,14 @@ impl BubblegumTxProcessor {
 
             transaction_result.instruction_results.push(ix);
             if transaction_result.instruction_results.len() >= BATCH_MINT_BATCH_FLUSH_SIZE {
-                // TODO: add retry
                 rocks_db
-                    .store_transaction_result(&transaction_result, false)
+                    .store_transaction_result(&transaction_result, false, false)
                     .await?;
                 transaction_result.instruction_results.clear();
             }
         }
-        // TODO: add retry
         rocks_db
-            .store_transaction_result(&transaction_result, true)
+            .store_transaction_result(&transaction_result, true, false)
             .await?;
 
         Ok(())

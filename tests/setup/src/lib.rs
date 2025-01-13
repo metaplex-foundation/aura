@@ -2,18 +2,24 @@ pub mod awaitility;
 pub mod pg;
 pub mod rocks;
 
+use std::sync::Arc;
+
 use crate::rocks::RocksTestEnvironmentSetup;
+use entities::enums::{AssetType, ASSET_TYPES};
 use metrics_utils::MetricsTrait;
-use rocks_db::asset::AssetCollection;
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+};
 use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
+
+use tokio::task::JoinSet;
 
 pub struct TestEnvironment<'a> {
     pub rocks_env: rocks::RocksTestEnvironment,
     pub pg_env: pg::TestEnvironment<'a>,
 }
-const BATCH_SIZE: usize = 200_000;
+
 impl<'a> TestEnvironment<'a> {
     pub async fn create(
         cli: &'a Cli,
@@ -67,15 +73,38 @@ impl<'a> TestEnvironment<'a> {
         let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
-            env.pg_env.client.clone(),
-            BATCH_SIZE,
-            "".to_string(),
+            200000,
+            "/tmp/sync_dump".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
-            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        syncronizer.synchronize_asset_indexes(&rx, 0).await.unwrap();
+        let synchronizer = Arc::new(syncronizer);
+
+        let mut tasks = JoinSet::new();
+        for asset_type in ASSET_TYPES {
+            let synchronizer = synchronizer.clone();
+            let rx = rx.resubscribe();
+            tasks.spawn(async move {
+                match asset_type {
+                    AssetType::NonFungible => synchronizer
+                        .synchronize_nft_asset_indexes(&rx, 0)
+                        .await
+                        .unwrap(),
+                    AssetType::Fungible => synchronizer
+                        .synchronize_fungible_asset_indexes(&rx, 0)
+                        .await
+                        .unwrap(),
+                }
+            });
+        }
+
+        while let Some(res) = tasks.join_next().await {
+            if let Err(err) = res {
+                panic!("{err}");
+            }
+        }
+
         (env, generated_data)
     }
 

@@ -10,14 +10,14 @@ use rocks_db::batch_savers::BatchSaveStorage;
 use rocks_db::Storage;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::Instant;
-use tracing::error;
+use tracing::{debug, error};
 
 use super::account_based::{
     inscriptions_processor::InscriptionsProcessor,
@@ -29,6 +29,26 @@ use super::account_based::{
 const WORKER_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
 // interval after which buffer is flushed
 const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
+
+// EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+pub const USDC_MINT_BYTES: [u8; 32] = [
+    198, 250, 122, 243, 190, 219, 173, 58, 61, 101, 243, 106, 171, 201, 116, 49, 177, 187, 228,
+    194, 210, 246, 224, 228, 124, 166, 2, 3, 69, 47, 93, 97,
+];
+// Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB
+pub const USDT_MINT_BYTES: [u8; 32] = [
+    206, 1, 14, 96, 175, 237, 178, 39, 23, 189, 99, 25, 47, 84, 20, 90, 63, 150, 90, 51, 187, 130,
+    210, 199, 2, 158, 178, 206, 30, 32, 130, 100,
+];
+
+lazy_static::lazy_static! {
+    pub static ref POPULAR_FUNGIBLE_TOKENS: HashSet<Pubkey> = {
+        let mut set = HashSet::new();
+        set.insert(Pubkey::new_from_array(USDC_MINT_BYTES));
+        set.insert(Pubkey::new_from_array(USDT_MINT_BYTES));
+        set
+    };
+}
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 'static>(
@@ -160,7 +180,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             .await;
     }
 
-    async fn process_account(
+    pub async fn process_account(
         &self,
         batch_storage: &mut BatchSaveStorage,
         unprocessed_accounts: Vec<UnprocessedAccountMessage>,
@@ -170,6 +190,11 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         batch_fill_instant: &mut Instant,
     ) {
         for unprocessed_account in unprocessed_accounts {
+            debug!(
+                "Process account with Id: {:?} {:?}",
+                &unprocessed_account.id, &unprocessed_account.account
+            );
+
             let processing_result = match &unprocessed_account.account {
                 UnprocessedAccount::MetadataInfo(metadata_info) => self
                     .mplx_accounts_processor
@@ -178,13 +203,23 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                         unprocessed_account.key,
                         metadata_info,
                     ),
-                UnprocessedAccount::Token(token_account) => self
-                    .token_accounts_processor
-                    .transform_and_save_token_account(
-                        batch_storage,
-                        unprocessed_account.key,
-                        token_account,
-                    ),
+                UnprocessedAccount::Token(token_account) => {
+                    if POPULAR_FUNGIBLE_TOKENS.contains(&token_account.mint) {
+                        self.token_accounts_processor
+                            .transform_and_save_fungible_token_account(
+                                batch_storage,
+                                unprocessed_account.key,
+                                token_account,
+                            )
+                    } else {
+                        self.token_accounts_processor
+                            .transform_and_save_token_account(
+                                batch_storage,
+                                unprocessed_account.key,
+                                token_account,
+                            )
+                    }
+                }
                 UnprocessedAccount::Mint(mint) => self
                     .token_accounts_processor
                     .transform_and_save_mint_account(batch_storage, mint),

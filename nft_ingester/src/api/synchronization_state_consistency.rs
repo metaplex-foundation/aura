@@ -1,3 +1,4 @@
+use entities::enums::{AssetType, ASSET_TYPES};
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::Call;
 use postgre_client::storage_traits::AssetIndexStorage;
@@ -29,60 +30,77 @@ const INDEX_STORAGE_DEPENDS_METHODS: &[&str] = &[
 ];
 
 pub struct SynchronizationStateConsistencyChecker {
-    overwhelm_seq_gap: Arc<AtomicBool>,
+    overwhelm_nft_seq_gap: Arc<AtomicBool>,
+    overwhelm_fungible_seq_gap: Arc<AtomicBool>,
 }
 
 impl SynchronizationStateConsistencyChecker {
     pub(crate) fn new() -> Self {
         Self {
-            overwhelm_seq_gap: Arc::new(AtomicBool::new(false)),
+            overwhelm_nft_seq_gap: Arc::new(AtomicBool::new(false)),
+            overwhelm_fungible_seq_gap: Arc::new(AtomicBool::new(false)),
         }
     }
 
     pub(crate) async fn run(
         &self,
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-        mut rx: tokio::sync::broadcast::Receiver<()>,
+        rx: tokio::sync::broadcast::Receiver<()>,
         pg_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
         synchronization_api_threshold: u64,
     ) {
-        let overwhelm_seq_gap_clone = self.overwhelm_seq_gap.clone();
-        tasks.lock().await.spawn(async move {
-            while rx.is_empty() {
-                let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id().await else {
-                    continue;
-                };
-                let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
-                    continue;
-                };
-                let Ok(Some(primary_update_key)) = rocks_db.last_known_asset_updated_key() else {
-                    continue;
-                };
+        for asset_type in ASSET_TYPES {
+            let overwhelm_seq_gap = match asset_type {
+                AssetType::NonFungible => self.overwhelm_nft_seq_gap.clone(),
+                AssetType::Fungible => self.overwhelm_fungible_seq_gap.clone(),
+            };
+            let pg_client = pg_client.clone();
+            let rocks_db = rocks_db.clone();
+            let mut rx = rx.resubscribe();
+            tasks.lock().await.spawn(async move {
+                while rx.is_empty() {
+                    let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id(asset_type).await else {
+                        continue;
+                    };
+                    let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
+                        continue;
+                    };
 
-                overwhelm_seq_gap_clone.store(
-                    primary_update_key
-                        .seq
-                        .saturating_sub(decoded_index_update_key.seq)
-                        >= synchronization_api_threshold,
-                    Ordering::SeqCst,
-                );
-                tokio::select! {
-                    _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC))=> {},
-                    _ = rx.recv() => {
-                        info!("Received stop signal, stopping SynchronizationStateConsistencyChecker...");
-                        return Ok(());
+                    let last_known_updated_asset = match asset_type {
+                        AssetType::NonFungible => rocks_db.last_known_nft_asset_updated_key(),
+                        AssetType::Fungible => rocks_db.last_known_fungible_asset_updated_key(),
+                    };
+                    let Ok(Some(primary_update_key)) = last_known_updated_asset else {
+                        continue;
+                    };
+
+                    overwhelm_seq_gap.store(
+                        primary_update_key
+                            .seq
+                            .saturating_sub(decoded_index_update_key.seq)
+                            >= synchronization_api_threshold,
+                        Ordering::Relaxed,
+                    );
+                    tokio::select! {
+                        _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC))=> {},
+                        _ = rx.recv() => {
+                            info!("Received stop signal, stopping SynchronizationStateConsistencyChecker...");
+                            return Ok(());
+                        }
                     }
                 }
-            }
-            Ok(())
-        });
+                Ok(())
+            });
+        }
     }
 }
 
 impl ConsistencyChecker for SynchronizationStateConsistencyChecker {
     fn should_cancel_request(&self, call: &Call) -> bool {
-        if !self.overwhelm_seq_gap.load(Ordering::SeqCst) {
+        if !&self.overwhelm_nft_seq_gap.load(Ordering::Relaxed)
+            || !&self.overwhelm_fungible_seq_gap.load(Ordering::Relaxed)
+        {
             return false;
         }
 

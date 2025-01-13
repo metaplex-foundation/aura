@@ -12,11 +12,11 @@ use entities::enums::{
 use entities::models::{BurntMetadataSlot, MetadataInfo, Updated};
 use entities::models::{ChainDataV1, Creator, UpdateVersion, Uses};
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::asset::{
+use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
+use rocks_db::columns::asset::{
     AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetStaticDetails,
     MetadataMintMap,
 };
-use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
 use rocks_db::errors::StorageError;
 use usecase::save_metrics::result_to_metrics;
 
@@ -161,11 +161,8 @@ impl MplxAccountsProcessor {
                 false,
             ),
             seq: None,
-            was_decompressed: Updated::new(
-                metadata_info.slot_updated,
-                Some(UpdateVersion::WriteVersion(metadata_info.write_version)),
-                false,
-            ),
+            // should not set this value for regular NFT updates
+            was_decompressed: None,
             onchain_data: Some(Updated::new(
                 metadata_info.slot_updated,
                 Some(UpdateVersion::WriteVersion(metadata_info.write_version)),

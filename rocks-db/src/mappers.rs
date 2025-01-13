@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset_generated::asset as fb;
+use crate::generated::asset_generated::asset as fb;
 use entities::enums::*;
 use entities::models::*;
 
@@ -279,6 +279,7 @@ impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetIndex {
                 .dynamic_details()
                 .and_then(|d| d.url())
                 .and_then(|u| u.value())
+                .filter(|s| !s.is_empty())
                 .map(|s| UrlWithStatus::new(s, false)),
             slot_updated: value.get_slot_updated() as i64,
             fungible_asset_mint: None,

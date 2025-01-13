@@ -15,6 +15,8 @@ pub enum IndexDbError {
     NotImplemented(String),
     #[error("Bad argument: {0}")]
     BadArgument(String),
+    #[error("Join Error: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
 }
 
 impl From<IndexDbError> for String {

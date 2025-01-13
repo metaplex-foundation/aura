@@ -74,6 +74,16 @@ pub struct AssetIndex {
     pub fungible_asset_balance: Option<u64>,
 }
 
+/// FungibleAssetIndex is the struct that is stored in the postgres, and is used to query the fungible asset pubkeys.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct FungibleAssetIndex {
+    pub pubkey: Pubkey,
+    pub owner: Option<Pubkey>,
+    pub slot_updated: i64,
+    pub fungible_asset_mint: Option<Pubkey>,
+    pub fungible_asset_balance: Option<u64>,
+}
+
 /// FungibleToken is associated token account
 /// owned by some user
 /// key - token account's pubkey
@@ -97,13 +107,13 @@ pub struct Creator {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct OffChainData {
+pub struct OffChainDataGrpc {
     pub url: String,
     pub metadata: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct CompleteAssetDetails {
+pub struct AssetCompleteDetailsGrpc {
     // From AssetStaticDetails
     pub pubkey: Pubkey,
     pub specification_asset_class: SpecificationAssetClass,
@@ -118,7 +128,7 @@ pub struct CompleteAssetDetails {
     pub supply: Option<Updated<u64>>,
     pub seq: Option<Updated<u64>>,
     pub is_burnt: Updated<bool>,
-    pub was_decompressed: Updated<bool>,
+    pub was_decompressed: Option<Updated<bool>>,
     pub onchain_data: Option<Updated<ChainDataV1>>,
     pub creators: Updated<Vec<Creator>>,
     pub royalty_amount: Updated<u16>,
@@ -146,6 +156,8 @@ pub struct CompleteAssetDetails {
     pub delegate: Updated<Option<Pubkey>>,
     pub owner_type: Updated<OwnerType>,
     pub owner_delegate_seq: Updated<Option<u64>>,
+    pub is_current_owner: Updated<bool>,
+    pub owner_record_pubkey: Pubkey,
 
     // Separate fields
     pub asset_leaf: Option<Updated<AssetLeaf>>,
@@ -160,7 +172,7 @@ pub struct CompleteAssetDetails {
     pub master_edition: Option<MasterEdition>,
 
     // OffChainData
-    pub offchain_data: Option<OffChainData>,
+    pub offchain_data: Option<OffChainDataGrpc>,
 
     // SplMint
     pub spl_mint: Option<SplMint>,
@@ -616,6 +628,11 @@ pub struct SplMint {
     pub token_program: Pubkey,
     pub slot_updated: i64,
     pub write_version: u64,
+}
+impl SplMint {
+    pub fn is_nft(&self) -> bool {
+        self.supply == 1 && self.decimals == 0
+    }
 }
 
 impl From<&Mint> for SplMint {

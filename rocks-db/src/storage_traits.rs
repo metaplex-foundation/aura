@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, fs::File};
 
 use async_trait::async_trait;
 use mockall::automock;
@@ -6,7 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 
 pub use crate::Result;
 use crate::Storage;
-use entities::models::AssetIndex;
+use entities::models::{AssetIndex, FungibleAssetIndex};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssetUpdatedKey {
@@ -23,9 +23,19 @@ impl AssetUpdatedKey {
 
 #[automock]
 pub trait AssetUpdateIndexStorage {
-    fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
+    fn last_known_nft_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
+    fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>>;
+
     #[allow(clippy::type_complexity)]
-    fn fetch_asset_updated_keys(
+    fn fetch_nft_asset_updated_keys(
+        &self,
+        from: Option<AssetUpdatedKey>,
+        up_to: Option<AssetUpdatedKey>,
+        limit: usize,
+        skip_keys: Option<HashSet<Pubkey>>,
+    ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)>;
+
+    fn fetch_fungible_asset_updated_keys(
         &self,
         from: Option<AssetUpdatedKey>,
         up_to: Option<AssetUpdatedKey>,
@@ -37,19 +47,38 @@ pub trait AssetUpdateIndexStorage {
 #[automock]
 #[async_trait]
 pub trait AssetIndexReader {
-    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>>;
+    async fn get_fungible_assets_indexes(&self, keys: &[Pubkey])
+        -> Result<Vec<FungibleAssetIndex>>;
+
+    async fn get_nft_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>>;
 }
 
 #[automock]
-#[async_trait]
 pub trait Dumper {
-    async fn dump_db(
+    #[allow(clippy::too_many_arguments)]
+    fn dump_nft_csv(
         &self,
-        base_path: &std::path::Path,
-        batch_size: usize,
+        assets_file: File,
+        creators_file: File,
+        authority_file: File,
+        metadata_file: File,
+        buf_capacity: usize,
+        asset_limit: Option<usize>,
+        start_pubkey: Option<Pubkey>,
+        end_pubkey: Option<Pubkey>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
-    ) -> core::result::Result<(), String>;
+    ) -> core::result::Result<usize, String>;
+
+    fn dump_fungible_csv(
+        &self,
+        fungible_tokens_file_and_path: (File, String),
+        buf_capacity: usize,
+        start_pubkey: Option<Pubkey>,
+        end_pubkey: Option<Pubkey>,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
+    ) -> core::result::Result<usize, String>;
 }
 
 pub trait AssetIndexStorage: AssetIndexReader + AssetUpdateIndexStorage + Dumper {}
@@ -72,12 +101,17 @@ impl MockAssetIndexStorage {
 }
 
 impl AssetUpdateIndexStorage for MockAssetIndexStorage {
-    fn last_known_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+    fn last_known_nft_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         self.mock_update_index_storage
-            .last_known_asset_updated_key()
+            .last_known_nft_asset_updated_key()
     }
 
-    fn fetch_asset_updated_keys(
+    fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
+        self.mock_update_index_storage
+            .last_known_fungible_asset_updated_key()
+    }
+
+    fn fetch_nft_asset_updated_keys(
         &self,
         from: Option<AssetUpdatedKey>,
         up_to: Option<AssetUpdatedKey>,
@@ -85,29 +119,83 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
         skip_keys: Option<HashSet<Pubkey>>,
     ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
         self.mock_update_index_storage
-            .fetch_asset_updated_keys(from, up_to, limit, skip_keys)
+            .fetch_nft_asset_updated_keys(from, up_to, limit, skip_keys)
+    }
+
+    fn fetch_fungible_asset_updated_keys(
+        &self,
+        from: Option<AssetUpdatedKey>,
+        up_to: Option<AssetUpdatedKey>,
+        limit: usize,
+        skip_keys: Option<HashSet<Pubkey>>,
+    ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
+        self.mock_update_index_storage
+            .fetch_fungible_asset_updated_keys(from, up_to, limit, skip_keys)
     }
 }
 
 #[async_trait]
 impl AssetIndexReader for MockAssetIndexStorage {
-    async fn get_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
-        self.mock_asset_index_reader.get_asset_indexes(keys).await
+    async fn get_fungible_assets_indexes(
+        &self,
+        keys: &[Pubkey],
+    ) -> Result<Vec<FungibleAssetIndex>> {
+        self.mock_asset_index_reader
+            .get_fungible_assets_indexes(keys)
+            .await
+    }
+
+    async fn get_nft_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
+        self.mock_asset_index_reader
+            .get_nft_asset_indexes(keys)
+            .await
     }
 }
 
-#[async_trait]
 impl Dumper for MockAssetIndexStorage {
-    async fn dump_db(
+    fn dump_nft_csv(
         &self,
-        base_path: &std::path::Path,
-        batch_size: usize,
+        assets_file: File,
+        creators_file: File,
+        authority_file: File,
+        metadata_file: File,
+        buf_capacity: usize,
+        asset_limit: Option<usize>,
+        start_pubkey: Option<Pubkey>,
+        end_pubkey: Option<Pubkey>,
         rx: &tokio::sync::broadcast::Receiver<()>,
         synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
-    ) -> core::result::Result<(), String> {
-        self.mock_dumper
-            .dump_db(base_path, batch_size, rx, synchronizer_metrics)
-            .await
+    ) -> core::result::Result<usize, String> {
+        self.mock_dumper.dump_nft_csv(
+            assets_file,
+            creators_file,
+            authority_file,
+            metadata_file,
+            buf_capacity,
+            asset_limit,
+            start_pubkey,
+            end_pubkey,
+            rx,
+            synchronizer_metrics,
+        )
+    }
+    fn dump_fungible_csv(
+        &self,
+        fungible_tokens_file_and_path: (File, String),
+        buf_capacity: usize,
+        start_pubkey: Option<Pubkey>,
+        end_pubkey: Option<Pubkey>,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
+    ) -> core::result::Result<usize, String> {
+        self.mock_dumper.dump_fungible_csv(
+            fungible_tokens_file_and_path,
+            buf_capacity,
+            start_pubkey,
+            end_pubkey,
+            rx,
+            synchronizer_metrics,
+        )
     }
 }
 

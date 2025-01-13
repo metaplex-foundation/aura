@@ -59,6 +59,7 @@ where
     /// E.g. https://storage-service.xyz/
     storage_service_base_path: Option<String>,
     token_price_fetcher: Arc<TPF>,
+    native_mint_pubkey: String,
 }
 
 pub fn not_found() -> DasApiError {
@@ -88,6 +89,7 @@ where
         account_balance_getter: Arc<ABG>,
         storage_service_base_path: Option<String>,
         token_price_fetcher: Arc<TPF>,
+        native_mint_pubkey: String,
     ) -> Self {
         DasApi {
             pg_client,
@@ -102,6 +104,7 @@ where
             account_balance_getter,
             storage_service_base_path,
             token_price_fetcher,
+            native_mint_pubkey,
         }
     }
 
@@ -308,7 +311,7 @@ where
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
-        let options = payload.options.unwrap_or_default();
+        let options = payload.options;
 
         let res = get_asset(
             self.rocks_db.clone(),
@@ -356,7 +359,7 @@ where
             .into_iter()
             .map(validate_pubkey)
             .collect::<Result<Vec<_>, _>>()?;
-        let options = payload.options.unwrap_or_default();
+        let options = payload.options;
 
         let res = get_asset_batch(
             self.rocks_db.clone(),
@@ -702,7 +705,7 @@ where
     {
         let pagination = payload.get_all_pagination_parameters();
         let sort_by = payload.get_sort_parameter().unwrap_or_default();
-        let options = payload.get_options().unwrap_or_default();
+        let options = payload.get_options();
 
         let query: SearchAssetsQuery = payload
             .try_into()
@@ -731,6 +734,7 @@ where
             self.token_price_fetcher.clone(),
             self.metrics.clone(),
             &self.tree_gaps_checker,
+            &self.native_mint_pubkey,
         )
         .await?;
 

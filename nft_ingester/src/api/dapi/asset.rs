@@ -3,9 +3,11 @@ use std::string::ToString;
 use std::sync::Arc;
 
 use entities::api_req_params::{AssetSortDirection, Options};
-use entities::models::{AssetSignatureWithPagination, OffChainData};
+use entities::enums::SpecificationAssetClass;
+use entities::models::AssetSignatureWithPagination;
 use interface::asset_sigratures::AssetSignaturesGetter;
-use interface::json::{JsonDownloader, JsonPersister};
+use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
+use rocks_db::columns::offchain_data::{OffChainData, StorageMutability};
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
@@ -14,13 +16,15 @@ use crate::api::dapi::rpc_asset_models::FullAsset;
 use futures::{stream, StreamExt};
 use interface::price_fetcher::TokenPriceFetcher;
 use interface::processing_possibility::ProcessingPossibilityChecker;
+use itertools::Itertools;
 use metrics_utils::ApiMetricsConfig;
-use rocks_db::asset::{AssetLeaf, AssetSelectedMaps};
-use rocks_db::{AssetAuthority, Storage};
+use rocks_db::columns::asset::{AssetLeaf, AssetSelectedMaps};
+use rocks_db::Storage;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
 pub const COLLECTION_GROUP_KEY: &str = "collection";
+pub const METADATA_CACHE_TTL: i64 = 86400; // 1 day
 
 fn convert_rocks_asset_model(
     asset_pubkey: &Pubkey,
@@ -72,7 +76,7 @@ fn convert_rocks_asset_model(
         asset_leaf: leaf,
         offchain_data,
         asset_collections: data.collection.clone(),
-        assets_authority: data.authority.clone().unwrap_or(AssetAuthority::default()),
+        assets_authority: data.authority.clone(),
         edition_data: static_data
             .edition_address
             .and_then(|e| asset_selected_maps.editions.get(&e).cloned()),
@@ -134,17 +138,20 @@ fn asset_selected_maps_into_full_asset(
     options: &Options,
 ) -> Option<FullAsset> {
     if !options.show_unverified_collections {
-        if let Some(collection_data) = asset_selected_maps
-            .asset_complete_details
-            .get(id)
-            .and_then(|a| a.collection.clone())
-        {
-            if !collection_data.is_collection_verified.value {
-                return None;
+        if let Some(asset_complete_details) = asset_selected_maps.asset_complete_details.get(id) {
+            if let Some(asset_static_details) = &asset_complete_details.static_details {
+                // collection itself cannot have a collection
+                // TODO!: should we also include in this check FungibleToken?
+                if asset_static_details.specification_asset_class
+                    != SpecificationAssetClass::MplCoreCollection
+                {
+                    if let Some(collection_details) = &asset_complete_details.collection {
+                        if !collection_details.is_collection_verified.value {
+                            return None;
+                        }
+                    }
+                }
             }
-        } else {
-            // don't have collection data == collection unverified
-            return None;
         }
     }
 
@@ -206,18 +213,21 @@ pub async fn get_by_ids<
             .push(index);
     }
 
-    let unique_asset_ids: Vec<_> = unique_asset_ids_map.keys().cloned().collect();
-    // request prices and symbols only for fungibles when the option is set. This will prolong the request at least an order of magnitude
-    let asset_selected_maps_fut =
-        rocks_db.get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options);
+    let unique_asset_ids: Vec<Pubkey> = unique_asset_ids_map.keys().cloned().collect();
+    let asset_ids_string = asset_ids
+        .clone()
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect_vec();
     let (token_prices, token_symbols) = if options.show_fungible {
-        let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids.as_slice());
-        let token_symbols_fut = token_price_fetcher.fetch_token_symbols(asset_ids.as_slice());
+        let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids_string.as_slice());
+        let token_symbols_fut =
+            token_price_fetcher.fetch_token_symbols(asset_ids_string.as_slice());
         tokio::join!(token_prices_fut, token_symbols_fut)
     } else {
         (Ok(HashMap::new()), Ok(HashMap::new()))
     };
-    let mut asset_selected_maps = asset_selected_maps_fut.await?;
+
     let token_prices = token_prices.unwrap_or_else(|e| {
         error!("Fetch token prices: {}", e);
         metrics.inc_token_info_fetch_errors("prices");
@@ -229,21 +239,56 @@ pub async fn get_by_ids<
         HashMap::new()
     });
 
+    // request prices and symbols only for fungibles when the option is set. This will prolong the request at least an order of magnitude
+    let mut asset_selected_maps = rocks_db
+        .get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options)
+        .await?;
     if let Some(json_downloader) = json_downloader {
         let mut urls_to_download = Vec::new();
 
         for (_, url) in asset_selected_maps.urls.iter() {
+            if url.is_empty() {
+                continue;
+            }
+            let offchain_data = asset_selected_maps.offchain_data.get(url);
+            let mut download_needed = false;
+            match offchain_data {
+                Some(offchain_data) => {
+                    let curr_time = chrono::Utc::now().timestamp();
+                    if offchain_data.storage_mutability.is_mutable()
+                        && curr_time > offchain_data.last_read_at + METADATA_CACHE_TTL
+                    {
+                        download_needed = true;
+                    }
+
+                    match &offchain_data.metadata {
+                        Some(metadata) => {
+                            if metadata.is_empty() {
+                                download_needed = true;
+                            }
+                        }
+                        None => {
+                            download_needed = true;
+                        }
+                    }
+                }
+                None => {
+                    download_needed = true;
+                }
+            }
+
+            if download_needed {
+                urls_to_download.push(url.clone());
+            }
+
             if urls_to_download.len() >= max_json_to_download {
                 break;
-            }
-            if !asset_selected_maps.offchain_data.contains_key(url) && !url.is_empty() {
-                urls_to_download.push(url.clone());
             }
         }
 
         let num_of_tasks = urls_to_download.len();
 
-        if num_of_tasks != 0 {
+        if num_of_tasks > 0 {
             let download_results = stream::iter(urls_to_download)
                 .map(|url| {
                     let json_downloader = json_downloader.clone();
@@ -258,20 +303,39 @@ pub async fn get_by_ids<
                 .await;
 
             for (json_url, res) in download_results.iter() {
-                if let Ok(metadata) = res {
-                    asset_selected_maps.offchain_data.insert(
-                        json_url.clone(),
-                        OffChainData {
-                            url: json_url.clone(),
-                            metadata: metadata.clone(),
-                        },
-                    );
+                let last_read_at = chrono::Utc::now().timestamp();
+                match res {
+                    Ok(JsonDownloadResult::JsonContent(metadata)) => {
+                        asset_selected_maps.offchain_data.insert(
+                            json_url.clone(),
+                            OffChainData {
+                                url: Some(json_url.clone()),
+                                metadata: Some(metadata.clone()),
+                                storage_mutability: StorageMutability::from(json_url.as_str()),
+                                last_read_at,
+                            },
+                        );
+                    }
+                    Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
+                        asset_selected_maps.offchain_data.insert(
+                            json_url.clone(),
+                            OffChainData {
+                                url: Some(json_url.clone()),
+                                metadata: Some(
+                                    format!("{{\"image\":\"{}\",\"type\":\"{}\"}}", url, mime_type)
+                                        .to_string(),
+                                ),
+                                storage_mutability: StorageMutability::from(json_url.as_str()),
+                                last_read_at,
+                            },
+                        );
+                    }
+                    Err(_) => {}
                 }
             }
 
             if let Some(json_persister) = json_persister {
                 if !download_results.is_empty() {
-                    let download_results = download_results.clone();
                     tasks.lock().await.spawn(async move {
                         if let Err(e) = json_persister.persist_response(download_results).await {
                             error!("Could not persist downloaded JSONs: {:?}", e);

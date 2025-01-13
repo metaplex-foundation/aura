@@ -1,7 +1,19 @@
-use asset_previews::{AssetPreviews, UrlToDownload};
+use clients::signature_client;
+use columns::asset::{
+    self, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
+};
+use columns::asset_previews::{AssetPreviews, UrlToDownload};
+use columns::batch_mint::{self, BatchMintWithStaker};
+use columns::inscriptions::{Inscription, InscriptionData};
+use columns::leaf_signatures::LeafSignature;
+use columns::offchain_data::{OffChainData, OffChainDataDeprecated};
+use columns::parameters::ParameterColumn;
+use columns::token_accounts::{self, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+use columns::token_prices::TokenPrice;
+use columns::{bubblegum_slots, cl_items, parameters};
 use entities::schedule::ScheduledJob;
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use inflector::Inflector;
-use leaf_signatures::LeafSignature;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
@@ -9,84 +21,43 @@ use std::{marker::PhantomData, sync::Arc};
 use asset::{
     AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetCompleteDetails,
     AssetDynamicDetailsDeprecated, AssetOwnerDeprecated, AssetStaticDetailsDeprecated,
-    MetadataMintMap, SlotAssetIdx,
+    FungibleAssetsUpdateIdx, MetadataMintMap, MplCoreCollectionAuthority, SlotAssetIdx,
 };
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
-use crate::migrator::{MigrationState, MigrationVersions, RocksMigration};
-pub use asset::{
-    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
-};
+use crate::migrator::{MigrationState, MigrationVersions};
+
 use column::{Column, TypedColumn};
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, SplMint,
-    TokenAccount,
+    AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
-use crate::batch_mint::BatchMintWithStaker;
 use crate::errors::StorageError;
-use crate::inscriptions::{Inscription, InscriptionData};
-use crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration;
-use crate::migrations::collection_authority::{
-    AssetCollectionVersion0, CollectionAuthorityMigration,
-};
-use crate::migrations::external_plugins::{AssetDynamicDetailsV0, ExternalPluginsMigration};
-use crate::migrations::spl2022::{
-    AssetDynamicDetailsWithoutExtentions, DynamicDataToken2022MintExtentionsMigration,
-    TokenAccounts2022ExtentionsMigration,
-};
-use crate::parameters::ParameterColumn;
-use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use crate::token_prices::TokenPrice;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
-pub mod asset;
-mod asset_client;
-pub mod asset_previews;
-pub mod asset_signatures;
-pub mod asset_streaming_client;
 pub mod backup_service;
-mod batch_client;
-pub mod batch_mint;
 pub mod batch_savers;
-pub mod bubblegum_slots;
-pub mod cl_items;
+pub mod clients;
 pub mod column;
-pub mod dump_client;
-pub mod editions;
+pub mod columns;
 pub mod errors;
 pub mod fork_cleaner;
-pub mod inscriptions;
 pub mod key_encoders;
-pub mod leaf_signatures;
 pub mod migrations;
 pub mod migrator;
-pub mod offchain_data;
-pub mod parameters;
 pub mod processing_possibility;
-pub mod raw_block;
-pub mod raw_blocks_streaming_client;
 pub mod schedule;
 pub mod sequence_consistent;
-pub mod signature_client;
 pub mod storage_traits;
-pub mod token_accounts;
-pub mod token_prices;
 pub mod transaction;
-pub mod transaction_client;
 pub mod tree_seq;
 // import the flatbuffers runtime library
 extern crate flatbuffers;
-#[allow(
-    clippy::missing_safety_doc,
-    unused_imports,
-    clippy::extra_unused_lifetimes
-)]
-pub mod asset_generated;
+pub mod generated;
 pub mod mappers;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
@@ -122,7 +93,11 @@ impl SlotStorage {
     }
 
     pub fn cf_names() -> Vec<&'static str> {
-        vec![RawBlock::NAME, MigrationVersions::NAME, OffChainData::NAME]
+        vec![
+            RawBlock::NAME,
+            MigrationVersions::NAME,
+            OffChainDataDeprecated::NAME,
+        ]
     }
 
     pub fn open<P>(
@@ -179,24 +154,30 @@ impl SlotStorage {
 
 pub struct Storage {
     pub asset_data: Column<AssetCompleteDetails>,
+    pub mpl_core_collection_authorities: Column<MplCoreCollectionAuthority>,
+
+    // TODO: Deprecated, remove start
     pub asset_static_data: Column<AssetStaticDetails>,
     pub asset_static_data_deprecated: Column<AssetStaticDetailsDeprecated>,
     pub asset_dynamic_data: Column<AssetDynamicDetails>,
     pub asset_dynamic_data_deprecated: Column<AssetDynamicDetailsDeprecated>,
-    pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_authority_data: Column<AssetAuthority>,
     pub asset_authority_deprecated: Column<AssetAuthorityDeprecated>,
     pub asset_owner_data_deprecated: Column<AssetOwnerDeprecated>,
     pub asset_owner_data: Column<AssetOwner>,
-    pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_collection_data: Column<asset::AssetCollection>,
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
+    pub asset_offchain_data_deprecated: Column<OffChainDataDeprecated>,
+    // Deprecated, remove end
+    pub metadata_mint_map: Column<MetadataMintMap>,
+    pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_offchain_data: Column<OffChainData>,
     pub cl_items: Column<cl_items::ClItem>,
     pub cl_leafs: Column<cl_items::ClLeaf>,
     pub force_reingestable_slots: Column<bubblegum_slots::ForceReingestableSlots>,
     pub db: Arc<DB>,
     pub assets_update_idx: Column<AssetsUpdateIdx>,
+    pub fungible_assets_update_idx: Column<FungibleAssetsUpdateIdx>,
     pub slot_asset_idx: Column<SlotAssetIdx>,
     pub tree_seq_idx: Column<TreeSeqIdx>,
     pub trees_gaps: Column<TreesGaps>,
@@ -218,6 +199,7 @@ pub struct Storage {
     pub leaf_signature: Column<LeafSignature>,
     pub spl_mints: Column<SplMint>,
     assets_update_last_seq: AtomicU64,
+    fungible_assets_update_last_seq: AtomicU64,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
 }
@@ -232,6 +214,7 @@ impl Storage {
         let asset_dynamic_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_data = Self::column(db.clone(), red_metrics.clone());
+        let mpl_core_collection_authorities = Self::column(db.clone(), red_metrics.clone());
         let metadata_mint_map = Self::column(db.clone(), red_metrics.clone());
         let asset_authority_data = Self::column(db.clone(), red_metrics.clone());
         let asset_authority_deprecated = Self::column(db.clone(), red_metrics.clone());
@@ -240,6 +223,7 @@ impl Storage {
         let asset_leaf_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_offchain_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_offchain_data = Self::column(db.clone(), red_metrics.clone());
 
         let cl_items = Self::column(db.clone(), red_metrics.clone());
@@ -247,6 +231,7 @@ impl Storage {
 
         let force_reingestable_slots = Self::column(db.clone(), red_metrics.clone());
         let assets_update_idx = Self::column(db.clone(), red_metrics.clone());
+        let fungible_assets_update_idx = Self::column(db.clone(), red_metrics.clone());
         let slot_asset_idx = Self::column(db.clone(), red_metrics.clone());
         let tree_seq_idx = Self::column(db.clone(), red_metrics.clone());
         let trees_gaps = Self::column(db.clone(), red_metrics.clone());
@@ -270,10 +255,13 @@ impl Storage {
         let spl_mints = Self::column(db.clone(), red_metrics.clone());
 
         Self {
+            asset_offchain_data_deprecated,
+            asset_data,
+            mpl_core_collection_authorities,
+
             asset_static_data,
             asset_dynamic_data,
             asset_dynamic_data_deprecated,
-            asset_data,
             metadata_mint_map,
             asset_authority_data,
             asset_authority_deprecated,
@@ -288,8 +276,10 @@ impl Storage {
             force_reingestable_slots,
             db,
             assets_update_idx,
+            fungible_assets_update_idx,
             slot_asset_idx,
             assets_update_last_seq: AtomicU64::new(0),
+            fungible_assets_update_last_seq: AtomicU64::new(0),
             join_set,
             tree_seq_idx,
             trees_gaps,
@@ -333,13 +323,16 @@ impl Storage {
         Ok(Self::new(db, join_set, red_metrics))
     }
 
-    pub fn open_secondary(
-        primary_path: &str,
-        secondary_path: &str,
+    pub fn open_secondary<P>(
+        primary_path: P,
+        secondary_path: P,
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         migration_state: MigrationState,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db = Arc::new(DB::open_cf_descriptors_as_secondary(
             &Self::get_db_options(),
@@ -399,12 +392,15 @@ impl Storage {
     fn create_cf_descriptors(migration_state: &MigrationState) -> Vec<ColumnFamilyDescriptor> {
         vec![
             Self::new_cf_descriptor::<OffChainData>(migration_state),
+            Self::new_cf_descriptor::<OffChainDataDeprecated>(migration_state),
             Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
+            Self::new_cf_descriptor::<MplCoreCollectionAuthority>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
             Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItem>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClLeaf>(migration_state),
             Self::new_cf_descriptor::<asset::AssetsUpdateIdx>(migration_state),
+            Self::new_cf_descriptor::<asset::FungibleAssetsUpdateIdx>(migration_state),
             Self::new_cf_descriptor::<asset::SlotAssetIdx>(migration_state),
             Self::new_cf_descriptor::<signature_client::SignatureIdx>(migration_state),
             Self::new_cf_descriptor::<parameters::ParameterColumn<u64>>(migration_state),
@@ -517,6 +513,12 @@ impl Storage {
                     asset::merge_complete_details_fb_simplified,
                 );
             }
+            MplCoreCollectionAuthority::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_mpl_core_collection_authority",
+                    asset::MplCoreCollectionAuthority::merge,
+                );
+            }
             AssetStaticDetails::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_static_details",
@@ -525,18 +527,9 @@ impl Storage {
             }
             asset::AssetDynamicDetails::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => match *version {
-                        CollectionAuthorityMigration::VERSION
-                            ..=ExternalPluginsMigration::VERSION => {
-                            AssetDynamicDetailsV0::merge_dynamic_details
-                        }
-                        CleanCollectionAuthoritiesMigration::VERSION
-                            ..=DynamicDataToken2022MintExtentionsMigration::VERSION => {
-                            AssetDynamicDetailsWithoutExtentions::merge_dynamic_details
-                        }
-                        _ => asset::AssetDynamicDetails::merge_dynamic_details,
-                    },
-                    MigrationState::Last => asset::AssetDynamicDetails::merge_dynamic_details,
+                    MigrationState::Last | MigrationState::Version(_) => {
+                        asset::AssetDynamicDetails::merge_dynamic_details
+                    }
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
                     }
@@ -580,15 +573,10 @@ impl Storage {
                 );
             }
             asset::AssetCollection::NAME => {
-                let mf = if matches!(
-                    migration_state,
-                    &MigrationState::Version(CollectionAuthorityMigration::VERSION)
-                ) {
-                    AssetCollectionVersion0::merge_asset_collection
-                } else {
-                    asset::AssetCollection::merge_asset_collection
-                };
-                cf_options.set_merge_operator_associative("merge_fn_asset_collection", mf);
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_asset_collection",
+                    asset::AssetCollection::merge_asset_collection,
+                );
             }
             cl_items::ClItem::NAME => {
                 cf_options.set_merge_operator_associative(
@@ -614,10 +602,14 @@ impl Storage {
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
+            OffChainDataDeprecated::NAME => cf_options.set_merge_operator_associative(
+                "merge_fn_off_chain_data_keep_existing_deprecated",
+                asset::AssetStaticDetails::merge_keep_existing,
+            ),
             OffChainData::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_off_chain_data_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
+                    OffChainData::merge_off_chain_data,
                 );
             }
             cl_items::ClLeaf::NAME => {
@@ -635,6 +627,12 @@ impl Storage {
             AssetsUpdateIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_assets_update_idx_keep_existing",
+                    asset::AssetStaticDetails::merge_keep_existing,
+                );
+            }
+            FungibleAssetsUpdateIdx::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_fungible_assets_update_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
@@ -659,7 +657,7 @@ impl Storage {
             TokenMetadataEdition::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_metadata_edition_keep_existing",
-                    crate::editions::merge_token_metadata_edition,
+                    crate::columns::editions::merge_token_metadata_edition,
                 );
             }
             AssetStaticDetailsDeprecated::NAME => {
@@ -676,14 +674,9 @@ impl Storage {
             }
             TokenAccount::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => match *version {
-                        CollectionAuthorityMigration::VERSION
-                            ..=TokenAccounts2022ExtentionsMigration::VERSION => {
-                            AssetDynamicDetailsV0::merge_dynamic_details
-                        }
-                        _ => token_accounts::merge_token_accounts,
-                    },
-                    MigrationState::Last => crate::token_accounts::merge_token_accounts,
+                    MigrationState::Last | MigrationState::Version(_) => {
+                        token_accounts::merge_token_accounts
+                    }
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
                     }
@@ -760,4 +753,58 @@ impl Storage {
         }
         cf_options
     }
+
+    #[cfg(feature = "integration_tests")]
+    pub async fn clean_db(&self) {
+        let column_families_to_remove = [
+            MetadataMintMap::NAME,
+            asset::AssetLeaf::NAME,
+            OffChainData::NAME,
+            cl_items::ClItem::NAME,
+            cl_items::ClLeaf::NAME,
+            bubblegum_slots::ForceReingestableSlots::NAME,
+            AssetsUpdateIdx::NAME,
+            FungibleAssetsUpdateIdx::NAME,
+            SlotAssetIdx::NAME,
+            TreeSeqIdx::NAME,
+            TreesGaps::NAME,
+            TokenMetadataEdition::NAME,
+            TokenAccount::NAME,
+            TokenAccountOwnerIdx::NAME,
+            TokenAccountMintOwnerIdx::NAME,
+            AssetSignature::NAME,
+            BatchMintToVerify::NAME,
+            FailedBatchMint::NAME,
+            BatchMintWithStaker::NAME,
+            MigrationVersions::NAME,
+            TokenPrice::NAME,
+            AssetPreviews::NAME,
+            UrlToDownload::NAME,
+            ScheduledJob::NAME,
+            Inscription::NAME,
+            InscriptionData::NAME,
+            LeafSignature::NAME,
+            SplMint::NAME,
+            AssetCompleteDetails::NAME,
+            MplCoreCollectionAuthority::NAME,
+        ];
+
+        for cf in column_families_to_remove {
+            let cf_handler = self.db.cf_handle(cf).unwrap();
+            for (key, _) in self
+                .db
+                .full_iterator_cf(&cf_handler, rocksdb::IteratorMode::Start)
+                .flatten()
+            {
+                self.db.delete_cf(&cf_handler, key).unwrap();
+            }
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub trait ToFlatbuffersConverter<'a> {
+    type Target: 'a;
+    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target>;
+    fn convert_to_fb_bytes(&self) -> Vec<u8>;
 }

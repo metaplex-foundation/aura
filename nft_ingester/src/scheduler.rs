@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use entities::models::OffChainData;
-use rocks_db::asset_previews::UrlToDownload;
+use rocks_db::columns::asset_previews::UrlToDownload;
+use rocks_db::columns::offchain_data::OffChainData;
 use tracing::log::error;
 
 use rocks_db::Storage;
@@ -213,7 +213,9 @@ impl Job for InitUrlsToDownloadJob {
 
         let urls: HashMap<String, UrlToDownload> = data
             .into_iter()
-            .filter_map(|(_, OffChainData { url: _, metadata })| parse_files(&metadata))
+            .filter_map(|(_, OffChainData { metadata, .. })| {
+                metadata.as_deref().and_then(parse_files)
+            })
             .flat_map(|files| files.into_iter().filter_map(|f| f.uri))
             .map(|uri| {
                 (

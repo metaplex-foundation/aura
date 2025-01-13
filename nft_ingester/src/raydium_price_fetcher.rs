@@ -4,7 +4,6 @@ use interface::error::UsecaseError;
 use interface::price_fetcher::TokenPriceFetcher;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use moka::future::Cache;
-use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -60,7 +59,7 @@ impl RaydiumTokenPriceFetcher {
 impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
     async fn fetch_token_symbols(
         &self,
-        token_ids: &[Pubkey],
+        token_ids: &[String],
     ) -> Result<HashMap<String, String>, UsecaseError> {
         let token_ids_str: Vec<String> = token_ids.iter().map(ToString::to_string).collect();
         let mut result = HashMap::with_capacity(token_ids.len());
@@ -111,7 +110,7 @@ impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
 
     async fn fetch_token_prices(
         &self,
-        token_ids: &[Pubkey],
+        token_ids: &[String],
     ) -> Result<HashMap<String, f64>, UsecaseError> {
         let token_ids_str: Vec<String> = token_ids.iter().map(ToString::to_string).collect();
         let mut result = HashMap::with_capacity(token_ids.len());

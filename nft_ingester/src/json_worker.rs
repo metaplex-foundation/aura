@@ -1,17 +1,18 @@
 use crate::api::dapi::rpc_asset_convertors::parse_files;
-use crate::config::{setup_config, IngesterConfig, INGESTER_CONFIG_PREFIX};
 use async_trait::async_trait;
 use entities::enums::TaskStatus;
-use entities::models::{JsonDownloadTask, OffChainData};
+use entities::models::JsonDownloadTask;
 use interface::error::JsonDownloaderError;
-use interface::json::{JsonDownloader, JsonPersister};
+use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::tasks::UpdatedTask;
 use postgre_client::PgClient;
-use reqwest::{Client, ClientBuilder};
-use rocks_db::asset_previews::UrlToDownload;
+use reqwest::ClientBuilder;
+use rocks_db::columns::asset_previews::UrlToDownload;
+use rocks_db::columns::offchain_data::OffChainData;
 use rocks_db::Storage;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
@@ -22,7 +23,6 @@ use tokio::time::{self, Duration, Instant};
 use tracing::{debug, error};
 use url::Url;
 
-pub const JSON_CONTENT_TYPE: &str = "application/json";
 pub const JSON_BATCH: usize = 300;
 pub const WIPE_PERIOD_SEC: u64 = 60;
 pub const SLEEP_TIME: u64 = 1;
@@ -42,12 +42,11 @@ impl JsonWorker {
         rocks_db: Arc<Storage>,
         metrics: Arc<JsonDownloaderMetricsConfig>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
+        parallel_json_downloaders: i32,
     ) -> Self {
-        let config: IngesterConfig = setup_config(INGESTER_CONFIG_PREFIX);
-
         Self {
             db_client,
-            num_of_parallel_workers: config.parallel_json_downloaders,
+            num_of_parallel_workers: parallel_json_downloaders,
             metrics,
             red_metrics,
             rocks_db,
@@ -112,13 +111,17 @@ impl TasksStreamer {
 
 pub struct TasksPersister<T: JsonPersister + Send + Sync + 'static> {
     pub persister: Arc<T>,
-    pub receiver: tokio::sync::mpsc::Receiver<(String, Result<String, JsonDownloaderError>)>,
+    pub receiver:
+        tokio::sync::mpsc::Receiver<(String, Result<JsonDownloadResult, JsonDownloaderError>)>,
 }
 
 impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
     pub fn new(
         persister: Arc<T>,
-        receiver: tokio::sync::mpsc::Receiver<(String, Result<String, JsonDownloaderError>)>,
+        receiver: tokio::sync::mpsc::Receiver<(
+            String,
+            Result<JsonDownloadResult, JsonDownloaderError>,
+        )>,
     ) -> Self {
         Self {
             persister,
@@ -262,7 +265,7 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
 
 #[async_trait]
 impl JsonDownloader for JsonWorker {
-    async fn download_file(&self, url: String) -> Result<String, JsonDownloaderError> {
+    async fn download_file(&self, url: String) -> Result<JsonDownloadResult, JsonDownloaderError> {
         let start_time = chrono::Utc::now();
         let client = ClientBuilder::new()
             .timeout(time::Duration::from_secs(CLIENT_TIMEOUT))
@@ -270,12 +273,28 @@ impl JsonDownloader for JsonWorker {
             .map_err(|e| {
                 JsonDownloaderError::ErrorDownloading(format!("Failed to create client: {:?}", e))
             })?;
-        let parsed_url = Url::parse(&url).map_err(|e| {
-            JsonDownloaderError::ErrorDownloading(format!("Failed to parse URL: {:?}", e))
-        })?;
+
+        // Detect if the URL is an IPFS link
+        let parsed_url = if url.starts_with("ipfs://") {
+            // Extract the IPFS hash or path
+            let ipfs_path = url.trim_start_matches("ipfs://");
+            // Choose an IPFS gateway (you can change this to your preferred gateway)
+            let gateway_url = format!("https://ipfs.io/ipfs/{}", ipfs_path);
+            // Parse the rewritten URL
+            Url::parse(&gateway_url).map_err(|e| {
+                JsonDownloaderError::ErrorDownloading(format!("Failed to parse IPFS URL: {:?}", e))
+            })?
+        } else {
+            // Parse the original URL
+            Url::parse(&url).map_err(|e| {
+                JsonDownloaderError::ErrorDownloading(format!("Failed to parse URL: {:?}", e))
+            })?
+        };
+
         let host = parsed_url.host_str().unwrap_or("no_host");
+
         let response = client
-            .get(&url)
+            .get(parsed_url.clone())
             .send()
             .await
             .map_err(|e| format!("Failed to make request: {:?}", e));
@@ -288,30 +307,46 @@ impl JsonDownloader for JsonWorker {
                     host,
                     start_time,
                 );
-                if let Some(content_header) = response.headers().get("Content-Type") {
-                    match content_header.to_str() {
-                        Ok(header) => {
-                            if !header.contains(JSON_CONTENT_TYPE) {
-                                return Err(JsonDownloaderError::GotNotJsonFile);
-                            }
-                        }
-                        Err(_) => {
-                            return Err(JsonDownloaderError::CouldNotReadHeader);
-                        }
-                    }
-                }
-
                 if response.status() != reqwest::StatusCode::OK {
                     return Err(JsonDownloaderError::ErrorStatusCode(
                         response.status().as_str().to_string(),
                     ));
-                } else {
-                    let metadata_body = response.text().await;
-                    if let Ok(metadata) = metadata_body {
-                        return Ok(metadata.trim().replace('\0', ""));
+                }
+
+                // Get the Content-Type header
+                let content_type = response
+                    .headers()
+                    .get("Content-Type")
+                    .and_then(|ct| ct.to_str().ok())
+                    .unwrap_or("");
+
+                // Excluded content types that are definitely not JSON
+                let excluded_types = ["audio/", "application/octet-stream"];
+                if excluded_types.iter().any(|&t| content_type.starts_with(t)) {
+                    return Err(JsonDownloaderError::GotNotJsonFile);
+                }
+
+                // Check if the content type is image or video
+                if content_type.starts_with("image/") || content_type.starts_with("video/") {
+                    // Return the URL and MIME type
+                    return Ok(JsonDownloadResult::MediaUrlAndMimeType {
+                        url: url.clone(),
+                        mime_type: content_type.to_string(),
+                    });
+                }
+
+                let metadata_body = response.text().await;
+                if let Ok(metadata) = metadata_body {
+                    // Attempt to parse the response as JSON
+                    if serde_json::from_str::<Value>(&metadata).is_ok() {
+                        return Ok(JsonDownloadResult::JsonContent(
+                            metadata.trim().replace('\0', ""),
+                        ));
                     } else {
-                        Err(JsonDownloaderError::CouldNotDeserialize)
+                        return Err(JsonDownloaderError::CouldNotDeserialize);
                     }
+                } else {
+                    Err(JsonDownloaderError::CouldNotDeserialize)
                 }
             }
             Err(e) => {
@@ -327,19 +362,22 @@ impl JsonDownloader for JsonWorker {
 impl JsonPersister for JsonWorker {
     async fn persist_response(
         &self,
-        results: Vec<(String, Result<String, JsonDownloaderError>)>,
+        results: Vec<(String, Result<JsonDownloadResult, JsonDownloaderError>)>,
     ) -> Result<(), JsonDownloaderError> {
         let mut pg_updates = Vec::new();
         let mut rocks_updates = HashMap::new();
+        let curr_time = chrono::Utc::now().timestamp();
 
         for (metadata_url, result) in results.iter() {
-            match &result {
-                Ok(json_file) => {
+            match result {
+                Ok(JsonDownloadResult::JsonContent(json_file)) => {
                     rocks_updates.insert(
                         metadata_url.clone(),
                         OffChainData {
-                            url: metadata_url.clone(),
-                            metadata: json_file.clone(),
+                            storage_mutability: metadata_url.as_str().into(),
+                            url: Some(metadata_url.clone()),
+                            metadata: Some(json_file.clone()),
+                            last_read_at: curr_time,
                         },
                     );
                     pg_updates.push(UpdatedTask {
@@ -350,7 +388,28 @@ impl JsonPersister for JsonWorker {
 
                     self.metrics.inc_tasks("json", MetricStatus::SUCCESS);
                 }
+                Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
+                    pg_updates.push(UpdatedTask {
+                        status: TaskStatus::Success,
+                        metadata_url: metadata_url.clone(),
+                        error: "".to_string(),
+                    });
+                    rocks_updates.insert(
+                        metadata_url.clone(),
+                        OffChainData {
+                            url: Some(metadata_url.clone()),
+                            metadata: Some(
+                                format!("{{\"image\":\"{}\",\"type\":\"{}\"}}", url, mime_type)
+                                    .to_string(),
+                            ),
+                            last_read_at: curr_time,
+                            storage_mutability: metadata_url.as_str().into(),
+                        },
+                    );
+                    self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
+                }
                 Err(json_err) => match json_err {
+                    // TODO: this is bullshit, we should handle this in a different way - it's not success
                     JsonDownloaderError::GotNotJsonFile => {
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Success,
@@ -360,8 +419,10 @@ impl JsonPersister for JsonWorker {
                         rocks_updates.insert(
                             metadata_url.clone(),
                             OffChainData {
-                                url: metadata_url.clone(),
-                                metadata: "".to_string(),
+                                url: Some(metadata_url.clone()),
+                                metadata: Some("".to_string()),
+                                last_read_at: curr_time,
+                                storage_mutability: metadata_url.as_str().into(),
                             },
                         );
 
@@ -394,15 +455,14 @@ impl JsonPersister for JsonWorker {
                     }
                     JsonDownloaderError::ErrorDownloading(err) => {
                         self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
-                        // back to pending status to try again
-                        // until attempts reach its maximum
+                        // Revert to pending status to retry until max attempts
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Pending,
                             metadata_url: metadata_url.clone(),
                             error: err.clone(),
                         });
                     }
-                    _ => {} // intentionally empty because nothing to process
+                    _ => {} // No additional processing needed
                 },
             }
         }
@@ -417,8 +477,10 @@ impl JsonPersister for JsonWorker {
         if !rocks_updates.is_empty() {
             let urls_to_download = rocks_updates
                 .values()
-                .filter(|data| !data.metadata.is_empty())
-                .filter_map(|data| parse_files(&data.metadata))
+                .filter(|data| {
+                    data.metadata.is_some() && !data.metadata.clone().unwrap().is_empty()
+                })
+                .filter_map(|data| parse_files(data.metadata.clone().unwrap().as_str()))
                 .flat_map(|files| files.into_iter())
                 .filter_map(|file| file.uri)
                 .map(|uri| (uri, UrlToDownload::default()))

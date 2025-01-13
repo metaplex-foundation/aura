@@ -1,6 +1,5 @@
 use crate::error::UsecaseError;
 use async_trait::async_trait;
-use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 
 #[async_trait]
@@ -12,10 +11,10 @@ pub trait PriceFetcher {
 pub trait TokenPriceFetcher {
     async fn fetch_token_symbols(
         &self,
-        token_ids: &[Pubkey],
+        token_ids: &[String],
     ) -> Result<HashMap<String, String>, UsecaseError>;
     async fn fetch_token_prices(
         &self,
-        token_ids: &[Pubkey],
+        token_ids: &[String],
     ) -> Result<HashMap<String, f64>, UsecaseError>;
 }

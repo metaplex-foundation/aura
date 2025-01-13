@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use entities::models::OffChainData;
 use entities::models::{BatchMintToVerify, BufferedTransaction, SignatureWithSlot};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
@@ -8,6 +7,7 @@ use spl_account_compression::state::PathNode;
 
 use crate::{
     asset::{AssetCollection, AssetLeaf},
+    columns::offchain_data::OffChainData,
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
 };
 

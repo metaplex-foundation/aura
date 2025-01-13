@@ -3,8 +3,6 @@ mod tests {
     use std::collections::HashSet;
     use std::sync::Arc;
 
-    use entities::enums::OwnerType;
-    use entities::models::{UpdateVersion, Updated};
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
 
@@ -12,13 +10,11 @@ mod tests {
     use rocks_db::key_encoders::encode_u64x2_pubkey;
     use rocks_db::migrator::MigrationState;
     use rocks_db::storage_traits::{AssetUpdateIndexStorage, AssetUpdatedKey};
-    use rocks_db::{AssetDynamicDetails, AssetOwner, Storage};
+    use rocks_db::Storage;
     use tokio::sync::Mutex;
     use tokio::task::JoinSet;
 
-    use setup::rocks::{
-        create_test_dynamic_data, RocksTestEnvironment, DEFAULT_PUBKEY_OF_ONES, PUBKEY_OF_TWOS,
-    };
+    use setup::rocks::{RocksTestEnvironment, DEFAULT_PUBKEY_OF_ONES, PUBKEY_OF_TWOS};
 
     #[test]
     fn test_process_asset_updates_batch_empty_db() {
@@ -34,7 +30,7 @@ mod tests {
 
         // Call fetch_asset_updated_keys on an empty database
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, None, 10, None)
+            .fetch_nft_asset_updated_keys(None, None, 10, None)
             .expect("Failed to fetch asset updated keys");
         // Assertions
         assert!(keys.is_empty(), "Expected no keys from an empty database");
@@ -79,7 +75,7 @@ mod tests {
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, None, 10, None)
+            .fetch_nft_asset_updated_keys(None, None, 10, None)
             .unwrap();
         assert_eq!(keys.len(), 1, "Expected a single key");
         assert_eq!(
@@ -90,7 +86,7 @@ mod tests {
         assert!(last_key.is_some(), "Expected a last key");
         // Verify fetch_asset_updated_keys with the last key from previous call
         let (new_keys, new_last_key) = storage
-            .fetch_asset_updated_keys(last_key.clone(), None, 10, None)
+            .fetch_nft_asset_updated_keys(last_key.clone(), None, 10, None)
             .unwrap();
         assert!(
             new_keys.is_empty(),
@@ -109,7 +105,7 @@ mod tests {
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, None, 1, None)
+            .fetch_nft_asset_updated_keys(None, None, 1, None)
             .unwrap();
         assert_eq!(keys.len(), 1, "Expected a single key");
         assert_eq!(
@@ -120,7 +116,7 @@ mod tests {
         assert!(last_key.is_some(), "Expected a last key");
         // Verify fetch_asset_updated_keys with the last key from previous call
         let (new_keys, new_last_key) = storage
-            .fetch_asset_updated_keys(last_key.clone(), None, 1, Some(keys))
+            .fetch_nft_asset_updated_keys(last_key.clone(), None, 1, Some(keys))
             .unwrap();
         assert!(
             new_keys.is_empty(),
@@ -139,7 +135,7 @@ mod tests {
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(
+            .fetch_nft_asset_updated_keys(
                 None,
                 None,
                 1,
@@ -168,7 +164,7 @@ mod tests {
 
         // Verify fetch_asset_updated_keys with up to key which is less then the first key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(
+            .fetch_nft_asset_updated_keys(
                 None,
                 Some(AssetUpdatedKey::new(0, 2, DEFAULT_PUBKEY_OF_ONES.clone())),
                 10,
@@ -180,7 +176,7 @@ mod tests {
 
         // verify fetch_asset_updated_keys with up to key which is equal to the first key
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(
+            .fetch_nft_asset_updated_keys(
                 None,
                 Some(AssetUpdatedKey::new(1, 4, DEFAULT_PUBKEY_OF_ONES.clone())),
                 10,
@@ -205,7 +201,7 @@ mod tests {
 
         // verify fetch_asset_updated_keys with up to key which is equal to the last key returns all the keys
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(
+            .fetch_nft_asset_updated_keys(
                 None,
                 Some(AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone())),
                 10,
@@ -236,7 +232,7 @@ mod tests {
     fn test_last_known_asset_updated_key_on_empty_db() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let last_key = storage
-            .last_known_asset_updated_key()
+            .last_known_nft_asset_updated_key()
             .expect("Failed to get last known asset updated key");
         assert!(last_key.is_none(), "Expected no last key");
     }
@@ -251,7 +247,7 @@ mod tests {
         ])
         .storage;
         let last_key = storage
-            .last_known_asset_updated_key()
+            .last_known_nft_asset_updated_key()
             .expect("Failed to get last known asset updated key");
         assert!(last_key.is_some(), "Expected a last key");
         let expected_key = AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone());
@@ -272,7 +268,7 @@ mod tests {
         ])
         .storage;
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(None, None, 10, None)
+            .fetch_nft_asset_updated_keys(None, None, 10, None)
             .unwrap();
 
         assert_eq!(keys.len(), 2, "Expected 2 keys");
@@ -296,7 +292,7 @@ mod tests {
         let key = Pubkey::new_unique();
         storage.asset_updated(5, key.clone()).unwrap();
         let (keys, last_key) = storage
-            .fetch_asset_updated_keys(last_key, None, 10, None)
+            .fetch_nft_asset_updated_keys(last_key, None, 10, None)
             .unwrap();
 
         assert_eq!(keys.len(), 1, "Expected 1 key");
@@ -326,7 +322,7 @@ mod tests {
         let mut last_seen_key = last_key.clone();
         for i in 0..10 {
             let (new_keys, last_key) = storage
-                .fetch_asset_updated_keys(last_seen_key, None, 1000, None)
+                .fetch_nft_asset_updated_keys(last_seen_key, None, 1000, None)
                 .unwrap();
             assert_eq!(new_keys.len(), 1000, "Expected 1000 keys");
             assert!(last_key.is_some(), "Expected a last key");
@@ -349,118 +345,5 @@ mod tests {
             }
             last_seen_key = last_key.clone();
         }
-    }
-
-    #[tokio::test]
-    async fn test_multiple_slot_updates() {
-        let storage = RocksTestEnvironment::new(&[]).storage;
-        let pk = Pubkey::new_unique();
-        let mut dynamic_data = create_test_dynamic_data(pk, 0, "http://example.com".to_string());
-        dynamic_data.is_compressible = Updated::new(0, None, false);
-        dynamic_data.is_compressed = Updated::new(0, None, false);
-        dynamic_data.supply = Some(Updated::new(0, None, 1));
-
-        storage
-            .asset_dynamic_data
-            .merge(dynamic_data.pubkey, dynamic_data.clone())
-            .await
-            .unwrap();
-
-        let new_data = AssetDynamicDetails {
-            pubkey: pk,
-            is_compressible: Updated::new(10, None, true),
-            is_compressed: Updated::new(0, None, true),
-            supply: Some(Updated::new(0, None, 5)),
-            ..Default::default()
-        };
-        storage
-            .asset_dynamic_data
-            .merge(dynamic_data.pubkey, new_data)
-            .await
-            .unwrap();
-
-        let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-        assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
-        assert_eq!(selected_data.is_compressed, Updated::new(0, None, false)); // slot in new_data not greater than slot in start data, so that field must not change
-        assert_eq!(selected_data.supply, Some(Updated::new(0, None, 1))); // slot in new_data not greater than slot in start data, so that field must not change
-
-        let new_data = AssetDynamicDetails {
-            pubkey: pk,
-            is_compressible: Updated::new(5, None, false),
-            is_compressed: Updated::new(0, None, true),
-            supply: Some(Updated::new(3, None, 5)),
-            ..Default::default()
-        };
-        storage
-            .asset_dynamic_data
-            .merge(dynamic_data.pubkey, new_data)
-            .await
-            .unwrap();
-
-        let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-        assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
-        assert_eq!(selected_data.is_compressed, Updated::new(0, None, false));
-        assert_eq!(selected_data.supply, Some(Updated::new(3, None, 5)));
-
-        let new_data = AssetDynamicDetails {
-            pubkey: pk,
-            is_compressible: Updated::new(5, Some(UpdateVersion::Sequence(1)), false),
-            ..Default::default()
-        };
-        storage
-            .asset_dynamic_data
-            .merge(dynamic_data.pubkey, new_data)
-            .await
-            .unwrap();
-
-        let selected_data = storage.asset_dynamic_data.get(pk).unwrap().unwrap();
-        assert_eq!(selected_data.is_compressible, Updated::new(10, None, true));
-        // data will not be updated because slot is lower
-        // and to update data based of seq both new and old records have to have that value
-    }
-
-    #[tokio::test]
-    async fn test_asset_delegate_update() {
-        let storage = RocksTestEnvironment::new(&[]).storage;
-        let pk = Pubkey::new_unique();
-        let owner = Pubkey::new_unique();
-
-        let asset_owner_data = AssetOwner {
-            pubkey: pk,
-            owner: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(owner)),
-            delegate: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(owner)),
-            owner_type: Updated::new(1, Some(UpdateVersion::Sequence(1)), OwnerType::Single),
-            owner_delegate_seq: Updated::new(1, Some(UpdateVersion::Sequence(1)), Some(1)),
-        };
-
-        storage
-            .asset_owner_data
-            .merge(pk, asset_owner_data.clone())
-            .await
-            .unwrap();
-
-        let selected_data = storage.asset_owner_data.get(pk).unwrap().unwrap();
-
-        assert_eq!(selected_data.delegate, asset_owner_data.delegate);
-
-        let new_owner = Pubkey::new_unique();
-
-        let updated_owner_data = AssetOwner {
-            pubkey: pk,
-            owner: Updated::new(2, Some(UpdateVersion::Sequence(2)), Some(new_owner)),
-            delegate: Updated::new(2, Some(UpdateVersion::Sequence(2)), None),
-            owner_type: Updated::new(2, Some(UpdateVersion::Sequence(2)), OwnerType::Single),
-            owner_delegate_seq: Updated::new(2, Some(UpdateVersion::Sequence(2)), Some(2)),
-        };
-
-        storage
-            .asset_owner_data
-            .merge(pk, updated_owner_data.clone())
-            .await
-            .unwrap();
-
-        let selected_data = storage.asset_owner_data.get(pk).unwrap().unwrap();
-
-        assert_eq!(selected_data.delegate.value, None);
     }
 }

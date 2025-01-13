@@ -109,7 +109,7 @@ async fn test_rpc_get_slots() {
 
     let client = BackfillRPC::connect("https://api.mainnet-beta.solana.com".to_string());
     let slots = client
-        .get_slots(
+        .get_slots_sorted_desc(
             &Pubkey::from_str("Vote111111111111111111111111111111111111111").unwrap(),
             253484000,
             2,
@@ -117,5 +117,5 @@ async fn test_rpc_get_slots() {
         .await
         .unwrap();
 
-    assert_eq!(slots.is_empty(), false)
+    assert!(!slots.is_empty())
 }
