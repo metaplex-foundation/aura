@@ -2632,7 +2632,7 @@ macro_rules! merge_updated_primitive {
     ($func_name:ident, $updated_type:ident, $updated_args:ident) => {
         fn $func_name<'a, T, F>(
             builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-            iter: impl Iterator<Item = T> + DoubleEndedIterator,
+            iter: impl DoubleEndedIterator<Item = T>,
             extract_fn: F,
         ) -> Option<flatbuffers::WIPOffset<fb::$updated_type<'a>>>
         where
@@ -2669,7 +2669,7 @@ macro_rules! merge_updated_offset {
     ($func_name:ident, $updated_type:ident, $updated_args:ident, $value_create_fn:path) => {
         fn $func_name<'a, T, F>(
             builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-            iter: impl Iterator<Item = T> + DoubleEndedIterator,
+            iter: impl DoubleEndedIterator<Item = T>,
             extract_fn: F,
         ) -> Option<flatbuffers::WIPOffset<fb::$updated_type<'a>>>
         where
@@ -2750,7 +2750,7 @@ merge_updated_offset!(
 
 fn merge_updated_creators<'a, T, F>(
     builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-    iter: impl Iterator<Item = T> + DoubleEndedIterator,
+    iter: impl DoubleEndedIterator<Item = T>,
     extract_fn: F,
 ) -> Option<flatbuffers::WIPOffset<fb::UpdatedCreators<'a>>>
 where

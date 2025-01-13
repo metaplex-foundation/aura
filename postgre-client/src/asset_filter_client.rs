@@ -450,14 +450,10 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         let query = query_builder.build_query_as::<AssetRawResponse>();
         debug!("SEARCH QUERY: {}", &query.sql());
         let start_time = chrono::Utc::now();
-        let result = query
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e: sqlx::Error| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "assets_v3");
-                e
-            })?;
+        let result = query.fetch_all(&self.pool).await.inspect_err(|_e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, SELECT_ACTION, "assets_v3");
+        })?;
         self.metrics
             .observe_request(SQL_COMPONENT, SELECT_ACTION, "assets_v3", start_time);
         let r = result
@@ -478,14 +474,10 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         let mut query_builder = Self::build_grand_total_query(filter, options)?;
         let query = query_builder.build();
         let start_time = chrono::Utc::now();
-        let result = query
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e: sqlx::Error| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, COUNT_ACTION, "assets_v3");
-                e
-            })?;
+        let result = query.fetch_one(&self.pool).await.inspect_err(|_e| {
+            self.metrics
+                .observe_error(SQL_COMPONENT, COUNT_ACTION, "assets_v3");
+        })?;
         self.metrics
             .observe_request(SQL_COMPONENT, COUNT_ACTION, "assets_v3", start_time);
         let count: i64 = result.get(0);

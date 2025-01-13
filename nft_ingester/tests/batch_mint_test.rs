@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anchor_lang::prelude::*;
+#[cfg(feature = "batch_mint_tests")]
 use async_trait::async_trait;
 use mockall::predicate;
 use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
@@ -19,7 +20,9 @@ use entities::models::BufferedTransaction;
 use entities::models::{BatchMintToVerify, BatchMintWithState};
 use flatbuffers::FlatBufferBuilder;
 use interface::account_balance::MockAccountBalanceGetter;
-use interface::batch_mint::{BatchMintDownloader, MockBatchMintDownloader};
+#[cfg(feature = "batch_mint_tests")]
+use interface::batch_mint::BatchMintDownloader;
+use interface::batch_mint::MockBatchMintDownloader;
 use interface::error::UsecaseError;
 use metrics_utils::ApiMetricsConfig;
 use metrics_utils::BatchMintPersisterMetricsConfig;
@@ -117,8 +120,13 @@ fn test_generate_10_000_000_batch_mint() {
     serde_json::to_writer(file, &batch_mint).unwrap()
 }
 
+#[cfg(feature = "batch_mint_tests")]
 const BATCH_MINT_ASSETS_TO_SAVE: usize = 1_000;
+
+#[cfg(feature = "batch_mint_tests")]
 struct TestBatchMintCreator;
+
+#[cfg(feature = "batch_mint_tests")]
 #[async_trait]
 impl BatchMintDownloader for TestBatchMintCreator {
     async fn download_batch_mint(

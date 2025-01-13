@@ -108,6 +108,7 @@ rpc_tests = []
 integration_tests = []
 batch_mint_tests = []
 profiling = []
+big_table_tests = []
 
 [dependencies.utils]
 version = "0.1.8"

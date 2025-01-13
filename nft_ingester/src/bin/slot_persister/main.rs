@@ -94,6 +94,9 @@ pub fn get_last_persisted_slot(rocks_db: Arc<SlotStorage>) -> u64 {
 #[derive(Debug)]
 enum FetchError {
     Cancelled,
+    // NOTE: the compiler incorrectly highlights the String field as being never read
+    // while it is clearly logged in other places in the code.
+    #[allow(dead_code)]
     Other(String),
 }
 
