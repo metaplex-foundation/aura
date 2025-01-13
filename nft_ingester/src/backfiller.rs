@@ -182,7 +182,7 @@ where
         .db
         .raw_iterator_cf(&slot_db.db.cf_handle(RawBlock::NAME).unwrap());
     if let Some(start_slot) = start_slot {
-        it.seek(&RawBlock::encode_key(start_slot));
+        it.seek(RawBlock::encode_key(start_slot));
     } else {
         it.seek_to_first();
     }

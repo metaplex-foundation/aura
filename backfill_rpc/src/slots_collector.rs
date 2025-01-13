@@ -54,9 +54,7 @@ fn fetch_related_signature(
     collected_key: &solana_program::pubkey::Pubkey,
     block_with_start_signature: Option<UiConfirmedBlock>,
 ) -> Option<String> {
-    let Some(txs) = block_with_start_signature.and_then(|block| block.transactions) else {
-        return None;
-    };
+    let txs = block_with_start_signature.and_then(|block| block.transactions)?;
     for tx in txs {
         if tx.meta.and_then(|meta| meta.err).is_some() {
             continue;

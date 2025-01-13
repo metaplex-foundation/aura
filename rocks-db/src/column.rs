@@ -231,7 +231,7 @@ where
         backend
             .batched_multi_get_cf(
                 &backend.cf_handle(C::NAME).unwrap(),
-                &keys.into_iter().map(C::encode_key).collect::<Vec<_>>(),
+                keys.into_iter().map(C::encode_key).collect::<Vec<_>>(),
                 false,
             )
             .into_iter()

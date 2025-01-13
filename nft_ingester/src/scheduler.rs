@@ -53,7 +53,7 @@ impl Scheduler {
     /// It executes jobs one by one sequentially.
     pub async fn run(&mut self) {
         loop {
-            let mut sleep_to_next_run = u64::max_value();
+            let mut sleep_to_next_run = u64::MAX;
             let mut to_remove = Vec::new();
             for job in self.jobs.iter_mut() {
                 let mut sched = match self.storage.get_schedule(job.id()) {
@@ -95,7 +95,7 @@ impl Scheduler {
                 }
             }
             self.jobs.retain(|j| to_remove.contains(&j.id()));
-            if self.jobs.is_empty() || sleep_to_next_run == u64::max_value() {
+            if self.jobs.is_empty() || sleep_to_next_run == u64::MAX {
                 break;
             }
             tokio::time::sleep(Duration::from_secs(sleep_to_next_run)).await;

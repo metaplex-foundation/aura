@@ -166,10 +166,9 @@ impl PgClient {
 
     async fn start_transaction(&self) -> Result<Transaction<'_, Postgres>, IndexDbError> {
         let start_time = chrono::Utc::now();
-        let transaction = self.pool.begin().await.map_err(|e| {
+        let transaction = self.pool.begin().await.inspect_err(|_e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
-            e
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
@@ -181,10 +180,9 @@ impl PgClient {
         transaction: Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         let start_time = chrono::Utc::now();
-        transaction.commit().await.map_err(|e| {
+        transaction.commit().await.inspect_err(|_e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "commit");
-            e
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
@@ -195,10 +193,9 @@ impl PgClient {
         transaction: Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
         let start_time = chrono::Utc::now();
-        transaction.rollback().await.map_err(|e| {
+        transaction.rollback().await.inspect_err(|_e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "rollback");
-            e
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "rollback", start_time);

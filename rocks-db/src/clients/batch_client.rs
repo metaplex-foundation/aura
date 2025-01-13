@@ -113,7 +113,7 @@ impl AssetUpdateIndexStorage for Storage {
             // Skip keys that are in the skip_keys set
             if skip_keys
                 .as_ref()
-                .map_or(false, |sk| sk.contains(&decoded_key.pubkey))
+                .is_some_and(|sk| sk.contains(&decoded_key.pubkey))
             {
                 continue;
             }
@@ -179,7 +179,7 @@ impl AssetUpdateIndexStorage for Storage {
             // Skip keys that are in the skip_keys set
             if skip_keys
                 .as_ref()
-                .map_or(false, |sk| sk.contains(&decoded_key.pubkey))
+                .is_some_and(|sk| sk.contains(&decoded_key.pubkey))
             {
                 continue;
             }

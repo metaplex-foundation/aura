@@ -163,6 +163,8 @@ struct MigrationApplier<'a> {
     applied_migration_versions: HashSet<u64>,
 }
 
+type ColumnIteratorItem = (Box<[u8]>, Box<[u8]>);
+
 impl<'a> MigrationApplier<'a> {
     fn new(
         db_path: &'a str,
@@ -301,7 +303,7 @@ impl<'a> MigrationApplier<'a> {
 
     fn migration_column_iter<M: RocksMigration>(
         db: &Arc<DB>,
-    ) -> Result<impl Iterator<Item = (Box<[u8]>, Box<[u8]>)> + '_> {
+    ) -> Result<impl Iterator<Item = ColumnIteratorItem> + '_> {
         Ok(db
             .iterator_cf(
                 &db.cf_handle(<<M as RocksMigration>::OldDataType as TypedColumn>::NAME)
