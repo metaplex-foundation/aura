@@ -84,7 +84,7 @@ num-traits = "0.2.17"
 
 # Configuration, env-vars and cli parsing
 figment = { version = "0.10.6", features = ["env", "toml", "yaml"] }
-clap = { version = "4.2.2", features = ["derive", "cargo", "env"] }
+clap = { version = "4.2.2", features = ["derive", "cargo"] }
 dotenvy = "0.15.7"
 indicatif = "0.17"
 

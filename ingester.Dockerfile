@@ -61,6 +61,7 @@ COPY --from=builder-with-profiling /rust/target/release/ingester ${APP}/profilin
 COPY --from=builder-with-profiling /rust/target/release/backfill ${APP}/profiling_backfill
 COPY --from=builder-with-profiling /rust/target/release/api ${APP}/profiling_api
 COPY --from=builder-with-profiling /rust/target/release/synchronizer ${APP}/profiling_synchronizer
+COPY --from=builder-with-profiling /rust/target/release/slot_persister ${APP}/profiling_slot_persister
 
 WORKDIR ${APP}
 STOPSIGNAL SIGINT

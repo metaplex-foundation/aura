@@ -49,7 +49,7 @@ struct Args {
     rpc_host: String,
 
     /// Optional starting slot number, this will override the last saved slot in the RocksDB
-    #[arg(short, long, env="SLOT_PERSISTER_START_SLOT")]
+    #[arg(short, long)]
     start_slot: Option<u64>,
 
     /// Big table credentials file path
@@ -57,7 +57,7 @@ struct Args {
     big_table_credentials: Option<String>,
 
     /// Optional big table timeout (default: 1000)
-    #[arg(short = 'B', long, env="BIG_TABLE_TIMEOUT", default_value_t = 1000)]
+    #[arg(short = 'B', long, default_value_t = 1000)]
     big_table_timeout: u32,
 
     /// Metrics port
@@ -66,15 +66,15 @@ struct Args {
     metrics_port: u16,
 
     /// Number of slots to process in each batch
-    #[arg(short, long, env="SLOT_PERSISTER_CHUNK_SIZE", default_value_t = 200)]
+    #[arg(short, long, default_value_t = 200)]
     chunk_size: usize,
 
     /// Maximum number of concurrent requests
-    #[arg(short = 'M', long, env="SLOT_PERSISTER_MAX_CONCURRENCY", default_value_t = 20)]
+    #[arg(short = 'M', long, default_value_t = 20)]
     max_concurrency: usize,
 
     /// Optional comma-separated list of slot numbers to check
-    #[arg(long, env="SLOT_PERSISTER_SLOTS")]
+    #[arg(long)]
     slots: Option<String>,
 }
 
