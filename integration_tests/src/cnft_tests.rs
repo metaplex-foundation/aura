@@ -1,13 +1,11 @@
+use std::{str::FromStr, sync::Arc};
+
 use entities::api_req_params::{GetAsset, Options, SearchAssets};
 use function_name::named;
-use std::{str::FromStr, sync::Arc};
-use tokio::{sync::Mutex, task::JoinSet};
-
 use itertools::Itertools;
-
 use serial_test::serial;
-
 use solana_sdk::signature::Signature;
+use tokio::{sync::Mutex, task::JoinSet};
 
 use super::common::*;
 
@@ -29,16 +27,9 @@ pub async fn run_get_asset_scenario_test(
 
     for events in seed_permutations {
         index_seed_events(setup, events).await;
-        let request = GetAsset {
-            id: asset_id.to_string(),
-            options: options.clone(),
-        };
+        let request = GetAsset { id: asset_id.to_string(), options: options.clone() };
 
-        let response = setup
-            .das_api
-            .get_asset(request, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
         insta::assert_json_snapshot!(setup.name.clone(), response);
     }
 }
@@ -53,10 +44,7 @@ async fn test_asset_decompress() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
     let asset_id = "Az9QTysJj1LW1F7zkYF21HgBj3FRpq3zpxTFdPnAJYm8";
@@ -91,10 +79,7 @@ async fn test_cnft_scenario_mint_update_metadata() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -124,10 +109,7 @@ async fn test_cnft_scenario_mint_update_metadata_remove_creators() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -159,10 +141,7 @@ async fn test_cnft_owners_table() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
 
@@ -197,11 +176,8 @@ async fn test_cnft_owners_table() {
             "with_different_owner",
         ),
     ] {
-        let response = setup
-            .das_api
-            .search_assets(request.clone(), mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let response =
+            setup.das_api.search_assets(request.clone(), mutexed_tasks.clone()).await.unwrap();
         insta::assert_json_snapshot!(format!("{}-{}", name, individual_test_name), response);
     }
 }
@@ -213,10 +189,7 @@ async fn test_mint_no_json_uri() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
     let seeds = vec![seed_txn(
@@ -239,10 +212,7 @@ async fn test_mint_delegate_transfer() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -271,10 +241,7 @@ async fn test_mint_redeem_cancel_redeem() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -303,10 +270,7 @@ async fn test_mint_redeem() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
 
@@ -340,10 +304,7 @@ async fn test_mint_transfer_burn() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -372,10 +333,7 @@ async fn test_mint_transfer_noop() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
 
@@ -404,10 +362,7 @@ async fn test_mint_transfer_transfer() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -436,10 +391,7 @@ async fn test_mint_verify_creator() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -467,10 +419,7 @@ async fn test_mint_verify_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -498,10 +447,7 @@ async fn test_mint_transfer_mpl_programs() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -530,10 +476,7 @@ async fn test_mint_to_collection_unverify_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -566,10 +509,7 @@ async fn test_mint_verify_collection_unverify_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 

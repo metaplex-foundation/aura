@@ -1,14 +1,22 @@
-use crate::api::synchronization_state_consistency::CATCH_UP_SEQUENCES_TIMEOUT_SEC;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+
 use entities::enums::{AssetType, ASSET_TYPES};
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::Call;
 use rocks_db::Storage;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
+use tokio::{
+    sync::Mutex,
+    task::{JoinError, JoinSet},
+};
 use tracing::info;
+
+use crate::api::synchronization_state_consistency::CATCH_UP_SEQUENCES_TIMEOUT_SEC;
 
 pub struct BackfillingStateConsistencyChecker {
     overwhelm_fungible_backfill_gap: Arc<AtomicBool>,

@@ -1,6 +1,7 @@
-use crate::error::UsecaseError;
 use async_trait::async_trait;
 use entities::models::UnprocessedAccountMessage;
+
+use crate::error::UsecaseError;
 
 #[async_trait]
 pub trait UnprocessedAccountsGetter {

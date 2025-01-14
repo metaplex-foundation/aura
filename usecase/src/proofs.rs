@@ -1,16 +1,17 @@
-use async_trait::async_trait;
-use interface::proofs::ProofChecker;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::pubkey::Pubkey;
-use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
-use spl_account_compression::canopy::fill_in_proof_from_canopy;
-use spl_account_compression::state::{
-    merkle_tree_get_size, ConcurrentMerkleTreeHeader, CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1,
-};
 use std::sync::Arc;
 
 use anchor_lang::prelude::*;
-use interface::error::IntegrityVerificationError;
+use async_trait::async_trait;
+use interface::{error::IntegrityVerificationError, proofs::ProofChecker};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::pubkey::Pubkey;
+use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
+use spl_account_compression::{
+    canopy::fill_in_proof_from_canopy,
+    state::{
+        merkle_tree_get_size, ConcurrentMerkleTreeHeader, CONCURRENT_MERKLE_TREE_HEADER_SIZE_V1,
+    },
+};
 
 /// MaybeProofChecker checks the proofs with the configured probability of the check to occur.
 pub struct MaybeProofChecker {
@@ -25,11 +26,7 @@ impl MaybeProofChecker {
         check_probability: f64,
         commitment_level: CommitmentLevel,
     ) -> Self {
-        Self {
-            rpc_client,
-            check_probability,
-            commitment_level,
-        }
+        Self { rpc_client, check_probability, commitment_level }
     }
 }
 
@@ -50,19 +47,13 @@ impl ProofChecker for MaybeProofChecker {
             .rpc_client
             .get_account_with_commitment(
                 &tree_id_pk,
-                CommitmentConfig {
-                    commitment: self.commitment_level,
-                },
+                CommitmentConfig { commitment: self.commitment_level },
             )
             .await;
-        let tree_acc_info = account_data
-            .map_err(IntegrityVerificationError::Rpc)?
-            .value
-            .map(|acc| acc.data);
+        let tree_acc_info =
+            account_data.map_err(IntegrityVerificationError::Rpc)?.value.map(|acc| acc.data);
         if tree_acc_info.is_none() {
-            return Err(IntegrityVerificationError::TreeAccountNotFound(
-                tree_id_pk.to_string(),
-            ));
+            return Err(IntegrityVerificationError::TreeAccountNotFound(tree_id_pk.to_string()));
         }
         validate_proofs(tree_acc_info.unwrap(), initial_proofs, leaf_index, leaf)
     }
@@ -81,10 +72,7 @@ pub fn validate_proofs(
         .map_err(|e| IntegrityVerificationError::Anchor(e.to_string()))?;
     let (tree_bytes, canopy_bytes) = rest.split_at_mut(merkle_tree_size);
 
-    let mut initial_proofs = initial_proofs
-        .iter()
-        .map(|p| p.to_bytes())
-        .collect::<Vec<_>>();
+    let mut initial_proofs = initial_proofs.iter().map(|p| p.to_bytes()).collect::<Vec<_>>();
     fill_in_proof_from_canopy(
         canopy_bytes,
         header.get_max_depth(),

@@ -1,7 +1,8 @@
-use crate::error::IntegrityVerificationError;
 use async_trait::async_trait;
 use mockall::automock;
 use solana_program::pubkey::Pubkey;
+
+use crate::error::IntegrityVerificationError;
 
 #[automock]
 #[async_trait]

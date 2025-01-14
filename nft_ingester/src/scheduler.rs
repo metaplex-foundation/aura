@@ -1,17 +1,13 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-
-use rocks_db::columns::asset_previews::UrlToDownload;
-use rocks_db::columns::offchain_data::OffChainData;
-use tracing::log::error;
-
-use rocks_db::Storage;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use entities::schedule::JobRunState;
-use entities::schedule::ScheduledJob;
+use entities::schedule::{JobRunState, ScheduledJob};
 use interface::schedules::SchedulesStore;
+use rocks_db::{
+    columns::{asset_previews::UrlToDownload, offchain_data::OffChainData},
+    Storage,
+};
+use tracing::log::error;
 
 use crate::api::dapi::rpc_asset_convertors::parse_files;
 
@@ -62,7 +58,7 @@ impl Scheduler {
                         let initial_config = job.initial_config();
                         self.storage.put_schedule(&initial_config);
                         initial_config
-                    }
+                    },
                 };
                 if sched.wont_run_again() {
                     to_remove.push(job.id());
@@ -81,15 +77,15 @@ impl Scheduler {
                                     );
                                 }
                                 break;
-                            }
+                            },
                             JobRunResult::NotFinished(state) => {
                                 self.storage.update_state(&mut sched, state);
-                            }
+                            },
                             JobRunResult::Error(state_op) => {
                                 self.storage.mark_failed(&mut sched, state_op);
                                 to_remove.push(job.id());
                                 break;
-                            }
+                            },
                         };
                     }
                 }
@@ -195,14 +191,8 @@ impl Job for InitUrlsToDownloadJob {
 
     async fn run(&mut self) -> JobRunResult {
         let data = match &self.last_key {
-            Some(v) => self
-                .storage
-                .asset_offchain_data
-                .get_after(v.clone(), self.batch_size),
-            None => self
-                .storage
-                .asset_offchain_data
-                .get_from_start(self.batch_size),
+            Some(v) => self.storage.asset_offchain_data.get_after(v.clone(), self.batch_size),
+            None => self.storage.asset_offchain_data.get_from_start(self.batch_size),
         };
 
         if data.is_empty() {
@@ -217,15 +207,7 @@ impl Job for InitUrlsToDownloadJob {
                 metadata.as_deref().and_then(parse_files)
             })
             .flat_map(|files| files.into_iter().filter_map(|f| f.uri))
-            .map(|uri| {
-                (
-                    uri,
-                    UrlToDownload {
-                        timestamp: 0,
-                        download_attempts: 0,
-                    },
-                )
-            })
+            .map(|uri| (uri, UrlToDownload { timestamp: 0, download_attempts: 0 }))
             .collect();
 
         if let Err(e) = self.storage.urls_to_download.put_batch(urls).await {
@@ -234,10 +216,6 @@ impl Job for InitUrlsToDownloadJob {
         };
 
         // If somehow the rocks key cannot be serialized, then it's probably better to crash?
-        JobRunResult::NotFinished(
-            self.last_key
-                .clone()
-                .map(|s| bincode::serialize(&s).unwrap()),
-        )
+        JobRunResult::NotFinished(self.last_key.clone().map(|s| bincode::serialize(&s).unwrap()))
     }
 }

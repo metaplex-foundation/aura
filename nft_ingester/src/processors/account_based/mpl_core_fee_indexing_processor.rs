@@ -1,18 +1,21 @@
-use crate::error::IngesterError;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
 use entities::models::{CoreAssetFee, CoreFee};
 use metrics_utils::IngesterMetricsConfig;
 use postgre_client::PgClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::pubkey::Pubkey;
-use solana_program::rent::Rent;
-use solana_program::sysvar::rent;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::broadcast::Receiver;
-use tokio::sync::{Mutex, RwLock};
-use tokio::task::JoinSet;
+use solana_program::{pubkey::Pubkey, rent::Rent, sysvar::rent};
+use tokio::{
+    sync::{broadcast::Receiver, Mutex, RwLock},
+    task::JoinSet,
+};
 use tracing::{error, info};
+
+use crate::error::IngesterError;
 
 // in fact rent program constant almost all of the time, so we can update it 1 time per twenty-four hours
 const FETCH_RENT_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
@@ -35,13 +38,7 @@ impl MplCoreFeeProcessor {
     ) -> Result<Self, IngesterError> {
         let rent_account = rpc_client.get_account(&rent::ID).await?;
         let rent: Rent = bincode::deserialize(&rent_account.data)?;
-        Ok(Self {
-            storage,
-            metrics,
-            rpc_client,
-            rent: Arc::new(RwLock::new(rent)),
-            join_set,
-        })
+        Ok(Self { storage, metrics, rpc_client, rent: Arc::new(RwLock::new(rent)), join_set })
     }
 
     // on-chain programs can fetch rent without RPC call
@@ -88,7 +85,7 @@ impl MplCoreFeeProcessor {
                 Err(err) => {
                     error!("calculate_rent_amount: {:?}", err);
                     continue;
-                }
+                },
             };
 
             fees.push(CoreFee {
@@ -106,20 +103,14 @@ impl MplCoreFeeProcessor {
         if let Err(err) = self.storage.save_core_fees(fees).await {
             error!("save_core_fees: {}", err);
         };
-        self.metrics.set_latency(
-            "mpl_core_asset_fee",
-            begin_processing.elapsed().as_millis() as f64,
-        );
+        self.metrics
+            .set_latency("mpl_core_asset_fee", begin_processing.elapsed().as_millis() as f64);
     }
 
     async fn calculate_rent_amount(
         &self,
         account_info: &CoreAssetFee,
     ) -> Result<u64, IngesterError> {
-        Ok(self
-            .rent
-            .read()
-            .await
-            .minimum_balance(account_info.data.len()))
+        Ok(self.rent.read().await.minimum_balance(account_info.data.len()))
     }
 }

@@ -1,15 +1,18 @@
 use std::{pin::Pin, sync::Arc};
 
+use futures::{stream::Stream, StreamExt};
+use interface::{
+    asset_streaming_and_discovery::{
+        AssetDetailsStreamer, AsyncError, RawBlockGetter, RawBlocksStreamer,
+    },
+    error::UsecaseError,
+};
+use tonic::{async_trait, Request, Response, Status};
+
 use crate::gapfiller::{
     gap_filler_service_server::GapFillerService, AssetDetails, GetRawBlockRequest, RangeRequest,
     RawBlock,
 };
-use futures::{stream::Stream, StreamExt};
-use interface::asset_streaming_and_discovery::{
-    AssetDetailsStreamer, AsyncError, RawBlockGetter, RawBlocksStreamer,
-};
-use interface::error::UsecaseError;
-use tonic::{async_trait, Request, Response, Status};
 
 pub struct PeerGapFillerServiceImpl {
     asset_details_streamer: Arc<dyn AssetDetailsStreamer>, // Dependency injection of the streaming service
@@ -23,11 +26,7 @@ impl PeerGapFillerServiceImpl {
         raw_blocks_streamer: Arc<dyn RawBlocksStreamer>,
         raw_block_getter: Arc<dyn RawBlockGetter>,
     ) -> Self {
-        PeerGapFillerServiceImpl {
-            asset_details_streamer,
-            raw_blocks_streamer,
-            raw_block_getter,
-        }
+        PeerGapFillerServiceImpl { asset_details_streamer, raw_blocks_streamer, raw_block_getter }
     }
 }
 
@@ -60,7 +59,7 @@ impl GapFillerService for PeerGapFillerServiceImpl {
                 }
                 // If it's not a UsecaseError, or if you don't have specific handling for it
                 return Err(Status::internal(format!("Internal error: {}", e)));
-            }
+            },
         };
 
         let response_stream = asset_stream.map(|result| {
@@ -85,10 +84,8 @@ impl GapFillerService for PeerGapFillerServiceImpl {
         let end_slot = range.end_slot;
 
         // Get the stream of asset details from the business logic layer
-        let raw_blocks_stream = self
-            .raw_blocks_streamer
-            .get_raw_blocks_stream_in_range(start_slot, end_slot)
-            .await;
+        let raw_blocks_stream =
+            self.raw_blocks_streamer.get_raw_blocks_stream_in_range(start_slot, end_slot).await;
 
         let raw_blocks_stream = match raw_blocks_stream {
             Ok(stream) => stream,
@@ -98,15 +95,13 @@ impl GapFillerService for PeerGapFillerServiceImpl {
                 }
                 // If it's not a UsecaseError, or if you don't have specific handling for it
                 return Err(Status::internal(format!("Internal error: {}", e)));
-            }
+            },
         };
 
         let response_stream = raw_blocks_stream.map(|result| {
             result
                 .and_then(|serialized_raw_block| {
-                    serialized_raw_block
-                        .try_into()
-                        .map_err(|e| Box::new(e) as AsyncError)
+                    serialized_raw_block.try_into().map_err(|e| Box::new(e) as AsyncError)
                 })
                 .map_err(|e| Status::internal(format!("Streaming error: {}", e)))
         });
@@ -121,9 +116,7 @@ impl GapFillerService for PeerGapFillerServiceImpl {
             .get_raw_block(request.into_inner().slot)
             .and_then(|serialized_raw_block| {
                 Ok(Response::new(
-                    serialized_raw_block
-                        .try_into()
-                        .map_err(|e| Box::new(e) as AsyncError)?,
+                    serialized_raw_block.try_into().map_err(|e| Box::new(e) as AsyncError)?,
                 ))
             })
             .map_err(|e| Status::internal(format!("Get RawBlock error: {}", e)))
@@ -141,7 +134,7 @@ fn usecase_error_to_status(err: &UsecaseError) -> Status {
                 "Invalid range: start {} and end {} are more than {} slots apart",
                 start, end, max_window_size
             ))
-        }
+        },
         // Add more cases here for other UsecaseError variants if needed
         _ => Status::internal(format!("Internal error: {:?}", err)),
     }
@@ -149,14 +142,16 @@ fn usecase_error_to_status(err: &UsecaseError) -> Status {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use futures::stream;
-    use interface::asset_streaming_and_discovery::MockAssetDetailsStreamer;
-    use interface::asset_streaming_and_discovery::{
-        AssetDetailsStream, MockRawBlockGetter, MockRawBlocksStreamer,
+    use interface::{
+        asset_streaming_and_discovery::{
+            AssetDetailsStream, MockAssetDetailsStreamer, MockRawBlockGetter, MockRawBlocksStreamer,
+        },
+        error::UsecaseError,
     };
-    use interface::error::UsecaseError;
     use mockall::predicate::*;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_get_assets_updated_within_empty_range() {
@@ -177,10 +172,7 @@ mod tests {
         };
 
         let response = service
-            .get_assets_updated_within(Request::new(RangeRequest {
-                start_slot: 0,
-                end_slot: 10,
-            }))
+            .get_assets_updated_within(Request::new(RangeRequest { start_slot: 0, end_slot: 10 }))
             .await;
 
         assert!(response.is_ok());
@@ -210,10 +202,7 @@ mod tests {
         };
 
         let response = service
-            .get_assets_updated_within(Request::new(RangeRequest {
-                start_slot: 10,
-                end_slot: 0,
-            }))
+            .get_assets_updated_within(Request::new(RangeRequest { start_slot: 10, end_slot: 0 }))
             .await;
 
         // Check for a specific error response

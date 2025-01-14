@@ -1,7 +1,10 @@
-use crate::column::TypedColumn;
-use crate::key_encoders::{decode_string, encode_string};
-use crate::Result;
 use serde::{Deserialize, Serialize};
+
+use crate::{
+    column::TypedColumn,
+    key_encoders::{decode_string, encode_string},
+    Result,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TokenPrice {

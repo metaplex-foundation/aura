@@ -1,7 +1,8 @@
-use crate::error::UsecaseError;
 use async_trait::async_trait;
 use entities::models::{TokenAccResponse, TokenAccountIterableIdx};
 use solana_program::pubkey::Pubkey;
+
+use crate::error::UsecaseError;
 
 #[async_trait]
 pub trait TokenAccountsGetter {

@@ -1,9 +1,7 @@
 use clap::{Parser, ValueEnum};
 use figment::value::Dict;
-
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
-
 use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;
@@ -37,12 +35,7 @@ pub struct IngesterClapArgs {
     )]
     pub file_storage_path_container: String,
 
-    #[clap(
-        short('p'),
-        long,
-        env,
-        help = "example: https://mainnet-aura.metaplex.com"
-    )]
+    #[clap(short('p'), long, env, help = "example: https://mainnet-aura.metaplex.com")]
     pub rpc_host: String,
 
     #[clap(long, env, default_value = "100")]
@@ -124,12 +117,7 @@ pub struct IngesterClapArgs {
     #[clap(long, env, help = "Migration storage path dir")]
     pub rocks_migration_storage_path: Option<String>,
 
-    #[clap(
-        long,
-        env,
-        default_value_t = false,
-        help = "Start consistent checker (default: false)"
-    )]
+    #[clap(long, env, default_value_t = false, help = "Start consistent checker (default: false)")]
     pub run_sequence_consistent_checker: bool,
 
     #[clap(
@@ -139,12 +127,7 @@ pub struct IngesterClapArgs {
         help = "#api Check proofs (default: false)"
     )]
     pub check_proofs: bool,
-    #[clap(
-        long,
-        env,
-        default_value = "0.1",
-        help = "#api Check proofs probability"
-    )]
+    #[clap(long, env, default_value = "0.1", help = "#api Check proofs probability")]
     pub check_proofs_probability: f64,
     #[clap(
         long,
@@ -169,12 +152,7 @@ pub struct IngesterClapArgs {
         help = "#api Skip check tree gaps. (default: false)"
     )]
     pub skip_check_tree_gaps: bool,
-    #[clap(
-        long,
-        env = "INGESTER_SERVER_PORT",
-        default_value = "9092",
-        help = "#api Server port"
-    )]
+    #[clap(long, env = "INGESTER_SERVER_PORT", default_value = "9092", help = "#api Server port")]
     pub server_port: u16,
     #[clap(long, env, default_value = "50", help = "#api Max page limit")]
     pub max_page_limit: usize,
@@ -219,12 +197,7 @@ pub struct IngesterClapArgs {
 
     #[clap(long, env, help = "#backfiller Backfill rpc address")]
     pub backfill_rpc_address: Option<String>,
-    #[clap(
-        long,
-        env,
-        default_value = "rpc",
-        help = "#backfiller Backfill source mode."
-    )]
+    #[clap(long, env, default_value = "rpc", help = "#backfiller Backfill source mode.")]
     pub backfiller_source_mode: BackfillerSourceMode,
     #[clap(long, env, value_parser = parse_json_to_big_table_config, help ="#backfiller Big table config")]
     pub big_table_config: Option<BigTableConfig>,
@@ -294,12 +267,7 @@ pub struct SynchronizerClapArgs {
         help = "Rocks db secondary path container"
     )]
     pub rocks_db_secondary_path: String,
-    #[clap(
-        long,
-        env,
-        default_value = "./tmp/rocks_dump",
-        help = "RocksDb dump path"
-    )]
+    #[clap(long, env, default_value = "./tmp/rocks_dump", help = "RocksDb dump path")]
     pub rocks_dump_path: String,
 
     #[clap(
@@ -345,12 +313,7 @@ pub struct MigratorClapArgs {
     pub rocks_json_source_db: String,
     #[clap(long, env, help = "Rocks json target db dir")]
     pub rocks_json_target_db: String,
-    #[clap(
-        long,
-        env,
-        default_value = "./tmp/rocks_dump",
-        help = "RocksDb dump path"
-    )]
+    #[clap(long, env, default_value = "./tmp/rocks_dump", help = "RocksDb dump path")]
     pub rocks_dump_path: String,
 
     #[clap(long, env, default_value = "full", help = "Json migrator mode")]
@@ -382,12 +345,7 @@ pub struct MigratorClapArgs {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct ApiClapArgs {
-    #[clap(
-        short('p'),
-        long,
-        env,
-        help = "example: https://mainnet-aura.metaplex.com"
-    )]
+    #[clap(short('p'), long, env, help = "example: https://mainnet-aura.metaplex.com")]
     pub rpc_host: String,
 
     #[clap(
@@ -419,12 +377,7 @@ pub struct ApiClapArgs {
     pub rocks_db_secondary_path: String,
     #[clap(long, env, default_value = "2")]
     pub rocks_sync_interval_seconds: u64,
-    #[clap(
-        long,
-        env,
-        default_value = "./tmp/rocks_dump",
-        help = "RocksDb dump path"
-    )]
+    #[clap(long, env, default_value = "./tmp/rocks_dump", help = "RocksDb dump path")]
     pub rocks_dump_path: String,
 
     #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
@@ -485,12 +438,7 @@ pub struct ApiClapArgs {
         help = "#api Archives directory"
     )]
     pub rocks_archives_dir: String,
-    #[clap(
-        long,
-        env = "API_SERVER_PORT",
-        default_value = "8990",
-        help = "#api Server port"
-    )]
+    #[clap(long, env = "API_SERVER_PORT", default_value = "8990", help = "#api Server port")]
     pub server_port: u16,
     #[clap(long, env, default_value = "50", help = "#api Max page limit")]
     pub max_page_limit: usize,
@@ -580,13 +528,9 @@ impl BigTableConfig {
     }
 
     pub fn get_big_table_timeout_key(&self) -> Result<u32, IngesterError> {
-        Ok(self
-            .0
-            .get(BIG_TABLE_TIMEOUT_KEY)
-            .and_then(|v| v.to_u128())
-            .ok_or(IngesterError::ConfigurationError {
-                msg: "BIG_TABLE_TIMEOUT_KEY missing".to_string(),
-            })? as u32)
+        Ok(self.0.get(BIG_TABLE_TIMEOUT_KEY).and_then(|v| v.to_u128()).ok_or(
+            IngesterError::ConfigurationError { msg: "BIG_TABLE_TIMEOUT_KEY missing".to_string() },
+        )? as u32)
     }
 }
 
@@ -597,8 +541,9 @@ pub fn init_logger(log_level: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use clap::Parser;
+
+    use super::*;
 
     #[test]
     fn test_default_values() {
@@ -681,10 +626,7 @@ mod tests {
         assert_eq!(args.rocks_archives_dir, "/rocksdb/_rocks_backup_archives");
         assert_eq!(args.server_port, 8990);
         assert_eq!(args.max_page_limit, 50);
-        assert_eq!(
-            args.native_mint_pubkey,
-            "So11111111111111111111111111111111111111112"
-        );
+        assert_eq!(args.native_mint_pubkey, "So11111111111111111111111111111111111111112");
         assert_eq!(args.parallel_json_downloaders, 100);
         assert_eq!(args.log_level, "info");
     }

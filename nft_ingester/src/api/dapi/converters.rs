@@ -1,14 +1,17 @@
-use crate::api::dapi::asset::COLLECTION_GROUP_KEY;
-use entities::api_req_params::SearchConditionType;
-use entities::api_req_params::{
-    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets,
-};
-use entities::enums::{
-    OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TokenType,
+use entities::{
+    api_req_params::{
+        GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets,
+        SearchConditionType,
+    },
+    enums::{
+        OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TokenType,
+    },
 };
 use interface::error::UsecaseError;
 use thiserror::Error;
 use usecase::validation::{validate_opt_pubkey_vec, validate_pubkey};
+
+use crate::api::dapi::asset::COLLECTION_GROUP_KEY;
 
 pub struct GroupingSize {
     pub size: u64,
@@ -230,10 +233,7 @@ mod tests {
     #[test]
     fn test_search_assets_filter_from_search_assets_query_conversion_error() {
         let query = SearchAssetsQuery {
-            grouping: Some((
-                "not_collection".to_string(),
-                "test".to_string().into_bytes(),
-            )),
+            grouping: Some(("not_collection".to_string(), "test".to_string().into_bytes())),
             ..Default::default()
         };
         let result = postgre_client::model::SearchAssetsFilter::try_from(query);

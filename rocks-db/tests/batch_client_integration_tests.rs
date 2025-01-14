@@ -1,20 +1,18 @@
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-    use std::sync::Arc;
-
-    use solana_sdk::pubkey::Pubkey;
-    use tempfile::TempDir;
+    use std::{collections::HashSet, sync::Arc};
 
     use metrics_utils::red::RequestErrorDurationMetrics;
-    use rocks_db::key_encoders::encode_u64x2_pubkey;
-    use rocks_db::migrator::MigrationState;
-    use rocks_db::storage_traits::{AssetUpdateIndexStorage, AssetUpdatedKey};
-    use rocks_db::Storage;
-    use tokio::sync::Mutex;
-    use tokio::task::JoinSet;
-
+    use rocks_db::{
+        key_encoders::encode_u64x2_pubkey,
+        migrator::MigrationState,
+        storage_traits::{AssetUpdateIndexStorage, AssetUpdatedKey},
+        Storage,
+    };
     use setup::rocks::{RocksTestEnvironment, DEFAULT_PUBKEY_OF_ONES, PUBKEY_OF_TWOS};
+    use solana_sdk::pubkey::Pubkey;
+    use tempfile::TempDir;
+    use tokio::{sync::Mutex, task::JoinSet};
 
     #[test]
     fn test_process_asset_updates_batch_empty_db() {
@@ -34,10 +32,7 @@ mod tests {
             .expect("Failed to fetch asset updated keys");
         // Assertions
         assert!(keys.is_empty(), "Expected no keys from an empty database");
-        assert!(
-            last_key.is_none(),
-            "Expected no last key from an empty database"
-        );
+        assert!(last_key.is_none(), "Expected no last key from an empty database");
     }
 
     #[test]
@@ -74,9 +69,7 @@ mod tests {
         ])
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
-        let (keys, last_key) = storage
-            .fetch_nft_asset_updated_keys(None, None, 10, None)
-            .unwrap();
+        let (keys, last_key) = storage.fetch_nft_asset_updated_keys(None, None, 10, None).unwrap();
         assert_eq!(keys.len(), 1, "Expected a single key");
         assert_eq!(
             keys.iter().next().unwrap(),
@@ -85,14 +78,9 @@ mod tests {
         );
         assert!(last_key.is_some(), "Expected a last key");
         // Verify fetch_asset_updated_keys with the last key from previous call
-        let (new_keys, new_last_key) = storage
-            .fetch_nft_asset_updated_keys(last_key.clone(), None, 10, None)
-            .unwrap();
-        assert!(
-            new_keys.is_empty(),
-            "Expected no new keys, but found: {:?}",
-            new_keys
-        );
+        let (new_keys, new_last_key) =
+            storage.fetch_nft_asset_updated_keys(last_key.clone(), None, 10, None).unwrap();
+        assert!(new_keys.is_empty(), "Expected no new keys, but found: {:?}", new_keys);
         assert_eq!(new_last_key, last_key, "Expected no new last key");
     }
 
@@ -104,9 +92,7 @@ mod tests {
         ])
         .storage;
         // Verify fetch_asset_updated_keys with None as last key
-        let (keys, last_key) = storage
-            .fetch_nft_asset_updated_keys(None, None, 1, None)
-            .unwrap();
+        let (keys, last_key) = storage.fetch_nft_asset_updated_keys(None, None, 1, None).unwrap();
         assert_eq!(keys.len(), 1, "Expected a single key");
         assert_eq!(
             keys.iter().next().unwrap(),
@@ -115,14 +101,9 @@ mod tests {
         );
         assert!(last_key.is_some(), "Expected a last key");
         // Verify fetch_asset_updated_keys with the last key from previous call
-        let (new_keys, new_last_key) = storage
-            .fetch_nft_asset_updated_keys(last_key.clone(), None, 1, Some(keys))
-            .unwrap();
-        assert!(
-            new_keys.is_empty(),
-            "Expected no new keys, but found: {:?}",
-            new_keys
-        );
+        let (new_keys, new_last_key) =
+            storage.fetch_nft_asset_updated_keys(last_key.clone(), None, 1, Some(keys)).unwrap();
+        assert!(new_keys.is_empty(), "Expected no new keys, but found: {:?}", new_keys);
         assert_ne!(new_last_key, last_key, "Expected a new last key");
     }
 
@@ -145,11 +126,7 @@ mod tests {
         assert_eq!(keys.len(), 0, "Expected no keys");
         assert!(last_key.is_some(), "Expected a last key");
         let expected_key = AssetUpdatedKey::new(2, 2, DEFAULT_PUBKEY_OF_ONES.clone());
-        assert_eq!(
-            last_key.unwrap(),
-            expected_key,
-            "Expected the specific last key"
-        );
+        assert_eq!(last_key.unwrap(), expected_key, "Expected the specific last key");
     }
 
     #[test]
@@ -209,14 +186,8 @@ mod tests {
             )
             .unwrap();
         assert_eq!(keys.len(), 2, "Expected 2 keys, got {:?}", keys);
-        assert!(
-            keys.contains(&DEFAULT_PUBKEY_OF_ONES),
-            "Expected the specific pubkey"
-        );
-        assert!(
-            keys.contains(&PUBKEY_OF_TWOS),
-            "Expected the specific pubkey"
-        );
+        assert!(keys.contains(&DEFAULT_PUBKEY_OF_ONES), "Expected the specific pubkey");
+        assert!(keys.contains(&PUBKEY_OF_TWOS), "Expected the specific pubkey");
         assert!(last_key.is_some(), "Expected a last key");
         let expected_key = AssetUpdatedKey::new(4, 5, PUBKEY_OF_TWOS.clone());
         assert_eq!(
@@ -267,19 +238,11 @@ mod tests {
             (2, PUBKEY_OF_TWOS.clone()),
         ])
         .storage;
-        let (keys, last_key) = storage
-            .fetch_nft_asset_updated_keys(None, None, 10, None)
-            .unwrap();
+        let (keys, last_key) = storage.fetch_nft_asset_updated_keys(None, None, 10, None).unwrap();
 
         assert_eq!(keys.len(), 2, "Expected 2 keys");
-        assert!(
-            keys.contains(&DEFAULT_PUBKEY_OF_ONES),
-            "Expected the specific pubkey"
-        );
-        assert!(
-            keys.contains(&PUBKEY_OF_TWOS),
-            "Expected the specific pubkey"
-        );
+        assert!(keys.contains(&DEFAULT_PUBKEY_OF_ONES), "Expected the specific pubkey");
+        assert!(keys.contains(&PUBKEY_OF_TWOS), "Expected the specific pubkey");
         assert!(last_key.is_some(), "Expected a last key");
         let expected_key = AssetUpdatedKey::new(2, 2, PUBKEY_OF_TWOS.clone());
         assert_eq!(
@@ -291,17 +254,11 @@ mod tests {
         );
         let key = Pubkey::new_unique();
         storage.asset_updated(5, key.clone()).unwrap();
-        let (keys, last_key) = storage
-            .fetch_nft_asset_updated_keys(last_key, None, 10, None)
-            .unwrap();
+        let (keys, last_key) =
+            storage.fetch_nft_asset_updated_keys(last_key, None, 10, None).unwrap();
 
         assert_eq!(keys.len(), 1, "Expected 1 key");
-        assert!(
-            keys.contains(&key),
-            "Expected the specific pubkey {:?}, got {:?}",
-            key,
-            keys
-        );
+        assert!(keys.contains(&key), "Expected the specific pubkey {:?}, got {:?}", key, keys);
         assert!(last_key.is_some(), "Expected a last key");
         let expected_key = AssetUpdatedKey::new(3, 5, key.clone());
         assert_eq!(
@@ -321,9 +278,8 @@ mod tests {
         }
         let mut last_seen_key = last_key.clone();
         for i in 0..10 {
-            let (new_keys, last_key) = storage
-                .fetch_nft_asset_updated_keys(last_seen_key, None, 1000, None)
-                .unwrap();
+            let (new_keys, last_key) =
+                storage.fetch_nft_asset_updated_keys(last_seen_key, None, 1000, None).unwrap();
             assert_eq!(new_keys.len(), 1000, "Expected 1000 keys");
             assert!(last_key.is_some(), "Expected a last key");
             let expected_key = keys[i * 1000 + 999].clone();

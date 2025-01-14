@@ -21,9 +21,6 @@ pub trait JsonDownloader {
 pub trait JsonPersister {
     async fn persist_response(
         &self,
-        results: Vec<(
-            String,
-            Result<JsonDownloadResult, crate::error::JsonDownloaderError>,
-        )>,
+        results: Vec<(String, Result<JsonDownloadResult, crate::error::JsonDownloaderError>)>,
     ) -> Result<(), crate::error::JsonDownloaderError>;
 }

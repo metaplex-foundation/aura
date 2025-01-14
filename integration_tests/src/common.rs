@@ -1,45 +1,40 @@
-use std::{collections::HashMap, path::Path};
-
-use std::str::FromStr;
+use std::{
+    collections::HashMap,
+    fmt,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 
 use entities::models::UnprocessedAccountMessage;
 use metrics_utils::MetricState;
 use mpl_token_metadata::accounts::Metadata;
-
-use nft_ingester::index_syncronizer::Synchronizer;
-use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
 use nft_ingester::{
     api::{account_balance::AccountBalanceGetterImpl, DasApi},
     buffer::Buffer,
     config::JsonMiddlewareConfig,
+    index_syncronizer::Synchronizer,
+    init::init_index_storage_with_migration,
     json_worker::JsonWorker,
     message_parser::MessageParser,
-    processors::accounts_processor::AccountsProcessor,
+    processors::{
+        accounts_processor::AccountsProcessor,
+        transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
+    },
     raydium_price_fetcher::{self, RaydiumTokenPriceFetcher},
 };
 use plerkle_serialization::{
     serializer::{seralize_encoded_transaction_with_status, serialize_account},
     solana_geyser_plugin_interface_shims::ReplicaAccountInfoV2,
 };
-
 use postgre_client::PgClient;
 use rocks_db::{batch_savers::BatchSaveStorage, migrator::MigrationState, Storage};
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use std::sync::Arc;
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-    time::Instant,
-};
-use usecase::proofs::MaybeProofChecker;
-
 use serde::de::DeserializeOwned;
 use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{
-    client_error::ClientError,
-    client_error::Result as RpcClientResult,
+    client_error::{ClientError, Result as RpcClientResult},
+    nonblocking::rpc_client::RpcClient,
     rpc_config::{RpcAccountInfoConfig, RpcTransactionConfig},
     rpc_request::RpcRequest,
     rpc_response::{Response as RpcResponse, RpcTokenAccountBalance},
@@ -47,16 +42,17 @@ use solana_client::{
 use solana_sdk::{
     account::Account,
     commitment_config::{CommitmentConfig, CommitmentLevel},
+    pubkey::Pubkey,
+    signature::Signature,
 };
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
-use std::{fmt, time::Duration};
+use tokio::{
+    sync::{broadcast, Mutex},
+    task::JoinSet,
+    time::{sleep, Instant},
+};
 use tracing::{error, info};
-
-use std::path::PathBuf;
-
-use tokio::time::sleep;
-
-use nft_ingester::init::init_index_storage_with_migration;
+use usecase::proofs::MaybeProofChecker;
 
 pub const DEFAULT_SLOT: u64 = 1;
 
@@ -228,18 +224,13 @@ pub async fn get_transaction(
 
     const CONFIG: RpcTransactionConfig = RpcTransactionConfig {
         encoding: Some(UiTransactionEncoding::Base64),
-        commitment: Some(CommitmentConfig {
-            commitment: CommitmentLevel::Confirmed,
-        }),
+        commitment: Some(CommitmentConfig { commitment: CommitmentLevel::Confirmed }),
         max_supported_transaction_version: Some(0),
     };
 
     loop {
         let response = client
-            .send(
-                RpcRequest::GetTransaction,
-                serde_json::json!([signature.to_string(), CONFIG,]),
-            )
+            .send(RpcRequest::GetTransaction, serde_json::json!([signature.to_string(), CONFIG,]))
             .await;
 
         if let Err(error) = response {
@@ -304,7 +295,7 @@ where
                 } else {
                     return Err(error);
                 }
-            }
+            },
         }
     }
 }
@@ -316,9 +307,7 @@ pub async fn fetch_account(
 ) -> anyhow::Result<(Account, u64)> {
     const CONFIG: RpcAccountInfoConfig = RpcAccountInfoConfig {
         encoding: Some(UiAccountEncoding::Base64Zstd),
-        commitment: Some(CommitmentConfig {
-            commitment: CommitmentLevel::Finalized,
-        }),
+        commitment: Some(CommitmentConfig { commitment: CommitmentLevel::Finalized }),
         data_slice: None,
         min_context_slot: None,
     };
@@ -354,7 +343,7 @@ pub async fn fetch_and_serialize_account(
         Ok((account, actual_slot)) => (account, actual_slot),
         Err(e) => {
             return Err(anyhow::anyhow!("Failed to fetch account: {:?}", e));
-        }
+        },
     };
 
     let fbb = flatbuffers::FlatBufferBuilder::new();
@@ -385,9 +374,7 @@ pub async fn fetch_and_serialize_account(
 pub async fn get_token_largest_account(client: &RpcClient, mint: Pubkey) -> anyhow::Result<Pubkey> {
     let response: RpcResponse<Vec<RpcTokenAccountBalance>> = rpc_tx_with_retries(
         client,
-        RpcRequest::Custom {
-            method: "getTokenLargestAccounts",
-        },
+        RpcRequest::Custom { method: "getTokenLargestAccounts" },
         serde_json::json!([mint.to_string(),]),
         5,
         mint,
@@ -401,16 +388,13 @@ pub async fn get_token_largest_account(client: &RpcClient, mint: Pubkey) -> anyh
                 Ok(pubkey) => Ok(pubkey),
                 Err(e) => anyhow::bail!("failed to parse pubkey: {:?}", e),
             }
-        }
+        },
         None => anyhow::bail!("no accounts for mint {mint}: burned nft?"),
     }
 }
 
 pub async fn index_account_bytes(setup: &TestSetup, account_bytes: Vec<u8>) {
-    let parsed_acc = setup
-        .message_parser
-        .parse_account(account_bytes, false)
-        .unwrap();
+    let parsed_acc = setup.message_parser.parse_account(account_bytes, false).unwrap();
     let ready_to_process = parsed_acc
         .into_iter()
         .map(|acc| UnprocessedAccountMessage {
@@ -420,11 +404,8 @@ pub async fn index_account_bytes(setup: &TestSetup, account_bytes: Vec<u8>) {
         })
         .collect();
 
-    let mut batch_storage = BatchSaveStorage::new(
-        setup.rocks_db.clone(),
-        1,
-        setup.metrics.ingester_metrics.clone(),
-    );
+    let mut batch_storage =
+        BatchSaveStorage::new(setup.rocks_db.clone(), 1, setup.metrics.ingester_metrics.clone());
 
     let mut interval = tokio::time::interval(Duration::from_millis(1));
     let mut batch_fill_instant = Instant::now();
@@ -444,17 +425,9 @@ pub async fn index_account_bytes(setup: &TestSetup, account_bytes: Vec<u8>) {
     let _ = batch_storage.flush();
 
     let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    setup
-        .synchronizer
-        .synchronize_nft_asset_indexes(&shutdown_rx, 1000)
-        .await
-        .unwrap();
+    setup.synchronizer.synchronize_nft_asset_indexes(&shutdown_rx, 1000).await.unwrap();
 
-    setup
-        .synchronizer
-        .synchronize_fungible_asset_indexes(&shutdown_rx, 1000)
-        .await
-        .unwrap();
+    setup.synchronizer.synchronize_fungible_asset_indexes(&shutdown_rx, 1000).await.unwrap();
 }
 
 pub async fn cached_fetch_account(
@@ -462,9 +435,7 @@ pub async fn cached_fetch_account(
     account: Pubkey,
     slot: Option<u64>,
 ) -> Vec<u8> {
-    cached_fetch_account_with_error_handling(setup, account, slot)
-        .await
-        .unwrap()
+    cached_fetch_account_with_error_handling(setup, account, slot).await.unwrap()
 }
 
 fn get_relative_project_path(path: &str) -> PathBuf {
@@ -503,10 +474,7 @@ async fn cached_fetch_transaction(setup: &TestSetup, sig: Signature) -> Vec<u8> 
     if file_path.exists() {
         std::fs::read(file_path).unwrap()
     } else {
-        let txn_bytes = fetch_and_serialize_transaction(&setup.client, sig)
-            .await
-            .unwrap()
-            .unwrap();
+        let txn_bytes = fetch_and_serialize_transaction(&setup.client, sig).await.unwrap().unwrap();
         std::fs::write(file_path, &txn_bytes).unwrap();
         txn_bytes
     }
@@ -515,10 +483,7 @@ async fn cached_fetch_transaction(setup: &TestSetup, sig: Signature) -> Vec<u8> 
 pub async fn index_transaction(setup: &TestSetup, sig: Signature) {
     let txn_bytes: Vec<u8> = cached_fetch_transaction(setup, sig).await;
 
-    let ready_to_process_tx = setup
-        .message_parser
-        .parse_transaction(txn_bytes, false)
-        .unwrap();
+    let ready_to_process_tx = setup.message_parser.parse_transaction(txn_bytes, false).unwrap();
 
     setup
         .tx_processor
@@ -528,17 +493,9 @@ pub async fn index_transaction(setup: &TestSetup, sig: Signature) {
         .unwrap();
 
     let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    setup
-        .synchronizer
-        .synchronize_nft_asset_indexes(&shutdown_rx, 1000)
-        .await
-        .unwrap();
+    setup.synchronizer.synchronize_nft_asset_indexes(&shutdown_rx, 1000).await.unwrap();
 
-    setup
-        .synchronizer
-        .synchronize_fungible_asset_indexes(&shutdown_rx, 1000)
-        .await
-        .unwrap();
+    setup.synchronizer.synchronize_fungible_asset_indexes(&shutdown_rx, 1000).await.unwrap();
 }
 
 async fn cached_fetch_largest_token_account_id(client: &RpcClient, mint: Pubkey) -> Pubkey {
@@ -585,16 +542,16 @@ pub async fn index_seed_events(setup: &TestSetup, events: Vec<&SeedEvent>) {
         match event {
             SeedEvent::Account(account) => {
                 index_account_with_ordered_slot(setup, *account).await;
-            }
+            },
             SeedEvent::Nft(mint) => {
                 index_nft(setup, *mint).await;
-            }
+            },
             SeedEvent::Signature(sig) => {
                 index_transaction(setup, *sig).await;
-            }
+            },
             SeedEvent::TokenMint(mint) => {
                 index_token_mint(setup, *mint).await;
-            }
+            },
         }
     }
 }
@@ -648,9 +605,7 @@ where
     I: IntoIterator,
     I::Item: AsRef<str>,
 {
-    strs.into_iter()
-        .map(|s| seed_token_mint(s.as_ref()))
-        .collect()
+    strs.into_iter().map(|s| seed_token_mint(s.as_ref())).collect()
 }
 
 pub async fn index_account(setup: &TestSetup, account: Pubkey) {
@@ -672,11 +627,7 @@ pub struct NftAccounts {
 pub async fn get_nft_accounts(setup: &TestSetup, mint: Pubkey) -> NftAccounts {
     let metadata_account = Metadata::find_pda(&mint).0;
     let token_account = cached_fetch_largest_token_account_id(&setup.client, mint).await;
-    NftAccounts {
-        mint,
-        metadata: metadata_account,
-        token: token_account,
-    }
+    NftAccounts { mint, metadata: metadata_account, token: token_account }
 }
 
 async fn index_account_with_ordered_slot(setup: &TestSetup, account: Pubkey) {
@@ -698,10 +649,10 @@ async fn index_token_mint(setup: &TestSetup, mint: Pubkey) {
     match cached_fetch_account_with_error_handling(setup, metadata_account, slot).await {
         Ok(account_bytes) => {
             index_account_bytes(setup, account_bytes).await;
-        }
+        },
         Err(_) => {
             // If we can't find the metadata account, then we assume that the mint is not an NFT.
-        }
+        },
     }
 }
 

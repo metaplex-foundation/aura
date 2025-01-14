@@ -1,12 +1,12 @@
-use crate::enums::{
-    BatchMintState, ChainMutability, FailedBatchMintState, OwnerType, PersistingBatchMintState,
-    RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TaskStatus,
-    TokenMetadataEdition, TokenStandard, UnprocessedAccount, UseMethod,
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
 };
-use base64::engine::general_purpose;
-use base64::Engine;
-use blockbuster::programs::mpl_core_program::MplCoreAccountData;
-use blockbuster::programs::token_extensions::MintAccountExtensions;
+
+use base64::{engine::general_purpose, Engine};
+use blockbuster::programs::{
+    mpl_core_program::MplCoreAccountData, token_extensions::MintAccountExtensions,
+};
 use libreplex_inscriptions::Inscription;
 use mpl_token_metadata::accounts::Metadata;
 use schemars::JsonSchema;
@@ -14,9 +14,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
 use sqlx::types::chrono;
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
+
+use crate::enums::{
+    BatchMintState, ChainMutability, FailedBatchMintState, OwnerType, PersistingBatchMintState,
+    RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TaskStatus,
+    TokenMetadataEdition, TokenStandard, UnprocessedAccount, UseMethod,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq, Hash)]
@@ -27,10 +29,7 @@ pub struct UrlWithStatus {
 
 impl UrlWithStatus {
     pub fn new(metadata_url: &str, is_downloaded: bool) -> Self {
-        Self {
-            metadata_url: metadata_url.trim().replace('\0', "").to_string(),
-            is_downloaded,
-        }
+        Self { metadata_url: metadata_url.trim().replace('\0', "").to_string(), is_downloaded }
     }
     pub fn get_metadata_id(&self) -> Vec<u8> {
         Self::get_metadata_id_for(&self.metadata_url)
@@ -279,11 +278,7 @@ pub struct Updated<T> {
 
 impl<T> Updated<T> {
     pub fn new(slot_updated: u64, update_version: Option<UpdateVersion>, value: T) -> Self {
-        Self {
-            slot_updated,
-            update_version,
-            value,
-        }
+        Self { slot_updated, update_version, value }
     }
 
     pub fn get_upd_ver_seq(&self) -> Option<u64> {
@@ -508,10 +503,7 @@ impl From<(&[u8], i64, CoreFeesAccount)> for CoreFeesAccountWithSortingID {
         key.extend_from_slice(pubkey);
         let sorting_id = general_purpose::STANDARD_NO_PAD.encode(key);
 
-        Self {
-            sorting_id,
-            fees_account: value,
-        }
+        Self { sorting_id, fees_account: value }
     }
 }
 
@@ -657,10 +649,7 @@ mod tests {
     #[test]
     fn test_url_with_status() {
         let url = "http://example.com".to_string();
-        let url_with_status = UrlWithStatus {
-            metadata_url: url,
-            is_downloaded: false,
-        };
+        let url_with_status = UrlWithStatus { metadata_url: url, is_downloaded: false };
         let metadata_id = url_with_status.get_metadata_id();
         assert_eq!(metadata_id.len(), 32);
         assert_eq!(
@@ -672,10 +661,7 @@ mod tests {
     #[test]
     fn test_url_with_status_trimmed_on_untrimmed_data() {
         let url = "  http://example.com  ".to_string();
-        let url_with_status = UrlWithStatus {
-            metadata_url: url,
-            is_downloaded: false,
-        };
+        let url_with_status = UrlWithStatus { metadata_url: url, is_downloaded: false };
         let metadata_id = url_with_status.get_metadata_id();
         assert_eq!(metadata_id.len(), 32);
         assert_eq!(

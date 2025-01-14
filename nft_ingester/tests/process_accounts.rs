@@ -1,41 +1,50 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use base64::engine::general_purpose;
-    use base64::Engine;
-    use blockbuster::mpl_core::types::{
-        AppData, ExternalPluginAdapter, ExternalPluginAdapterSchema, ExternalPluginAdapterType,
-        FreezeDelegate, Plugin, PluginAuthority, PluginType, TransferDelegate, UpdateAuthority,
+    use std::{collections::HashMap, str::FromStr, sync::Arc};
+
+    use base64::{engine::general_purpose, Engine};
+    use blockbuster::{
+        mpl_core::{
+            types::{
+                AppData, ExternalPluginAdapter, ExternalPluginAdapterSchema,
+                ExternalPluginAdapterType, FreezeDelegate, Plugin, PluginAuthority, PluginType,
+                TransferDelegate, UpdateAuthority,
+            },
+            IndexableAsset, IndexableCheckResult, IndexableExternalPluginSchemaV1,
+            IndexablePluginSchemaV1, LifecycleChecks,
+        },
+        programs::mpl_core_program::MplCoreAccountData,
+        token_metadata::{
+            accounts::Metadata,
+            types::{Key, TokenStandard},
+        },
     };
-    use blockbuster::mpl_core::{
-        IndexableAsset, IndexableCheckResult, IndexableExternalPluginSchemaV1,
-        IndexablePluginSchemaV1, LifecycleChecks,
-    };
-    use blockbuster::programs::mpl_core_program::MplCoreAccountData;
-    use blockbuster::token_metadata::accounts::Metadata;
-    use blockbuster::token_metadata::types::{Key, TokenStandard};
-    use entities::enums::{TokenMetadataEdition, UnprocessedAccount};
-    use entities::models::{
-        EditionMetadata, EditionV1, IndexableAssetWithAccountInfo, MasterEdition, MetadataInfo,
-        Mint, TokenAccount,
+    use entities::{
+        enums::{TokenMetadataEdition, UnprocessedAccount},
+        models::{
+            EditionMetadata, EditionV1, IndexableAssetWithAccountInfo, MasterEdition, MetadataInfo,
+            Mint, TokenAccount,
+        },
     };
     use metrics_utils::IngesterMetricsConfig;
-    use nft_ingester::buffer::Buffer;
-    use nft_ingester::message_parser::MessageParser;
-    use nft_ingester::plerkle;
-    use nft_ingester::processors::account_based::inscriptions_processor::InscriptionsProcessor;
-    use nft_ingester::processors::account_based::mpl_core_processor::MplCoreProcessor;
-    use nft_ingester::processors::account_based::mplx_updates_processor::MplxAccountsProcessor;
-    use nft_ingester::processors::account_based::token_updates_processor::TokenAccountsProcessor;
-    use rocks_db::batch_savers::BatchSaveStorage;
-    use rocks_db::column::TypedColumn;
-    use rocks_db::columns::asset::AssetAuthority;
-    use rocks_db::columns::asset::AssetCompleteDetails;
-    use rocks_db::ToFlatbuffersConverter;
+    use nft_ingester::{
+        buffer::Buffer,
+        message_parser::MessageParser,
+        plerkle,
+        processors::account_based::{
+            inscriptions_processor::InscriptionsProcessor, mpl_core_processor::MplCoreProcessor,
+            mplx_updates_processor::MplxAccountsProcessor,
+            token_updates_processor::TokenAccountsProcessor,
+        },
+    };
+    use rocks_db::{
+        batch_savers::BatchSaveStorage,
+        column::TypedColumn,
+        columns::asset::{AssetAuthority, AssetCompleteDetails},
+        ToFlatbuffersConverter,
+    };
     use solana_program::pubkey::Pubkey;
-    use std::collections::HashMap;
-    use std::str::FromStr;
-    use std::sync::Arc;
     use testcontainers::clients::Cli;
 
     pub fn generate_metadata(mint_key: Pubkey) -> MetadataInfo {
@@ -156,18 +165,10 @@ mod tests {
             .unwrap();
         batch_storage.flush().unwrap();
 
-        let first_from_db = env
-            .rocks_env
-            .storage
-            .get_complete_asset_details(first_mint)
-            .unwrap()
-            .unwrap();
-        let second_from_db = env
-            .rocks_env
-            .storage
-            .get_complete_asset_details(second_mint)
-            .unwrap()
-            .unwrap();
+        let first_from_db =
+            env.rocks_env.storage.get_complete_asset_details(first_mint).unwrap().unwrap();
+        let second_from_db =
+            env.rocks_env.storage.get_complete_asset_details(second_mint).unwrap().unwrap();
 
         let first_owner_from_db = first_from_db.owner.unwrap();
         let second_owner_from_db = second_from_db.owner.unwrap();
@@ -193,12 +194,7 @@ mod tests {
         let second_metadata_to_save = generate_metadata(second_mint);
         let first_edition_to_save = EditionMetadata {
             edition: TokenMetadataEdition::EditionV1 {
-                0: EditionV1 {
-                    key: Default::default(),
-                    parent,
-                    edition: 0,
-                    write_version: 1,
-                },
+                0: EditionV1 { key: Default::default(), parent, edition: 0, write_version: 1 },
             },
             write_version: 1,
             slot_updated: 1,
@@ -256,18 +252,10 @@ mod tests {
             .unwrap();
         batch_storage.flush().unwrap();
 
-        let first_static_from_db = env
-            .rocks_env
-            .storage
-            .get_complete_asset_details(first_mint)
-            .unwrap()
-            .unwrap();
-        let second_static_from_db = env
-            .rocks_env
-            .storage
-            .get_complete_asset_details(second_mint)
-            .unwrap()
-            .unwrap();
+        let first_static_from_db =
+            env.rocks_env.storage.get_complete_asset_details(first_mint).unwrap().unwrap();
+        let second_static_from_db =
+            env.rocks_env.storage.get_complete_asset_details(second_mint).unwrap().unwrap();
         assert_eq!(first_static_from_db.pubkey, first_mint);
         assert_eq!(second_static_from_db.pubkey, second_mint);
 
@@ -413,11 +401,7 @@ mod tests {
             .storage
             .db
             .merge_cf(
-                &env.rocks_env
-                    .storage
-                    .db
-                    .cf_handle(AssetCompleteDetails::NAME)
-                    .unwrap(),
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                 second_authority,
                 second_authority_complete_asset.convert_to_fb_bytes(),
             )
@@ -444,31 +428,20 @@ mod tests {
             .unwrap();
         batch_storage.flush().unwrap();
 
-        let first = env
-            .rocks_env
-            .storage
-            .get_complete_asset_details(first_mpl_core)
-            .unwrap()
-            .unwrap();
+        let first =
+            env.rocks_env.storage.get_complete_asset_details(first_mpl_core).unwrap().unwrap();
         let first_dynamic_from_db = first.dynamic_details.unwrap();
         let first_owner_from_db = first.owner.unwrap();
         let first_authority_from_db = first.authority.unwrap();
         assert_eq!(first_dynamic_from_db.pubkey, first_mpl_core);
         assert_eq!(first_dynamic_from_db.is_frozen.value, true);
         assert_eq!(first_dynamic_from_db.url.value, first_uri.to_string());
-        assert_eq!(
-            first_dynamic_from_db.raw_name.unwrap().value,
-            first_core_name.to_string()
-        );
+        assert_eq!(first_dynamic_from_db.raw_name.unwrap().value, first_core_name.to_string());
         assert_eq!(first_owner_from_db.owner.value.unwrap(), first_owner);
         assert_eq!(first_authority_from_db.authority, first_authority);
 
-        let second = env
-            .rocks_env
-            .storage
-            .get_complete_asset_details(second_mpl_core)
-            .unwrap()
-            .unwrap();
+        let second =
+            env.rocks_env.storage.get_complete_asset_details(second_mpl_core).unwrap().unwrap();
         let second_dynamic_from_db = second.dynamic_details.unwrap();
         let second_owner_from_db = second.owner.unwrap();
         let second_authority_from_db = second.authority.unwrap();
@@ -476,10 +449,7 @@ mod tests {
         assert_eq!(second_dynamic_from_db.pubkey, second_mpl_core);
         assert_eq!(second_dynamic_from_db.is_frozen.value, false);
         assert_eq!(second_dynamic_from_db.url.value, second_uri.to_string());
-        assert_eq!(
-            second_dynamic_from_db.raw_name.unwrap().value,
-            second_core_name.to_string()
-        );
+        assert_eq!(second_dynamic_from_db.raw_name.unwrap().value, second_core_name.to_string());
         assert_eq!(second_owner_from_db.owner.value.unwrap(), second_owner);
         assert_eq!(second_owner_from_db.delegate.value.unwrap(), second_owner);
         assert_eq!(second_authority_from_db.authority, second_owner);
@@ -528,32 +498,18 @@ mod tests {
                 data: inscription_data_account_data,
             })
             .unwrap();
-        buffer
-            .accounts
-            .lock()
-            .await
-            .insert(inscription_pk, parsed_inscription_account);
-        buffer
-            .accounts
-            .lock()
-            .await
-            .insert(inscription_data_pk, parsed_inscription_account_data);
+        buffer.accounts.lock().await.insert(inscription_pk, parsed_inscription_account);
+        buffer.accounts.lock().await.insert(inscription_data_pk, parsed_inscription_account_data);
 
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let asset_pk = generated_assets.static_details.first().unwrap().pubkey;
 
-        match buffer
-            .accounts
-            .lock()
-            .await
-            .get_mut(&inscription_pk)
-            .unwrap()
-        {
+        match buffer.accounts.lock().await.get_mut(&inscription_pk).unwrap() {
             UnprocessedAccount::Inscription(i) => {
                 i.inscription.root = asset_pk;
-            }
+            },
             _ => panic!("Invalid account type"),
         };
 
@@ -566,19 +522,11 @@ mod tests {
         );
         match buffer.accounts.lock().await.get(&inscription_pk).unwrap() {
             UnprocessedAccount::Inscription(inscription) => {
-                mpl_core_parser
-                    .store_inscription(&mut batch_storage, inscription)
-                    .unwrap();
-            }
+                mpl_core_parser.store_inscription(&mut batch_storage, inscription).unwrap();
+            },
             _ => panic!("Invalid account type"),
         };
-        match buffer
-            .accounts
-            .lock()
-            .await
-            .get(&inscription_data_pk)
-            .unwrap()
-        {
+        match buffer.accounts.lock().await.get(&inscription_data_pk).unwrap() {
             UnprocessedAccount::InscriptionData(inscription_data) => {
                 mpl_core_parser
                     .store_inscription_data(
@@ -587,18 +535,12 @@ mod tests {
                         inscription_data,
                     )
                     .unwrap();
-            }
+            },
             _ => panic!("Invalid account type"),
         };
         batch_storage.flush().unwrap();
 
-        let inscription = env
-            .rocks_env
-            .storage
-            .inscriptions
-            .get(asset_pk)
-            .unwrap()
-            .unwrap();
+        let inscription = env.rocks_env.storage.inscriptions.get(asset_pk).unwrap().unwrap();
         assert_eq!(inscription.inscription_data_account, inscription_data_pk);
         assert_eq!(inscription.root, asset_pk);
         assert_eq!(inscription.order, 308243);
@@ -620,25 +562,10 @@ mod tests {
             .unwrap();
         let inscription_data_json =
             serde_json::from_slice::<serde_json::Value>(inscription_data.data.as_slice()).unwrap();
-        assert_eq!(
-            inscription_data_json.get("p").unwrap().as_str().unwrap(),
-            "spl-20"
-        );
-        assert_eq!(
-            inscription_data_json.get("op").unwrap().as_str().unwrap(),
-            "deploy"
-        );
-        assert_eq!(
-            inscription_data_json.get("tick").unwrap().as_str().unwrap(),
-            "helius"
-        );
-        assert_eq!(
-            inscription_data_json.get("max").unwrap().as_str().unwrap(),
-            "1000"
-        );
-        assert_eq!(
-            inscription_data_json.get("lim").unwrap().as_str().unwrap(),
-            "1"
-        );
+        assert_eq!(inscription_data_json.get("p").unwrap().as_str().unwrap(), "spl-20");
+        assert_eq!(inscription_data_json.get("op").unwrap().as_str().unwrap(), "deploy");
+        assert_eq!(inscription_data_json.get("tick").unwrap().as_str().unwrap(), "helius");
+        assert_eq!(inscription_data_json.get("max").unwrap().as_str().unwrap(), "1000");
+        assert_eq!(inscription_data_json.get("lim").unwrap().as_str().unwrap(), "1");
     }
 }

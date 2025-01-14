@@ -1,25 +1,24 @@
 use std::sync::Arc;
 
-use entities::models::Updated;
+use entities::{enums::SpecificationAssetClass, models::Updated};
+use metrics_utils::red::RequestErrorDurationMetrics;
 use rand::{random, Rng};
-use rocks_db::column::TypedColumn;
-use rocks_db::columns::asset::AssetCompleteDetails;
-use rocks_db::columns::offchain_data::OffChainData;
-use rocks_db::ToFlatbuffersConverter;
+use rocks_db::{
+    column::TypedColumn,
+    columns::{
+        asset::{
+            AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetOwner,
+            AssetStaticDetails,
+        },
+        offchain_data::OffChainData,
+    },
+    errors::StorageError,
+    migrator::MigrationState,
+    SlotStorage, Storage, ToFlatbuffersConverter,
+};
 use solana_sdk::pubkey::Pubkey;
 use sqlx::types::chrono::Utc;
 use tempfile::TempDir;
-
-use entities::enums::SpecificationAssetClass;
-use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::errors::StorageError;
-use rocks_db::migrator::MigrationState;
-use rocks_db::{
-    columns::asset::{
-        AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
-    },
-    SlotStorage, Storage,
-};
 use tokio::{sync::Mutex, task::JoinSet};
 
 const DEFAULT_TEST_URL: &str = "http://example.com";
@@ -64,9 +63,7 @@ impl RocksTestEnvironment {
         .expect("Failed to create slot storage database");
 
         for &(slot, ref pubkey) in keys {
-            storage
-                .asset_updated(slot, *pubkey)
-                .expect("Cannot update assets.");
+            storage.asset_updated(slot, *pubkey).expect("Cannot update assets.");
         }
 
         RocksTestEnvironment {
@@ -87,9 +84,7 @@ impl RocksTestEnvironment {
         dynamic_details: fn(&[Pubkey], u64) -> Vec<AssetDynamicDetails>,
         collections: fn(&[Pubkey]) -> Vec<AssetCollection>,
     ) -> GeneratedAssets {
-        let pubkeys = (0..cnt)
-            .map(|_| self.generate_and_store_pubkey(slot))
-            .collect::<Vec<_>>();
+        let pubkeys = (0..cnt).map(|_| self.generate_and_store_pubkey(slot)).collect::<Vec<_>>();
         let static_details = static_details(&pubkeys, slot);
         let authorities = authorities(&pubkeys);
         let owners = owners(&pubkeys);
@@ -113,9 +108,7 @@ impl RocksTestEnvironment {
     }
 
     pub async fn generate_assets(&self, cnt: usize, slot: u64) -> GeneratedAssets {
-        let pubkeys = (0..cnt)
-            .map(|_| self.generate_and_store_pubkey(slot))
-            .collect::<Vec<_>>();
+        let pubkeys = (0..cnt).map(|_| self.generate_and_store_pubkey(slot)).collect::<Vec<_>>();
         let static_details = RocksTestEnvironmentSetup::static_data_for_nft(&pubkeys, slot);
         let authorities = RocksTestEnvironmentSetup::with_authority(&pubkeys);
         let owners = RocksTestEnvironmentSetup::test_owner(&pubkeys);
@@ -140,9 +133,7 @@ impl RocksTestEnvironment {
 
     fn generate_and_store_pubkey(&self, slot: u64) -> Pubkey {
         let pubkey = Pubkey::new_unique();
-        self.storage
-            .asset_updated(slot, pubkey)
-            .expect("Cannot update assets.");
+        self.storage.asset_updated(slot, pubkey).expect("Cannot update assets.");
         pubkey
     }
 
@@ -184,11 +175,7 @@ impl RocksTestEnvironment {
                     let asset_data = complete_asset.convert_to_fb(&mut builder);
                     builder.finish_minimal(asset_data);
                     batch.put_cf(
-                        &self
-                            .storage
-                            .db
-                            .cf_handle(AssetCompleteDetails::NAME)
-                            .unwrap(),
+                        &self.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                         *pubkey,
                         builder.finished_data(),
                     );

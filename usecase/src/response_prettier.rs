@@ -19,7 +19,7 @@ pub fn filter_non_null_fields(value: Option<&Value>) -> Option<Value> {
                     Some(Value::Object(filtered_map))
                 }
             }
-        }
+        },
         _ => value.cloned(),
     }
 }

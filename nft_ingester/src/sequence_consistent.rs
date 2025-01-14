@@ -1,11 +1,12 @@
+use std::sync::Arc;
+
 use entities::models::TreeState;
-use interface::signature_persistence::BlockConsumer;
-use interface::slot_getter::FinalizedSlotGetter;
 use interface::{
-    sequence_consistent::SequenceConsistentManager, signature_persistence::BlockProducer,
+    sequence_consistent::SequenceConsistentManager,
+    signature_persistence::{BlockConsumer, BlockProducer},
+    slot_getter::FinalizedSlotGetter,
 };
 use metrics_utils::{BackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig};
-use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
 use tracing::{info, warn};
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
@@ -59,12 +60,7 @@ pub async fn collect_sequences_gaps<R, S, F, BP, BC>(
             // fill the gap now, the dumper is the inmemory one, so we could fetch the slots and ingest all of those
 
             collector
-                .collect_slots(
-                    &current_state.tree,
-                    current_state.slot,
-                    prev_state.slot,
-                    &rx,
-                )
+                .collect_slots(&current_state.tree, current_state.slot, prev_state.slot, &rx)
                 .await;
             let slots = in_memory_dumper.get_sorted_keys().await;
             for slot_num in slots {

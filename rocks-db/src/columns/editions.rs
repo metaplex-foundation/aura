@@ -1,11 +1,14 @@
-use crate::column::TypedColumn;
-use crate::errors::StorageError;
-use crate::key_encoders::{decode_pubkey, encode_pubkey};
-use crate::Result;
 use entities::enums::TokenMetadataEdition;
 use rocksdb::MergeOperands;
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
+
+use crate::{
+    column::TypedColumn,
+    errors::StorageError,
+    key_encoders::{decode_pubkey, encode_pubkey},
+    Result,
+};
 
 impl TypedColumn for TokenMetadataEdition {
     type KeyType = Pubkey;
@@ -42,17 +45,14 @@ pub fn merge_token_metadata_edition(
             Ok(TokenMetadataEdition::MasterEdition(value)) => {
                 write_version = value.write_version;
                 result = existing_val.to_vec();
-            }
+            },
             Ok(TokenMetadataEdition::EditionV1(value)) => {
                 write_version = value.write_version;
                 result = existing_val.to_vec();
-            }
+            },
             Err(e) => {
-                error!(
-                    "RocksDB: TokenMetadataEdition deserialize existing_val: {}",
-                    e
-                )
-            }
+                error!("RocksDB: TokenMetadataEdition deserialize existing_val: {}", e)
+            },
         }
     }
 
@@ -63,16 +63,16 @@ pub fn merge_token_metadata_edition(
                     write_version = new_val.write_version;
                     result = op.to_vec();
                 }
-            }
+            },
             Ok(TokenMetadataEdition::EditionV1(new_val)) => {
                 if new_val.write_version > write_version || result.is_empty() {
                     write_version = new_val.write_version;
                     result = op.to_vec();
                 }
-            }
+            },
             Err(e) => {
                 error!("RocksDB: TokenMetadataEdition deserialize new_val: {}", e)
-            }
+            },
         }
     }
 

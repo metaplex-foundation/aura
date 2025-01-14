@@ -1,9 +1,8 @@
+use interface::error::UsecaseError;
 use jsonrpc_core::ErrorCode;
+use rocks_db::errors::StorageError;
 use thiserror::Error;
 use tracing::error;
-
-use interface::error::UsecaseError;
-use rocks_db::errors::StorageError;
 
 const STANDARD_ERROR_CODE: i64 = -32000;
 pub const CANNOT_SERVICE_REQUEST_ERROR_CODE: i64 = -32050;

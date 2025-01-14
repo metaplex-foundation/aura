@@ -1,16 +1,18 @@
-use crate::message_handler::MessageHandlerIngester;
+use std::{
+    convert::TryInto,
+    io,
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
 use interface::message_handler::MessageHandler;
-use std::convert::TryInto;
-use std::io;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::io::AsyncReadExt;
-use tokio::net::TcpStream;
-use tokio::sync::broadcast::Receiver;
-use tokio::task::JoinError;
-use tokio::time::sleep;
+use tokio::{
+    io::AsyncReadExt, net::TcpStream, sync::broadcast::Receiver, task::JoinError, time::sleep,
+};
 use tracing::{debug, error, info};
+
+use crate::message_handler::MessageHandlerIngester;
 
 const HEADER_BYTE_SIZE: usize = 4;
 
@@ -69,10 +71,7 @@ pub struct TcpReceiver<M: MessageHandler> {
 
 impl<M: MessageHandler> TcpReceiver<M> {
     pub fn new(callback: Arc<M>, reconnect_interval: Duration) -> Self {
-        TcpReceiver {
-            callback,
-            reconnect_interval,
-        }
+        TcpReceiver { callback, reconnect_interval }
     }
 
     pub async fn connect(&self, addr: SocketAddr, rx: Receiver<()>) -> io::Result<()> {
@@ -123,10 +122,7 @@ impl<M: MessageHandler> TcpReceiver<M> {
         while i < body.len() {
             let mut end = i + HEADER_BYTE_SIZE;
             let size_bytes = body[i..end].try_into().map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("Failed to convert size: {}", e),
-                )
+                io::Error::new(io::ErrorKind::InvalidData, format!("Failed to convert size: {}", e))
             })?;
             let size = u32::from_le_bytes(size_bytes) as usize;
             i = end;

@@ -8,9 +8,7 @@ pub struct IntegrityVerificationApi {
 
 impl IntegrityVerificationApi {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+        Self { client: Client::new() }
     }
 
     pub async fn make_request(
@@ -35,10 +33,11 @@ impl IntegrityVerificationApi {
 #[cfg(feature = "rpc_tests")]
 #[tokio::test]
 async fn test_api() {
-    use crate::diff_checker::GET_ASSET_METHOD;
-    use crate::params::generate_get_asset_params;
-    use crate::requests::Body;
     use serde_json::{json, Value};
+
+    use crate::{
+        diff_checker::GET_ASSET_METHOD, params::generate_get_asset_params, requests::Body,
+    };
 
     let api = IntegrityVerificationApi::new();
     let body = json!(Body::new(
@@ -48,10 +47,5 @@ async fn test_api() {
         )),
     ));
 
-    assert_ne!(
-        Value::Null,
-        api.make_request("http://test_url", &body.to_string())
-            .await
-            .unwrap()
-    );
+    assert_ne!(Value::Null, api.make_request("http://test_url", &body.to_string()).await.unwrap());
 }

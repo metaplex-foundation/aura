@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bincode::serialize;
 use entities::models::SignatureWithSlot;
 use interface::{error::StorageError, signature_persistence::SignaturePersistence};
 use rocksdb::DB;
@@ -8,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
 use crate::{column::TypedColumn, Storage};
-use bincode::serialize;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SignatureIdx {}
@@ -94,10 +94,8 @@ impl SignaturePersistence for Storage {
         signatures: Vec<SignatureWithSlot>,
     ) -> Result<Vec<SignatureWithSlot>, StorageError> {
         let db = self.db.clone();
-        let keys = signatures
-            .into_iter()
-            .map(|s| (program_id, s.slot, s.signature))
-            .collect::<Vec<_>>();
+        let keys =
+            signatures.into_iter().map(|s| (program_id, s.slot, s.signature)).collect::<Vec<_>>();
         tokio::task::spawn_blocking(move || {
             Self::sync_missing_keys_of::<SignatureIdx>(db, keys)
                 .map_err(|e| StorageError::Common(e.to_string()))
@@ -206,7 +204,7 @@ impl Storage {
                 let (key, _) = result?;
                 let decoded = T::decode_key(key.to_vec())?;
                 Ok(Some(decoded))
-            }
+            },
             None => Ok(None),
         }
     }
@@ -237,11 +235,7 @@ impl Storage {
     {
         let serialized_value = serialize(value)?;
 
-        batch.put_cf(
-            &backend.cf_handle(T::NAME).unwrap(),
-            T::encode_key(key),
-            serialized_value,
-        );
+        batch.put_cf(&backend.cf_handle(T::NAME).unwrap(), T::encode_key(key), serialized_value);
 
         Ok(())
     }

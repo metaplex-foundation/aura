@@ -24,10 +24,7 @@ pub struct ScheduledJob {
 impl ScheduledJob {
     /// Update last run timestamp with the current time.
     pub fn update_with_current_time(&mut self) {
-        self.last_run_epoch_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        self.last_run_epoch_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     }
 
     /// Checks if it is already time to run the job.
@@ -38,10 +35,8 @@ impl ScheduledJob {
 
         self.run_interval_sec
             .map(|sec_interval| {
-                let since_the_epoch = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs();
+                let since_the_epoch =
+                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
                 since_the_epoch > self.last_run_epoch_time + sec_interval
             })
             .unwrap_or(false)

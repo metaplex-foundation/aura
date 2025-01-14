@@ -2,8 +2,7 @@ use async_trait::async_trait;
 use entities::models::{BatchMintToVerify, BufferedTransaction, SignatureWithSlot};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
-use spl_account_compression::events::ChangeLogEventV1;
-use spl_account_compression::state::PathNode;
+use spl_account_compression::{events::ChangeLogEventV1, state::PathNode};
 
 use crate::{
     asset::{AssetCollection, AssetLeaf},
@@ -64,12 +63,7 @@ pub struct CopyableChangeLogEventV1 {
 
 impl From<&ChangeLogEventV1> for CopyableChangeLogEventV1 {
     fn from(event: &ChangeLogEventV1) -> Self {
-        Self {
-            id: event.id,
-            path: event.path.clone(),
-            seq: event.seq,
-            leaf_id: event.index,
-        }
+        Self { id: event.id, path: event.path.clone(), seq: event.seq, leaf_id: event.index }
     }
 }
 #[derive(Clone, Default)]
@@ -93,19 +87,13 @@ pub struct InstructionResult {
 
 impl From<AssetUpdateEvent> for InstructionResult {
     fn from(update: AssetUpdateEvent) -> Self {
-        Self {
-            update: Some(update),
-            ..Default::default()
-        }
+        Self { update: Some(update), ..Default::default() }
     }
 }
 
 impl From<AssetUpdate<AssetDynamicDetails>> for InstructionResult {
     fn from(decompressed: AssetUpdate<AssetDynamicDetails>) -> Self {
-        Self {
-            decompressed: Some(decompressed),
-            ..Default::default()
-        }
+        Self { decompressed: Some(decompressed), ..Default::default() }
     }
 }
 

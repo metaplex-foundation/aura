@@ -1,10 +1,11 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use interface::{
     assert_urls::{UrlDownloadNotification, UrlsToDownloadStore},
     asset_streaming_and_discovery::AsyncError,
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::keccak;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{column::TypedColumn, errors::StorageError, key_encoders::decode_string, Storage};
 
@@ -32,12 +33,7 @@ impl AssetPreviews {
         AssetPreviews { size, failed: None }
     }
     pub fn new_failed(timestamp: u64) -> Self {
-        AssetPreviews {
-            size: 0,
-            failed: Some(DownloadFailInfo {
-                timestamp_epoch_sec: timestamp,
-            }),
-        }
+        AssetPreviews { size: 0, failed: Some(DownloadFailInfo { timestamp_epoch_sec: timestamp }) }
     }
 }
 
@@ -84,19 +80,13 @@ pub struct UrlToDownload {
 #[allow(clippy::derivable_impls)]
 impl Default for UrlToDownload {
     fn default() -> Self {
-        Self {
-            timestamp: 0,
-            download_attempts: 0,
-        }
+        Self { timestamp: 0, download_attempts: 0 }
     }
 }
 
 impl From<u64> for UrlToDownload {
     fn from(timestamp: u64) -> Self {
-        UrlToDownload {
-            timestamp,
-            download_attempts: 0,
-        }
+        UrlToDownload { timestamp, download_attempts: 0 }
     }
 }
 
@@ -147,8 +137,7 @@ impl UrlsToDownloadStore for Storage {
         for (url, info) in urls.iter_mut() {
             info.timestamp = now;
             info.download_attempts += 1;
-            self.urls_to_download
-                .put_with_batch(&mut batch, url.clone(), info)?;
+            self.urls_to_download.put_with_batch(&mut batch, url.clone(), info)?;
         }
         self.urls_to_download.backend.write(batch)?;
 
@@ -170,9 +159,8 @@ impl UrlsToDownloadStore for Storage {
                     let url_hash = keccak::hash(url.as_bytes());
                     let prev: AssetPreviews = AssetPreviews::new(size);
                     self.urls_to_download.delete_with_batch(&mut batch, url);
-                    self.asset_previews
-                        .put_with_batch(&mut batch, url_hash.to_bytes(), &prev)?;
-                }
+                    self.asset_previews.put_with_batch(&mut batch, url_hash.to_bytes(), &prev)?;
+                },
                 E::NotFound => {
                     let url_hash = keccak::hash(url.as_bytes());
                     self.urls_to_download.delete_with_batch(&mut batch, url);
@@ -181,7 +169,7 @@ impl UrlsToDownloadStore for Storage {
                         url_hash.to_bytes(),
                         &AssetPreviews::new_failed(now),
                     )?;
-                }
+                },
                 E::ServerError | E::TooManyRequests => {
                     if let Ok(Some(prev)) = self.urls_to_download.get(url.clone()) {
                         if prev.download_attempts > DL_MAX_ATTEMPTS {
@@ -194,11 +182,11 @@ impl UrlsToDownloadStore for Storage {
                             )?;
                         }
                     };
-                }
+                },
                 E::NotSupportedFormat | E::TooLarge | E::CorruptedAsset | E::Nothing => {
                     // Means in get-asset request, we'll be providing original asset URL
                     self.urls_to_download.delete_with_batch(&mut batch, url)
-                }
+                },
             };
         }
         self.db.write(batch)?;
@@ -207,8 +195,5 @@ impl UrlsToDownloadStore for Storage {
 }
 
 fn current_epoch_time() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }

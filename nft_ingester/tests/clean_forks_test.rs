@@ -1,21 +1,24 @@
 use bincode::deserialize;
-use blockbuster::instruction::InstructionBundle;
-use blockbuster::programs::bubblegum::BubblegumInstruction;
+use blockbuster::{instruction::InstructionBundle, programs::bubblegum::BubblegumInstruction};
 use entities::models::{RawBlock, SignatureWithSlot};
 use metrics_utils::MetricState;
-use mpl_bubblegum::types::{BubblegumEventType, LeafSchema, Version};
-use mpl_bubblegum::{InstructionName, LeafSchemaEvent};
-use nft_ingester::cleaners::fork_cleaner::ForkCleaner;
-use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
-use rocks_db::column::TypedColumn;
-use rocks_db::columns::cl_items::ClItem;
-use rocks_db::transaction::{InstructionResult, TransactionResult, TreeUpdate};
-use rocks_db::tree_seq::TreeSeqIdx;
+use mpl_bubblegum::{
+    types::{BubblegumEventType, LeafSchema, Version},
+    InstructionName, LeafSchemaEvent,
+};
+use nft_ingester::{
+    cleaners::fork_cleaner::ForkCleaner,
+    processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
+};
+use rocks_db::{
+    column::TypedColumn,
+    columns::cl_items::ClItem,
+    transaction::{InstructionResult, TransactionResult, TreeUpdate},
+    tree_seq::TreeSeqIdx,
+};
 use setup::rocks::RocksTestEnvironment;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use spl_account_compression::events::ChangeLogEventV1;
-use spl_account_compression::state::PathNode;
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use spl_account_compression::{events::ChangeLogEventV1, state::PathNode};
 use tokio::sync::broadcast;
 
 #[cfg(test)]
@@ -23,19 +26,16 @@ use tokio::sync::broadcast;
 #[tracing_test::traced_test]
 #[tokio::test]
 async fn test_clean_forks() {
-    use std::collections::{HashMap, HashSet};
+    use std::{
+        collections::{HashMap, HashSet},
+        str::FromStr,
+    };
 
-    use metrics_utils::utils::start_metrics;
-    use metrics_utils::MetricsTrait;
-    use rocks_db::{columns::cl_items::ClItemKey, columns::leaf_signatures::LeafSignature};
+    use metrics_utils::{utils::start_metrics, MetricsTrait};
+    use rocks_db::columns::{cl_items::ClItemKey, leaf_signatures::LeafSignature};
     use solana_transaction_status::UiConfirmedBlock;
-    use std::str::FromStr;
 
-    let RocksTestEnvironment {
-        storage,
-        slot_storage,
-        ..
-    } = RocksTestEnvironment::new(&[]);
+    let RocksTestEnvironment { storage, slot_storage, .. } = RocksTestEnvironment::new(&[]);
     let first_tree_key =
         solana_program::pubkey::Pubkey::from_str("5zYdh7eB538fv5Xnjbqg2rZfapY993vwwNYUoP59uz61")
             .unwrap();
@@ -231,14 +231,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                first_tree_key,
-                leaf_idx_from_first_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), first_tree_key, leaf_idx_from_first_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -250,14 +244,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                first_tree_key,
-                leaf_idx_from_first_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), first_tree_key, leaf_idx_from_first_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -269,14 +257,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                first_tree_key,
-                leaf_idx_from_first_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), first_tree_key, leaf_idx_from_first_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -288,14 +270,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                first_tree_key,
-                leaf_idx_from_first_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), first_tree_key, leaf_idx_from_first_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -307,14 +283,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                first_tree_key,
-                leaf_idx_from_first_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), first_tree_key, leaf_idx_from_first_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -326,14 +296,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                first_tree_key,
-                leaf_idx_from_first_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), first_tree_key, leaf_idx_from_first_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -345,14 +309,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                first_tree_key,
-                leaf_idx_from_first_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), first_tree_key, leaf_idx_from_first_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -365,14 +323,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                second_tree_key,
-                leaf_idx_from_second_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), second_tree_key, leaf_idx_from_second_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -384,14 +336,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                second_tree_key,
-                leaf_idx_from_second_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), second_tree_key, leaf_idx_from_second_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -403,14 +349,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                second_tree_key,
-                leaf_idx_from_second_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), second_tree_key, leaf_idx_from_second_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -422,14 +362,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                second_tree_key,
-                leaf_idx_from_second_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), second_tree_key, leaf_idx_from_second_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -441,14 +375,8 @@ async fn test_clean_forks() {
     storage
         .leaf_signature
         .put_async(
-            (
-                Signature::new_unique(),
-                second_tree_key,
-                leaf_idx_from_second_tree,
-            ),
-            LeafSignature {
-                data: slot_sequence_map,
-            },
+            (Signature::new_unique(), second_tree_key, leaf_idx_from_second_tree),
+            LeafSignature { data: slot_sequence_map },
         )
         .await
         .unwrap();
@@ -652,14 +580,10 @@ async fn test_clean_forks() {
     );
     fork_cleaner.clean_forks(rx.resubscribe()).await;
 
-    let forked_first_key_first_item = storage
-        .cl_items
-        .get(ClItemKey::new(103, first_tree_key))
-        .unwrap();
-    let forked_first_key_second_item = storage
-        .cl_items
-        .get(ClItemKey::new(104, first_tree_key))
-        .unwrap();
+    let forked_first_key_first_item =
+        storage.cl_items.get(ClItemKey::new(103, first_tree_key)).unwrap();
+    let forked_first_key_second_item =
+        storage.cl_items.get(ClItemKey::new(104, first_tree_key)).unwrap();
     let forked_first_key_first_seq = storage.tree_seq_idx.get((first_tree_key, 10003)).unwrap();
     let forked_first_key_second_seq = storage.tree_seq_idx.get((first_tree_key, 10004)).unwrap();
     assert_eq!(forked_first_key_first_item, None);
@@ -667,20 +591,16 @@ async fn test_clean_forks() {
     assert_eq!(forked_first_key_first_seq, None);
     assert_eq!(forked_first_key_second_seq, None);
 
-    let forked_second_key_first_item = storage
-        .cl_items
-        .get(ClItemKey::new(104, second_tree_key))
-        .unwrap();
+    let forked_second_key_first_item =
+        storage.cl_items.get(ClItemKey::new(104, second_tree_key)).unwrap();
     let forked_second_key_first_seq = storage.tree_seq_idx.get((second_tree_key, 10002)).unwrap();
     let forked_second_key_fourth_seq = storage.tree_seq_idx.get((second_tree_key, 10004)).unwrap();
     assert_eq!(forked_second_key_first_item, None);
     assert_eq!(forked_second_key_first_seq, None);
     assert_eq!(forked_second_key_fourth_seq, None);
 
-    let non_forked_first_key_item = storage
-        .cl_items
-        .get(ClItemKey::new(106, first_tree_key))
-        .unwrap();
+    let non_forked_first_key_item =
+        storage.cl_items.get(ClItemKey::new(106, first_tree_key)).unwrap();
     let non_forked_first_key_seq = storage.tree_seq_idx.get((first_tree_key, 10006)).unwrap();
     assert_eq!(
         non_forked_first_key_item,
@@ -696,10 +616,8 @@ async fn test_clean_forks() {
     );
     assert_eq!(non_forked_first_key_seq, Some(TreeSeqIdx { slot: 10006 }));
 
-    let non_forked_second_key_item = storage
-        .cl_items
-        .get(ClItemKey::new(106, second_tree_key))
-        .unwrap();
+    let non_forked_second_key_item =
+        storage.cl_items.get(ClItemKey::new(106, second_tree_key)).unwrap();
     let non_forked_second_key_seq = storage.tree_seq_idx.get((second_tree_key, 10003)).unwrap();
     assert_eq!(
         non_forked_second_key_item,
@@ -720,11 +638,7 @@ async fn test_clean_forks() {
 #[tokio::test]
 async fn test_process_forked_transaction() {
     let metrics_state = MetricState::new();
-    let RocksTestEnvironment {
-        storage,
-        slot_storage,
-        ..
-    } = RocksTestEnvironment::new(&[]);
+    let RocksTestEnvironment { storage, slot_storage, .. } = RocksTestEnvironment::new(&[]);
 
     let tree = Pubkey::new_unique();
 
@@ -751,30 +665,12 @@ async fn test_process_forked_transaction() {
         tree_update: Some(ChangeLogEventV1 {
             id: tree,
             path: vec![
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 32,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 16,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 8,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 4,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 2,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 1,
-                },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 32 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 16 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 8 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 4 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 2 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 1 },
             ],
             seq: normal_sequence,
             index: 5,
@@ -782,14 +678,7 @@ async fn test_process_forked_transaction() {
         leaf_update: Some(LeafSchemaEvent {
             event_type: BubblegumEventType::LeafSchemaEvent,
             version: Version::V1,
-            schema: LeafSchema::V1 {
-                id: tree,
-                owner,
-                delegate,
-                nonce: 5,
-                data_hash,
-                creator_hash,
-            },
+            schema: LeafSchema::V1 { id: tree, owner, delegate, nonce: 5, data_hash, creator_hash },
             leaf_hash,
         }),
         payload: None,
@@ -800,30 +689,12 @@ async fn test_process_forked_transaction() {
         tree_update: Some(ChangeLogEventV1 {
             id: tree,
             path: vec![
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 32,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 16,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 8,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 4,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 2,
-                },
-                PathNode {
-                    node: Pubkey::new_unique().to_bytes(),
-                    index: 1,
-                },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 32 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 16 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 8 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 4 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 2 },
+                PathNode { node: Pubkey::new_unique().to_bytes(), index: 1 },
             ],
             seq: forked_sequence,
             index: 5,
@@ -831,14 +702,7 @@ async fn test_process_forked_transaction() {
         leaf_update: Some(LeafSchemaEvent {
             event_type: BubblegumEventType::LeafSchemaEvent,
             version: Version::V1,
-            schema: LeafSchema::V1 {
-                id: tree,
-                owner,
-                delegate,
-                nonce: 5,
-                data_hash,
-                creator_hash,
-            },
+            schema: LeafSchema::V1 { id: tree, owner, delegate, nonce: 5, data_hash, creator_hash },
             leaf_hash,
         }),
         payload: None,
@@ -900,33 +764,21 @@ async fn test_process_forked_transaction() {
         instruction_results: vec![tx_1_resp],
         transaction_signature: Some((
             mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
-            SignatureWithSlot {
-                signature,
-                slot: slot_normal_tx,
-            },
+            SignatureWithSlot { signature, slot: slot_normal_tx },
         )),
     };
 
-    storage
-        .store_transaction_result(&normal_transaction, true, true)
-        .await
-        .unwrap();
+    storage.store_transaction_result(&normal_transaction, true, true).await.unwrap();
 
     let forked_transaction = TransactionResult {
         instruction_results: vec![tx_2_resp],
         transaction_signature: Some((
             mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
-            SignatureWithSlot {
-                signature,
-                slot: slot_forked_tx,
-            },
+            SignatureWithSlot { signature, slot: slot_forked_tx },
         )),
     };
 
-    storage
-        .store_transaction_result(&forked_transaction, true, true)
-        .await
-        .unwrap();
+    storage.store_transaction_result(&forked_transaction, true, true).await.unwrap();
 
     // save only one slot to the raw_blocks_cbor because this is how we detect that fork happened
     // if some slot is not in raw_blocks_cbor - it's forked one

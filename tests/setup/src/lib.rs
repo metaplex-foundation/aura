@@ -4,7 +4,6 @@ pub mod rocks;
 
 use std::sync::Arc;
 
-use crate::rocks::RocksTestEnvironmentSetup;
 use entities::enums::{AssetType, ASSET_TYPES};
 use metrics_utils::MetricsTrait;
 use rocks_db::columns::asset::{
@@ -12,8 +11,9 @@ use rocks_db::columns::asset::{
 };
 use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
-
 use tokio::task::JoinSet;
+
+use crate::rocks::RocksTestEnvironmentSetup;
 
 pub struct TestEnvironment<'a> {
     pub rocks_env: rocks::RocksTestEnvironment,
@@ -87,14 +87,12 @@ impl<'a> TestEnvironment<'a> {
             let rx = rx.resubscribe();
             tasks.spawn(async move {
                 match asset_type {
-                    AssetType::NonFungible => synchronizer
-                        .synchronize_nft_asset_indexes(&rx, 0)
-                        .await
-                        .unwrap(),
-                    AssetType::Fungible => synchronizer
-                        .synchronize_fungible_asset_indexes(&rx, 0)
-                        .await
-                        .unwrap(),
+                    AssetType::NonFungible => {
+                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap()
+                    },
+                    AssetType::Fungible => {
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap()
+                    },
                 }
             });
         }

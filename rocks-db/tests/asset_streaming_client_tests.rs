@@ -4,11 +4,10 @@ mod tests {
 
     use entities::models::RawBlock;
     use interface::asset_streaming_and_discovery::{AssetDetailsStreamer, RawBlocksStreamer};
+    use setup::rocks::*;
     use solana_sdk::pubkey::Pubkey;
     use solana_transaction_status::UiConfirmedBlock;
     use tokio_stream::StreamExt;
-
-    use setup::rocks::*;
 
     #[tokio::test]
     async fn test_get_asset_details_stream_in_range_empty_db() {

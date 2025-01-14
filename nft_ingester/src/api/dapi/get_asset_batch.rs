@@ -1,21 +1,21 @@
+use std::sync::Arc;
+
 use entities::api_req_params::Options;
-use interface::json::{JsonDownloader, JsonPersister};
-use interface::price_fetcher::TokenPriceFetcher;
-use interface::processing_possibility::ProcessingPossibilityChecker;
+use interface::{
+    json::{JsonDownloader, JsonPersister},
+    price_fetcher::TokenPriceFetcher,
+    processing_possibility::ProcessingPossibilityChecker,
+};
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::{errors::StorageError, Storage};
 use solana_sdk::pubkey::Pubkey;
-use std::sync::Arc;
 use tokio::{
     sync::Mutex,
     task::{JoinError, JoinSet},
 };
 
-use crate::api::dapi::asset;
-use crate::api::dapi::rpc_asset_convertors::asset_to_rpc;
-use crate::api::dapi::rpc_asset_models::Asset;
-
 use super::asset_preview::populate_previews_opt;
+use crate::api::dapi::{asset, rpc_asset_convertors::asset_to_rpc, rpc_asset_models::Asset};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn get_asset_batch<

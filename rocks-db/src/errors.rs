@@ -1,7 +1,6 @@
+use std::{array::TryFromSliceError, io, io::Error};
+
 use reqwest;
-use std::array::TryFromSliceError;
-use std::io;
-use std::io::Error;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -72,11 +71,11 @@ impl From<StorageError> for interface::error::StorageError {
             StorageError::NoAssetOwner(s) => InterfaceStorageError::Common(s),
             StorageError::InvalidKeyLength => {
                 InterfaceStorageError::Common(ToOwned::to_owned("InvalidKeyLength"))
-            }
+            },
             StorageError::CannotServiceRequest => InterfaceStorageError::CannotServiceRequest,
             StorageError::InvalidMigrationVersion(v) => {
                 InterfaceStorageError::Common(format!("InvalidMigrationVersion: {v}"))
-            }
+            },
             StorageError::NotFound(s) => InterfaceStorageError::NotFound(s),
         }
     }

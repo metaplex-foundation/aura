@@ -1,21 +1,23 @@
+use std::{str::FromStr, sync::Arc, time::Duration};
+
 use async_trait::async_trait;
 use entities::models::{BufferedTransaction, SignatureWithSlot};
 use flatbuffers::FlatBufferBuilder;
 use futures::{stream, StreamExt, TryStreamExt};
-use interface::error::UsecaseError;
-use interface::slot_getter::FinalizedSlotGetter;
-use interface::solana_rpc::TransactionsGetter;
+use interface::{
+    error::UsecaseError, slot_getter::FinalizedSlotGetter, solana_rpc::TransactionsGetter,
+};
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
-use solana_client::rpc_config::RpcTransactionConfig;
+use solana_client::{
+    nonblocking::rpc_client::RpcClient, rpc_client::GetConfirmedSignaturesForAddress2Config,
+    rpc_config::RpcTransactionConfig,
+};
 use solana_program::pubkey::Pubkey;
-use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
-use solana_sdk::signature::Signature;
+use solana_sdk::{
+    commitment_config::{CommitmentConfig, CommitmentLevel},
+    signature::Signature,
+};
 use solana_transaction_status::UiTransactionEncoding;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
 
 const MAX_SIGNATURES_LIMIT: usize = 50_000_000;
 pub(crate) const GET_TX_RETRIES: usize = 7;
@@ -25,9 +27,7 @@ pub struct BackfillRPC {
 
 impl BackfillRPC {
     pub fn connect(addr: String) -> Self {
-        Self {
-            client: Arc::new(RpcClient::new(addr)),
-        }
+        Self { client: Arc::new(RpcClient::new(addr)) }
     }
 }
 
@@ -42,9 +42,8 @@ impl TransactionsGetter for BackfillRPC {
         let mut txs = Vec::new();
         let last_finalized_slot = self.get_finalized_slot().await?;
         loop {
-            let signatures = self
-                .get_signatures_by_address(Some(until.signature), before, &address)
-                .await?;
+            let signatures =
+                self.get_signatures_by_address(Some(until.signature), before, &address).await?;
             if signatures.is_empty() {
                 break;
             }
@@ -136,9 +135,7 @@ impl BackfillRPC {
                 address,
                 GetConfirmedSignaturesForAddress2Config {
                     until,
-                    commitment: Some(CommitmentConfig {
-                        commitment: CommitmentLevel::Finalized,
-                    }),
+                    commitment: Some(CommitmentConfig { commitment: CommitmentLevel::Finalized }),
                     before,
                     ..Default::default()
                 },
@@ -161,9 +158,7 @@ impl FinalizedSlotGetter for BackfillRPC {
     async fn get_finalized_slot(&self) -> Result<u64, UsecaseError> {
         Ok(self
             .client
-            .get_slot_with_commitment(CommitmentConfig {
-                commitment: CommitmentLevel::Finalized,
-            })
+            .get_slot_with_commitment(CommitmentConfig { commitment: CommitmentLevel::Finalized })
             .await?)
     }
     async fn get_finalized_slot_no_error(&self) -> u64 {
@@ -171,7 +166,7 @@ impl FinalizedSlotGetter for BackfillRPC {
             Err(e) => {
                 tracing::error!("Failed to get finalized slot: {}", e);
                 None
-            }
+            },
             Ok(last_ingested_slot) => Some(last_ingested_slot),
         }
         .unwrap_or(u64::MAX)

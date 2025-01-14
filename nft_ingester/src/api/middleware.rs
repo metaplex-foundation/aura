@@ -1,17 +1,21 @@
-use jsonrpc_core::Output::Failure;
-use jsonrpc_core::{ErrorCode, Response};
-use std::io;
-use std::path::{Path, PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
-use crate::api::error::CANNOT_SERVICE_REQUEST_ERROR_CODE;
-use jsonrpc_http_server::hyper::header::HeaderValue;
-use jsonrpc_http_server::hyper::StatusCode;
-use jsonrpc_http_server::jsonrpc_core::futures::TryStreamExt;
-use jsonrpc_http_server::response_middleware::ResponseMiddleware;
-use jsonrpc_http_server::{hyper, RequestMiddleware, RequestMiddlewareAction};
+use jsonrpc_core::{ErrorCode, Output::Failure, Response};
+use jsonrpc_http_server::{
+    hyper,
+    hyper::{header::HeaderValue, StatusCode},
+    jsonrpc_core::futures::TryStreamExt,
+    response_middleware::ResponseMiddleware,
+    RequestMiddleware, RequestMiddlewareAction,
+};
 use serde_json::json;
 use tokio_util::codec::{BytesCodec, FramedRead};
 use tracing::info;
+
+use crate::api::error::CANNOT_SERVICE_REQUEST_ERROR_CODE;
 
 const FULL_BACKUP_REQUEST_PATH: &str = "/snapshot";
 
@@ -22,9 +26,7 @@ pub struct RpcRequestMiddleware {
 
 impl RpcRequestMiddleware {
     pub fn new(archives_dir: &str) -> Self {
-        Self {
-            archives_dir: archives_dir.to_string(),
-        }
+        Self { archives_dir: archives_dir.to_string() }
     }
 
     fn not_found() -> hyper::Response<hyper::Body> {
@@ -85,19 +87,17 @@ impl RpcRequestMiddleware {
                         response: Box::pin(async move { Ok(Self::not_found()) }),
                     };
                 };
-            }
+            },
             Err(_e) => {
                 return RequestMiddlewareAction::Respond {
                     should_validate_hosts: true,
                     response: Box::pin(async move { Ok(Self::internal_server_error()) }),
                 };
-            }
+            },
         };
 
-        let file_length = std::fs::metadata(&filename)
-            .map(|m| m.len())
-            .unwrap_or_default()
-            .to_string();
+        let file_length =
+            std::fs::metadata(&filename).map(|m| m.len()).unwrap_or_default().to_string();
         info!("get {} -> {:?} ({} bytes)", path, filename, file_length);
 
         RequestMiddlewareAction::Respond {
@@ -118,7 +118,7 @@ impl RpcRequestMiddleware {
                             .header(hyper::header::CONTENT_LENGTH, file_length)
                             .body(body)
                             .unwrap())
-                    }
+                    },
                 }
             }),
         }

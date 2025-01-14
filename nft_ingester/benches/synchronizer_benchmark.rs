@@ -1,9 +1,9 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use setup::TestEnvironment;
-use sqlx::Executor;
 use std::sync::{atomic::AtomicBool, Arc};
 
+use criterion::{criterion_group, criterion_main, Criterion};
 use metrics_utils::SynchronizerMetricsConfig;
+use setup::TestEnvironment;
+use sqlx::Executor;
 use testcontainers::clients::Cli;
 
 async fn setup_environment<'a>(

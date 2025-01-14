@@ -1,29 +1,33 @@
-use crate::asset::MplCoreCollectionAuthority;
-use crate::column::TypedColumn;
-use crate::generated::asset_generated::asset as fb;
-use crate::key_encoders::encode_u64x2_pubkey;
-use crate::storage_traits::AssetUpdatedKey;
-use crate::{column::Column, storage_traits::Dumper, Storage};
-use bincode::deserialize;
-use csv::WriterBuilder;
-use entities::enums::AssetType;
-use entities::models::SplMint;
-use entities::{
-    enums::{OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions},
-    models::{TokenAccount, UrlWithStatus},
-};
-use hex;
-use inflector::Inflector;
-use metrics_utils::SynchronizerMetricsConfig;
-use serde::{Serialize, Serializer};
-use solana_sdk::pubkey::Pubkey;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::BufWriter,
     sync::Arc,
 };
+
+use bincode::deserialize;
+use csv::WriterBuilder;
+use entities::{
+    enums::{
+        AssetType, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+    },
+    models::{SplMint, TokenAccount, UrlWithStatus},
+};
+use hex;
+use inflector::Inflector;
+use metrics_utils::SynchronizerMetricsConfig;
+use serde::{Serialize, Serializer};
+use solana_sdk::pubkey::Pubkey;
 use tracing::{error, info};
+
+use crate::{
+    asset::MplCoreCollectionAuthority,
+    column::{Column, TypedColumn},
+    generated::asset_generated::asset as fb,
+    key_encoders::encode_u64x2_pubkey,
+    storage_traits::{AssetUpdatedKey, Dumper},
+    Storage,
+};
 
 fn serialize_as_snake_case<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -45,7 +49,7 @@ where
             let variant_name = format!("{:?}", v); // Convert the enum variant to a string
             let snake_case_name = variant_name.to_snake_case(); // Convert to snake_case
             serializer.serialize_some(&snake_case_name)
-        }
+        },
         None => serializer.serialize_none(),
     }
 }
@@ -104,9 +108,8 @@ impl Dumper for Storage {
         let mut metadata_key_set = HashSet::new();
 
         let mut core_collection_authorities: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
-        let mut core_collections_iter = self
-            .db
-            .raw_iterator_cf(&self.mpl_core_collection_authorities.handle());
+        let mut core_collections_iter =
+            self.db.raw_iterator_cf(&self.mpl_core_collection_authorities.handle());
         core_collections_iter.seek_to_first();
         while core_collections_iter.valid() {
             let key = core_collections_iter.key().unwrap();
@@ -121,22 +124,14 @@ impl Dumper for Storage {
 
         let buf_writer = BufWriter::with_capacity(buf_capacity, assets_file);
 
-        let mut asset_writer = WriterBuilder::new()
-            .has_headers(false)
-            .from_writer(buf_writer);
+        let mut asset_writer = WriterBuilder::new().has_headers(false).from_writer(buf_writer);
 
         let buf_writer = BufWriter::with_capacity(buf_capacity, authority_file);
-        let mut authority_writer = WriterBuilder::new()
-            .has_headers(false)
-            .from_writer(buf_writer);
+        let mut authority_writer = WriterBuilder::new().has_headers(false).from_writer(buf_writer);
         let buf_writer = BufWriter::with_capacity(buf_capacity, creators_file);
-        let mut creators_writer = WriterBuilder::new()
-            .has_headers(false)
-            .from_writer(buf_writer);
+        let mut creators_writer = WriterBuilder::new().has_headers(false).from_writer(buf_writer);
         let buf_writer = BufWriter::with_capacity(buf_capacity, metadata_file);
-        let mut metadata_writer = WriterBuilder::new()
-            .has_headers(false)
-            .from_writer(buf_writer);
+        let mut metadata_writer = WriterBuilder::new().has_headers(false).from_writer(buf_writer);
 
         // Iteration over `asset_data` column via CUSTOM iterator.
         let mut iter = self.db.raw_iterator_cf(&self.asset_data.handle());
@@ -176,9 +171,7 @@ impl Dumper for Storage {
             {
                 // get the spl token account and check its supply and decimals
                 // if those are 1 and 0, then it is not a fungible asset, but an NFT
-                let ta = self
-                    .db
-                    .get_cf(&self.db.cf_handle(SplMint::NAME).unwrap(), key);
+                let ta = self.db.get_cf(&self.db.cf_handle(SplMint::NAME).unwrap(), key);
                 if let Ok(Some(ta)) = ta {
                     if let Ok(ta) = bincode::deserialize::<SplMint>(&ta) {
                         if ta.is_nft() {
@@ -211,10 +204,8 @@ impl Dumper for Storage {
                 });
 
             let slot_updated = asset.get_slot_updated() as i64;
-            if let Some(cc) = asset
-                .dynamic_details()
-                .and_then(|d| d.creators())
-                .and_then(|u| u.value())
+            if let Some(cc) =
+                asset.dynamic_details().and_then(|d| d.creators()).and_then(|u| u.value())
             {
                 for creator in cc {
                     let c_key = creator.creator().unwrap().bytes();
@@ -235,10 +226,8 @@ impl Dumper for Storage {
                 .and_then(|c| c.value())
                 .and_then(|c| core_collection_authorities.get(c.bytes()))
                 .map(|b| b.to_owned());
-            let authority = asset
-                .authority()
-                .and_then(|a| a.authority())
-                .map(|a| a.bytes().to_vec());
+            let authority =
+                asset.authority().and_then(|a| a.authority()).map(|a| a.bytes().to_vec());
             let collection = asset
                 .collection()
                 .and_then(|c| c.collection())
@@ -389,9 +378,7 @@ impl Dumper for Storage {
 
         let buf_writer = BufWriter::with_capacity(buf_capacity, fungible_tokens_file_and_path.0);
         let mut iter = self.db.raw_iterator_cf(&column.handle());
-        let mut writer = WriterBuilder::new()
-            .has_headers(false)
-            .from_writer(buf_writer);
+        let mut writer = WriterBuilder::new().has_headers(false).from_writer(buf_writer);
 
         if let Some(start_pubkey) = start_pubkey {
             iter.seek(start_pubkey.to_bytes());
@@ -410,10 +397,7 @@ impl Dumper for Storage {
                 info!("Shutdown signal received...");
                 return Ok(cnt);
             }
-            if let Some(token) = iter
-                .value()
-                .map(deserialize::<TokenAccount>)
-                .and_then(|v| v.ok())
+            if let Some(token) = iter.value().map(deserialize::<TokenAccount>).and_then(|v| v.ok())
             {
                 if let Err(e) = writer
                     .serialize((
@@ -463,9 +447,7 @@ impl Storage {
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), String> {
         let buf_writer = BufWriter::with_capacity(buf_capacity, file);
-        let mut metadata_writer = WriterBuilder::new()
-            .has_headers(false)
-            .from_writer(buf_writer);
+        let mut metadata_writer = WriterBuilder::new().has_headers(false).from_writer(buf_writer);
 
         metadata.into_iter().for_each(|s| {
             let url = s;

@@ -1,7 +1,10 @@
-use async_trait::async_trait;
-use interface::asset_streaming_and_discovery::{AsyncError, RawBlocksStream, RawBlocksStreamer};
-use interface::error::UsecaseError;
 use std::sync::Arc;
+
+use async_trait::async_trait;
+use interface::{
+    asset_streaming_and_discovery::{AsyncError, RawBlocksStream, RawBlocksStreamer},
+    error::UsecaseError,
+};
 
 pub struct BlocksStreamer {
     pub max_window_size: u64,
@@ -10,10 +13,7 @@ pub struct BlocksStreamer {
 
 impl BlocksStreamer {
     pub fn new(max_window_size: u64, data_layer: Arc<dyn RawBlocksStreamer>) -> Self {
-        Self {
-            max_window_size,
-            data_layer,
-        }
+        Self { max_window_size, data_layer }
     }
 }
 
@@ -36,8 +36,6 @@ impl RawBlocksStreamer for BlocksStreamer {
             )));
         }
 
-        self.data_layer
-            .get_raw_blocks_stream_in_range(start_slot, end_slot)
-            .await
+        self.data_layer.get_raw_blocks_stream_in_range(start_slot, end_slot).await
     }
 }

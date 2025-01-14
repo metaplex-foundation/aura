@@ -1,11 +1,11 @@
-use crate::error::IngesterError;
+use std::{collections::HashMap, sync::Arc};
+
 use async_trait::async_trait;
-use interface::error::UsecaseError;
-use interface::price_fetcher::TokenPriceFetcher;
+use interface::{error::UsecaseError, price_fetcher::TokenPriceFetcher};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use moka::future::Cache;
-use std::collections::HashMap;
-use std::sync::Arc;
+
+use crate::error::IngesterError;
 
 pub const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 
@@ -75,10 +75,8 @@ impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
 
         if !missing_token_ids.is_empty() {
             let req = format!("mint/ids?mints={}", missing_token_ids.join("%2C"));
-            let response = self
-                .get(&req)
-                .await
-                .map_err(|e| UsecaseError::Reqwest(e.to_string()))?;
+            let response =
+                self.get(&req).await.map_err(|e| UsecaseError::Reqwest(e.to_string()))?;
 
             let tokens_data = response
                 .get("data")
@@ -97,9 +95,7 @@ impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
                 ) {
                     let address = address.to_string();
                     let symbol = symbol.to_string();
-                    self.symbol_cache
-                        .insert(address.clone(), symbol.clone())
-                        .await;
+                    self.symbol_cache.insert(address.clone(), symbol.clone()).await;
                     result.insert(address, symbol);
                 }
             }
@@ -126,10 +122,8 @@ impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
 
         if !missing_token_ids.is_empty() {
             let req = format!("mint/price?mints={}", missing_token_ids.join("%2C"));
-            let response = self
-                .get(&req)
-                .await
-                .map_err(|e| UsecaseError::Reqwest(e.to_string()))?;
+            let response =
+                self.get(&req).await.map_err(|e| UsecaseError::Reqwest(e.to_string()))?;
 
             let tokens_data = response
                 .get("data")

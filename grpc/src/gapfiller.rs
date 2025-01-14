@@ -455,19 +455,19 @@ impl SpecificationAssetClass {
             SpecificationAssetClass::PrintableNft => "SPECIFICATION_ASSET_CLASS_PRINTABLE_NFT",
             SpecificationAssetClass::ProgrammableNft => {
                 "SPECIFICATION_ASSET_CLASS_PROGRAMMABLE_NFT"
-            }
+            },
             SpecificationAssetClass::Print => "SPECIFICATION_ASSET_CLASS_PRINT",
             SpecificationAssetClass::TransferRestrictedNft => {
                 "SPECIFICATION_ASSET_CLASS_TRANSFER_RESTRICTED_NFT"
-            }
+            },
             SpecificationAssetClass::NonTransferableNft => {
                 "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT"
-            }
+            },
             SpecificationAssetClass::IdentityNft => "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT",
             SpecificationAssetClass::MplCoreAsset => "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET",
             SpecificationAssetClass::MplCoreCollection => {
                 "SPECIFICATION_ASSET_CLASS_MPL_CORE_COLLECTION"
-            }
+            },
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -482,7 +482,7 @@ impl SpecificationAssetClass {
             "SPECIFICATION_ASSET_CLASS_PRINT" => Some(Self::Print),
             "SPECIFICATION_ASSET_CLASS_TRANSFER_RESTRICTED_NFT" => {
                 Some(Self::TransferRestrictedNft)
-            }
+            },
             "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT" => Some(Self::NonTransferableNft),
             "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT" => Some(Self::IdentityNft),
             "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET" => Some(Self::MplCoreAsset),
@@ -642,8 +642,7 @@ impl UpdateVersion {
 /// Generated client implementations.
 pub mod gap_filler_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::http::Uri;
-    use tonic::codegen::*;
+    use tonic::codegen::{http::Uri, *};
     /// Define the gRPC service
     #[derive(Debug, Clone)]
     pub struct GapFillerServiceClient<T> {
@@ -742,10 +741,8 @@ pub mod gap_filler_service_client {
                 "/gapfiller.GapFillerService/GetAssetsUpdatedWithin",
             );
             let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "gapfiller.GapFillerService",
-                "GetAssetsUpdatedWithin",
-            ));
+            req.extensions_mut()
+                .insert(GrpcMethod::new("gapfiller.GapFillerService", "GetAssetsUpdatedWithin"));
             self.inner.server_streaming(req, path, codec).await
         }
         pub async fn get_raw_blocks_within(
@@ -766,10 +763,8 @@ pub mod gap_filler_service_client {
                 "/gapfiller.GapFillerService/GetRawBlocksWithin",
             );
             let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "gapfiller.GapFillerService",
-                "GetRawBlocksWithin",
-            ));
+            req.extensions_mut()
+                .insert(GrpcMethod::new("gapfiller.GapFillerService", "GetRawBlocksWithin"));
             self.inner.server_streaming(req, path, codec).await
         }
         pub async fn get_raw_block(
@@ -944,7 +939,7 @@ pub mod gap_filler_service_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                }
+                },
                 "/gapfiller.GapFillerService/GetRawBlocksWithin" => {
                     #[allow(non_camel_case_types)]
                     struct GetRawBlocksWithinSvc<T: GapFillerService>(pub Arc<T>);
@@ -990,7 +985,7 @@ pub mod gap_filler_service_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                }
+                },
                 "/gapfiller.GapFillerService/GetRawBlock" => {
                     #[allow(non_camel_case_types)]
                     struct GetRawBlockSvc<T: GapFillerService>(pub Arc<T>);
@@ -1032,7 +1027,7 @@ pub mod gap_filler_service_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                }
+                },
                 _ => Box::pin(async move {
                     Ok(http::Response::builder()
                         .status(200)

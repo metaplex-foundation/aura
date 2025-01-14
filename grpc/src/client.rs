@@ -1,18 +1,26 @@
-use crate::error::GrpcError;
-use crate::gapfiller::gap_filler_service_client::GapFillerServiceClient;
-use crate::gapfiller::{GetRawBlockRequest, RangeRequest};
+use std::{str::FromStr, sync::Arc};
+
 use async_trait::async_trait;
 use futures::StreamExt;
-use interface::asset_streaming_and_discovery::{
-    AssetDetailsConsumer, AssetDetailsStreamNonSync, AsyncError, RawBlocksConsumer,
-    RawBlocksStreamNonSync,
+use interface::{
+    asset_streaming_and_discovery::{
+        AssetDetailsConsumer, AssetDetailsStreamNonSync, AsyncError, RawBlocksConsumer,
+        RawBlocksStreamNonSync,
+    },
+    error::StorageError,
+    signature_persistence::BlockProducer,
 };
-use interface::error::StorageError;
-use interface::signature_persistence::BlockProducer;
-use std::str::FromStr;
-use std::sync::Arc;
-use tonic::transport::{Channel, Uri};
-use tonic::{Code, Status};
+use tonic::{
+    transport::{Channel, Uri},
+    Code, Status,
+};
+
+use crate::{
+    error::GrpcError,
+    gapfiller::{
+        gap_filler_service_client::GapFillerServiceClient, GetRawBlockRequest, RangeRequest,
+    },
+};
 
 #[derive(Clone)]
 pub struct Client {
@@ -24,9 +32,7 @@ impl Client {
         let url = Uri::from_str(peer_addr).map_err(|e| GrpcError::UriCreate(e.to_string()))?;
         let channel = Channel::builder(url).connect().await?;
 
-        Ok(Self {
-            inner: GapFillerServiceClient::new(channel),
-        })
+        Ok(Self { inner: GapFillerServiceClient::new(channel) })
     }
 }
 
@@ -39,10 +45,7 @@ impl AssetDetailsConsumer for Client {
     ) -> Result<AssetDetailsStreamNonSync, AsyncError> {
         Ok(Box::pin(
             self.inner
-                .get_assets_updated_within(RangeRequest {
-                    start_slot,
-                    end_slot,
-                })
+                .get_assets_updated_within(RangeRequest { start_slot, end_slot })
                 .await
                 .map_err(|e| Box::new(e) as AsyncError)?
                 .into_inner()
@@ -68,10 +71,7 @@ impl RawBlocksConsumer for Client {
     ) -> Result<RawBlocksStreamNonSync, AsyncError> {
         Ok(Box::pin(
             self.inner
-                .get_raw_blocks_within(RangeRequest {
-                    start_slot,
-                    end_slot,
-                })
+                .get_raw_blocks_within(RangeRequest { start_slot, end_slot })
                 .await
                 .map_err(|e| Box::new(e) as AsyncError)?
                 .into_inner()
@@ -118,8 +118,6 @@ impl BlockProducer for Client {
             return Ok(block);
         }
 
-        Err(StorageError::NotFound(format!(
-            "Cannot get block with slot: '{slot}'!"
-        )))
+        Err(StorageError::NotFound(format!("Cannot get block with slot: '{slot}'!")))
     }
 }

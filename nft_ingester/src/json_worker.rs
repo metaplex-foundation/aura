@@ -1,27 +1,28 @@
-use crate::api::dapi::rpc_asset_convertors::parse_files;
+use std::{collections::HashMap, sync::Arc};
+
 use async_trait::async_trait;
-use entities::enums::TaskStatus;
-use entities::models::JsonDownloadTask;
-use interface::error::JsonDownloaderError;
-use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
-use metrics_utils::red::RequestErrorDurationMetrics;
-use metrics_utils::{JsonDownloaderMetricsConfig, MetricStatus};
-use postgre_client::tasks::UpdatedTask;
-use postgre_client::PgClient;
+use entities::{enums::TaskStatus, models::JsonDownloadTask};
+use interface::{
+    error::JsonDownloaderError,
+    json::{JsonDownloadResult, JsonDownloader, JsonPersister},
+};
+use metrics_utils::{red::RequestErrorDurationMetrics, JsonDownloaderMetricsConfig, MetricStatus};
+use postgre_client::{tasks::UpdatedTask, PgClient};
 use reqwest::ClientBuilder;
-use rocks_db::columns::asset_previews::UrlToDownload;
-use rocks_db::columns::offchain_data::OffChainData;
-use rocks_db::Storage;
+use rocks_db::{
+    columns::{asset_previews::UrlToDownload, offchain_data::OffChainData},
+    Storage,
+};
 use serde_json::Value;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::broadcast::Receiver;
-use tokio::sync::mpsc::error::TryRecvError;
-use tokio::sync::{mpsc, Mutex};
-use tokio::task::JoinSet;
-use tokio::time::{self, Duration, Instant};
+use tokio::{
+    sync::{broadcast::Receiver, mpsc, mpsc::error::TryRecvError, Mutex},
+    task::JoinSet,
+    time::{self, Duration, Instant},
+};
 use tracing::{debug, error};
 use url::Url;
+
+use crate::api::dapi::rpc_asset_convertors::parse_files;
 
 pub const JSON_BATCH: usize = 300;
 pub const WIPE_PERIOD_SEC: u64 = 60;
@@ -67,11 +68,7 @@ impl TasksStreamer {
         sender: tokio::sync::mpsc::Sender<JsonDownloadTask>,
         receiver: Arc<Mutex<tokio::sync::mpsc::Receiver<JsonDownloadTask>>>,
     ) -> Self {
-        Self {
-            db_conn,
-            sender,
-            receiver,
-        }
+        Self { db_conn, sender, receiver }
     }
 
     pub async fn run(self, rx: Receiver<()>, num_of_tasks: i32, tasks: &mut JoinSet<()>) {
@@ -94,12 +91,12 @@ impl TasksStreamer {
                                     );
                                 }
                             }
-                        }
+                        },
                         Err(err) => {
                             error!("Error while selecting tasks for JsonDownloader: {}", err);
                             tokio::time::sleep(Duration::from_secs(SLEEP_TIME)).await;
                             continue;
-                        }
+                        },
                     }
                 } else {
                     tokio::time::sleep(Duration::from_secs(SLEEP_TIME)).await;
@@ -123,10 +120,7 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
             Result<JsonDownloadResult, JsonDownloaderError>,
         )>,
     ) -> Self {
-        Self {
-            persister,
-            receiver,
-        }
+        Self { persister, receiver }
     }
 
     pub async fn run(mut self, rx: Receiver<()>, tasks: &mut JoinSet<()>) {
@@ -197,20 +191,13 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
 
     let (result_tx, result_rx) = mpsc::channel(JSON_BATCH);
 
-    let tasks_streamer = TasksStreamer::new(
-        json_downloader.db_client.clone(),
-        tasks_tx,
-        tasks_rx.clone(),
-    );
+    let tasks_streamer =
+        TasksStreamer::new(json_downloader.db_client.clone(), tasks_tx, tasks_rx.clone());
 
     let tasks_persister = TasksPersister::new(json_downloader.clone(), result_rx);
 
-    tasks_streamer
-        .run(rx.resubscribe(), num_of_tasks, &mut workers_pool)
-        .await;
-    tasks_persister
-        .run(rx.resubscribe(), &mut workers_pool)
-        .await;
+    tasks_streamer.run(rx.resubscribe(), num_of_tasks, &mut workers_pool).await;
+    tasks_persister.run(rx.resubscribe(), &mut workers_pool).await;
 
     for _ in 0..json_downloader.num_of_parallel_workers {
         let cln_rx = rx.resubscribe();
@@ -227,9 +214,8 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
 
                         let begin_processing = Instant::now();
 
-                        let response = json_downloader
-                            .download_file(task.metadata_url.clone())
-                            .await;
+                        let response =
+                            json_downloader.download_file(task.metadata_url.clone()).await;
 
                         json_downloader.metrics.set_latency_task_executed(
                             "json_downloader",
@@ -242,7 +228,7 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
                                 err.to_string()
                             );
                         }
-                    }
+                    },
                     Err(err) => {
                         drop(locked_rx);
                         if err == TryRecvError::Disconnected {
@@ -254,7 +240,7 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
                             // it's just empty
                             tokio::time::sleep(Duration::from_secs(SLEEP_TIME)).await;
                         }
-                    }
+                    },
                 }
             }
         });
@@ -348,12 +334,11 @@ impl JsonDownloader for JsonWorker {
                 } else {
                     Err(JsonDownloaderError::CouldNotDeserialize)
                 }
-            }
+            },
             Err(e) => {
-                self.red_metrics
-                    .observe_error("json_downloader", "download_file", host);
+                self.red_metrics.observe_error("json_downloader", "download_file", host);
                 Err(JsonDownloaderError::ErrorDownloading(e.to_string()))
-            }
+            },
         }
     }
 }
@@ -387,7 +372,7 @@ impl JsonPersister for JsonWorker {
                     });
 
                     self.metrics.inc_tasks("json", MetricStatus::SUCCESS);
-                }
+                },
                 Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
                     pg_updates.push(UpdatedTask {
                         status: TaskStatus::Success,
@@ -407,7 +392,7 @@ impl JsonPersister for JsonWorker {
                         },
                     );
                     self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
-                }
+                },
                 Err(json_err) => match json_err {
                     // TODO: this is bullshit, we should handle this in a different way - it's not success
                     JsonDownloaderError::GotNotJsonFile => {
@@ -427,7 +412,7 @@ impl JsonPersister for JsonWorker {
                         );
 
                         self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
-                    }
+                    },
                     JsonDownloaderError::CouldNotDeserialize => {
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Failed,
@@ -435,7 +420,7 @@ impl JsonPersister for JsonWorker {
                             error: "Failed to deserialize metadata body".to_string(),
                         });
                         self.metrics.inc_tasks("json", MetricStatus::FAILURE);
-                    }
+                    },
                     JsonDownloaderError::CouldNotReadHeader => {
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Failed,
@@ -443,7 +428,7 @@ impl JsonPersister for JsonWorker {
                             error: "Failed to read header".to_string(),
                         });
                         self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
-                    }
+                    },
                     JsonDownloaderError::ErrorStatusCode(err) => {
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Failed,
@@ -452,7 +437,7 @@ impl JsonPersister for JsonWorker {
                         });
 
                         self.metrics.inc_tasks("json", MetricStatus::FAILURE);
-                    }
+                    },
                     JsonDownloaderError::ErrorDownloading(err) => {
                         self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
                         // Revert to pending status to retry until max attempts
@@ -461,8 +446,8 @@ impl JsonPersister for JsonWorker {
                             metadata_url: metadata_url.clone(),
                             error: err.clone(),
                         });
-                    }
-                    _ => {} // No additional processing needed
+                    },
+                    _ => {}, // No additional processing needed
                 },
             }
         }
@@ -492,12 +477,7 @@ impl JsonPersister for JsonWorker {
                 .await
                 .map_err(|e| JsonDownloaderError::MainStorageError(e.to_string()))?;
 
-            if let Err(e) = self
-                .rocks_db
-                .urls_to_download
-                .put_batch(urls_to_download)
-                .await
-            {
+            if let Err(e) = self.rocks_db.urls_to_download.put_batch(urls_to_download).await {
                 error!("Unable to persist URLs to download: {e}");
             };
         }

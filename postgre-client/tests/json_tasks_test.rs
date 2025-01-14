@@ -2,11 +2,9 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use chrono::{DateTime, Days, Utc};
-    use setup::pg::*;
-
     use entities::{enums::TaskStatus, models::Task};
+    use setup::pg::*;
     use testcontainers::clients::Cli;
-    use tokio;
 
     #[tokio::test]
     async fn test_json_task_select() {
@@ -30,10 +28,7 @@ mod tests {
 
         let selected = asset_index_storage.get_pending_tasks(100).await.unwrap();
         assert_eq!(selected.len(), 1);
-        assert_eq!(
-            selected.get(0).unwrap().metadata_url,
-            pending_task.ofd_metadata_url
-        );
+        assert_eq!(selected.get(0).unwrap().metadata_url, pending_task.ofd_metadata_url);
 
         // make sure we do not select locked task
         let locked_until: DateTime<Utc> = Utc::now().checked_add_days(Days::new(1)).unwrap();

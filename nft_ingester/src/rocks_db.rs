@@ -1,26 +1,32 @@
-use crate::config::INGESTER_BACKUP_NAME;
+use std::{
+    fs::{create_dir_all, remove_dir_all},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::backup_service::BackupService;
-use rocks_db::errors::BackupServiceError;
-use rocks_db::storage_traits::AssetSlotStorage;
-use rocks_db::{backup_service, Storage};
-use std::fs::{create_dir_all, remove_dir_all};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast::{Receiver, Sender};
-use tokio::task::JoinError;
-use tokio::time::sleep as tokio_sleep;
+use rocks_db::{
+    backup_service, backup_service::BackupService, errors::BackupServiceError,
+    storage_traits::AssetSlotStorage, Storage,
+};
+use tokio::{
+    sync::broadcast::{Receiver, Sender},
+    task::JoinError,
+    time::sleep as tokio_sleep,
+};
 use tracing::{error, info};
+
+use crate::config::INGESTER_BACKUP_NAME;
 
 pub async fn perform_backup(
     mut backup_service: BackupService,
     cloned_rx: Receiver<()>,
     cloned_metrics: Arc<IngesterMetricsConfig>,
 ) -> Result<(), JoinError> {
-    backup_service
-        .perform_backup(cloned_metrics, cloned_rx)
-        .await;
+    backup_service.perform_backup(cloned_metrics, cloned_rx).await;
     Ok(())
 }
 
@@ -36,13 +42,13 @@ pub async fn receive_last_saved_slot(
             Ok(Some(slot)) if slot != last_saved_slot => {
                 first_processed_slot_clone.store(slot, Ordering::Relaxed);
                 break;
-            }
+            },
             Err(e) => {
                 error!("Error while getting last saved slot: {}", e);
                 cloned_tx.send(()).ok();
                 break;
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         tokio_sleep(Duration::from_millis(100)).await;

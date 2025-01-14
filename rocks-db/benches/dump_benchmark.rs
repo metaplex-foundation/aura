@@ -68,13 +68,7 @@ async fn bench_batch_get_keys(storage: Arc<Storage>, pubkeys: Vec<Pubkey>) {
 // }
 async fn bench_get_assets(storage: Arc<Storage>, pubkeys: Vec<Pubkey>) {
     storage
-        .get_asset_selected_maps_async(
-            pubkeys,
-            &None,
-            &Options {
-                ..Default::default()
-            },
-        )
+        .get_asset_selected_maps_async(pubkeys, &None, &Options { ..Default::default() })
         .await
         .unwrap();
 }
@@ -98,10 +92,7 @@ async fn bench_dump(storage: Arc<Storage>, batch_size: usize) {
     let temp_dir_path = temp_dir.path();
 
     let sync_metrics = Arc::new(SynchronizerMetricsConfig::new());
-    storage
-        .dump_db(temp_dir_path, batch_size, &rx, sync_metrics)
-        .await
-        .unwrap();
+    storage.dump_db(temp_dir_path, batch_size, &rx, sync_metrics).await.unwrap();
 }
 
 #[tokio::test]
@@ -149,19 +140,11 @@ fn dump_benchmark(c: &mut Criterion) {
     });
     group.bench_function("get_assets_individually", |b| {
         b.iter(|| {
-            rt.block_on(bench_get_assets_individually(
-                storage.clone(),
-                sampled_pubkeys.clone(),
-            ))
+            rt.block_on(bench_get_assets_individually(storage.clone(), sampled_pubkeys.clone()))
         })
     });
     group.bench_function("get_asset_indexes", |b| {
-        b.iter(|| {
-            rt.block_on(bench_get_asset_indexes(
-                storage.clone(),
-                sampled_pubkeys.clone(),
-            ))
-        })
+        b.iter(|| rt.block_on(bench_get_asset_indexes(storage.clone(), sampled_pubkeys.clone())))
     });
     // group.bench_function("batch_get_keys", |b| {
     //     b.iter(|| rt.block_on(bench_batch_get_keys(storage.clone(), sampled_pubkeys.clone())))

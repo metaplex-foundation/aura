@@ -1,6 +1,7 @@
-use crate::error::{StorageError, UsecaseError};
 use async_trait::async_trait;
 use mockall::automock;
+
+use crate::error::{StorageError, UsecaseError};
 
 #[automock]
 #[async_trait]

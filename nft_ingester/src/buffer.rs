@@ -1,21 +1,26 @@
-use entities::enums::UnprocessedAccount;
-use entities::models::{BufferedTransaction, BufferedTxWithID, Task, UnprocessedAccountMessage};
-use interface::error::UsecaseError;
-use interface::signature_persistence::UnprocessedTransactionsGetter;
-use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+    time::Duration,
+};
+
+use entities::{
+    enums::UnprocessedAccount,
+    models::{BufferedTransaction, BufferedTxWithID, Task, UnprocessedAccountMessage},
+};
+use interface::{
+    error::UsecaseError, signature_persistence::UnprocessedTransactionsGetter,
+    unprocessed_data_getter::UnprocessedAccountsGetter,
+};
+use metrics_utils::IngesterMetricsConfig;
 use solana_program::pubkey::Pubkey;
-use std::collections::HashMap;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast::Receiver;
-use tokio::sync::Mutex;
-use tokio::task::JoinError;
-use tokio::time::sleep as tokio_sleep;
+use tokio::{
+    sync::{broadcast::Receiver, Mutex},
+    task::JoinError,
+    time::sleep as tokio_sleep,
+};
 use tonic::async_trait;
 use tracing::log::info;
-
-use metrics_utils::IngesterMetricsConfig;
 
 const TXS_BATCH_SIZE: usize = 100;
 
@@ -59,14 +64,8 @@ impl Buffer {
     }
 
     pub async fn capture_metrics(&self, metrics: &Arc<IngesterMetricsConfig>) {
-        metrics.set_buffer(
-            "buffer_transactions",
-            self.transactions.lock().await.len() as i64,
-        );
-        metrics.set_buffer(
-            "buffer_json_tasks",
-            self.json_tasks.lock().await.len() as i64,
-        );
+        metrics.set_buffer("buffer_transactions", self.transactions.lock().await.len() as i64);
+        metrics.set_buffer("buffer_json_tasks", self.json_tasks.lock().await.len() as i64);
         metrics.set_buffer("buffer_accounts", self.accounts.lock().await.len() as i64);
     }
 }
@@ -78,10 +77,7 @@ impl UnprocessedTransactionsGetter for Buffer {
         let mut result = Vec::with_capacity(TXS_BATCH_SIZE);
 
         while let Some(tx) = buffer.pop_front() {
-            result.push(BufferedTxWithID {
-                tx,
-                id: String::new(),
-            });
+            result.push(BufferedTxWithID { tx, id: String::new() });
             if result.len() >= TXS_BATCH_SIZE {
                 break;
             }
@@ -109,11 +105,7 @@ impl UnprocessedAccountsGetter for Buffer {
         }
         for key in keys_to_remove {
             if let Some((key, account)) = buffer.remove_entry(&key) {
-                result.push(UnprocessedAccountMessage {
-                    account,
-                    key,
-                    id: String::new(),
-                });
+                result.push(UnprocessedAccountMessage { account, key, id: String::new() });
             }
         }
 

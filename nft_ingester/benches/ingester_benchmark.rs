@@ -1,20 +1,19 @@
+use std::{fs::File, sync::Arc};
+
 use criterion::{criterion_group, criterion_main, Criterion};
+use metrics_utils::{
+    red::RequestErrorDurationMetrics, BackfillerMetricsConfig, IngesterMetricsConfig,
+};
 use nft_ingester::{
     backfiller::{DirectBlockParser, TransactionsParser},
     buffer::Buffer,
     processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
     transaction_ingester,
 };
-use rocks_db::Storage;
+use rocks_db::{bubblegum_slots::BubblegumSlotGetter, migrator::MigrationState, Storage};
 use setup::TestEnvironment;
-use std::{fs::File, sync::Arc};
-use tokio::{sync::Mutex, task::JoinSet};
-
-use metrics_utils::red::RequestErrorDurationMetrics;
-use metrics_utils::{BackfillerMetricsConfig, IngesterMetricsConfig};
-use rocks_db::bubblegum_slots::BubblegumSlotGetter;
-use rocks_db::migrator::MigrationState;
 use testcontainers::clients::Cli;
+use tokio::{sync::Mutex, task::JoinSet};
 
 async fn setup_environment<'a>(
     cli: &'a Cli,
@@ -57,9 +56,7 @@ async fn bench_ingest(
         chunk_size,
     ));
     let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-    transactions_parser
-        .parse_raw_transactions(rx, permits, None)
-        .await;
+    transactions_parser.parse_raw_transactions(rx, permits, None).await;
 }
 
 fn ingest_benchmark(c: &mut Criterion) {
@@ -72,11 +69,7 @@ fn ingest_benchmark(c: &mut Criterion) {
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let transactions_storage = Storage::open(
-        &format!(
-            "{}{}",
-            tx_storage_dir.path().to_str().unwrap(),
-            "/test_rocks"
-        ),
+        &format!("{}{}", tx_storage_dir.path().to_str().unwrap(), "/test_rocks"),
         mutexed_tasks.clone(),
         red_metrics,
         MigrationState::Last,
@@ -137,13 +130,7 @@ fn ingest_benchmark(c: &mut Criterion) {
     });
     group.bench_function("5 workers mode, 1 in a chunk", |b| {
         b.iter(|| {
-            rt.block_on(bench_ingest(
-                rocks_storage.clone(),
-                env.rocks_env.storage.clone(),
-                5,
-                1,
-                1,
-            ))
+            rt.block_on(bench_ingest(rocks_storage.clone(), env.rocks_env.storage.clone(), 5, 1, 1))
         })
     });
     group.bench_function("10 workers mode, 10 in a chunk", |b| {

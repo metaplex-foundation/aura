@@ -1,14 +1,7 @@
-use crate::api::IntegrityVerificationApi;
-use crate::params::{
-    generate_get_asset_params, generate_get_asset_proof_params,
-    generate_get_assets_by_authority_params, generate_get_assets_by_creator_params,
-    generate_get_assets_by_group_params, generate_get_assets_by_owner_params,
-};
-use crate::requests::Body;
-use crate::slots_dumper::FileSlotsDumper;
+use std::{str::FromStr, sync::Arc, time::Duration};
+
 use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
-use interface::error::IntegrityVerificationError;
-use interface::proofs::ProofChecker;
+use interface::{error::IntegrityVerificationError, proofs::ProofChecker};
 use metrics_utils::{BackfillerMetricsConfig, IntegrityVerificationMetricsConfig};
 use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
 use regex::Regex;
@@ -16,14 +9,22 @@ use serde_json::{json, Value};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentLevel;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
-use usecase::bigtable::BigTableClient;
-use usecase::proofs::MaybeProofChecker;
-use usecase::slots_collector::SlotsCollector;
+use usecase::{
+    bigtable::BigTableClient, proofs::MaybeProofChecker, slots_collector::SlotsCollector,
+};
+
+use crate::{
+    api::IntegrityVerificationApi,
+    params::{
+        generate_get_asset_params, generate_get_asset_proof_params,
+        generate_get_assets_by_authority_params, generate_get_assets_by_creator_params,
+        generate_get_assets_by_group_params, generate_get_assets_by_owner_params,
+    },
+    requests::Body,
+    slots_dumper::FileSlotsDumper,
+};
 
 pub const GET_ASSET_METHOD: &str = "getAsset";
 pub const GET_ASSET_PROOF_METHOD: &str = "getAssetProof";
@@ -145,10 +146,8 @@ where
             &testing_response,
             Config::new(CompareMode::Strict),
         ) {
-            let diff = self
-                .regexes
-                .iter()
-                .fold(diff, |acc, re| re.replace_all(&acc, "").to_string());
+            let diff =
+                self.regexes.iter().fold(diff, |acc, re| re.replace_all(&acc, "").to_string());
             if diff.is_empty() {
                 return None;
             }
@@ -172,7 +171,7 @@ where
                 self.metrics.inc_network_errors_reference_host();
                 error!("Reference host network error: {}", e);
                 return DiffWithResponses::default();
-            }
+            },
         };
         let testing_response = match testing_response {
             Ok(testing_response) => testing_response,
@@ -180,7 +179,7 @@ where
                 self.metrics.inc_network_errors_testing_host();
                 error!("Testing host network error: {}", e);
                 return DiffWithResponses::default();
-            }
+            },
         };
 
         DiffWithResponses {
@@ -214,13 +213,9 @@ where
             let mut test_failed = false;
             if let Some(diff) = diff_with_responses.diff {
                 test_failed = true;
-                error!(
-                    "{}: mismatch responses: req: {:#?}, diff: {}",
-                    req.method, req, diff
-                );
+                error!("{}: mismatch responses: req: {:#?}, diff: {}", req.method, req, diff);
                 let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
-                self.try_collect_slots(req, &diff_with_responses.reference_response, &rx)
-                    .await;
+                self.try_collect_slots(req, &diff_with_responses.reference_response, &rx).await;
             }
 
             if req.method == GET_ASSET_PROOF_METHOD {
@@ -234,11 +229,11 @@ where
                             error!("Invalid proof for {} asset", asset_id)
                         };
                         !proof_valid
-                    }
+                    },
                     Err(e) => {
                         error!("Check proof valid: {}", e);
                         test_failed
-                    }
+                    },
                 };
             }
             if test_failed {
@@ -282,10 +277,7 @@ where
         let requests = verification_required_keys
             .into_iter()
             .map(|key| {
-                Body::new(
-                    GET_ASSET_PROOF_METHOD,
-                    json!(generate_get_asset_proof_params(key)),
-                )
+                Body::new(GET_ASSET_PROOF_METHOD, json!(generate_get_asset_proof_params(key)))
             })
             .collect::<Vec<_>>();
 
@@ -425,14 +417,14 @@ where
             None => {
                 error!("cannot get asset id: {:?}", &req.params);
                 return;
-            }
+            },
             Some(asset_id) => asset_id,
         };
         let tree_id = match reference_response["result"]["tree_id"].as_str() {
             None => {
                 error!("cannot get tree id: {:?}", &reference_response);
                 return;
-            }
+            },
             Some(tree_id) => tree_id,
         };
         let slot = match self.get_slot().await {
@@ -440,12 +432,10 @@ where
             Err(e) => {
                 error!("get_slot: {}", e);
                 return;
-            }
+            },
         };
         if let Ok(tree_id) = Pubkey::from_str(tree_id) {
-            collect_tools
-                .collect_slots(asset_id, tree_id, slot, rx)
-                .await
+            collect_tools.collect_slots(asset_id, tree_id, slot, rx).await
         }
     }
 
@@ -458,19 +448,19 @@ where
         asset_id: &str,
         response: Value,
     ) -> Result<bool, IntegrityVerificationError> {
-        let tree_id = response["result"]["tree_id"].as_str().ok_or(
-            IntegrityVerificationError::CannotGetResponseField("tree_id".to_string()),
-        )?;
-        let leaf = Pubkey::from_str(response["result"]["leaf"].as_str().ok_or(
-            IntegrityVerificationError::CannotGetResponseField("leaf".to_string()),
-        )?)?
+        let tree_id = response["result"]["tree_id"]
+            .as_str()
+            .ok_or(IntegrityVerificationError::CannotGetResponseField("tree_id".to_string()))?;
+        let leaf = Pubkey::from_str(
+            response["result"]["leaf"]
+                .as_str()
+                .ok_or(IntegrityVerificationError::CannotGetResponseField("leaf".to_string()))?,
+        )?
         .to_bytes();
 
         let initial_proofs = response["result"]["proof"]
             .as_array()
-            .ok_or(IntegrityVerificationError::CannotGetResponseField(
-                "proof".to_string(),
-            ))?
+            .ok_or(IntegrityVerificationError::CannotGetResponseField("proof".to_string()))?
             .iter()
             .filter_map(|proof| proof.as_str().and_then(|v| Pubkey::from_str(v).ok()))
             .collect::<Vec<_>>();
@@ -480,28 +470,20 @@ where
             json!(generate_get_asset_params(asset_id.to_string()))
         ))
         .to_string();
-        let get_asset = self
-            .api
-            .make_request(&self.reference_host, &get_asset_req)
-            .await?;
+        let get_asset = self.api.make_request(&self.reference_host, &get_asset_req).await?;
         let tree_id_pk: Pubkey = Pubkey::from_str(tree_id)?;
         let leaf_index = get_asset["result"]["compression"]["leaf_id"]
             .as_u64()
-            .ok_or(IntegrityVerificationError::CannotGetResponseField(
-                "leaf_id".to_string(),
-            ))? as u32;
-        self.proof_checker
-            .check_proof(tree_id_pk, initial_proofs, leaf_index, leaf)
-            .await
+            .ok_or(IntegrityVerificationError::CannotGetResponseField("leaf_id".to_string()))?
+            as u32;
+        self.proof_checker.check_proof(tree_id_pk, initial_proofs, leaf_index, leaf).await
     }
 }
 
 impl CollectSlotsTools {
     async fn collect_slots(&self, asset: &str, tree_key: Pubkey, slot: u64, rx: &Receiver<()>) {
         let slots_collector = SlotsCollector::new(
-            Arc::new(FileSlotsDumper::new(
-                self.format_filename(&tree_key.to_string(), asset),
-            )),
+            Arc::new(FileSlotsDumper::new(self.format_filename(&tree_key.to_string(), asset))),
             self.bigtable_client.big_table_inner_client.clone(),
             self.metrics.clone(),
         );
@@ -518,14 +500,13 @@ impl CollectSlotsTools {
 
 #[cfg(test)]
 mod tests {
-    use crate::diff_checker::DiffChecker;
-    use crate::file_keys_fetcher::FileKeysFetcher;
     use assert_json_diff::{assert_json_matches_no_panic, CompareMode, Config};
-    use metrics_utils::utils::start_metrics;
-    use metrics_utils::{IntegrityVerificationMetrics, MetricsTrait};
+    use metrics_utils::{utils::start_metrics, IntegrityVerificationMetrics, MetricsTrait};
     use regex::Regex;
     use serde_json::json;
     use solana_sdk::commitment_config::CommitmentLevel;
+
+    use crate::{diff_checker::DiffChecker, file_keys_fetcher::FileKeysFetcher};
 
     // this function used only inside tests under rpc_tests and bigtable_tests features, that do not running in our CI
     #[allow(dead_code)]
@@ -560,8 +541,9 @@ mod tests {
     #[cfg(feature = "bigtable_tests")]
     #[tokio::test]
     async fn test_save_slots_to_file() {
-        use solana_program::pubkey::Pubkey;
         use std::str::FromStr;
+
+        use solana_program::pubkey::Pubkey;
 
         let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         create_test_diff_checker()
@@ -664,9 +646,6 @@ mod tests {
         let res = re1.replace_all(&res, "").to_string();
         let res = re2.replace_all(&res, "").to_string();
 
-        assert_eq!(
-            "json atom at path \".result.mutable\" is missing from lhs",
-            res.trim()
-        );
+        assert_eq!("json atom at path \".result.mutable\" is missing from lhs", res.trim());
     }
 }

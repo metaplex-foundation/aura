@@ -1,9 +1,9 @@
-use crate::api::dapi::rpc_asset_models::Asset;
-use crate::api::error::DasApiError;
 use itertools::Itertools;
 use rocks_db::Storage;
 use solana_sdk::keccak::{self, Hash};
 use url::Url;
+
+use crate::api::{dapi::rpc_asset_models::Asset, error::DasApiError};
 
 /// This is the adaptor for [`replace_file_urls_with_preview_urls_refs`]
 pub async fn populate_previews_opt(
@@ -61,10 +61,7 @@ pub async fn populate_previews_slice(
         .enumerate()
         .for_each(|(i, file)| {
             let url = file.uri.as_ref().unwrap(); // always exists because of filter
-            let has_preview = previews[i]
-                .as_ref()
-                .map(|p| p.failed.is_none())
-                .unwrap_or(false);
+            let has_preview = previews[i].as_ref().map(|p| p.failed.is_none()).unwrap_or(false);
             if has_preview {
                 if let Ok(prevew) = preview_url(url, base_url, keccak::hash(url.as_bytes())) {
                     file.cdn_uri = Some(prevew);
@@ -121,9 +118,6 @@ mod test {
         let original_url = "https://original/nft1?car=true";
         let url_hash = keccak::hash(original_url.as_bytes());
         let result = preview_url(original_url, "http://storage", url_hash).unwrap();
-        assert_eq!(
-            result,
-            format!("http://storage/preview/{url_hash}?car=true")
-        );
+        assert_eq!(result, format!("http://storage/preview/{url_hash}?car=true"));
     }
 }

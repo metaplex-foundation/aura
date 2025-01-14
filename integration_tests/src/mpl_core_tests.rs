@@ -1,15 +1,12 @@
-use function_name::named;
+use std::sync::Arc;
 
 use entities::api_req_params::{
     GetAsset, GetAssetsByAuthority, GetAssetsByGroup, GetAssetsByOwner,
 };
-
+use function_name::named;
 use itertools::Itertools;
-
 use serial_test::serial;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+use tokio::{sync::Mutex, task::JoinSet};
 
 use super::common::*;
 
@@ -20,10 +17,7 @@ async fn test_mpl_core_get_asset() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -40,11 +34,7 @@ async fn test_mpl_core_get_asset() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -55,10 +45,7 @@ async fn test_mpl_core_get_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -75,11 +62,7 @@ async fn test_mpl_core_get_collection() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -91,10 +74,7 @@ async fn test_mpl_core_get_assets_by_authority() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -122,11 +102,8 @@ async fn test_mpl_core_get_assets_by_authority() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAssetsByAuthority = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_assets_by_authority(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response =
+        setup.das_api.get_assets_by_authority(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -137,10 +114,7 @@ async fn test_mpl_core_get_assets_by_group() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -169,11 +143,7 @@ async fn test_mpl_core_get_assets_by_group() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAssetsByGroup = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_assets_by_group(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_assets_by_group(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -184,10 +154,7 @@ async fn test_mpl_core_get_assets_by_owner() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -213,11 +180,7 @@ async fn test_mpl_core_get_assets_by_owner() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAssetsByOwner = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_assets_by_owner(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_assets_by_owner(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -228,10 +191,7 @@ async fn test_mpl_core_get_asset_with_edition() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -248,11 +208,7 @@ async fn test_mpl_core_get_asset_with_edition() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -263,10 +219,7 @@ async fn test_mpl_core_get_asset_with_pubkey_in_rule_set() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Mainnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
     )
     .await;
 
@@ -283,11 +236,7 @@ async fn test_mpl_core_get_asset_with_pubkey_in_rule_set() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -298,10 +247,7 @@ async fn test_mpl_core_get_asset_with_two_oracle_external_plugins() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -318,11 +264,7 @@ async fn test_mpl_core_get_asset_with_two_oracle_external_plugins() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -333,10 +275,7 @@ async fn test_mpl_core_get_asset_with_oracle_external_plugin_on_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -353,11 +292,7 @@ async fn test_mpl_core_get_asset_with_oracle_external_plugin_on_collection() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -368,10 +303,7 @@ async fn test_mpl_core_get_asset_with_oracle_multiple_lifecycle_events() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -388,11 +320,7 @@ async fn test_mpl_core_get_asset_with_oracle_multiple_lifecycle_events() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -403,10 +331,7 @@ async fn test_mpl_core_get_asset_with_oracle_custom_offset_and_base_address_conf
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -423,11 +348,7 @@ async fn test_mpl_core_get_asset_with_oracle_custom_offset_and_base_address_conf
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -438,10 +359,7 @@ async fn test_mpl_core_get_asset_with_oracle_no_offset() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -458,11 +376,7 @@ async fn test_mpl_core_get_asset_with_oracle_no_offset() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -473,10 +387,7 @@ async fn test_mpl_core_get_assets_by_group_with_oracle_and_custom_pda_all_seeds(
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -503,11 +414,7 @@ async fn test_mpl_core_get_assets_by_group_with_oracle_and_custom_pda_all_seeds(
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAssetsByGroup = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_assets_by_group(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_assets_by_group(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -518,10 +425,7 @@ async fn test_mpl_core_get_asset_with_multiple_internal_and_external_plugins() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -538,11 +442,7 @@ async fn test_mpl_core_get_asset_with_multiple_internal_and_external_plugins() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -553,10 +453,7 @@ async fn test_mpl_core_autograph_plugin() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -573,11 +470,7 @@ async fn test_mpl_core_autograph_plugin() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -588,10 +481,7 @@ async fn test_mpl_core_autograph_plugin_with_signature() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -608,11 +498,7 @@ async fn test_mpl_core_autograph_plugin_with_signature() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -623,10 +509,7 @@ async fn test_mpl_core_verified_creators_plugin() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -643,11 +526,7 @@ async fn test_mpl_core_verified_creators_plugin() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -658,10 +537,7 @@ async fn test_mpl_core_verified_creators_plugin_with_signature() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -678,11 +554,7 @@ async fn test_mpl_core_verified_creators_plugin_with_signature() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -693,10 +565,7 @@ async fn test_mpl_core_get_asset_with_app_data_with_binary_data_and_owner_is_dat
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -713,11 +582,7 @@ async fn test_mpl_core_get_asset_with_app_data_with_binary_data_and_owner_is_dat
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -729,10 +594,7 @@ async fn test_mpl_core_get_asset_with_app_data_with_json_data_and_update_authori
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -749,11 +611,7 @@ async fn test_mpl_core_get_asset_with_app_data_with_json_data_and_update_authori
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -764,10 +622,7 @@ async fn test_mpl_core_get_asset_with_app_data_with_msg_pack_data_and_address_is
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -784,11 +639,7 @@ async fn test_mpl_core_get_asset_with_app_data_with_msg_pack_data_and_address_is
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -800,10 +651,7 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_binary_data_and_
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -820,11 +668,7 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_binary_data_and_
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -835,10 +679,7 @@ async fn test_mpl_core_get_asset_with_data_section_with_binary_data() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -855,11 +696,7 @@ async fn test_mpl_core_get_asset_with_data_section_with_binary_data() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -871,10 +708,7 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_json_data_and_ow
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -891,11 +725,7 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_json_data_and_ow
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -906,10 +736,7 @@ async fn test_mpl_core_get_asset_with_data_section_with_json_data() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -926,11 +753,7 @@ async fn test_mpl_core_get_asset_with_data_section_with_json_data() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -942,10 +765,7 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_msg_pack_data_an
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -962,11 +782,7 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_msg_pack_data_an
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -977,10 +793,7 @@ async fn test_mpl_core_get_asset_with_data_section_with_msg_pack_data() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -997,10 +810,6 @@ async fn test_mpl_core_get_asset_with_data_section_with_msg_pack_data() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }

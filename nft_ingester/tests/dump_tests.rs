@@ -3,12 +3,16 @@
 mod tests {
     use std::sync::Arc;
 
-    use entities::enums::ASSET_TYPES;
-    use entities::models::TokenAccount;
-    use entities::{api_req_params::GetByMethodsOptions, models::UrlWithStatus};
+    use entities::{
+        api_req_params::GetByMethodsOptions,
+        enums::ASSET_TYPES,
+        models::{TokenAccount, UrlWithStatus},
+    };
     use metrics_utils::{IngesterMetricsConfig, SynchronizerMetricsConfig};
-    use nft_ingester::index_syncronizer::Synchronizer;
-    use nft_ingester::processors::account_based::token_updates_processor::TokenAccountsProcessor;
+    use nft_ingester::{
+        index_syncronizer::Synchronizer,
+        processors::account_based::token_updates_processor::TokenAccountsProcessor,
+    };
     use postgre_client::{
         model::{AssetSortBy, AssetSortDirection, AssetSorting, SearchAssetsFilter},
         storage_traits::AssetPubkeyFilteredFetcher,
@@ -79,22 +83,10 @@ mod tests {
         }
 
         assert_eq!(pg_env.count_rows_in_metadata().await.unwrap(), 1);
-        assert_eq!(
-            pg_env.count_rows_in_creators().await.unwrap(),
-            number_of_assets as i64
-        );
-        assert_eq!(
-            pg_env.count_rows_in_assets().await.unwrap(),
-            number_of_assets as i64
-        );
-        assert_eq!(
-            pg_env.count_rows_in_authorities().await.unwrap(),
-            number_of_assets as i64
-        );
-        assert_eq!(
-            pg_env.count_rows_in_fungible_tokens().await.unwrap(),
-            1000 as i64
-        );
+        assert_eq!(pg_env.count_rows_in_creators().await.unwrap(), number_of_assets as i64);
+        assert_eq!(pg_env.count_rows_in_assets().await.unwrap(), number_of_assets as i64);
+        assert_eq!(pg_env.count_rows_in_authorities().await.unwrap(), number_of_assets as i64);
+        assert_eq!(pg_env.count_rows_in_fungible_tokens().await.unwrap(), 1000 as i64);
         let metadata_key_set = client.get_existing_metadata_keys().await.unwrap();
         assert_eq!(metadata_key_set.len(), 1);
         let key = metadata_key_set.iter().next().unwrap();
@@ -113,10 +105,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -132,22 +121,22 @@ mod tests {
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod mtg_441_tests {
+    use std::sync::Arc;
+
     use entities::api_req_params::{GetAsset, Options};
     use interface::account_balance::MockAccountBalanceGetter;
     use metrics_utils::ApiMetricsConfig;
-    use nft_ingester::api::dapi::rpc_asset_models::Asset;
-    use nft_ingester::api::DasApi;
-    use nft_ingester::config::JsonMiddlewareConfig;
-    use nft_ingester::json_worker::JsonWorker;
-    use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
+    use nft_ingester::{
+        api::{dapi::rpc_asset_models::Asset, DasApi},
+        config::JsonMiddlewareConfig,
+        json_worker::JsonWorker,
+        raydium_price_fetcher::RaydiumTokenPriceFetcher,
+    };
     use rocks_db::Storage;
     use serde_json::Value;
-    use setup::rocks::RocksTestEnvironmentSetup;
-    use setup::TestEnvironment;
-    use std::sync::Arc;
+    use setup::{rocks::RocksTestEnvironmentSetup, TestEnvironment};
     use testcontainers::clients::Cli;
-    use tokio::sync::Mutex;
-    use tokio::task::JoinSet;
+    use tokio::{sync::Mutex, task::JoinSet};
     use usecase::proofs::MaybeProofChecker;
 
     use crate::tests::NATIVE_MINT_PUBKEY;
@@ -208,21 +197,15 @@ mod mtg_441_tests {
         )
         .await;
 
-        let first_pubkey = generated_assets
-            .static_details
-            .first()
-            .expect("Cannot get first pubkey.")
-            .pubkey;
+        let first_pubkey =
+            generated_assets.static_details.first().expect("Cannot get first pubkey.").pubkey;
 
         let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let api_res = get_das_api(&env)
             .get_asset(
                 GetAsset {
                     id: first_pubkey.to_string(),
-                    options: Options {
-                        show_unverified_collections: true,
-                        ..Default::default()
-                    },
+                    options: Options { show_unverified_collections: true, ..Default::default() },
                 },
                 mutexed_tasks,
             )
@@ -250,21 +233,15 @@ mod mtg_441_tests {
         )
         .await;
 
-        let first_pubkey = generated_assets
-            .static_details
-            .first()
-            .expect("Cannot get first pubkey.")
-            .pubkey;
+        let first_pubkey =
+            generated_assets.static_details.first().expect("Cannot get first pubkey.").pubkey;
 
         let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let api_res = get_das_api(&env)
             .get_asset(
                 GetAsset {
                     id: first_pubkey.to_string(),
-                    options: Options {
-                        show_unverified_collections: true,
-                        ..Default::default()
-                    },
+                    options: Options { show_unverified_collections: true, ..Default::default() },
                 },
                 mutexed_tasks,
             )
@@ -291,21 +268,15 @@ mod mtg_441_tests {
         )
         .await;
 
-        let first_pubkey = generated_assets
-            .static_details
-            .first()
-            .expect("Cannot get first pubkey.")
-            .pubkey;
+        let first_pubkey =
+            generated_assets.static_details.first().expect("Cannot get first pubkey.").pubkey;
 
         let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let api_res = get_das_api(&env)
             .get_asset(
                 GetAsset {
                     id: first_pubkey.to_string(),
-                    options: Options {
-                        show_unverified_collections: true,
-                        ..Default::default()
-                    },
+                    options: Options { show_unverified_collections: true, ..Default::default() },
                 },
                 mutexed_tasks,
             )
@@ -332,21 +303,15 @@ mod mtg_441_tests {
         )
         .await;
 
-        let first_pubkey = generated_assets
-            .static_details
-            .first()
-            .expect("Cannot get first pubkey.")
-            .pubkey;
+        let first_pubkey =
+            generated_assets.static_details.first().expect("Cannot get first pubkey.").pubkey;
 
         let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let api_res = get_das_api(&env)
             .get_asset(
                 GetAsset {
                     id: first_pubkey.to_string(),
-                    options: Options {
-                        show_unverified_collections: true,
-                        ..Default::default()
-                    },
+                    options: Options { show_unverified_collections: true, ..Default::default() },
                 },
                 mutexed_tasks,
             )

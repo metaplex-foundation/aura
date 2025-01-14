@@ -2,8 +2,7 @@
 
 // @generated
 
-use core::cmp::Ordering;
-use core::mem;
+use core::{cmp::Ordering, mem};
 
 extern crate flatbuffers;
 use self::flatbuffers::{EndianScalar, Follow};
@@ -11,8 +10,7 @@ use self::flatbuffers::{EndianScalar, Follow};
 #[allow(unused_imports, dead_code)]
 pub mod off_chain_data {
 
-    use core::cmp::Ordering;
-    use core::mem;
+    use core::{cmp::Ordering, mem};
 
     extern crate flatbuffers;
     use self::flatbuffers::{EndianScalar, Follow};
@@ -118,9 +116,7 @@ pub mod off_chain_data {
         type Inner = OffChainData<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -176,8 +172,7 @@ pub mod off_chain_data {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<&str>>(OffChainData::VT_URL, None)
+                self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(OffChainData::VT_URL, None)
             }
         }
         #[inline]
@@ -186,8 +181,7 @@ pub mod off_chain_data {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<&str>>(OffChainData::VT_METADATA, None)
+                self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(OffChainData::VT_METADATA, None)
             }
         }
         #[inline]
@@ -195,11 +189,7 @@ pub mod off_chain_data {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<i64>(OffChainData::VT_LAST_READ_AT, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<i64>(OffChainData::VT_LAST_READ_AT, Some(0)).unwrap() }
         }
     }
 
@@ -260,8 +250,7 @@ pub mod off_chain_data {
         }
         #[inline]
         pub fn add_url(&mut self, url: flatbuffers::WIPOffset<&'b str>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(OffChainData::VT_URL, url);
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(OffChainData::VT_URL, url);
         }
         #[inline]
         pub fn add_metadata(&mut self, metadata: flatbuffers::WIPOffset<&'b str>) {
@@ -270,18 +259,14 @@ pub mod off_chain_data {
         }
         #[inline]
         pub fn add_last_read_at(&mut self, last_read_at: i64) {
-            self.fbb_
-                .push_slot::<i64>(OffChainData::VT_LAST_READ_AT, last_read_at, 0);
+            self.fbb_.push_slot::<i64>(OffChainData::VT_LAST_READ_AT, last_read_at, 0);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> OffChainDataBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            OffChainDataBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            OffChainDataBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<OffChainData<'a>> {

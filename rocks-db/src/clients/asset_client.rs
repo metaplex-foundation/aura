@@ -1,21 +1,25 @@
-use bincode::serialize;
-use solana_sdk::pubkey::Pubkey;
-use std::sync::atomic::Ordering;
+use std::{collections::HashMap, sync::atomic::Ordering};
 
-use crate::asset::{
-    AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx,
-    FungibleAssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey,
+use bincode::serialize;
+use entities::{
+    api_req_params::Options,
+    enums::{AssetType, SpecificationAssetClass, TokenMetadataEdition},
+    models::{EditionData, PubkeyWithSlot},
 };
-use crate::column::{Column, TypedColumn};
-use crate::errors::StorageError;
-use crate::generated::asset_generated::asset as fb;
-use crate::key_encoders::encode_u64x2_pubkey;
-use crate::{Result, Storage, BATCH_GET_ACTION, ROCKS_COMPONENT};
-use entities::api_req_params::Options;
-use entities::enums::{AssetType, SpecificationAssetClass, TokenMetadataEdition};
-use entities::models::{EditionData, PubkeyWithSlot};
 use futures_util::FutureExt;
-use std::collections::HashMap;
+use solana_sdk::pubkey::Pubkey;
+
+use crate::{
+    asset::{
+        AssetCollection, AssetCompleteDetails, AssetSelectedMaps, AssetsUpdateIdx,
+        FungibleAssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey,
+    },
+    column::{Column, TypedColumn},
+    errors::StorageError,
+    generated::asset_generated::asset as fb,
+    key_encoders::encode_u64x2_pubkey,
+    Result, Storage, BATCH_GET_ACTION, ROCKS_COMPONENT,
+};
 
 #[macro_export]
 macro_rules! to_map {
@@ -38,15 +42,11 @@ impl Storage {
                 // Assuming the key is structured as (u64, ...)
 
                 let seq = u64::from_be_bytes(last_key[..std::mem::size_of::<u64>()].try_into()?);
-                self.fungible_assets_update_last_seq
-                    .store(seq, Ordering::Relaxed);
+                self.fungible_assets_update_last_seq.store(seq, Ordering::Relaxed);
             }
         }
         // Increment and return the sequence number
-        let seq = self
-            .fungible_assets_update_last_seq
-            .fetch_add(1, Ordering::Relaxed)
-            + 1;
+        let seq = self.fungible_assets_update_last_seq.fetch_add(1, Ordering::Relaxed) + 1;
         Ok(seq)
     }
 
@@ -162,9 +162,8 @@ impl Storage {
         } else {
             async { Ok(Vec::new()) }.boxed()
         };
-        let (mut assets_data, assets_collection_pks, mut urls) = self
-            .get_assets_with_collections_and_urls(asset_ids.clone())
-            .await?;
+        let (mut assets_data, assets_collection_pks, mut urls) =
+            self.get_assets_with_collections_and_urls(asset_ids.clone()).await?;
         let mut mpl_core_collections = HashMap::new();
         // todo: consider async/future here, but not likely as the very next call depends on urls from this one
         if !assets_collection_pks.is_empty() {
@@ -203,16 +202,11 @@ impl Storage {
             );
         }
 
-        let offchain_data_fut = self
-            .asset_offchain_data
-            .batch_get(urls.clone().into_values().collect::<Vec<_>>());
+        let offchain_data_fut =
+            self.asset_offchain_data.batch_get(urls.clone().into_values().collect::<Vec<_>>());
 
-        let (assets_leaf, offchain_data, token_accounts, spl_mints) = tokio::join!(
-            assets_leaf_fut,
-            offchain_data_fut,
-            token_accounts_fut,
-            spl_mints_fut
-        );
+        let (assets_leaf, offchain_data, token_accounts, spl_mints) =
+            tokio::join!(assets_leaf_fut, offchain_data_fut, token_accounts_fut, spl_mints_fut);
         let offchain_data = offchain_data
             .map_err(|e| StorageError::Common(e.to_string()))?
             .into_iter()
@@ -263,11 +257,7 @@ impl Storage {
                 })
             })
             .for_each(|(_, ref mut asset)| {
-                if spl_mints
-                    .get(&asset.pubkey)
-                    .map(|spl_mint| spl_mint.is_nft())
-                    .unwrap_or(false)
-                {
+                if spl_mints.get(&asset.pubkey).map(|spl_mint| spl_mint.is_nft()).unwrap_or(false) {
                     if let Some(sd) = asset.static_details.as_mut() {
                         sd.specification_asset_class = SpecificationAssetClass::Nft
                     }
@@ -305,10 +295,7 @@ impl Storage {
         &self,
         edition_keys: Vec<Pubkey>,
     ) -> Result<HashMap<Pubkey, EditionData>> {
-        let first_batch = self
-            .token_metadata_edition_cbor
-            .batch_get(edition_keys)
-            .await?;
+        let first_batch = self.token_metadata_edition_cbor.batch_get(edition_keys).await?;
         let mut edition_data_list = Vec::new();
         let mut parent_keys = Vec::new();
 
@@ -316,7 +303,7 @@ impl Storage {
             match token_metadata_edition {
                 Some(TokenMetadataEdition::EditionV1(edition)) => {
                     parent_keys.push(edition.parent);
-                }
+                },
                 Some(TokenMetadataEdition::MasterEdition(master)) => {
                     edition_data_list.push(EditionData {
                         key: master.key,
@@ -324,8 +311,8 @@ impl Storage {
                         max_supply: master.max_supply,
                         edition_number: None,
                     });
-                }
-                None => {}
+                },
+                None => {},
             }
         }
 
@@ -368,16 +355,15 @@ impl Storage {
         &self,
         pubkey: Pubkey,
     ) -> Result<Option<AssetCompleteDetails>> {
-        let data = self.db.get_pinned_cf(
-            &self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
-            pubkey,
-        )?;
+        let data = self
+            .db
+            .get_pinned_cf(&self.db.cf_handle(AssetCompleteDetails::NAME).unwrap(), pubkey)?;
         match data {
             Some(data) => {
                 let asset = fb::root_as_asset_complete_details(&data)
                     .map_err(|e| StorageError::Common(e.to_string()))?;
                 Ok(Some(AssetCompleteDetails::from(asset)))
-            }
+            },
             _ => Ok(None),
         }
     }
@@ -391,11 +377,7 @@ impl Storage {
 
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for (pubkey, asset) in assets {
-            batch.put_cf(
-                &self.asset_data.handle(),
-                pubkey,
-                asset.convert_to_fb_bytes(),
-            );
+            batch.put_cf(&self.asset_data.handle(), pubkey, asset.convert_to_fb_bytes());
         }
         self.db.write(batch).map_err(StorageError::RocksDb)
     }

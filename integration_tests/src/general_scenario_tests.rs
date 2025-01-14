@@ -1,19 +1,15 @@
-use crate::common::index_seed_events;
-use crate::common::seed_accounts;
-use crate::common::seed_nfts;
-use crate::common::trim_test_name;
-use crate::common::Network;
-use crate::common::SeedEvent;
-use crate::common::TestSetup;
-use crate::common::TestSetupOptions;
-use entities::api_req_params::GetAsset;
-use entities::api_req_params::GetAssetsByOwner;
+use std::sync::Arc;
+
+use entities::api_req_params::{GetAsset, GetAssetsByOwner};
 use function_name::named;
 use itertools::Itertools;
 use serial_test::serial;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+use tokio::{sync::Mutex, task::JoinSet};
+
+use crate::common::{
+    index_seed_events, seed_accounts, seed_nfts, trim_test_name, Network, SeedEvent, TestSetup,
+    TestSetupOptions,
+};
 
 #[tokio::test]
 #[serial]
@@ -22,10 +18,7 @@ async fn test_asset_parsing() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
 
@@ -42,11 +35,7 @@ async fn test_asset_parsing() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -57,10 +46,7 @@ async fn test_get_different_assets_by_owner() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Devnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
     )
     .await;
 
@@ -93,11 +79,7 @@ async fn test_get_different_assets_by_owner() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAssetsByOwner = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_assets_by_owner(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_assets_by_owner(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name.clone(), response);
 
     let request = r#"
@@ -116,10 +98,6 @@ async fn test_get_different_assets_by_owner() {
     "#;
 
     let request: GetAssetsByOwner = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_assets_by_owner(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_assets_by_owner(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(format!("{}_show_unverif_coll", name), response);
 }

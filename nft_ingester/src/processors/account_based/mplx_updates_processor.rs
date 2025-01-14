@@ -1,23 +1,23 @@
 use std::sync::Arc;
 
 use blockbuster::token_metadata::types::TokenStandard;
+use entities::{
+    enums::{ChainMutability, RoyaltyTargetType, SpecificationAssetClass, TokenMetadataEdition},
+    models::{BurntMetadataSlot, ChainDataV1, Creator, MetadataInfo, UpdateVersion, Updated, Uses},
+};
+use metrics_utils::IngesterMetricsConfig;
 use mpl_token_metadata::accounts::MasterEdition;
+use rocks_db::{
+    batch_savers::{BatchSaveStorage, MetadataModels},
+    columns::asset::{
+        AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails,
+        AssetStaticDetails, MetadataMintMap,
+    },
+    errors::StorageError,
+};
 use serde_json::json;
 use solana_program::pubkey::Pubkey;
 use tokio::time::Instant;
-
-use entities::enums::{
-    ChainMutability, RoyaltyTargetType, SpecificationAssetClass, TokenMetadataEdition,
-};
-use entities::models::{BurntMetadataSlot, MetadataInfo, Updated};
-use entities::models::{ChainDataV1, Creator, UpdateVersion, Uses};
-use metrics_utils::IngesterMetricsConfig;
-use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
-use rocks_db::columns::asset::{
-    AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetStaticDetails,
-    MetadataMintMap,
-};
-use rocks_db::errors::StorageError;
 use usecase::save_metrics::result_to_metrics;
 
 pub struct MplxAccountsProcessor {
@@ -57,11 +57,7 @@ impl MplxAccountsProcessor {
         let begin_processing = Instant::now();
         let asset = AssetCompleteDetails::from(&metadata_models);
         let res = storage.store_metadata_models(&asset, metadata_models.metadata_mint);
-        result_to_metrics(
-            self.metrics.clone(),
-            &res,
-            "metadata_accounts_merge_with_batch",
-        );
+        result_to_metrics(self.metrics.clone(), &res, "metadata_accounts_merge_with_batch");
         self.metrics.set_latency(
             "metadata_accounts_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
@@ -95,10 +91,7 @@ impl MplxAccountsProcessor {
 
         let metadata = metadata_info.metadata.clone();
         let mint = metadata.mint;
-        models.metadata_mint = Some(MetadataMintMap {
-            pubkey: key,
-            mint_key: mint,
-        });
+        models.metadata_mint = Some(MetadataMintMap { pubkey: key, mint_key: mint });
 
         let data = metadata.clone();
         let authority = metadata.update_authority;
@@ -110,10 +103,10 @@ impl MplxAccountsProcessor {
             Some(TokenStandard::NonFungibleEdition) => SpecificationAssetClass::Nft,
             Some(TokenStandard::ProgrammableNonFungible) => {
                 SpecificationAssetClass::ProgrammableNft
-            }
+            },
             Some(TokenStandard::ProgrammableNonFungibleEdition) => {
                 SpecificationAssetClass::ProgrammableNft
-            }
+            },
             _ => SpecificationAssetClass::Unknown,
         };
 

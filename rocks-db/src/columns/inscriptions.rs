@@ -1,12 +1,16 @@
-use crate::column::TypedColumn;
-use crate::key_encoders::{decode_pubkey, encode_pubkey};
-use crate::{impl_merge_values, Result};
 use bincode::deserialize;
 use entities::models::InscriptionInfo;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
+
+use crate::{
+    column::TypedColumn,
+    impl_merge_values,
+    key_encoders::{decode_pubkey, encode_pubkey},
+    Result,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Inscription {

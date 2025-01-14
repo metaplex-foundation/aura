@@ -11,11 +11,6 @@ pub struct Body {
 
 impl Body {
     pub fn new(method: &str, params: Value) -> Self {
-        Self {
-            jsonrpc: "2.0".to_owned(),
-            id: 0,
-            method: method.to_owned(),
-            params,
-        }
+        Self { jsonrpc: "2.0".to_owned(), id: 0, method: method.to_owned(), params }
     }
 }

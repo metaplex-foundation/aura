@@ -1,8 +1,9 @@
-use rocks_db::generated::asset_generated::asset as fb;
-
 use bincode::{deserialize, serialize};
 use criterion::{criterion_group, criterion_main, Criterion};
-use rocks_db::columns::asset::{self, AssetCompleteDetails, AssetDynamicDetails};
+use rocks_db::{
+    columns::asset::{self, AssetCompleteDetails, AssetDynamicDetails},
+    generated::asset_generated::asset as fb,
+};
 use setup::rocks::RocksTestEnvironmentSetup;
 use solana_sdk::pubkey::Pubkey;
 
@@ -48,25 +49,14 @@ fn flatbuffer_vs_bincode_merge_functions_benchmark(c: &mut Criterion) {
         .map(|i| AssetCompleteDetails {
             pubkey: *pubkeys.get(0).unwrap(),
             static_details: static_details.get(0).map(|v| v.to_owned()),
-            dynamic_details: dynamic_details
-                .get(i)
-                .and_then(|d| d.get(0))
-                .map(|v| v.to_owned()),
-            authority: authorities
-                .get(i)
-                .and_then(|d| d.get(0))
-                .map(|v| v.to_owned()),
+            dynamic_details: dynamic_details.get(i).and_then(|d| d.get(0)).map(|v| v.to_owned()),
+            authority: authorities.get(i).and_then(|d| d.get(0)).map(|v| v.to_owned()),
             owner: owners.get(i).and_then(|d| d.get(0)).map(|v| v.to_owned()),
-            collection: collections
-                .get(i)
-                .and_then(|d| d.get(0))
-                .map(|v| v.to_owned()),
+            collection: collections.get(i).and_then(|d| d.get(0)).map(|v| v.to_owned()),
         })
         .collect::<Vec<_>>();
-    let bincode_bytes_versions = assets_versions
-        .iter()
-        .map(|a| serialize(&a).unwrap())
-        .collect::<Vec<_>>();
+    let bincode_bytes_versions =
+        assets_versions.iter().map(|a| serialize(&a).unwrap()).collect::<Vec<_>>();
     let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
     let fb_bytes_versions = assets_versions
         .iter()

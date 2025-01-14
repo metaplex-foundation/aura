@@ -1,15 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-use schemars::JsonSchema;
-use serde_json::Value;
-use {
-    serde::{Deserialize, Serialize},
-    std::collections::HashMap,
+use entities::{
+    enums::{Interface, OwnershipModel, RoyaltyModel, UseMethod},
+    models::{EditionData, SplMint, TokenAccount},
 };
-
-use crate::api::dapi::response::InscriptionResponse;
-use entities::enums::{Interface, OwnershipModel, RoyaltyModel, UseMethod};
-use entities::models::{EditionData, SplMint, TokenAccount};
 use rocks_db::columns::{
     asset::{
         AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner,
@@ -18,6 +12,11 @@ use rocks_db::columns::{
     inscriptions::{Inscription, InscriptionData},
     offchain_data::OffChainData,
 };
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::api::dapi::response::InscriptionResponse;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct AssetProof {

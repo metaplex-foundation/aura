@@ -1,16 +1,13 @@
-use entities::enums::TaskStatus;
-use entities::models::UrlWithStatus;
+use std::{path::PathBuf, sync::Arc, time::Duration};
+
+use entities::{enums::TaskStatus, models::UrlWithStatus};
 use error::IndexDbError;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use sqlx::Executor;
-use sqlx::Row;
 use sqlx::{
     migrate::Migrator,
     postgres::{PgConnectOptions, PgPoolOptions},
-    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Transaction,
+    ConnectOptions, Error, Executor, PgPool, Postgres, QueryBuilder, Row, Transaction,
 };
-use std::path::PathBuf;
-use std::{sync::Arc, time::Duration};
 use tracing::log::LevelFilter;
 
 pub mod asset_filter_client;
@@ -72,11 +69,7 @@ impl PgClient {
             .connect_with(options)
             .await?;
 
-        Ok(Self {
-            pool,
-            base_dump_path,
-            metrics,
-        })
+        Ok(Self { pool, base_dump_path, metrics })
     }
 
     pub fn new_with_pool(
@@ -84,11 +77,7 @@ impl PgClient {
         base_dump_path: Option<PathBuf>,
         metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Self {
-        Self {
-            pool,
-            base_dump_path,
-            metrics,
-        }
+        Self { pool, base_dump_path, metrics }
     }
 
     pub async fn check_health(&self) -> Result<(), String> {
@@ -97,15 +86,13 @@ impl PgClient {
 
         match resp {
             Ok(_) => {
-                self.metrics
-                    .observe_request(SQL_COMPONENT, SELECT_ACTION, "health", start_time);
+                self.metrics.observe_request(SQL_COMPONENT, SELECT_ACTION, "health", start_time);
                 Ok(())
-            }
+            },
             Err(e) => {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "health");
+                self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "health");
                 Err(e.to_string())
-            }
+            },
         }
     }
 
@@ -125,19 +112,17 @@ impl PgClient {
                 );
                 let v: i64 = size.get(0);
                 Ok(v as u64)
-            }
+            },
             Err(e) => {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "get_collection_size");
+                self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "get_collection_size");
                 Err(e)
-            }
+            },
         }
     }
 
     pub async fn run_migration(&self, migration_path: &str) -> Result<(), String> {
-        let m = Migrator::new(std::path::Path::new(migration_path))
-            .await
-            .map_err(|e| e.to_string())?;
+        let m =
+            Migrator::new(std::path::Path::new(migration_path)).await.map_err(|e| e.to_string())?;
         m.run(&self.pool).await.map_err(|e| e.to_string())
     }
 
@@ -167,11 +152,9 @@ impl PgClient {
     async fn start_transaction(&self) -> Result<Transaction<'_, Postgres>, IndexDbError> {
         let start_time = chrono::Utc::now();
         let transaction = self.pool.begin().await.inspect_err(|_e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
+            self.metrics.observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "begin");
         })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
+        self.metrics.observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "begin", start_time);
         Ok(transaction)
     }
 
@@ -181,11 +164,9 @@ impl PgClient {
     ) -> Result<(), IndexDbError> {
         let start_time = chrono::Utc::now();
         transaction.commit().await.inspect_err(|_e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "commit");
+            self.metrics.observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "commit");
         })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
+        self.metrics.observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "commit", start_time);
         Ok(())
     }
     async fn rollback_transaction(
@@ -194,11 +175,9 @@ impl PgClient {
     ) -> Result<(), IndexDbError> {
         let start_time = chrono::Utc::now();
         transaction.rollback().await.inspect_err(|_e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "rollback");
+            self.metrics.observe_error(SQL_COMPONENT, TRANSACTION_ACTION, "rollback");
         })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "rollback", start_time);
+        self.metrics.observe_request(SQL_COMPONENT, TRANSACTION_ACTION, "rollback", start_time);
         Ok(())
     }
 
@@ -230,10 +209,8 @@ impl PgClient {
         self.recreate_asset_indexes(&mut transaction).await?;
         self.recreate_authorities_indexes(&mut transaction).await?;
         self.recreate_creators_indexes(&mut transaction).await?;
-        self.recreate_asset_authorities_constraints(&mut transaction)
-            .await?;
-        self.recreate_asset_creators_constraints(&mut transaction)
-            .await?;
+        self.recreate_asset_authorities_constraints(&mut transaction).await?;
+        self.recreate_asset_creators_constraints(&mut transaction).await?;
         self.recreate_asset_constraints(&mut transaction).await?;
 
         transaction.commit().await?;

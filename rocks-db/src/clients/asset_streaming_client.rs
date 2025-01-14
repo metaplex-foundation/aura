@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use entities::enums::TokenMetadataEdition;
-use entities::models::{AssetCompleteDetailsGrpc, SplMint, Updated};
+use entities::{
+    enums::TokenMetadataEdition,
+    models::{AssetCompleteDetailsGrpc, SplMint, Updated},
+};
 use interface::asset_streaming_and_discovery::{
     AssetDetailsStream, AssetDetailsStreamer, AsyncError,
 };
@@ -11,14 +13,13 @@ use rocksdb::DB;
 use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::asset::{AssetCompleteDetails, SlotAssetIdxKey};
-use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey};
-use crate::columns::offchain_data::OffChainData;
-use crate::generated::asset_generated::asset as fb;
 use crate::{
-    asset::{AssetLeaf, SlotAssetIdx},
+    asset::{AssetCompleteDetails, AssetLeaf, SlotAssetIdx, SlotAssetIdxKey},
+    cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey},
     column::TypedColumn,
+    columns::offchain_data::OffChainData,
     errors::StorageError,
+    generated::asset_generated::asset as fb,
     Storage,
 };
 
@@ -55,10 +56,8 @@ async fn process_asset_details_range(
     tx: tokio::sync::mpsc::Sender<Result<AssetCompleteDetailsGrpc, AsyncError>>,
 ) -> Result<(), AsyncError> {
     let slot_asset_idx = Storage::column::<SlotAssetIdx>(backend.clone(), metrics.clone());
-    let iterator = slot_asset_idx.iter(SlotAssetIdxKey::new(
-        start_slot,
-        solana_sdk::pubkey::Pubkey::default(),
-    ));
+    let iterator = slot_asset_idx
+        .iter(SlotAssetIdxKey::new(start_slot, solana_sdk::pubkey::Pubkey::default()));
 
     for pair in iterator {
         let (idx_key, _) = pair.map_err(|e| Box::new(e) as AsyncError)?;
@@ -74,12 +73,12 @@ async fn process_asset_details_range(
                 if tx.send(Err(Box::new(e) as AsyncError)).await.is_err() {
                     break; // Receiver is dropped
                 }
-            }
+            },
             Ok(details) => {
                 if tx.send(Ok(details)).await.is_err() {
                     break; // Receiver is dropped
                 }
-            }
+            },
         }
     }
 
@@ -98,7 +97,7 @@ async fn get_complete_asset_details(
     let data = match data {
         None => {
             return Err(StorageError::Common("Asset data not found".to_string()));
-        }
+        },
         Some(data) => data,
     };
     let data = fb::root_as_asset_complete_details(&data)
@@ -107,33 +106,27 @@ async fn get_complete_asset_details(
     let data = AssetCompleteDetails::from(data);
     let static_data = match data.static_details {
         None => {
-            return Err(StorageError::Common(
-                "Asset static data not found".to_string(),
-            ));
-        }
+            return Err(StorageError::Common("Asset static data not found".to_string()));
+        },
         Some(static_data) => static_data,
     };
 
     let dynamic_data = match data.dynamic_details {
         None => {
-            return Err(StorageError::Common(
-                "Asset dynamic data not found".to_string(),
-            ));
-        }
+            return Err(StorageError::Common("Asset dynamic data not found".to_string()));
+        },
         Some(dynamic_data) => dynamic_data,
     };
     let authority = match data.authority {
         None => {
-            return Err(StorageError::Common(
-                "Asset authority not found".to_string(),
-            ));
-        }
+            return Err(StorageError::Common("Asset authority not found".to_string()));
+        },
         Some(authority) => authority,
     };
     let owner = match data.owner {
         None => {
             return Err(StorageError::Common("Asset owner not found".to_string()));
-        }
+        },
         Some(owner) => owner,
     };
 
@@ -145,12 +138,8 @@ async fn get_complete_asset_details(
         Some(onchain_data) => {
             let v = serde_json::from_str(&onchain_data.value)
                 .map_err(|e| StorageError::Common(e.to_string()))?;
-            Some(Updated::new(
-                onchain_data.slot_updated,
-                onchain_data.update_version,
-                v,
-            ))
-        }
+            Some(Updated::new(onchain_data.slot_updated, onchain_data.update_version, v))
+        },
     };
 
     let cl_leaf = match asset_leaf {
@@ -170,7 +159,7 @@ async fn get_complete_asset_details(
                         .collect::<Vec<_>>(),
                 )
                 .await?
-        }
+        },
     }
     .into_iter()
     .flatten()
@@ -197,7 +186,7 @@ async fn get_complete_asset_details(
                     None
                 };
             (Some(edition), master_edition)
-        }
+        },
     };
 
     let url = dynamic_data.url.clone();

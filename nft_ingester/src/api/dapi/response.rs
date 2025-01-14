@@ -1,7 +1,8 @@
-use crate::api::dapi::rpc_asset_models::Asset;
 use entities::models::{AssetSignature, CoreFeesAccount, ResponseTokenAccount};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+use crate::api::dapi::rpc_asset_models::Asset;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
 #[serde(default)]
@@ -70,11 +71,7 @@ pub struct SignatureItem {
 
 impl From<AssetSignature> for SignatureItem {
     fn from(value: AssetSignature) -> Self {
-        Self {
-            signature: value.tx,
-            instruction: value.instruction,
-            slot: value.slot,
-        }
+        Self { signature: value.tx, instruction: value.instruction, slot: value.slot }
     }
 }
 

@@ -1,13 +1,13 @@
 #[cfg(feature = "integration_tests")]
 #[cfg(test)]
 mod tests {
-    use entities::api_req_params::GetByMethodsOptions;
-    use entities::enums::AssetType;
-    use postgre_client::model::*;
-    use postgre_client::storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher};
+    use entities::{api_req_params::GetByMethodsOptions, enums::AssetType};
+    use postgre_client::{
+        model::*,
+        storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher},
+    };
     use setup::pg::*;
     use testcontainers::clients::Cli;
-    use tokio;
 
     #[tokio::test]
     async fn test_get_asset_pubkeys_filtered_on_empty_db() {
@@ -53,10 +53,7 @@ mod tests {
                 page,
                 before,
                 after,
-                &GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -125,10 +122,7 @@ mod tests {
                 page,
                 None,
                 None,
-                &GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -233,10 +227,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -256,10 +247,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -319,10 +307,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();

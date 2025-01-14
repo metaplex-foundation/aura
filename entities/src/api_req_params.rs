@@ -1,6 +1,7 @@
-use crate::enums::{Interface, OwnershipModel, RoyaltyModel, TokenType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+use crate::enums::{Interface, OwnershipModel, RoyaltyModel, TokenType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -331,11 +332,7 @@ impl SearchAssets {
         check_and_append(&mut result, &self.supply_mint, "supply_mint");
         check_and_append(&mut result, &self.compressed, "compressed");
         check_and_append(&mut result, &self.compressible, "compressible");
-        check_and_append(
-            &mut result,
-            &self.royalty_target_type,
-            "royalty_target_type",
-        );
+        check_and_append(&mut result, &self.royalty_target_type, "royalty_target_type");
         check_and_append(&mut result, &self.royalty_target, "royalty_target");
         check_and_append(&mut result, &self.royalty_amount, "royalty_amount");
         check_and_append(&mut result, &self.burnt, "burnt");
@@ -624,11 +621,8 @@ mod tests {
 
     #[test]
     fn extract_some_field_names_with_partially_filled_structure() {
-        let search_assets = SearchAssets {
-            burnt: Some(false),
-            negate: Some(true),
-            ..Default::default()
-        };
+        let search_assets =
+            SearchAssets { burnt: Some(false), negate: Some(true), ..Default::default() };
 
         let extracted_fields = search_assets.extract_some_fields();
 

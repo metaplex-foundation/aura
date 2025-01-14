@@ -1,13 +1,13 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use plerkle_messenger::redis_messenger::RedisMessenger;
-use plerkle_messenger::{Messenger, MessengerConfig};
-use tokio::sync::broadcast::Receiver;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
+use plerkle_messenger::{redis_messenger::RedisMessenger, Messenger, MessengerConfig};
 use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedSender},
+    sync::{
+        broadcast::Receiver,
+        mpsc::{unbounded_channel, UnboundedSender},
+        Mutex,
+    },
+    task::{JoinError, JoinSet},
     time::{interval, Duration},
 };
 use tracing::log::error;

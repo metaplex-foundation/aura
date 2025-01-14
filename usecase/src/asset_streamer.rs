@@ -13,10 +13,7 @@ pub struct AssetStreamer {
 
 impl AssetStreamer {
     pub fn new(max_window_size: u64, data_layer: Arc<dyn AssetDetailsStreamer>) -> Self {
-        Self {
-            max_window_size,
-            data_layer,
-        }
+        Self { max_window_size, data_layer }
     }
 }
 
@@ -39,27 +36,24 @@ impl AssetDetailsStreamer for AssetStreamer {
             )));
         }
 
-        self.data_layer
-            .get_asset_details_stream_in_range(start_slot, end_slot)
-            .await
+        self.data_layer.get_asset_details_stream_in_range(start_slot, end_slot).await
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use futures::stream::{self, StreamExt};
     use interface::asset_streaming_and_discovery::MockAssetDetailsStreamer;
     use mockall::predicate::*;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_get_asset_details_stream_in_range_too_wide_range() {
         let data_layer = MockAssetDetailsStreamer::new();
         let asset_streamer = AssetStreamer::new(100, Arc::new(data_layer));
 
-        let result = asset_streamer
-            .get_asset_details_stream_in_range(0, 100)
-            .await;
+        let result = asset_streamer.get_asset_details_stream_in_range(0, 100).await;
 
         assert!(result.is_err());
         // Check for a specific error response
@@ -77,9 +71,7 @@ mod tests {
         let data_layer = MockAssetDetailsStreamer::new();
         let asset_streamer = AssetStreamer::new(100, Arc::new(data_layer));
 
-        let result = asset_streamer
-            .get_asset_details_stream_in_range(100, 0)
-            .await;
+        let result = asset_streamer.get_asset_details_stream_in_range(100, 0).await;
 
         assert!(result.is_err());
         // Check for a specific error response
@@ -106,9 +98,7 @@ mod tests {
             );
         let asset_streamer = AssetStreamer::new(100, Arc::new(data_layer));
 
-        let result = asset_streamer
-            .get_asset_details_stream_in_range(0, 10)
-            .await;
+        let result = asset_streamer.get_asset_details_stream_in_range(0, 10).await;
 
         assert!(result.is_ok());
 

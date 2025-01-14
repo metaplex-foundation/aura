@@ -1,36 +1,51 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use blockbuster::token_metadata::accounts::Metadata;
-    use blockbuster::token_metadata::types::{Collection, Creator, Key};
-    use entities::api_req_params::{GetAsset, Options};
-    use entities::models::{MetadataInfo, Mint, TokenAccount};
+    use std::{
+        fs::File,
+        io::{self, Read},
+        str::FromStr,
+        sync::Arc,
+    };
+
+    use blockbuster::token_metadata::{
+        accounts::Metadata,
+        types::{Collection, Creator, Key},
+    };
+    use entities::{
+        api_req_params::{GetAsset, Options},
+        models::{MetadataInfo, Mint, TokenAccount},
+    };
     use interface::account_balance::MockAccountBalanceGetter;
-    use metrics_utils::red::RequestErrorDurationMetrics;
-    use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
-    use nft_ingester::config::JsonMiddlewareConfig;
-    use nft_ingester::json_worker::JsonWorker;
-    use nft_ingester::processors::account_based::mplx_updates_processor::MplxAccountsProcessor;
-    use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
+    use metrics_utils::{
+        red::RequestErrorDurationMetrics, ApiMetricsConfig, BackfillerMetricsConfig,
+        IngesterMetricsConfig,
+    };
     use nft_ingester::{
-        backfiller::DirectBlockParser, buffer::Buffer,
-        processors::account_based::token_updates_processor::TokenAccountsProcessor,
-        processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
+        backfiller::DirectBlockParser,
+        buffer::Buffer,
+        config::JsonMiddlewareConfig,
+        json_worker::JsonWorker,
+        processors::{
+            account_based::{
+                mplx_updates_processor::MplxAccountsProcessor,
+                token_updates_processor::TokenAccountsProcessor,
+            },
+            transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
+        },
+        raydium_price_fetcher::RaydiumTokenPriceFetcher,
         transaction_ingester,
     };
-    use rocks_db::batch_savers::BatchSaveStorage;
-    use rocks_db::columns::offchain_data::OffChainData;
-    use rocks_db::migrator::MigrationState;
-    use rocks_db::Storage;
+    use rocks_db::{
+        batch_savers::BatchSaveStorage, columns::offchain_data::OffChainData,
+        migrator::MigrationState, Storage,
+    };
     use solana_sdk::pubkey::Pubkey;
-    use std::fs::File;
-    use std::io::{self, Read};
-    use std::str::FromStr;
-    use std::sync::Arc;
     use testcontainers::clients::Cli;
-    use tokio::sync::broadcast;
-    use tokio::sync::Mutex;
-    use tokio::task::JoinSet;
+    use tokio::{
+        sync::{broadcast, Mutex},
+        task::JoinSet,
+    };
     use usecase::proofs::MaybeProofChecker;
 
     // corresponds to So11111111111111111111111111111111111111112
@@ -61,11 +76,7 @@ mod tests {
 
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let transactions_storage = Storage::open(
-            &format!(
-                "{}{}",
-                tx_storage_dir.path().to_str().unwrap(),
-                "/test_rocks"
-            ),
+            &format!("{}{}", tx_storage_dir.path().to_str().unwrap(), "/test_rocks"),
             mutexed_tasks.clone(),
             red_metrics.clone(),
             MigrationState::Last,
@@ -74,10 +85,8 @@ mod tests {
 
         let rocks_storage = Arc::new(transactions_storage);
 
-        let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
-            env_rocks,
-            Arc::new(IngesterMetricsConfig::new()),
-        ));
+        let bubblegum_updates_processor =
+            Arc::new(BubblegumTxProcessor::new(env_rocks, Arc::new(IngesterMetricsConfig::new())));
 
         let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
             bubblegum_updates_processor.clone(),
@@ -136,9 +145,7 @@ mod tests {
             .transform_and_save_token_account(storage, token_acc.pubkey, &token_acc)
             .unwrap();
 
-        spl_token_accs_parser
-            .transform_and_save_mint_account(storage, &mint_acc)
-            .unwrap();
+        spl_token_accs_parser.transform_and_save_mint_account(storage, &mint_acc).unwrap();
 
         let decompressed_token_data = MetadataInfo {
             metadata: Metadata {
@@ -267,10 +274,7 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
@@ -362,10 +366,7 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
@@ -457,10 +458,7 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
@@ -552,10 +550,7 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 

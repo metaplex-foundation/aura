@@ -1,19 +1,21 @@
-use std::ops::Deref;
-use std::{sync::Arc, time::Duration};
+use std::{ops::Deref, sync::Arc, time::Duration};
 
-use crate::{
-    error::IngesterError,
-    processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
-};
 use async_trait::async_trait;
 use bubblegum_batch_sdk::model::BatchMint;
-use entities::enums::PersistingBatchMintState;
-use entities::{enums::FailedBatchMintState, models::BatchMintToVerify};
+use entities::{
+    enums::{FailedBatchMintState, PersistingBatchMintState},
+    models::BatchMintToVerify,
+};
 use interface::{batch_mint::BatchMintDownloader, error::UsecaseError};
 use metrics_utils::{BatchMintPersisterMetricsConfig, MetricStatus};
 use rocks_db::columns::batch_mint::BatchMintWithStaker;
 use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
 use tracing::{error, info};
+
+use crate::{
+    error::IngesterError,
+    processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
+};
 
 pub const MAX_BATCH_MINT_DOWNLOAD_ATTEMPTS: u8 = 5;
 
@@ -53,11 +55,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         downloader: D,
         metrics: Arc<BatchMintPersisterMetricsConfig>,
     ) -> Self {
-        Self {
-            rocks_client,
-            downloader,
-            metrics,
-        }
+        Self { rocks_client, downloader, metrics }
     }
 
     pub async fn persist_batch_mints(&self, mut rx: Receiver<()>) -> Result<(), JoinError> {
@@ -66,14 +64,13 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
                 Ok(res) => res,
                 Err(_) => {
                     continue;
-                }
+                },
             };
             let Some(batch_mint_to_verify) = batch_mint_to_verify else {
                 // no batch_mints to persist
                 continue;
             };
-            self.persist_batch_mint(&rx, batch_mint_to_verify, batch_mint)
-                .await;
+            self.persist_batch_mint(&rx, batch_mint_to_verify, batch_mint).await;
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_secs(5)) => {},
                 _ = rx.recv() => {
@@ -96,13 +93,12 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         while rx.is_empty() {
             match &batch_mint_to_verify.persisting_state {
                 &PersistingBatchMintState::ReceivedTransaction => {
-                    if let Err(err) = self
-                        .download_batch_mint(&mut batch_mint_to_verify, &mut batch_mint)
-                        .await
+                    if let Err(err) =
+                        self.download_batch_mint(&mut batch_mint_to_verify, &mut batch_mint).await
                     {
                         error!("Error during batch_mint downloading: {}", err)
                     };
-                }
+                },
                 &PersistingBatchMintState::SuccessfullyDownload => {
                     if let Some(r) = &batch_mint {
                         self.validate_batch_mint(&mut batch_mint_to_verify, r).await;
@@ -112,22 +108,20 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
                             &batch_mint_to_verify
                         )
                     }
-                }
+                },
                 &PersistingBatchMintState::SuccessfullyValidate => {
                     if let Some(r) = &batch_mint {
-                        self.store_batch_mint_update(&mut batch_mint_to_verify, r)
-                            .await;
+                        self.store_batch_mint_update(&mut batch_mint_to_verify, r).await;
                     } else {
                         error!(
                             "Trying to store update for non downloaded batch_mint: {:#?}",
                             &batch_mint_to_verify
                         )
                     }
-                }
+                },
                 &PersistingBatchMintState::FailedToPersist
                 | &PersistingBatchMintState::StoredUpdate => {
-                    self.drop_batch_mint_from_queue(batch_mint_to_verify.file_hash.clone())
-                        .await;
+                    self.drop_batch_mint_from_queue(batch_mint_to_verify.file_hash.clone()).await;
                     info!(
                         "Finish processing {} batch_mint file with {:?} state",
                         &batch_mint_to_verify.url, &batch_mint_to_verify.persisting_state
@@ -137,16 +131,13 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
                         start_time.elapsed().as_millis() as f64,
                     );
                     return;
-                }
+                },
             }
         }
         if let Err(e) = self
             .rocks_client
             .batch_mint_to_verify
-            .put_async(
-                batch_mint_to_verify.file_hash.clone(),
-                batch_mint_to_verify.clone(),
-            )
+            .put_async(batch_mint_to_verify.file_hash.clone(), batch_mint_to_verify.clone())
             .await
         {
             error!("Update batch_mint to verify state: {}", e)
@@ -159,14 +150,13 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         match self.rocks_client.fetch_batch_mint_for_verifying().await {
             Ok((Some(batch_mint_to_verify), batch_mint_data)) => {
                 Ok((Some(batch_mint_to_verify), batch_mint_data.map(Box::new)))
-            }
+            },
             Ok((None, _)) => Ok((None, None)),
             Err(e) => {
-                self.metrics
-                    .inc_batch_mints_with_status("batch_mint_fetch", MetricStatus::FAILURE);
+                self.metrics.inc_batch_mints_with_status("batch_mint_fetch", MetricStatus::FAILURE);
                 error!("Failed to fetch batch_mint for verifying: {}", e);
                 Err(e.into())
-            }
+            },
         }
     }
 
@@ -205,7 +195,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
                 *batch_mint = Some(r);
                 batch_mint_to_verify.persisting_state =
                     PersistingBatchMintState::SuccessfullyDownload;
-            }
+            },
             Err(e) => {
                 if let UsecaseError::HashMismatch(expected, actual) = e {
                     batch_mint_to_verify.persisting_state =
@@ -266,7 +256,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
                     );
                 }
                 return Err(IngesterError::Usecase(e.to_string()));
-            }
+            },
         }
         self.metrics.set_persisting_latency(
             "batch_mint_download",
@@ -303,8 +293,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
             };
             return;
         }
-        self.metrics
-            .inc_batch_mints_with_status("batch_mint_validating", MetricStatus::SUCCESS);
+        self.metrics.inc_batch_mints_with_status("batch_mint_validating", MetricStatus::SUCCESS);
         self.metrics.set_persisting_latency(
             "batch_mint_validation",
             begin_processing.elapsed().as_millis() as f64,
@@ -327,13 +316,11 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         .await
         .is_err()
         {
-            self.metrics
-                .inc_batch_mints_with_status("batch_mint_persist", MetricStatus::FAILURE);
+            self.metrics.inc_batch_mints_with_status("batch_mint_persist", MetricStatus::FAILURE);
             batch_mint_to_verify.persisting_state = PersistingBatchMintState::FailedToPersist;
             return;
         }
-        self.metrics
-            .inc_batch_mints_with_status("batch_mint_persist", MetricStatus::SUCCESS);
+        self.metrics.inc_batch_mints_with_status("batch_mint_persist", MetricStatus::SUCCESS);
         self.metrics.set_persisting_latency(
             "batch_mint_store_into_db",
             begin_processing.elapsed().as_millis() as f64,
@@ -346,11 +333,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         status: FailedBatchMintState,
         batch_mint: &BatchMintToVerify,
     ) -> Result<(), IngesterError> {
-        if let Err(e) = self
-            .rocks_client
-            .save_batch_mint_as_failed(status, batch_mint)
-            .await
-        {
+        if let Err(e) = self.rocks_client.save_batch_mint_as_failed(status, batch_mint).await {
             self.metrics
                 .inc_batch_mints_with_status("batch_mint_mark_as_failure", MetricStatus::FAILURE);
             return Err(e.into());
@@ -359,11 +342,7 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
     }
 
     async fn drop_batch_mint_from_queue(&self, file_hash: String) {
-        if let Err(e) = self
-            .rocks_client
-            .drop_batch_mint_from_queue(file_hash)
-            .await
-        {
+        if let Err(e) = self.rocks_client.drop_batch_mint_from_queue(file_hash).await {
             self.metrics
                 .inc_batch_mints_with_status("batch_mint_queue_clear", MetricStatus::FAILURE);
             error!("batch_mint queue clear: {}", e)

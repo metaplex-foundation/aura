@@ -1,17 +1,11 @@
-use std::sync::Arc;
-
-use rocks_db::column::TypedColumn;
-
-use tracing::info;
-
-use rocksdb::{Options, DB};
-use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
+use std::{env, sync::Arc};
 
 use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
-
-use std::env;
+use rocks_db::column::TypedColumn;
+use rocksdb::{Options, DB};
+use rustyline::{error::ReadlineError, DefaultEditor};
+use tracing::info;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), String> {
@@ -33,10 +27,7 @@ pub async fn main() -> Result<(), String> {
     ];
 
     // Print the column families to be removed
-    println!(
-        "Columns to be removed from {}: {:?}",
-        db_path, columns_to_remove
-    );
+    println!("Columns to be removed from {}: {:?}", db_path, columns_to_remove);
 
     // Ask for user confirmation
     println!("Do you want to proceed with removing these column families? (y/n)");
@@ -50,13 +41,13 @@ pub async fn main() -> Result<(), String> {
             } else {
                 println!("Operation cancelled.");
             }
-        }
+        },
         Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
             println!("Operation cancelled.");
-        }
+        },
         Err(err) => {
             println!("Error: {:?}", err);
-        }
+        },
     }
 
     Ok(())

@@ -1,12 +1,17 @@
 use std::sync::Arc;
 
-use crate::error::IndexDbError;
-use crate::model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter};
 use async_trait::async_trait;
-use entities::api_req_params::GetByMethodsOptions;
-use entities::enums::AssetType;
-use entities::models::{AssetIndex, FungibleAssetIndex};
+use entities::{
+    api_req_params::GetByMethodsOptions,
+    enums::AssetType,
+    models::{AssetIndex, FungibleAssetIndex},
+};
 use mockall::{automock, mock};
+
+use crate::{
+    error::IndexDbError,
+    model::{AssetSortedIndex, AssetSorting, SearchAssetsFilter},
+};
 
 pub struct NFTSemaphores {
     pub assets: Arc<tokio::sync::Semaphore>,

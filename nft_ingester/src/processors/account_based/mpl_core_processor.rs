@@ -1,25 +1,30 @@
-use crate::error::IngesterError;
-use blockbuster::mpl_core::types::{Plugin, PluginAuthority, PluginType, UpdateAuthority};
-use blockbuster::programs::mpl_core_program::MplCoreAccountData;
-use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{
-    BurntMetadataSlot, ChainDataV1, IndexableAssetWithAccountInfo, UpdateVersion, Updated,
+use std::{collections::BTreeMap, sync::Arc, time::Instant};
+
+use blockbuster::{
+    mpl_core::types::{Plugin, PluginAuthority, PluginType, UpdateAuthority},
+    programs::mpl_core_program::MplCoreAccountData,
+};
+use entities::{
+    enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass},
+    models::{
+        BurntMetadataSlot, ChainDataV1, IndexableAssetWithAccountInfo, UpdateVersion, Updated,
+    },
 };
 use heck::ToSnakeCase;
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
-use rocks_db::columns::asset::{
-    AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetOwner,
-    AssetStaticDetails,
+use rocks_db::{
+    batch_savers::{BatchSaveStorage, MetadataModels},
+    columns::asset::{
+        AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetOwner,
+        AssetStaticDetails,
+    },
+    errors::StorageError,
 };
-use rocks_db::errors::StorageError;
-use serde_json::Map;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use solana_program::pubkey::Pubkey;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::time::Instant;
 use usecase::save_metrics::result_to_metrics;
+
+use crate::error::IngesterError;
 
 pub struct MplCoreProcessor {
     metrics: Arc<IngesterMetricsConfig>,
@@ -46,11 +51,7 @@ impl MplCoreProcessor {
         let begin_processing = Instant::now();
         let asset = AssetCompleteDetails::from(&metadata_models);
         let res = storage.store_metadata_models(&asset, metadata_models.metadata_mint);
-        result_to_metrics(
-            self.metrics.clone(),
-            &res,
-            "mpl_core_asset_merge_with_batch",
-        );
+        result_to_metrics(self.metrics.clone(), &res, "mpl_core_asset_merge_with_batch");
         self.metrics.set_latency(
             "mpl_core_asset_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
@@ -117,7 +118,7 @@ impl MplCoreProcessor {
             MplCoreAccountData::Asset(_) => (asset.owner, SpecificationAssetClass::MplCoreAsset),
             MplCoreAccountData::Collection(_) => {
                 (update_authority, SpecificationAssetClass::MplCoreCollection)
-            }
+            },
             _ => return Ok(None),
         };
 
@@ -138,11 +139,8 @@ impl MplCoreProcessor {
         // convert HashMap plugins into BTreeMap to have always same plugins order
         // for example without ordering 2 assets with same plugins can have different order saved in DB
         // it affects only API response and tests
-        let ordered_plugins: BTreeMap<_, _> = asset
-            .plugins
-            .iter()
-            .map(|(key, value)| (format!("{:?}", key), value))
-            .collect();
+        let ordered_plugins: BTreeMap<_, _> =
+            asset.plugins.iter().map(|(key, value)| (format!("{:?}", key), value)).collect();
         let mut plugins_json = serde_json::to_value(ordered_plugins)
             .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
 
@@ -191,15 +189,14 @@ impl MplCoreProcessor {
 
         // Get transfer delegate from `TransferDelegate` plugin if available.
         let transfer_delegate =
-            asset
-                .plugins
-                .get(&PluginType::TransferDelegate)
-                .and_then(|plugin_schema| match &plugin_schema.authority {
+            asset.plugins.get(&PluginType::TransferDelegate).and_then(|plugin_schema| {
+                match &plugin_schema.authority {
                     PluginAuthority::Owner => owner,
                     PluginAuthority::UpdateAuthority => update_authority,
                     PluginAuthority::Address { address } => Some(*address),
                     PluginAuthority::None => None,
-                });
+                }
+            });
 
         // Get frozen status from `FreezeDelegate` plugin if available.
         let frozen = asset
@@ -216,14 +213,12 @@ impl MplCoreProcessor {
 
         if let UpdateAuthority::Collection(address) = asset.update_authority {
             // setup update_authority only on collection updates
-            let authority = if matches!(
-                account_data.indexable_asset,
-                MplCoreAccountData::Collection(_)
-            ) {
-                update_authority
-            } else {
-                None
-            };
+            let authority =
+                if matches!(account_data.indexable_asset, MplCoreAccountData::Collection(_)) {
+                    update_authority
+                } else {
+                    None
+                };
             models.asset_collection = Some(AssetCollection {
                 pubkey: asset_key,
                 collection: Updated::new(
@@ -435,11 +430,7 @@ impl MplCoreProcessor {
     ) -> Result<(), StorageError> {
         let begin_processing = Instant::now();
         let res = self.mark_mpl_asset_as_burnt(storage, key, burnt_slot);
-        result_to_metrics(
-            self.metrics.clone(),
-            &res,
-            "burn_mpl_assets_merge_with_batch",
-        );
+        result_to_metrics(self.metrics.clone(), &res, "burn_mpl_assets_merge_with_batch");
         self.metrics.set_latency(
             "burn_mpl_assets_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,
@@ -477,14 +468,14 @@ fn remove_plugins_nesting(plugins_json: &mut Value, nested_key: &str) {
             for (_, plugin) in plugins.iter_mut() {
                 remove_nesting_from_plugin(plugin, nested_key);
             }
-        }
+        },
         Value::Array(plugins_array) => {
             // Handle the case where plugins_json is an array.
             for plugin in plugins_array.iter_mut() {
                 remove_nesting_from_plugin(plugin, nested_key);
             }
-        }
-        _ => {}
+        },
+        _ => {},
     }
 }
 
@@ -525,7 +516,7 @@ fn transform_plugins_authority(plugins_json: &mut Value) {
                     transform_linked_app_data_parent_key_in_object(plugin_obj);
                 }
             }
-        }
+        },
         Value::Array(plugins_array) => {
             // Transform plugins in an array
             for plugin in plugins_array.iter_mut() {
@@ -535,8 +526,8 @@ fn transform_plugins_authority(plugins_json: &mut Value) {
                     transform_linked_app_data_parent_key_in_object(plugin_obj);
                 }
             }
-        }
-        _ => {}
+        },
+        _ => {},
     }
 }
 
@@ -548,9 +539,8 @@ fn transform_authority_in_object(plugin: &mut Map<String, Value>) {
 
 fn transform_data_authority_in_object(plugin: &mut Map<String, Value>) {
     if let Some(adapter_config) = plugin.get_mut("adapter_config") {
-        if let Some(data_authority) = adapter_config
-            .as_object_mut()
-            .and_then(|o| o.get_mut("data_authority"))
+        if let Some(data_authority) =
+            adapter_config.as_object_mut().and_then(|o| o.get_mut("data_authority"))
         {
             transform_authority(data_authority);
         }
@@ -559,13 +549,11 @@ fn transform_data_authority_in_object(plugin: &mut Map<String, Value>) {
 
 fn transform_linked_app_data_parent_key_in_object(plugin: &mut Map<String, Value>) {
     if let Some(adapter_config) = plugin.get_mut("adapter_config") {
-        if let Some(parent_key) = adapter_config
-            .as_object_mut()
-            .and_then(|o| o.get_mut("parent_key"))
+        if let Some(parent_key) =
+            adapter_config.as_object_mut().and_then(|o| o.get_mut("parent_key"))
         {
-            if let Some(linked_app_data) = parent_key
-                .as_object_mut()
-                .and_then(|o| o.get_mut("LinkedAppData"))
+            if let Some(linked_app_data) =
+                parent_key.as_object_mut().and_then(|o| o.get_mut("LinkedAppData"))
             {
                 transform_authority(linked_app_data);
             }
@@ -585,15 +573,15 @@ fn transform_authority(authority: &mut Value) {
                     }
                 }
             }
-        }
+        },
         Value::String(authority_type) => {
             // Handle the case where authority is a string.
             let mut authority_obj = Map::new();
             authority_obj.insert("type".to_string(), Value::String(authority_type.clone()));
             authority_obj.insert("address".to_string(), Value::Null);
             *authority = Value::Object(authority_obj);
-        }
-        _ => {}
+        },
+        _ => {},
     }
 }
 
@@ -611,12 +599,12 @@ fn convert_keys_to_snake_case(plugins_json: &mut Value) {
             for (_, val) in obj.iter_mut() {
                 convert_keys_to_snake_case(val);
             }
-        }
+        },
         Value::Array(arr) => {
             for val in arr {
                 convert_keys_to_snake_case(val);
             }
-        }
-        _ => {}
+        },
+        _ => {},
     }
 }

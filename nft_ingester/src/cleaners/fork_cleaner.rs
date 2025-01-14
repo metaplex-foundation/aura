@@ -1,16 +1,15 @@
+use std::{sync::Arc, time::Duration};
+
 use entities::models::ForkedItem;
 use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
 use metrics_utils::ForkCleanerMetricsConfig;
-use rocks_db::SlotStorage;
-use rocks_db::Storage;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast::Receiver;
-use tokio::task::JoinError;
-use tokio::time::sleep as tokio_sleep;
-use tokio::time::Instant;
+use rocks_db::{SlotStorage, Storage};
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use tokio::{
+    sync::broadcast::Receiver,
+    task::JoinError,
+    time::{sleep as tokio_sleep, Instant},
+};
 use tracing::info;
 
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 100;
@@ -60,18 +59,12 @@ where
         fork_checker: Arc<FC>,
         metrics: Arc<ForkCleanerMetricsConfig>,
     ) -> Self {
-        Self {
-            cl_items_manager,
-            fork_checker,
-            metrics,
-        }
+        Self { cl_items_manager, fork_checker, metrics }
     }
 
     pub async fn clean_forks(&self, rx: Receiver<()>) {
-        let last_slot_for_check = self
-            .fork_checker
-            .last_slot_for_check()
-            .saturating_sub(SLOT_CHECK_OFFSET);
+        let last_slot_for_check =
+            self.fork_checker.last_slot_for_check().saturating_sub(SLOT_CHECK_OFFSET);
         let all_non_forked_slots = self.fork_checker.get_all_non_forked_slots(rx.resubscribe());
 
         let mut forked_slots = 0;
@@ -133,13 +126,13 @@ where
                                 highest_sequence = *seq;
                                 slots_with_highest_sequence.clear(); // Clear previous slots since a new highest sequence is found
                                 slots_with_highest_sequence.push(*slot);
-                            }
+                            },
                             std::cmp::Ordering::Equal => {
                                 slots_with_highest_sequence.push(*slot);
-                            }
+                            },
                             std::cmp::Ordering::Less => {
                                 // Do nothing
-                            }
+                            },
                         }
                     }
                 }
@@ -197,16 +190,12 @@ where
 
     async fn delete_tree_seq_idx(&self, delete_items: &mut Vec<ForkedItem>) {
         self.metrics.inc_by_deleted_items(delete_items.len() as u64);
-        self.cl_items_manager
-            .delete_tree_seq_idx(std::mem::take(delete_items))
-            .await;
+        self.cl_items_manager.delete_tree_seq_idx(std::mem::take(delete_items)).await;
     }
 
     async fn delete_cl_items(&self, delete_items: &mut Vec<ForkedItem>) {
         self.metrics.inc_by_deleted_items(delete_items.len() as u64);
-        self.cl_items_manager
-            .delete_cl_items(std::mem::take(delete_items))
-            .await;
+        self.cl_items_manager.delete_cl_items(std::mem::take(delete_items)).await;
     }
 
     async fn delete_leaf_signatures(&self, keys: Vec<(Signature, Pubkey, u64)>) {

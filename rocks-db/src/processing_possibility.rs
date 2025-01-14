@@ -1,7 +1,8 @@
-use crate::Storage;
 use async_trait::async_trait;
 use interface::processing_possibility::ProcessingPossibilityChecker;
 use solana_sdk::pubkey::Pubkey;
+
+use crate::Storage;
 
 #[async_trait]
 impl ProcessingPossibilityChecker for Storage {
@@ -10,10 +11,9 @@ impl ProcessingPossibilityChecker for Storage {
             return true;
         }
         let trees = match self.asset_leaf_data.batch_get(pubkeys.to_vec()).await {
-            Ok(asset_leafs) => asset_leafs
-                .into_iter()
-                .flat_map(|leaf| leaf.map(|l| l.tree_id))
-                .collect::<Vec<_>>(),
+            Ok(asset_leafs) => {
+                asset_leafs.into_iter().flat_map(|leaf| leaf.map(|l| l.tree_id)).collect::<Vec<_>>()
+            },
             // Some troubles with DB, so we cannot handle requests
             Err(_) => return false,
         };

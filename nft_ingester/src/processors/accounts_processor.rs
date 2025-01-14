@@ -1,22 +1,25 @@
-use crate::{error::IngesterError, redis_receiver::get_timestamp_from_id};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 use chrono::Utc;
-use entities::enums::UnprocessedAccount;
-use entities::models::{CoreAssetFee, UnprocessedAccountMessage};
+use entities::{
+    enums::UnprocessedAccount,
+    models::{CoreAssetFee, UnprocessedAccountMessage},
+};
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
 use metrics_utils::{IngesterMetricsConfig, MessageProcessMetricsConfig};
 use postgre_client::PgClient;
-use rocks_db::batch_savers::BatchSaveStorage;
-use rocks_db::Storage;
+use rocks_db::{batch_savers::BatchSaveStorage, Storage};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast::Receiver;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
-use tokio::time::Instant;
+use tokio::{
+    sync::{broadcast::Receiver, Mutex},
+    task::{JoinError, JoinSet},
+    time::Instant,
+};
 use tracing::{debug, error};
 
 use super::account_based::{
@@ -24,6 +27,7 @@ use super::account_based::{
     mpl_core_fee_indexing_processor::MplCoreFeeProcessor, mpl_core_processor::MplCoreProcessor,
     mplx_updates_processor::MplxAccountsProcessor, token_updates_processor::TokenAccountsProcessor,
 };
+use crate::{error::IngesterError, redis_receiver::get_timestamp_from_id};
 
 // worker idle timeout
 const WORKER_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
@@ -78,9 +82,7 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
         .await
         .expect("Failed to build 'AccountsProcessor'!");
 
-        account_processor
-            .process_accounts(rx, rocks_storage, account_buffer_size)
-            .await;
+        account_processor.process_accounts(rx, rocks_storage, account_buffer_size).await;
 
         Ok(())
     });
@@ -169,15 +171,8 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 }
             }
         }
-        self.flush(
-            &mut batch_storage,
-            &mut ack_ids,
-            &mut interval,
-            &mut batch_fill_instant,
-        );
-        self.core_fees_processor
-            .store_mpl_assets_fee(&std::mem::take(&mut core_fees))
-            .await;
+        self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_instant);
+        self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
     }
 
     pub async fn process_account(
@@ -196,82 +191,79 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             );
 
             let processing_result = match &unprocessed_account.account {
-                UnprocessedAccount::MetadataInfo(metadata_info) => self
-                    .mplx_accounts_processor
-                    .transform_and_store_metadata_account(
+                UnprocessedAccount::MetadataInfo(metadata_info) => {
+                    self.mplx_accounts_processor.transform_and_store_metadata_account(
                         batch_storage,
                         unprocessed_account.key,
                         metadata_info,
-                    ),
+                    )
+                },
                 UnprocessedAccount::Token(token_account) => {
                     if POPULAR_FUNGIBLE_TOKENS.contains(&token_account.mint) {
-                        self.token_accounts_processor
-                            .transform_and_save_fungible_token_account(
-                                batch_storage,
-                                unprocessed_account.key,
-                                token_account,
-                            )
+                        self.token_accounts_processor.transform_and_save_fungible_token_account(
+                            batch_storage,
+                            unprocessed_account.key,
+                            token_account,
+                        )
                     } else {
-                        self.token_accounts_processor
-                            .transform_and_save_token_account(
-                                batch_storage,
-                                unprocessed_account.key,
-                                token_account,
-                            )
+                        self.token_accounts_processor.transform_and_save_token_account(
+                            batch_storage,
+                            unprocessed_account.key,
+                            token_account,
+                        )
                     }
-                }
+                },
                 UnprocessedAccount::Mint(mint) => self
                     .token_accounts_processor
                     .transform_and_save_mint_account(batch_storage, mint),
-                UnprocessedAccount::Edition(edition) => self
-                    .mplx_accounts_processor
-                    .transform_and_store_edition_account(
+                UnprocessedAccount::Edition(edition) => {
+                    self.mplx_accounts_processor.transform_and_store_edition_account(
                         batch_storage,
                         unprocessed_account.key,
                         &edition.edition,
-                    ),
-                UnprocessedAccount::BurnMetadata(burn_metadata) => self
-                    .mplx_accounts_processor
-                    .transform_and_store_burnt_metadata(
+                    )
+                },
+                UnprocessedAccount::BurnMetadata(burn_metadata) => {
+                    self.mplx_accounts_processor.transform_and_store_burnt_metadata(
                         batch_storage,
                         unprocessed_account.key,
                         burn_metadata,
-                    ),
+                    )
+                },
                 UnprocessedAccount::BurnMplCore(burn_mpl_core) => {
                     self.mpl_core_processor.transform_and_store_burnt_mpl_asset(
                         batch_storage,
                         unprocessed_account.key,
                         burn_mpl_core,
                     )
-                }
+                },
                 UnprocessedAccount::MplCore(mpl_core) => {
                     self.mpl_core_processor.transform_and_store_mpl_asset(
                         batch_storage,
                         unprocessed_account.key,
                         mpl_core,
                     )
-                }
-                UnprocessedAccount::Inscription(inscription) => self
-                    .inscription_processor
-                    .store_inscription(batch_storage, inscription),
+                },
+                UnprocessedAccount::Inscription(inscription) => {
+                    self.inscription_processor.store_inscription(batch_storage, inscription)
+                },
                 UnprocessedAccount::InscriptionData(inscription_data) => {
                     self.inscription_processor.store_inscription_data(
                         batch_storage,
                         unprocessed_account.key,
                         inscription_data,
                     )
-                }
+                },
                 UnprocessedAccount::MplCoreFee(core_fee) => {
                     core_fees.insert(unprocessed_account.key, core_fee.clone());
                     Ok(())
-                }
+                },
             };
             if let Err(err) = processing_result {
                 error!("Processing account {}: {}", unprocessed_account.key, err);
                 continue;
             }
-            self.metrics
-                .inc_accounts(unprocessed_account.account.into());
+            self.metrics.inc_accounts(unprocessed_account.account.into());
 
             if let Some(message_process_metrics) = &self.message_process_metrics {
                 if let Some(message_timestamp) = get_timestamp_from_id(&unprocessed_account.id) {
@@ -279,9 +271,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
 
                     message_process_metrics.set_data_read_time(
                         "accounts",
-                        current_timestamp
-                            .checked_sub(message_timestamp)
-                            .unwrap_or_default() as f64,
+                        current_timestamp.checked_sub(message_timestamp).unwrap_or_default() as f64,
                     );
                 }
             }
@@ -291,9 +281,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 self.flush(batch_storage, ack_ids, interval, batch_fill_instant);
             }
             if core_fees.len() > self.fees_batch_size {
-                self.core_fees_processor
-                    .store_mpl_assets_fee(&std::mem::take(core_fees))
-                    .await;
+                self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(core_fees)).await;
             }
         }
     }
@@ -309,17 +297,15 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         match write_batch_result {
             Ok(_) => {
                 self.unprocessed_account_getter.ack(std::mem::take(ack_ids));
-            }
+            },
             Err(err) => {
                 error!("Write batch: {}", err);
                 ack_ids.clear();
-            }
+            },
         }
         interval.reset();
-        self.metrics.set_latency(
-            "accounts_batch_filling",
-            batch_fill_instant.elapsed().as_millis() as f64,
-        );
+        self.metrics
+            .set_latency("accounts_batch_filling", batch_fill_instant.elapsed().as_millis() as f64);
         *batch_fill_instant = Instant::now();
     }
 }

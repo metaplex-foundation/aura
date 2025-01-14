@@ -1,8 +1,9 @@
-use crate::{PgClient, BATCH_SELECT_ACTION, INSERT_ACTION, SQL_COMPONENT};
 use chrono::Utc;
 use entities::models::{CoreFee, CoreFeesAccount, CoreFeesAccountWithSortingID};
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Postgres, QueryBuilder, Row};
+
+use crate::{PgClient, BATCH_SELECT_ACTION, INSERT_ACTION, SQL_COMPONENT};
 
 impl PgClient {
     pub async fn save_core_fees(&self, fees: Vec<CoreFee>) -> Result<(), String> {
@@ -30,13 +31,11 @@ impl PgClient {
         query_builder.push(" ON CONFLICT (fee_pubkey) DO UPDATE SET fee_paid = EXCLUDED.fee_paid, fee_slot_updated = EXCLUDED.fee_slot_updated WHERE core_fees.fee_slot_updated < EXCLUDED.fee_slot_updated;");
         let query = query_builder.build();
         query.execute(&self.pool).await.map_err(|err| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, INSERT_ACTION, "core_fees");
+            self.metrics.observe_error(SQL_COMPONENT, INSERT_ACTION, "core_fees");
             format!("Insert core fees: {}", err)
         })?;
 
-        self.metrics
-            .observe_request(SQL_COMPONENT, INSERT_ACTION, "core_fees", start_time);
+        self.metrics.observe_request(SQL_COMPONENT, INSERT_ACTION, "core_fees", start_time);
 
         Ok(())
     }
@@ -80,12 +79,10 @@ impl PgClient {
         let query = query_builder.build();
         let start_time = chrono::Utc::now();
         let result = query.fetch_all(&self.pool).await.map_err(|err| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, "core_fees");
+            self.metrics.observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, "core_fees");
             err.to_string()
         })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, "core_fees", start_time);
+        self.metrics.observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, "core_fees", start_time);
         Ok(result
             .iter()
             .map(|row| {

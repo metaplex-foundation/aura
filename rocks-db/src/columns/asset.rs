@@ -1,23 +1,30 @@
-use std::collections::HashMap;
+use std::{
+    cmp::{max, Ordering},
+    collections::HashMap,
+};
 
-use crate::columns::inscriptions::{Inscription, InscriptionData};
-use crate::columns::offchain_data::OffChainData;
 use bincode::{deserialize, serialize};
-use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::{
-    AssetIndex, EditionData, SplMint, TokenAccount, UpdateVersion, Updated, UrlWithStatus,
+use entities::{
+    enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass},
+    models::{
+        AssetIndex, EditionData, SplMint, TokenAccount, UpdateVersion, Updated, UrlWithStatus,
+    },
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
-use std::cmp::{max, Ordering};
 use tracing::error;
 
-use crate::generated::asset_generated::asset as fb;
-use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
-use crate::TypedColumn;
-use crate::{Result, ToFlatbuffersConverter};
+use crate::{
+    columns::{
+        inscriptions::{Inscription, InscriptionData},
+        offchain_data::OffChainData,
+    },
+    generated::asset_generated::asset as fb,
+    key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey},
+    Result, ToFlatbuffersConverter, TypedColumn,
+};
 
 const MAX_OTHER_OWNERS: usize = 10;
 
@@ -70,23 +77,13 @@ impl<'a> ToFlatbuffersConverter<'a> for AssetCompleteDetails {
 
     fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target> {
         let pk = Some(builder.create_vector(&self.pubkey.to_bytes()));
-        let static_details = self
-            .static_details
-            .as_ref()
-            .map(|sd| asset_static_details_to_fb(builder, sd));
-        let dynamic_details = self
-            .dynamic_details
-            .as_ref()
-            .map(|dd| asset_dynamic_details_to_fb(builder, dd));
-        let authority = self
-            .authority
-            .as_ref()
-            .map(|a| asset_authority_to_fb(builder, a));
+        let static_details =
+            self.static_details.as_ref().map(|sd| asset_static_details_to_fb(builder, sd));
+        let dynamic_details =
+            self.dynamic_details.as_ref().map(|dd| asset_dynamic_details_to_fb(builder, dd));
+        let authority = self.authority.as_ref().map(|a| asset_authority_to_fb(builder, a));
         let owner = self.owner.as_ref().map(|o| asset_owner_to_fb(builder, o));
-        let collection = self
-            .collection
-            .as_ref()
-            .map(|c| asset_collection_to_fb(builder, c));
+        let collection = self.collection.as_ref().map(|c| asset_collection_to_fb(builder, c));
         fb::AssetCompleteDetails::create(
             builder,
             &fb::AssetCompleteDetailsArgs {
@@ -119,9 +116,8 @@ impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetCompleteDetails {
 impl<'a> From<fb::AssetStaticDetails<'a>> for AssetStaticDetails {
     fn from(value: fb::AssetStaticDetails<'a>) -> Self {
         let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
-        let edition_address = value
-            .edition_address()
-            .map(|ea| Pubkey::try_from(ea.bytes()).unwrap());
+        let edition_address =
+            value.edition_address().map(|ea| Pubkey::try_from(ea.bytes()).unwrap());
         AssetStaticDetails {
             pubkey,
             specification_asset_class: value.specification_asset_class().into(),
@@ -146,27 +142,22 @@ impl<'a> From<fb::AssetDynamicDetails<'a>> for AssetDynamicDetails {
         let creators = value.creators().map(updated_creators_from_fb).unwrap();
         let royalty_amount = value.royalty_amount().map(updated_u16_from_fb).unwrap();
         let url = value.url().and_then(updated_string_from_fb).unwrap();
-        let chain_mutability = value
-            .chain_mutability()
-            .map(updated_chain_mutability_from_fb);
+        let chain_mutability = value.chain_mutability().map(updated_chain_mutability_from_fb);
         let lamports = value.lamports().map(updated_u64_from_fb);
         let executable = value.executable().map(updated_bool_from_fb);
         let metadata_owner = value.metadata_owner().and_then(updated_string_from_fb);
         let raw_name = value.raw_name().and_then(updated_string_from_fb);
         let mpl_core_plugins = value.mpl_core_plugins().and_then(updated_string_from_fb);
-        let mpl_core_unknown_plugins = value
-            .mpl_core_unknown_plugins()
-            .and_then(updated_string_from_fb);
+        let mpl_core_unknown_plugins =
+            value.mpl_core_unknown_plugins().and_then(updated_string_from_fb);
         let rent_epoch = value.rent_epoch().map(updated_u64_from_fb);
         let num_minted = value.num_minted().map(updated_u32_from_fb);
         let current_size = value.current_size().map(updated_u32_from_fb);
         let plugins_json_version = value.plugins_json_version().map(updated_u32_from_fb);
-        let mpl_core_external_plugins = value
-            .mpl_core_external_plugins()
-            .and_then(updated_string_from_fb);
-        let mpl_core_unknown_external_plugins = value
-            .mpl_core_unknown_external_plugins()
-            .and_then(updated_string_from_fb);
+        let mpl_core_external_plugins =
+            value.mpl_core_external_plugins().and_then(updated_string_from_fb);
+        let mpl_core_unknown_external_plugins =
+            value.mpl_core_unknown_external_plugins().and_then(updated_string_from_fb);
         let mint_extensions = value.mint_extensions().and_then(updated_string_from_fb);
         AssetDynamicDetails {
             pubkey,
@@ -205,17 +196,10 @@ impl<'a> From<fb::AssetAuthority<'a>> for AssetAuthority {
         let v;
         // using unsafe because the generated code does not have a safe way to get the optional value without default
         unsafe {
-            v = value
-                ._tab
-                .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None);
+            v = value._tab.get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None);
         }
         let authority = Pubkey::try_from(value.authority().unwrap().bytes()).unwrap();
-        AssetAuthority {
-            pubkey,
-            authority,
-            slot_updated: value.slot_updated(),
-            write_version: v,
-        }
+        AssetAuthority { pubkey, authority, slot_updated: value.slot_updated(), write_version: v }
     }
 }
 
@@ -223,27 +207,13 @@ impl<'a> From<fb::AssetOwner<'a>> for AssetOwner {
     fn from(value: fb::AssetOwner<'a>) -> Self {
         let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
         let owner = value.owner().map(updated_optional_pubkey_from_fb).unwrap();
-        let delegate = value
-            .delegate()
-            .map(updated_optional_pubkey_from_fb)
-            .unwrap();
+        let delegate = value.delegate().map(updated_optional_pubkey_from_fb).unwrap();
         let owner_type = value.owner_type().map(updated_owner_type_from_fb).unwrap();
-        let owner_delegate_seq = value
-            .owner_delegate_seq()
-            .map(updated_optional_u64_from_fb)
-            .unwrap();
-        let is_current_owner = value
-            .is_current_owner()
-            .map(updated_bool_from_fb)
-            .unwrap_or_default();
-        AssetOwner {
-            pubkey,
-            owner,
-            delegate,
-            owner_type,
-            owner_delegate_seq,
-            is_current_owner,
-        }
+        let owner_delegate_seq =
+            value.owner_delegate_seq().map(updated_optional_u64_from_fb).unwrap();
+        let is_current_owner =
+            value.is_current_owner().map(updated_bool_from_fb).unwrap_or_default();
+        AssetOwner { pubkey, owner, delegate, owner_type, owner_delegate_seq, is_current_owner }
     }
 }
 
@@ -251,20 +221,10 @@ impl<'a> From<fb::AssetCollection<'a>> for AssetCollection {
     fn from(value: fb::AssetCollection<'a>) -> Self {
         let pubkey = Pubkey::try_from(value.pubkey().unwrap().bytes()).unwrap();
         let collection = value.collection().map(updated_pubkey_from_fb).unwrap();
-        let is_collection_verified = value
-            .is_collection_verified()
-            .map(updated_bool_from_fb)
-            .unwrap();
-        let authority = value
-            .authority()
-            .map(updated_optional_pubkey_from_fb)
-            .unwrap();
-        AssetCollection {
-            pubkey,
-            collection,
-            is_collection_verified,
-            authority,
-        }
+        let is_collection_verified =
+            value.is_collection_verified().map(updated_bool_from_fb).unwrap();
+        let authority = value.authority().map(updated_optional_pubkey_from_fb).unwrap();
+        AssetCollection { pubkey, collection, is_collection_verified, authority }
     }
 }
 
@@ -414,14 +374,9 @@ fn asset_dynamic_details_to_fb<'a>(
     let is_frozen_fb = updated_bool_to_fb(builder, &dynamic_details.is_frozen);
 
     // Optional fields
-    let supply_fb = dynamic_details
-        .supply
-        .as_ref()
-        .map(|supply| updated_u64_to_fb(builder, supply));
-    let seq_fb = dynamic_details
-        .seq
-        .as_ref()
-        .map(|seq| updated_u64_to_fb(builder, seq));
+    let supply_fb =
+        dynamic_details.supply.as_ref().map(|supply| updated_u64_to_fb(builder, supply));
+    let seq_fb = dynamic_details.seq.as_ref().map(|seq| updated_u64_to_fb(builder, seq));
     let is_burnt_fb = updated_bool_to_fb(builder, &dynamic_details.is_burnt);
     let was_decompressed_fb = dynamic_details
         .was_decompressed
@@ -438,10 +393,8 @@ fn asset_dynamic_details_to_fb<'a>(
         .chain_mutability
         .as_ref()
         .map(|chain_mutability| updated_chain_mutability_to_fb(builder, chain_mutability));
-    let lamports_fb = dynamic_details
-        .lamports
-        .as_ref()
-        .map(|lamports| updated_u64_to_fb(builder, lamports));
+    let lamports_fb =
+        dynamic_details.lamports.as_ref().map(|lamports| updated_u64_to_fb(builder, lamports));
     let executable_fb = dynamic_details
         .executable
         .as_ref()
@@ -450,10 +403,8 @@ fn asset_dynamic_details_to_fb<'a>(
         .metadata_owner
         .as_ref()
         .map(|metadata_owner| updated_string_to_fb(builder, metadata_owner));
-    let raw_name_fb = dynamic_details
-        .raw_name
-        .as_ref()
-        .map(|raw_name| updated_string_to_fb(builder, raw_name));
+    let raw_name_fb =
+        dynamic_details.raw_name.as_ref().map(|raw_name| updated_string_to_fb(builder, raw_name));
     let mpl_core_plugins_fb = dynamic_details
         .mpl_core_plugins
         .as_ref()
@@ -596,9 +547,7 @@ fn asset_collection_to_fb<'a>(
 fn updated_bool_from_fb(updated: fb::UpdatedBool) -> Updated<bool> {
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: updated.value(),
     }
 }
@@ -622,9 +571,7 @@ fn updated_bool_to_fb<'a>(
 fn updated_u64_from_fb(updated: fb::UpdatedU64) -> Updated<u64> {
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: updated.value(),
     }
 }
@@ -648,9 +595,7 @@ fn updated_u64_to_fb<'a>(
 fn updated_u32_from_fb(updated: fb::UpdatedU32) -> Updated<u32> {
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: updated.value(),
     }
 }
@@ -674,9 +619,7 @@ fn updated_u32_to_fb<'a>(
 fn updated_u16_from_fb(updated: fb::UpdatedU32) -> Updated<u16> {
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: updated.value() as u16,
     }
 }
@@ -700,9 +643,7 @@ fn updated_u16_to_u32_fb<'a>(
 fn updated_string_from_fb(updated: fb::UpdatedString) -> Option<Updated<String>> {
     updated.value().map(|value| Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: value.to_string(),
     })
 }
@@ -728,9 +669,7 @@ fn updated_string_to_fb<'a>(
 fn updated_pubkey_from_fb(updated: fb::UpdatedPubkey) -> Updated<Pubkey> {
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: Pubkey::try_from(updated.value().unwrap().bytes()).unwrap(),
     }
 }
@@ -757,12 +696,8 @@ fn updated_pubkey_to_fb<'a>(
 fn updated_optional_pubkey_from_fb(updated: fb::UpdatedOptionalPubkey) -> Updated<Option<Pubkey>> {
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
-        value: updated
-            .value()
-            .map(|pubkey| Pubkey::try_from(pubkey.bytes()).unwrap()),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
+        value: updated.value().map(|pubkey| Pubkey::try_from(pubkey.bytes()).unwrap()),
     }
 }
 
@@ -793,9 +728,7 @@ fn updated_optional_u64_from_fb(updated: fb::UpdatedU64) -> Updated<Option<u64>>
     }
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: v,
     }
 }
@@ -833,9 +766,7 @@ fn updated_creators_from_fb(
     }
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: ve,
     }
 }
@@ -876,9 +807,7 @@ fn updated_creators_to_fb<'a>(
 fn updated_owner_type_from_fb(updated: fb::UpdatedOwnerType) -> Updated<OwnerType> {
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: updated.value().into(),
     }
 }
@@ -904,9 +833,7 @@ fn updated_chain_mutability_from_fb(
 ) -> Updated<ChainMutability> {
     Updated {
         slot_updated: updated.slot_updated(),
-        update_version: updated
-            .update_version()
-            .and_then(convert_update_version_from_fb),
+        update_version: updated.update_version().and_then(convert_update_version_from_fb),
         value: updated.value().into(),
     }
 }
@@ -937,23 +864,17 @@ fn convert_update_version_to_fb<'a>(
         None => (fb::UpdateVersionType::None, 0),
     };
 
-    fb::UpdateVersion::create(
-        builder,
-        &fb::UpdateVersionArgs {
-            version_type,
-            version_value,
-        },
-    )
+    fb::UpdateVersion::create(builder, &fb::UpdateVersionArgs { version_type, version_value })
 }
 
 fn convert_update_version_from_fb(update_version: fb::UpdateVersion) -> Option<UpdateVersion> {
     match update_version.version_type() {
         fb::UpdateVersionType::Sequence => {
             Some(UpdateVersion::Sequence(update_version.version_value()))
-        }
+        },
         fb::UpdateVersionType::WriteVersion => {
             Some(UpdateVersion::WriteVersion(update_version.version_value()))
-        }
+        },
         fb::UpdateVersionType::None => None,
         _ => None,
     }
@@ -1053,11 +974,7 @@ impl AssetCompleteDetails {
                 .as_ref()
                 .map(|a| a.royalty_target_type)
                 .unwrap_or_default(),
-            slot_created: self
-                .static_details
-                .as_ref()
-                .map(|a| a.created_at)
-                .unwrap_or_default(),
+            slot_created: self.static_details.as_ref().map(|a| a.created_at).unwrap_or_default(),
             is_compressible: self
                 .dynamic_details
                 .as_ref()
@@ -1068,21 +985,13 @@ impl AssetCompleteDetails {
                 .as_ref()
                 .map(|d| d.is_compressed.value)
                 .unwrap_or_default(),
-            is_frozen: self
-                .dynamic_details
-                .as_ref()
-                .map(|d| d.is_frozen.value)
-                .unwrap_or_default(),
+            is_frozen: self.dynamic_details.as_ref().map(|d| d.is_frozen.value).unwrap_or_default(),
             supply: self
                 .dynamic_details
                 .as_ref()
                 .map(|d| d.supply.clone().map(|s| s.value as i64))
                 .unwrap_or_default(),
-            is_burnt: self
-                .dynamic_details
-                .as_ref()
-                .map(|d| d.is_burnt.value)
-                .unwrap_or_default(),
+            is_burnt: self.dynamic_details.as_ref().map(|d| d.is_burnt.value).unwrap_or_default(),
             creators: self
                 .dynamic_details
                 .as_ref()
@@ -1273,9 +1182,9 @@ pub(crate) fn update_field<T: Clone>(current: &mut Updated<T>, new: &Updated<T>)
             Some(Ordering::Less) => {
                 *current = new.clone();
                 return;
-            }
+            },
             Some(Ordering::Greater) => return,
-            _ => {} // types are different need to check slot
+            _ => {}, // types are different need to check slot
         }
     }
 
@@ -1301,9 +1210,9 @@ pub(crate) fn update_optional_field<T: Clone + Default>(
             Some(Ordering::Less) => {
                 *current = new.clone();
                 return;
-            }
+            },
             Some(Ordering::Greater) => return,
-            _ => {} // types are different need to check slot
+            _ => {}, // types are different need to check slot
         }
     }
 
@@ -1344,10 +1253,10 @@ impl MplCoreCollectionAuthority {
             match deserialize::<Self>(existing_val) {
                 Ok(value) => {
                     result = Some(value);
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetCollection deserialize existing_val: {}", e)
-                }
+                },
             }
         }
 
@@ -1360,10 +1269,10 @@ impl MplCoreCollectionAuthority {
                     } else {
                         new_val
                     });
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetCollection deserialize new_val: {}", e)
-                }
+                },
             }
         }
 
@@ -1578,13 +1487,10 @@ impl AssetCompleteDetails {
             match deserialize::<Self>(existing_val) {
                 Ok(value) => {
                     result = Some(value);
-                }
+                },
                 Err(e) => {
-                    error!(
-                        "RocksDB: AssetCompleteDetails deserialize existing_val: {}",
-                        e
-                    )
-                }
+                    error!("RocksDB: AssetCompleteDetails deserialize existing_val: {}", e)
+                },
             }
         }
 
@@ -1637,10 +1543,10 @@ impl AssetCompleteDetails {
                     } else {
                         result = Some(new_val);
                     }
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetCompleteDetails deserialize new_val: {}", e)
-                }
+                },
             }
         }
 
@@ -1664,10 +1570,7 @@ pub fn merge_complete_details_fb_through_proxy<'a>(
         .and_then(|bytes| {
             fb::root_as_asset_complete_details(bytes)
                 .map_err(|e| {
-                    error!(
-                        "RocksDB: AssetCompleteDetails deserialize existing_val: {}",
-                        e
-                    )
+                    error!("RocksDB: AssetCompleteDetails deserialize existing_val: {}", e)
                 })
                 .ok()
         })
@@ -1731,9 +1634,7 @@ macro_rules! create_updated_offset {
                 )
             });
 
-            let value_offset = updated
-                .value()
-                .map(|value| $create_value_fn(builder, value));
+            let value_offset = updated.value().map(|value| $create_value_fn(builder, value));
 
             fb::$updated_type::create(
                 builder,
@@ -1862,127 +1763,83 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
 ) -> Option<Vec<u8>> {
     let existing_val = existing_val.and_then(|bytes| {
         fb::root_as_asset_complete_details(bytes)
-            .map_err(|e| {
-                error!(
-                    "RocksDB: AssetCompleteDetails deserialize existing_val: {}",
-                    e
-                )
-            })
+            .map_err(|e| error!("RocksDB: AssetCompleteDetails deserialize existing_val: {}", e))
             .ok()
     });
     let mut pk = existing_val.and_then(|a| a.pubkey());
     let mut static_details = existing_val.and_then(|a| a.static_details());
     // creating a copy of every single field of the rest of the asset fields including the pubkeys to properly select the latest ones and reconstruct the asset
-    let mut dynamic_details_pubkey = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.pubkey());
-    let mut dynamic_details_is_compressible = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.is_compressible());
-    let mut dynamic_details_is_compressed = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.is_compressed());
-    let mut dynamic_details_is_frozen = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.is_frozen());
-    let mut dynamic_details_supply = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.supply());
-    let mut dynamic_details_seq = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.seq());
-    let mut dynamic_details_is_burnt = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.is_burnt());
-    let mut dynamic_details_was_decompressed = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.was_decompressed());
-    let mut dynamic_details_onchain_data = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.onchain_data());
-    let mut dynamic_details_creators = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.creators());
-    let mut dynamic_details_royalty_amount = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.royalty_amount());
-    let mut dynamic_details_url = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.url());
-    let mut dynamic_details_chain_mutability = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.chain_mutability());
-    let mut dynamic_details_lamports = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.lamports());
-    let mut dynamic_details_executable = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.executable());
-    let mut dynamic_details_metadata_owner = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.metadata_owner());
-    let mut dynamic_details_raw_name = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.raw_name());
-    let mut dynamic_details_mpl_core_plugins = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.mpl_core_plugins());
-    let mut dynamic_details_mpl_core_unknown_plugins = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.mpl_core_unknown_plugins());
-    let mut dynamic_details_rent_epoch = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.rent_epoch());
-    let mut dynamic_details_num_minted = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.num_minted());
-    let mut dynamic_details_current_size = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.current_size());
-    let mut dynamic_details_plugins_json_version = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.plugins_json_version());
-    let mut dynamic_details_mpl_core_external_plugins = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.mpl_core_external_plugins());
+    let mut dynamic_details_pubkey =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.pubkey());
+    let mut dynamic_details_is_compressible =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.is_compressible());
+    let mut dynamic_details_is_compressed =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.is_compressed());
+    let mut dynamic_details_is_frozen =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.is_frozen());
+    let mut dynamic_details_supply =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.supply());
+    let mut dynamic_details_seq =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.seq());
+    let mut dynamic_details_is_burnt =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.is_burnt());
+    let mut dynamic_details_was_decompressed =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.was_decompressed());
+    let mut dynamic_details_onchain_data =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.onchain_data());
+    let mut dynamic_details_creators =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.creators());
+    let mut dynamic_details_royalty_amount =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.royalty_amount());
+    let mut dynamic_details_url =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.url());
+    let mut dynamic_details_chain_mutability =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.chain_mutability());
+    let mut dynamic_details_lamports =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.lamports());
+    let mut dynamic_details_executable =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.executable());
+    let mut dynamic_details_metadata_owner =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.metadata_owner());
+    let mut dynamic_details_raw_name =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.raw_name());
+    let mut dynamic_details_mpl_core_plugins =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.mpl_core_plugins());
+    let mut dynamic_details_mpl_core_unknown_plugins =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.mpl_core_unknown_plugins());
+    let mut dynamic_details_rent_epoch =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.rent_epoch());
+    let mut dynamic_details_num_minted =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.num_minted());
+    let mut dynamic_details_current_size =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.current_size());
+    let mut dynamic_details_plugins_json_version =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.plugins_json_version());
+    let mut dynamic_details_mpl_core_external_plugins =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.mpl_core_external_plugins());
     let mut dynamic_details_mpl_core_unknown_external_plugins = existing_val
         .and_then(|a| a.dynamic_details())
         .and_then(|d| d.mpl_core_unknown_external_plugins());
-    let mut dynamic_details_mint_extensions = existing_val
-        .and_then(|a| a.dynamic_details())
-        .and_then(|d| d.mint_extensions());
+    let mut dynamic_details_mint_extensions =
+        existing_val.and_then(|a| a.dynamic_details()).and_then(|d| d.mint_extensions());
     let mut authority = existing_val.and_then(|a| a.authority());
-    let mut owner_pubkey = existing_val
-        .and_then(|a| a.owner())
-        .and_then(|d| d.pubkey());
+    let mut owner_pubkey = existing_val.and_then(|a| a.owner()).and_then(|d| d.pubkey());
     let mut owner_owner = existing_val.and_then(|a| a.owner()).and_then(|d| d.owner());
-    let mut owner_delegate = existing_val
-        .and_then(|a| a.owner())
-        .and_then(|d| d.delegate());
-    let mut owner_owner_type = existing_val
-        .and_then(|a| a.owner())
-        .and_then(|d| d.owner_type());
-    let mut owner_owner_delegate_seq = existing_val
-        .and_then(|a| a.owner())
-        .and_then(|d| d.owner_delegate_seq());
-    let mut owner_is_current_owner = existing_val
-        .and_then(|a| a.owner())
-        .and_then(|d| d.is_current_owner());
-    let mut collection_pubkey = existing_val
-        .and_then(|a| a.collection())
-        .and_then(|d| d.pubkey());
-    let mut collection_collection = existing_val
-        .and_then(|a| a.collection())
-        .and_then(|d| d.collection());
-    let mut collection_is_collection_verified = existing_val
-        .and_then(|a| a.collection())
-        .and_then(|d| d.is_collection_verified());
-    let mut collection_authority = existing_val
-        .and_then(|a| a.collection())
-        .and_then(|d| d.authority());
-    let mut specification_asset_class = existing_val
-        .and_then(|a| a.static_details())
-        .map(|d| d.specification_asset_class());
+    let mut owner_delegate = existing_val.and_then(|a| a.owner()).and_then(|d| d.delegate());
+    let mut owner_owner_type = existing_val.and_then(|a| a.owner()).and_then(|d| d.owner_type());
+    let mut owner_owner_delegate_seq =
+        existing_val.and_then(|a| a.owner()).and_then(|d| d.owner_delegate_seq());
+    let mut owner_is_current_owner =
+        existing_val.and_then(|a| a.owner()).and_then(|d| d.is_current_owner());
+    let mut collection_pubkey = existing_val.and_then(|a| a.collection()).and_then(|d| d.pubkey());
+    let mut collection_collection =
+        existing_val.and_then(|a| a.collection()).and_then(|d| d.collection());
+    let mut collection_is_collection_verified =
+        existing_val.and_then(|a| a.collection()).and_then(|d| d.is_collection_verified());
+    let mut collection_authority =
+        existing_val.and_then(|a| a.collection()).and_then(|d| d.authority());
+    let mut specification_asset_class =
+        existing_val.and_then(|a| a.static_details()).map(|d| d.specification_asset_class());
 
     // With the owner the merge is a bit more complex because we need to check if the owner is a new owner or an existing one
     // The following cases are possible:
@@ -2027,10 +1884,10 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                                 Some(new_static_details.specification_asset_class());
                         }
                     }
-                }
+                },
                 None => {
                     static_details = new_val.static_details();
-                }
+                },
             }
             // Merge dynamic_details
             if let Some(new_dynamic_details) = new_val.dynamic_details() {
@@ -2045,28 +1902,16 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                     &mut dynamic_details_is_compressed,
                     new_dynamic_details.is_compressed(),
                 );
-                merge_field(
-                    &mut dynamic_details_is_frozen,
-                    new_dynamic_details.is_frozen(),
-                );
+                merge_field(&mut dynamic_details_is_frozen, new_dynamic_details.is_frozen());
                 merge_field(&mut dynamic_details_supply, new_dynamic_details.supply());
                 merge_field(&mut dynamic_details_seq, new_dynamic_details.seq());
-                merge_field(
-                    &mut dynamic_details_is_burnt,
-                    new_dynamic_details.is_burnt(),
-                );
+                merge_field(&mut dynamic_details_is_burnt, new_dynamic_details.is_burnt());
                 merge_field(
                     &mut dynamic_details_was_decompressed,
                     new_dynamic_details.was_decompressed(),
                 );
-                merge_field(
-                    &mut dynamic_details_onchain_data,
-                    new_dynamic_details.onchain_data(),
-                );
-                merge_field(
-                    &mut dynamic_details_creators,
-                    new_dynamic_details.creators(),
-                );
+                merge_field(&mut dynamic_details_onchain_data, new_dynamic_details.onchain_data());
+                merge_field(&mut dynamic_details_creators, new_dynamic_details.creators());
                 merge_field(
                     &mut dynamic_details_royalty_amount,
                     new_dynamic_details.royalty_amount(),
@@ -2076,22 +1921,13 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                     &mut dynamic_details_chain_mutability,
                     new_dynamic_details.chain_mutability(),
                 );
-                merge_field(
-                    &mut dynamic_details_lamports,
-                    new_dynamic_details.lamports(),
-                );
-                merge_field(
-                    &mut dynamic_details_executable,
-                    new_dynamic_details.executable(),
-                );
+                merge_field(&mut dynamic_details_lamports, new_dynamic_details.lamports());
+                merge_field(&mut dynamic_details_executable, new_dynamic_details.executable());
                 merge_field(
                     &mut dynamic_details_metadata_owner,
                     new_dynamic_details.metadata_owner(),
                 );
-                merge_field(
-                    &mut dynamic_details_raw_name,
-                    new_dynamic_details.raw_name(),
-                );
+                merge_field(&mut dynamic_details_raw_name, new_dynamic_details.raw_name());
                 merge_field(
                     &mut dynamic_details_mpl_core_plugins,
                     new_dynamic_details.mpl_core_plugins(),
@@ -2100,18 +1936,9 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                     &mut dynamic_details_mpl_core_unknown_plugins,
                     new_dynamic_details.mpl_core_unknown_plugins(),
                 );
-                merge_field(
-                    &mut dynamic_details_rent_epoch,
-                    new_dynamic_details.rent_epoch(),
-                );
-                merge_field(
-                    &mut dynamic_details_num_minted,
-                    new_dynamic_details.num_minted(),
-                );
-                merge_field(
-                    &mut dynamic_details_current_size,
-                    new_dynamic_details.current_size(),
-                );
+                merge_field(&mut dynamic_details_rent_epoch, new_dynamic_details.rent_epoch());
+                merge_field(&mut dynamic_details_num_minted, new_dynamic_details.num_minted());
+                merge_field(&mut dynamic_details_current_size, new_dynamic_details.current_size());
                 merge_field(
                     &mut dynamic_details_plugins_json_version,
                     new_dynamic_details.plugins_json_version(),
@@ -2222,10 +2049,7 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
 
                             // now the merged owner holds the merged data. We need to check if it's marked as the current owner and if it's newer than the current owner
                             // if it doesn't have the is current owner set to true we don't need to do anything
-                            if merged_owner
-                                .is_current_owner
-                                .map(|u| u.value())
-                                .unwrap_or(false)
+                            if merged_owner.is_current_owner.map(|u| u.value()).unwrap_or(false)
                                 && !owner_is_current_owner.map(|u| u.value()).unwrap_or(false)
                                 || merged_owner
                                     .is_current_owner
@@ -2285,9 +2109,7 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                 .unwrap_or(s.specification_asset_class()),
             royalty_target_type: s.royalty_target_type(),
             created_at: s.created_at(),
-            edition_address: s
-                .edition_address()
-                .map(|k| builder.create_vector(k.bytes())),
+            edition_address: s.edition_address().map(|k| builder.create_vector(k.bytes())),
         };
         fb::AssetStaticDetails::create(&mut builder, &args)
     });
@@ -2345,10 +2167,8 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
         fb::AssetDynamicDetails::create(&mut builder, &args)
     });
     let authority = authority.map(|a| {
-        let write_version = unsafe {
-            a._tab
-                .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None)
-        };
+        let write_version =
+            unsafe { a._tab.get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None) };
         let auth = a.authority().map(|x| builder.create_vector(x.bytes()));
         let pk = a.pubkey().map(|x| builder.create_vector(x.bytes()));
         let mut auth_builder = fb::AssetAuthorityBuilder::new(&mut builder);
@@ -2422,11 +2242,7 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
 
         let top_slot_to_keep = max(
             owner_owner_updated_slot,
-            owners_vec
-                .first()
-                .and_then(|o| o.owner)
-                .map(|o| o.slot_updated())
-                .unwrap_or(0),
+            owners_vec.first().and_then(|o| o.owner).map(|o| o.slot_updated()).unwrap_or(0),
         );
         // Iterate through the sorted owners
         for owner in owners_vec {
@@ -2464,25 +2280,18 @@ fn create_owner_offset<'a>(
 ) -> WIPOffset<fb::AssetOwner<'a>> {
     let pubkey_offset = owner.pubkey.map(|k| builder.create_vector(k.bytes()));
 
-    let owner_field = owner
-        .owner
-        .map(|o| create_updated_optional_pubkey_offset(builder, &o));
+    let owner_field = owner.owner.map(|o| create_updated_optional_pubkey_offset(builder, &o));
 
-    let delegate_field = owner
-        .delegate
-        .map(|d| create_updated_optional_pubkey_offset(builder, &d));
+    let delegate_field = owner.delegate.map(|d| create_updated_optional_pubkey_offset(builder, &d));
 
-    let owner_type_field = owner
-        .owner_type
-        .map(|ot| create_updated_owner_type_offset(builder, &ot));
+    let owner_type_field =
+        owner.owner_type.map(|ot| create_updated_owner_type_offset(builder, &ot));
 
-    let owner_delegate_seq_field = owner
-        .owner_delegate_seq
-        .map(|seq| create_updated_u64_offset(builder, &seq));
+    let owner_delegate_seq_field =
+        owner.owner_delegate_seq.map(|seq| create_updated_u64_offset(builder, &seq));
 
-    let is_current_owner_field = owner
-        .is_current_owner
-        .map(|ico| create_updated_bool_offset(builder, &ico));
+    let is_current_owner_field =
+        owner.is_current_owner.map(|ico| create_updated_bool_offset(builder, &ico));
 
     fb::AssetOwner::create(
         builder,
@@ -2505,12 +2314,12 @@ where
         match existing_field {
             None => {
                 *existing_field = Some(new_val);
-            }
+            },
             Some(existing_value) => {
                 if new_val.partial_cmp(existing_value) == Some(std::cmp::Ordering::Greater) {
                     *existing_field = Some(new_val);
                 }
-            }
+            },
         }
     }
 }
@@ -2526,10 +2335,7 @@ pub fn merge_complete_details_fb_raw<'a>(
         .and_then(|bytes| {
             fb::root_as_asset_complete_details(bytes)
                 .map_err(|e| {
-                    error!(
-                        "RocksDB: AssetCompleteDetails deserialize existing_val: {}",
-                        e
-                    )
+                    error!("RocksDB: AssetCompleteDetails deserialize existing_val: {}", e)
                 })
                 .ok()
         })
@@ -2549,30 +2355,17 @@ pub fn merge_complete_details_fb_raw<'a>(
 
     let static_details = merge_static_details(
         &mut builder,
-        all_assets
-            .iter()
-            .filter_map(|a| a.static_details())
-            .collect(),
+        all_assets.iter().filter_map(|a| a.static_details()).collect(),
     );
     let dynamic_details = merge_dynamic_details(
         &mut builder,
-        all_assets
-            .iter()
-            .filter_map(|a| a.dynamic_details())
-            .collect(),
+        all_assets.iter().filter_map(|a| a.dynamic_details()).collect(),
     );
-    let authority = merge_authority(
-        &mut builder,
-        all_assets.iter().filter_map(|a| a.authority()).collect(),
-    );
-    let owner = merge_owner(
-        &mut builder,
-        all_assets.iter().filter_map(|a| a.owner()).collect(),
-    );
-    let collection = merge_collection(
-        &mut builder,
-        all_assets.iter().filter_map(|a| a.collection()).collect(),
-    );
+    let authority =
+        merge_authority(&mut builder, all_assets.iter().filter_map(|a| a.authority()).collect());
+    let owner = merge_owner(&mut builder, all_assets.iter().filter_map(|a| a.owner()).collect());
+    let collection =
+        merge_collection(&mut builder, all_assets.iter().filter_map(|a| a.collection()).collect());
     let res = fb::AssetCompleteDetails::create(
         &mut builder,
         &fb::AssetCompleteDetailsArgs {
@@ -2613,12 +2406,7 @@ fn merge_static_details<'a>(
             .map(|asset| asset.royalty_target_type())
             .next()
             .unwrap_or_default(),
-        created_at: iter
-            .iter()
-            .cloned()
-            .map(|asset| asset.created_at())
-            .next()
-            .unwrap_or_default(),
+        created_at: iter.iter().cloned().map(|asset| asset.created_at()).next().unwrap_or_default(),
         edition_address: iter
             .iter()
             .cloned()
@@ -2711,17 +2499,8 @@ merge_updated_primitive!(
     UpdatedChainMutability,
     UpdatedChainMutabilityArgs
 );
-merge_updated_primitive!(
-    merge_updated_owner_type,
-    UpdatedOwnerType,
-    UpdatedOwnerTypeArgs
-);
-merge_updated_offset!(
-    merge_updated_string,
-    UpdatedString,
-    UpdatedStringArgs,
-    create_string_offset
-);
+merge_updated_primitive!(merge_updated_owner_type, UpdatedOwnerType, UpdatedOwnerTypeArgs);
+merge_updated_offset!(merge_updated_string, UpdatedString, UpdatedStringArgs, create_string_offset);
 fn create_string_offset<'a>(
     builder: &mut flatbuffers::FlatBufferBuilder<'a>,
     value: &str,
@@ -2735,12 +2514,7 @@ fn create_vector_offset<'a>(
 ) -> flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>> {
     builder.create_vector(value.bytes())
 }
-merge_updated_offset!(
-    merge_updated_pubkey,
-    UpdatedPubkey,
-    UpdatedPubkeyArgs,
-    create_vector_offset
-);
+merge_updated_offset!(merge_updated_pubkey, UpdatedPubkey, UpdatedPubkeyArgs, create_vector_offset);
 merge_updated_offset!(
     merge_updated_optional_pubkey,
     UpdatedOptionalPubkey,
@@ -2813,37 +2587,32 @@ fn merge_dynamic_details<'a>(
         .find_map(|asset| asset.pubkey())
         .map(|k| builder.create_vector(k.bytes()));
     pk?;
-    let is_compressible = merge_updated_bool(builder, iter.iter().cloned(), |asset| {
-        asset.is_compressible()
-    });
+    let is_compressible =
+        merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.is_compressible());
     let is_compressed =
         merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.is_compressed());
     let is_frozen = merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.is_frozen());
     let supply = merge_updated_u64(builder, iter.iter().cloned(), |asset| asset.supply());
     let seq = merge_updated_u64(builder, iter.iter().cloned(), |asset| asset.seq());
     let is_burnt = merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.is_burnt());
-    let was_decompressed = merge_updated_bool(builder, iter.iter().cloned(), |asset| {
-        asset.was_decompressed()
-    });
+    let was_decompressed =
+        merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.was_decompressed());
     let onchain_data =
         merge_updated_string(builder, iter.iter().cloned(), |asset| asset.onchain_data());
     let creators = merge_updated_creators(builder, iter.iter().cloned(), |a| a.creators());
-    let royalty_amount = merge_updated_u32(builder, iter.iter().cloned(), |asset| {
-        asset.royalty_amount()
-    });
+    let royalty_amount =
+        merge_updated_u32(builder, iter.iter().cloned(), |asset| asset.royalty_amount());
     let url = merge_updated_string(builder, iter.iter().cloned(), |asset| asset.url());
     let chain_mutability = merge_updated_chain_mutability(builder, iter.iter().cloned(), |asset| {
         asset.chain_mutability()
     });
     let lamports = merge_updated_u64(builder, iter.iter().cloned(), |asset| asset.lamports());
     let executable = merge_updated_bool(builder, iter.iter().cloned(), |asset| asset.executable());
-    let metadata_owner = merge_updated_string(builder, iter.iter().cloned(), |asset| {
-        asset.metadata_owner()
-    });
+    let metadata_owner =
+        merge_updated_string(builder, iter.iter().cloned(), |asset| asset.metadata_owner());
     let raw_name = merge_updated_string(builder, iter.iter().cloned(), |asset| asset.raw_name());
-    let mpl_core_plugins = merge_updated_string(builder, iter.iter().cloned(), |asset| {
-        asset.mpl_core_plugins()
-    });
+    let mpl_core_plugins =
+        merge_updated_string(builder, iter.iter().cloned(), |asset| asset.mpl_core_plugins());
     let mpl_core_unknown_plugins = merge_updated_string(builder, iter.iter().cloned(), |asset| {
         asset.mpl_core_unknown_plugins()
     });
@@ -2851,9 +2620,8 @@ fn merge_dynamic_details<'a>(
     let num_minted = merge_updated_u32(builder, iter.iter().cloned(), |asset| asset.num_minted());
     let current_size =
         merge_updated_u32(builder, iter.iter().cloned(), |asset| asset.current_size());
-    let plugins_json_version = merge_updated_u32(builder, iter.iter().cloned(), |asset| {
-        asset.plugins_json_version()
-    });
+    let plugins_json_version =
+        merge_updated_u32(builder, iter.iter().cloned(), |asset| asset.plugins_json_version());
     let mpl_core_external_plugins = merge_updated_string(builder, iter.iter().cloned(), |asset| {
         asset.mpl_core_external_plugins()
     });
@@ -2861,9 +2629,8 @@ fn merge_dynamic_details<'a>(
         merge_updated_string(builder, iter.iter().cloned(), |asset| {
             asset.mpl_core_unknown_external_plugins()
         });
-    let mint_extensions = merge_updated_string(builder, iter.iter().cloned(), |asset| {
-        asset.mint_extensions()
-    });
+    let mint_extensions =
+        merge_updated_string(builder, iter.iter().cloned(), |asset| asset.mint_extensions());
 
     Some(fb::AssetDynamicDetails::create(
         builder,
@@ -2914,10 +2681,8 @@ fn merge_authority<'a>(
         .max_by(|a, b| {
             if let (Some(a_write_version), Some(b_write_version)) = unsafe {
                 (
-                    a._tab
-                        .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
-                    b._tab
-                        .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
+                    a._tab.get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
+                    b._tab.get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
                 )
             } {
                 a_write_version.cmp(&b_write_version)
@@ -2927,13 +2692,9 @@ fn merge_authority<'a>(
         })
         .map(|authority_original| {
             let write_version = unsafe {
-                authority_original
-                    ._tab
-                    .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None)
+                authority_original._tab.get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None)
             };
-            let auth = authority_original
-                .authority()
-                .map(|x| builder.create_vector(x.bytes()));
+            let auth = authority_original.authority().map(|x| builder.create_vector(x.bytes()));
             let mut auth_builder = fb::AssetAuthorityBuilder::new(builder);
             if let Some(wv) = write_version {
                 auth_builder.add_write_version(wv);
@@ -2964,12 +2725,10 @@ fn merge_owner<'a>(
         merge_updated_optional_pubkey(builder, iter.iter().cloned(), |owner| owner.delegate());
     let owner_type =
         merge_updated_owner_type(builder, iter.iter().cloned(), |owner| owner.owner_type());
-    let owner_delegate_seq = merge_updated_u64(builder, iter.iter().cloned(), |owner| {
-        owner.owner_delegate_seq()
-    });
-    let is_current_owner = merge_updated_bool(builder, iter.iter().cloned(), |owner| {
-        owner.is_current_owner()
-    });
+    let owner_delegate_seq =
+        merge_updated_u64(builder, iter.iter().cloned(), |owner| owner.owner_delegate_seq());
+    let is_current_owner =
+        merge_updated_bool(builder, iter.iter().cloned(), |owner| owner.is_current_owner());
 
     Some(fb::AssetOwner::create(
         builder,
@@ -2993,9 +2752,8 @@ fn merge_collection<'a>(
         .find_map(|collection| collection.pubkey())
         .map(|k| builder.create_vector(k.bytes()));
     pk?;
-    let collection = merge_updated_pubkey(builder, iter.iter().cloned(), |collection| {
-        collection.collection()
-    });
+    let collection =
+        merge_updated_pubkey(builder, iter.iter().cloned(), |collection| collection.collection());
     let is_collection_verified = merge_updated_bool(builder, iter.iter().cloned(), |collection| {
         collection.is_collection_verified()
     });
@@ -3005,12 +2763,7 @@ fn merge_collection<'a>(
 
     Some(fb::AssetCollection::create(
         builder,
-        &fb::AssetCollectionArgs {
-            pubkey: pk,
-            collection,
-            is_collection_verified,
-            authority,
-        },
+        &fb::AssetCollectionArgs { pubkey: pk, collection, is_collection_verified, authority },
     ))
 }
 
@@ -3040,10 +2793,7 @@ impl AssetDynamicDetails {
         update_optional_field(&mut self.num_minted, &new_val.num_minted);
         update_optional_field(&mut self.current_size, &new_val.current_size);
         update_optional_field(&mut self.rent_epoch, &new_val.rent_epoch);
-        update_optional_field(
-            &mut self.plugins_json_version,
-            &new_val.plugins_json_version,
-        );
+        update_optional_field(&mut self.plugins_json_version, &new_val.plugins_json_version);
         update_optional_field(
             &mut self.mpl_core_external_plugins,
             &new_val.mpl_core_external_plugins,
@@ -3066,10 +2816,7 @@ impl AssetDynamicDetails {
         if let Some(existing_val) = existing_val {
             match deserialize::<Self>(existing_val) {
                 Ok(value) => result = Some(value),
-                Err(e) => error!(
-                    "RocksDB: AssetDynamicDetails deserialize existing_val: {}",
-                    e
-                ),
+                Err(e) => error!("RocksDB: AssetDynamicDetails deserialize existing_val: {}", e),
             }
         }
 
@@ -3082,7 +2829,7 @@ impl AssetDynamicDetails {
                     } else {
                         result = Some(new_val);
                     }
-                }
+                },
                 Err(e) => error!("RocksDB: AssetDynamicDetails deserialize new_val: {}", e),
             }
         }
@@ -3102,23 +2849,13 @@ impl AssetDynamicDetails {
             self.was_decompressed
                 .as_ref()
                 .map_or(0, |was_decompressed| was_decompressed.slot_updated),
-            self.onchain_data
-                .as_ref()
-                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.onchain_data.as_ref().map_or(0, |onchain_data| onchain_data.slot_updated),
             self.creators.slot_updated,
             self.royalty_amount.slot_updated,
-            self.chain_mutability
-                .as_ref()
-                .map_or(0, |onchain_data| onchain_data.slot_updated),
-            self.lamports
-                .as_ref()
-                .map_or(0, |onchain_data| onchain_data.slot_updated),
-            self.executable
-                .as_ref()
-                .map_or(0, |onchain_data| onchain_data.slot_updated),
-            self.metadata_owner
-                .as_ref()
-                .map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.chain_mutability.as_ref().map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.lamports.as_ref().map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.executable.as_ref().map_or(0, |onchain_data| onchain_data.slot_updated),
+            self.metadata_owner.as_ref().map_or(0, |onchain_data| onchain_data.slot_updated),
         ]
         .into_iter()
         .max()
@@ -3154,10 +2891,10 @@ impl AssetAuthority {
                     slot = value.slot_updated;
                     write_version = value.write_version;
                     result = existing_val.to_vec();
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetAuthority deserialize existing_val: {}", e)
-                }
+                },
             }
         }
 
@@ -3175,10 +2912,10 @@ impl AssetAuthority {
                         write_version = new_val.write_version;
                         result = op.to_vec();
                     }
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetAuthority deserialize new_val: {}", e)
-                }
+                },
             }
         }
 
@@ -3231,10 +2968,10 @@ impl AssetOwner {
             match deserialize::<Self>(existing_val) {
                 Ok(value) => {
                     result = Some(value);
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetOwner deserialize existing_val: {}", e)
-                }
+                },
             }
         }
 
@@ -3254,10 +2991,10 @@ impl AssetOwner {
                     } else {
                         new_val
                     });
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetOwner deserialize new_val: {}", e)
-                }
+                },
             }
         }
 
@@ -3308,10 +3045,10 @@ impl AssetLeaf {
                     slot = value.slot_updated;
                     leaf_seq = value.leaf_seq;
                     result = existing_val.to_vec();
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetLeaf deserialize existing_val: {}", e);
-                }
+                },
             }
         }
 
@@ -3324,10 +3061,7 @@ impl AssetLeaf {
                 Err(_e_sourced) => {
                     // If fails, try decoding as AssetLeaf
                     match deserialize::<AssetLeaf>(op) {
-                        Ok(al) => SourcedAssetLeaf {
-                            leaf: al,
-                            is_from_finalized_source: false,
-                        },
+                        Ok(al) => SourcedAssetLeaf { leaf: al, is_from_finalized_source: false },
                         Err(e_leaf) => {
                             // If last operand and still no result chosen, store empty if needed
                             if i == len - 1 && result.is_empty() {
@@ -3341,9 +3075,9 @@ impl AssetLeaf {
                                 error!("RocksDB: AssetLeaf deserialize new_val failed: {}", e_leaf);
                             }
                             continue;
-                        }
+                        },
                     }
-                }
+                },
             };
 
             let new_slot = new_val.leaf.slot_updated;
@@ -3379,13 +3113,13 @@ impl AssetLeaf {
                         result = serialized;
                         slot = new_slot;
                         leaf_seq = new_seq;
-                    }
+                    },
                     Err(e) => {
                         error!(
                             "RocksDB: Failed to serialize AssetLeaf from SourcedAssetLeaf: {}",
                             e
                         );
-                    }
+                    },
                 }
             }
         }
@@ -3425,10 +3159,7 @@ impl TypedColumn for AssetCollection {
 impl AssetCollection {
     pub fn merge(&mut self, new_val: &Self) {
         update_field(&mut self.collection, &new_val.collection);
-        update_field(
-            &mut self.is_collection_verified,
-            &new_val.is_collection_verified,
-        );
+        update_field(&mut self.is_collection_verified, &new_val.is_collection_verified);
         update_field(&mut self.authority, &new_val.authority);
     }
 
@@ -3442,10 +3173,10 @@ impl AssetCollection {
             match deserialize::<Self>(existing_val) {
                 Ok(value) => {
                     result = Some(value);
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetCollection deserialize existing_val: {}", e)
-                }
+                },
             }
         }
 
@@ -3458,10 +3189,10 @@ impl AssetCollection {
                     } else {
                         new_val
                     });
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: AssetCollection deserialize new_val: {}", e)
-                }
+                },
             }
         }
 
@@ -3559,10 +3290,7 @@ pub struct SlotAssetIdxKey {
 
 impl SlotAssetIdxKey {
     pub fn new(slot: u64, asset: Pubkey) -> SlotAssetIdxKey {
-        SlotAssetIdxKey {
-            slot,
-            pubkey: asset,
-        }
+        SlotAssetIdxKey { slot, pubkey: asset }
     }
 
     pub fn encode_to_bytes(&self) -> Vec<u8> {
@@ -3570,19 +3298,18 @@ impl SlotAssetIdxKey {
     }
 
     pub fn decode_from_bypes(bytes: Vec<u8>) -> Result<SlotAssetIdxKey> {
-        decode_u64_pubkey(bytes).map(|(slot, asset)| SlotAssetIdxKey {
-            slot,
-            pubkey: asset,
-        })
+        decode_u64_pubkey(bytes).map(|(slot, asset)| SlotAssetIdxKey { slot, pubkey: asset })
     }
 }
 #[cfg(test)]
 mod tests {
 
-    use super::*;
+    use std::str::FromStr;
+
     use entities::models::Creator;
     use itertools::Itertools;
-    use std::str::FromStr;
+
+    use super::*;
 
     const TEST_DATA:&str = "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";
     const EXISTING_OWNER: &str = "4ja2N12Zczh9K25zGFTfao6yPdTZSfA5Bw4QueSmQCYJ";
@@ -3614,11 +3341,7 @@ mod tests {
             creators: Updated::new(
                 50,
                 None,
-                vec![Creator {
-                    creator: pubkey,
-                    creator_verified: true,
-                    creator_share: 100,
-                }],
+                vec![Creator { creator: pubkey, creator_verified: true, creator_share: 100 }],
             ),
             royalty_amount: Updated::new(50, None, 100),
             url: Updated::new(50, None, "url".to_string()),
@@ -3663,11 +3386,7 @@ mod tests {
         let owner = AssetOwner {
             pubkey,
             owner_type: Updated::new(50, None, OwnerType::Single),
-            owner: Updated::new(
-                51,
-                Some(UpdateVersion::Sequence(53)),
-                Some(Pubkey::new_unique()),
-            ),
+            owner: Updated::new(51, Some(UpdateVersion::Sequence(53)), Some(Pubkey::new_unique())),
             delegate: Updated::new(
                 56,
                 Some(UpdateVersion::Sequence(54)),
@@ -4080,23 +3799,11 @@ mod tests {
             assert!(asset.other_known_owners().is_some());
             assert_eq!(asset.other_known_owners().unwrap().len(), 2);
             assert_eq!(
-                asset
-                    .other_known_owners()
-                    .unwrap()
-                    .get(0)
-                    .is_current_owner()
-                    .unwrap()
-                    .value(),
+                asset.other_known_owners().unwrap().get(0).is_current_owner().unwrap().value(),
                 false
             );
             assert_eq!(
-                asset
-                    .other_known_owners()
-                    .unwrap()
-                    .get(1)
-                    .is_current_owner()
-                    .unwrap()
-                    .value(),
+                asset.other_known_owners().unwrap().get(1).is_current_owner().unwrap().value(),
                 false
             );
             assert_eq!(

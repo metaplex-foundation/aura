@@ -1,6 +1,6 @@
 use interface::error::UsecaseError;
-use spl_account_compression::state::ConcurrentMerkleTreeHeader;
-use spl_account_compression::zero_copy::ZeroCopy;
+use spl_account_compression::{state::ConcurrentMerkleTreeHeader, zero_copy::ZeroCopy};
+
 macro_rules! check_proof {
     ($max_depth:literal, $max_size:literal, &$bytes:ident, $initial_proofs:ident, $leaf:ident, $leaf_index:ident) => {{
         let mut proof: [spl_concurrent_merkle_tree::node::Node; $max_depth] =

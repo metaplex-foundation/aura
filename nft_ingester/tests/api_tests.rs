@@ -1,70 +1,83 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use base64::engine::general_purpose;
-    use base64::Engine;
-    use blockbuster::programs::token_extensions::extension::{
-        ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig, UnixTimestamp,
-    };
-    use blockbuster::programs::token_extensions::MintAccountExtensions;
-    use nft_ingester::cleaners::indexer_cleaner::clean_syncronized_idxs;
-    use rocks_db::column::TypedColumn;
+    use std::{collections::HashMap, str::FromStr, sync::Arc};
 
-    use std::str::FromStr;
-    use std::{collections::HashMap, sync::Arc};
-
-    use blockbuster::token_metadata::accounts::Metadata;
-    use entities::api_req_params::{
-        DisplayOptions, GetAssetProof, GetAssetSignatures, GetByMethodsOptions, GetCoreFees,
-        GetTokenAccounts, Options, SearchAssetsOptions,
-    };
-    use entities::enums::{AssetType, TokenType, ASSET_TYPES};
-    use entities::models::{
-        AssetSignature, AssetSignatureKey, BurntMetadataSlot, MetadataInfo, Mint, TokenAccount,
+    use base64::{engine::general_purpose, Engine};
+    use blockbuster::{
+        programs::token_extensions::{
+            extension::{
+                ShadowInterestBearingConfig, ShadowTransferFee, ShadowTransferFeeConfig,
+                UnixTimestamp,
+            },
+            MintAccountExtensions,
+        },
+        token_metadata::accounts::Metadata,
     };
     use entities::{
         api_req_params::{
-            AssetSortBy, AssetSortDirection, AssetSorting, GetAsset, GetAssetsByAuthority,
-            GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets,
+            AssetSortBy, AssetSortDirection, AssetSorting, DisplayOptions, GetAsset, GetAssetProof,
+            GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup,
+            GetAssetsByOwner, GetByMethodsOptions, GetCoreFees, GetTokenAccounts, Options,
+            SearchAssets, SearchAssetsOptions,
         },
         enums::{
-            ChainMutability, Interface, OwnerType, OwnershipModel, RoyaltyModel, RoyaltyTargetType,
-            SpecificationAssetClass, TokenStandard,
+            AssetType, ChainMutability, Interface, OwnerType, OwnershipModel, RoyaltyModel,
+            RoyaltyTargetType, SpecificationAssetClass, TokenStandard, TokenType, ASSET_TYPES,
         },
-        models::{ChainDataV1, UpdateVersion, Updated},
+        models::{
+            AssetSignature, AssetSignatureKey, BurntMetadataSlot, ChainDataV1, MetadataInfo, Mint,
+            TokenAccount, UpdateVersion, Updated,
+        },
     };
-    use interface::account_balance::MockAccountBalanceGetter;
-    use interface::json::{MockJsonDownloader, MockJsonPersister};
+    use interface::{
+        account_balance::MockAccountBalanceGetter,
+        json::{MockJsonDownloader, MockJsonPersister},
+    };
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig, SynchronizerMetricsConfig};
     use mockall::predicate;
-    use mpl_token_metadata::accounts::MasterEdition;
-    use mpl_token_metadata::types::Key;
-    use nft_ingester::api::dapi::response::{
-        AssetList, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList,
-    };
-    use nft_ingester::api::dapi::rpc_asset_models::Asset;
-    use nft_ingester::api::error::DasApiError;
-    use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater};
-    use nft_ingester::processors::account_based::mplx_updates_processor::MplxAccountsProcessor;
-    use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
+    use mpl_token_metadata::{accounts::MasterEdition, types::Key};
     use nft_ingester::{
-        config::JsonMiddlewareConfig, json_worker::JsonWorker,
-        processors::account_based::token_updates_processor::TokenAccountsProcessor,
+        api::{
+            dapi::{
+                response::{
+                    AssetList, CoreFeesAccountsList, TokenAccountsList, TransactionSignatureList,
+                },
+                rpc_asset_models::Asset,
+            },
+            error::DasApiError,
+        },
+        cleaners::indexer_cleaner::clean_syncronized_idxs,
+        config::JsonMiddlewareConfig,
+        json_worker::JsonWorker,
+        price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater},
+        processors::account_based::{
+            mplx_updates_processor::MplxAccountsProcessor,
+            token_updates_processor::TokenAccountsProcessor,
+        },
+        raydium_price_fetcher::RaydiumTokenPriceFetcher,
     };
-    use rocks_db::batch_savers::BatchSaveStorage;
-    use rocks_db::columns::asset::{
-        AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
+    use rocks_db::{
+        batch_savers::BatchSaveStorage,
+        column::TypedColumn,
+        columns::{
+            asset::{
+                AssetAuthority, AssetCompleteDetails, AssetDynamicDetails, AssetLeaf, AssetOwner,
+                AssetStaticDetails,
+            },
+            inscriptions::{Inscription, InscriptionData},
+            offchain_data::{OffChainData, StorageMutability},
+        },
+        tree_seq::TreesGaps,
+        Storage, ToFlatbuffersConverter,
     };
-    use rocks_db::columns::asset::{AssetCompleteDetails, AssetLeaf};
-    use rocks_db::columns::inscriptions::{Inscription, InscriptionData};
-    use rocks_db::columns::offchain_data::{OffChainData, StorageMutability};
-    use rocks_db::tree_seq::TreesGaps;
-    use rocks_db::{Storage, ToFlatbuffersConverter};
     use serde_json::{json, Value};
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
-    use spl_pod::optional_keys::OptionalNonZeroPubkey;
-    use spl_pod::primitives::{PodU16, PodU64};
+    use spl_pod::{
+        optional_keys::OptionalNonZeroPubkey,
+        primitives::{PodU16, PodU64},
+    };
     use spl_token_2022::extension::interest_bearing_mint::BasisPoints;
     use sqlx::QueryBuilder;
     use testcontainers::clients::Cli;
@@ -120,23 +133,13 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             assert!(res.is_object());
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             after = res_obj.cursor.clone();
             assert_eq!(res_obj.total, limit, "total should match the limit");
-            assert_eq!(
-                res_obj.limit, limit,
-                "limit should match the requested limit"
-            );
-            assert_eq!(
-                res_obj.items.len(),
-                limit as usize,
-                "assets length should match the limit"
-            );
+            assert_eq!(res_obj.limit, limit, "limit should match the requested limit");
+            assert_eq!(res_obj.items.len(), limit as usize, "assets length should match the limit");
 
             for i in 0..limit {
                 assert_eq!(
@@ -161,10 +164,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -185,10 +185,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -209,10 +206,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert!(res_obj.items.is_empty(), "items should be empty");
         }
@@ -227,10 +221,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -251,10 +242,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert!(res_obj.items.is_empty(), "items should be empty");
         }
@@ -282,10 +270,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -307,10 +292,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -332,10 +314,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -357,10 +336,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             // calculate the number of assets with creator verified true
             let mut cnt = 0;
@@ -383,10 +359,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -401,20 +374,14 @@ mod tests {
             let ref_value = generated_assets.collections[12].clone();
             let payload = SearchAssets {
                 limit: Some(limit),
-                grouping: Some((
-                    "collection".to_string(),
-                    ref_value.collection.value.to_string(),
-                )),
+                grouping: Some(("collection".to_string(), ref_value.collection.value.to_string())),
                 options: SearchAssetsOptions {
                     show_unverified_collections: true,
                     ..Default::default()
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -436,10 +403,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -461,10 +425,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -488,10 +449,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api
-                .search_assets(payload, mutexed_tasks.clone())
-                .await
-                .unwrap();
+            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
             assert_eq!(res_obj.total, 1, "total should be 1");
@@ -591,12 +549,8 @@ mod tests {
             ..Default::default()
         };
 
-        let asset_authority = AssetAuthority {
-            pubkey: pb,
-            authority,
-            slot_updated: 12,
-            write_version: Some(1),
-        };
+        let asset_authority =
+            AssetAuthority { pubkey: pb, authority, slot_updated: 12, write_version: Some(1) };
 
         let owner = AssetOwner {
             pubkey: pb,
@@ -631,11 +585,7 @@ mod tests {
             .storage
             .db
             .put_cf(
-                &env.rocks_env
-                    .storage
-                    .db
-                    .cf_handle(AssetCompleteDetails::NAME)
-                    .unwrap(),
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                 pb,
                 asset_complete_details.convert_to_fb_bytes(),
             )
@@ -643,18 +593,12 @@ mod tests {
 
         let payload = GetAsset {
             id: pb.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["grouping"], Value::Array(vec![]));
-        assert_eq!(
-            response["content"]["metadata"]["token_standard"],
-            "NonFungible"
-        );
+        assert_eq!(response["content"]["metadata"]["token_standard"], "NonFungible");
 
         env.teardown().await;
     }
@@ -731,12 +675,8 @@ mod tests {
             ..Default::default()
         };
 
-        let asset_authority = AssetAuthority {
-            pubkey: pb,
-            authority,
-            slot_updated: 12,
-            write_version: Some(1),
-        };
+        let asset_authority =
+            AssetAuthority { pubkey: pb, authority, slot_updated: 12, write_version: Some(1) };
 
         let owner = AssetOwner {
             pubkey: pb,
@@ -758,11 +698,7 @@ mod tests {
             .storage
             .db
             .put_cf(
-                &env.rocks_env
-                    .storage
-                    .db
-                    .cf_handle(AssetCompleteDetails::NAME)
-                    .unwrap(),
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                 pb,
                 asset_complete_details.convert_to_fb_bytes(),
             )
@@ -770,19 +706,13 @@ mod tests {
 
         let payload = GetAsset {
             id: pb.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["id"], pb.to_string());
         assert_eq!(response["grouping"], Value::Array(vec![]));
-        assert_eq!(
-            response["content"]["metadata"]["token_standard"],
-            "NonFungible"
-        );
+        assert_eq!(response["content"]["metadata"]["token_standard"], "NonFungible");
         assert_eq!(response["content"]["json_uri"], json_uri);
 
         env.teardown().await;
@@ -913,10 +843,7 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
@@ -948,10 +875,7 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
@@ -1111,10 +1035,7 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_accs[0].pubkey.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
@@ -1123,10 +1044,7 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_accs[1].pubkey.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
@@ -1260,10 +1178,7 @@ mod tests {
             .transform_and_store_burnt_metadata(
                 &mut batch_storage,
                 metadata_key,
-                &BurntMetadataSlot {
-                    slot_updated: 2,
-                    write_version: 100,
-                },
+                &BurntMetadataSlot { slot_updated: 2, write_version: 100 },
             )
             .unwrap();
         env.rocks_env
@@ -1282,10 +1197,7 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
@@ -1337,11 +1249,7 @@ mod tests {
                 .storage
                 .asset_signature
                 .put(
-                    AssetSignatureKey {
-                        tree: first_tree,
-                        leaf_idx: first_leaf_idx,
-                        seq,
-                    },
+                    AssetSignatureKey { tree: first_tree, leaf_idx: first_leaf_idx, seq },
                     AssetSignature {
                         tx: signature.to_string(),
                         instruction: "TestInstruction".to_string(),
@@ -1375,11 +1283,7 @@ mod tests {
                 .storage
                 .asset_signature
                 .put(
-                    AssetSignatureKey {
-                        tree: second_tree,
-                        leaf_idx: second_leaf_idx,
-                        seq,
-                    },
+                    AssetSignatureKey { tree: second_tree, leaf_idx: second_leaf_idx, seq },
                     AssetSignature {
                         tx: signature.to_string(),
                         instruction: "TestInstruction".to_string(),
@@ -1690,9 +1594,7 @@ mod tests {
             page: Some(2),
             owner: Some(first_owner.to_string()),
             mint: None,
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: None,
             before: None,
             cursor: None,
@@ -1707,9 +1609,7 @@ mod tests {
             page: Some(1),
             owner: Some(second_owner.to_string()),
             mint: Some(second_mint.to_string()),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: None,
             before: None,
             cursor: None,
@@ -1717,19 +1617,14 @@ mod tests {
         let response = api.get_token_accounts(payload).await.unwrap();
         let parsed_response: TokenAccountsList = serde_json::from_value(response).unwrap();
 
-        assert_eq!(
-            parsed_response.token_accounts.len(),
-            first_owner_with_mint_count
-        );
+        assert_eq!(parsed_response.token_accounts.len(), first_owner_with_mint_count);
 
         let payload = GetTokenAccounts {
             limit: None,
             page: None,
             owner: Some(second_owner.to_string()),
             mint: Some(first_mint.to_string()),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: None,
             before: None,
             cursor: None,
@@ -1866,9 +1761,7 @@ mod tests {
             page: None,
             owner: owner.clone(),
             mint: mint.clone(),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: None,
             before: None,
             cursor: None,
@@ -1881,9 +1774,7 @@ mod tests {
             page: None,
             owner: owner.clone(),
             mint: mint.clone(),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: None,
             before: None,
             cursor: first_10.cursor.clone(),
@@ -1896,9 +1787,7 @@ mod tests {
             page: None,
             owner: owner.clone(),
             mint: mint.clone(),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: None,
             before: None,
             cursor: None,
@@ -1916,9 +1805,7 @@ mod tests {
             page: None,
             owner: owner.clone(),
             mint: mint.clone(),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: None,
             // it's safe to do it in test because we want to check how reverse work
             before: first_20.cursor.clone(),
@@ -1939,9 +1826,7 @@ mod tests {
             page: None,
             owner: owner.clone(),
             mint: mint.clone(),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             // it's safe to do it in test because we want to check how reverse work
             after: first_10.cursor.clone(),
             before: first_20.cursor,
@@ -1950,19 +1835,14 @@ mod tests {
         let response = api.get_token_accounts(payload).await.unwrap();
         let first_10_before_after: TokenAccountsList = serde_json::from_value(response).unwrap();
 
-        assert_eq!(
-            first_10_before_after.token_accounts,
-            second_10.token_accounts
-        );
+        assert_eq!(first_10_before_after.token_accounts, second_10.token_accounts);
 
         let payload = GetTokenAccounts {
             limit: Some(10),
             page: None,
             owner: owner.clone(),
             mint: mint.clone(),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: first_10.cursor,
             before: None,
             cursor: None,
@@ -1975,9 +1855,7 @@ mod tests {
             page: None,
             owner: owner.clone(),
             mint: mint.clone(),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: after_first_10.after,
             before: None,
             cursor: None,
@@ -1990,9 +1868,7 @@ mod tests {
             page: None,
             owner: owner.clone(),
             mint: mint.clone(),
-            options: Some(DisplayOptions {
-                show_zero_balance: true,
-            }),
+            options: Some(DisplayOptions { show_zero_balance: true }),
             after: None,
             before: None,
             cursor: None,
@@ -2039,11 +1915,7 @@ mod tests {
 
         let ref_value = generated_assets.owners[8].clone();
         let payload = GetAssetsByOwner {
-            owner_address: ref_value
-                .owner
-                .value
-                .map(|owner| owner.to_string())
-                .unwrap_or_default(),
+            owner_address: ref_value.owner.value.map(|owner| owner.to_string()).unwrap_or_default(),
             sort_by: None,
             limit: None,
             page: None,
@@ -2055,10 +1927,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api
-            .get_assets_by_owner(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.get_assets_by_owner(payload, mutexed_tasks.clone()).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -2116,10 +1985,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api
-            .get_assets_by_group(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.get_assets_by_group(payload, mutexed_tasks.clone()).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -2177,10 +2043,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api
-            .get_assets_by_creator(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.get_assets_by_creator(payload, mutexed_tasks.clone()).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -2237,10 +2100,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api
-            .get_assets_by_authority(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.get_assets_by_authority(payload, mutexed_tasks.clone()).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -2298,15 +2158,11 @@ mod tests {
         "#;
 
         let mut mock_middleware = MockJsonDownloader::new();
-        mock_middleware
-            .expect_download_file()
-            .with(predicate::eq(url))
-            .times(1)
-            .returning(move |_| {
-                Ok(interface::json::JsonDownloadResult::JsonContent(
-                    offchain_data.to_string(),
-                ))
-            });
+        mock_middleware.expect_download_file().with(predicate::eq(url)).times(1).returning(
+            move |_| {
+                Ok(interface::json::JsonDownloadResult::JsonContent(offchain_data.to_string()))
+            },
+        );
 
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,
@@ -2324,10 +2180,7 @@ mod tests {
             50,
             Some(Arc::new(mock_middleware)),
             None,
-            JsonMiddlewareConfig {
-                is_enabled: true,
-                max_urls_to_parse: 10,
-            },
+            JsonMiddlewareConfig { is_enabled: true, max_urls_to_parse: 10 },
             Arc::new(MockAccountBalanceGetter::new()),
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
@@ -2375,12 +2228,8 @@ mod tests {
             ..Default::default()
         };
 
-        let asset_authority = AssetAuthority {
-            pubkey: pb,
-            authority,
-            slot_updated: 12,
-            write_version: Some(1),
-        };
+        let asset_authority =
+            AssetAuthority { pubkey: pb, authority, slot_updated: 12, write_version: Some(1) };
 
         let owner = AssetOwner {
             pubkey: pb,
@@ -2402,11 +2251,7 @@ mod tests {
             .storage
             .db
             .put_cf(
-                &env.rocks_env
-                    .storage
-                    .db
-                    .cf_handle(AssetCompleteDetails::NAME)
-                    .unwrap(),
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                 pb,
                 asset_complete_details.convert_to_fb_bytes(),
             )
@@ -2414,10 +2259,7 @@ mod tests {
 
         let payload = GetAsset {
             id: pb.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
 
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
@@ -2453,10 +2295,7 @@ mod tests {
 
         assert_eq!(response["id"], pb.to_string());
         assert_eq!(response["grouping"], Value::Array(vec![]));
-        assert_eq!(
-            response["content"]["metadata"]["token_standard"],
-            "NonFungible"
-        );
+        assert_eq!(response["content"]["metadata"]["token_standard"], "NonFungible");
         assert_eq!(response["content"]["json_uri"], json_uri);
 
         assert_eq!(response["content"], expected_content);
@@ -2511,15 +2350,8 @@ mod tests {
             )
             .await
             .unwrap();
-        env.rocks_env
-            .storage
-            .trees_gaps
-            .put_async(tree_id, TreesGaps {})
-            .await
-            .unwrap();
-        let payload = GetAssetProof {
-            id: asset_id.to_string(),
-        };
+        env.rocks_env.storage.trees_gaps.put_async(tree_id, TreesGaps {}).await.unwrap();
+        let payload = GetAssetProof { id: asset_id.to_string() };
         let res = api.get_asset_proof(payload).await.err().unwrap();
         assert!(matches!(res, DasApiError::CannotServiceRequest));
     }
@@ -2564,52 +2396,28 @@ mod tests {
         query_builder.push_values(asset_ids, |mut builder, id| {
             builder.push_bind(id.to_bytes().to_vec());
         });
-        query_builder
-            .build()
-            .execute(&env.pg_env.pool)
-            .await
-            .unwrap();
+        query_builder.build().execute(&env.pg_env.pool).await.unwrap();
 
-        let payload = GetCoreFees {
-            limit: Some(50),
-            page: Some(1),
-            before: None,
-            after: None,
-            cursor: None,
-        };
+        let payload =
+            GetCoreFees { limit: Some(50), page: Some(1), before: None, after: None, cursor: None };
         let res = api.get_core_fees(payload).await.unwrap();
         let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
         assert_eq!(res.core_fees_account.len(), 50);
 
-        let payload = GetCoreFees {
-            limit: Some(975),
-            page: None,
-            before: None,
-            after: None,
-            cursor: None,
-        };
+        let payload =
+            GetCoreFees { limit: Some(975), page: None, before: None, after: None, cursor: None };
         let res = api.get_core_fees(payload).await.unwrap();
         let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
         assert_eq!(res.core_fees_account.len(), 975);
 
-        let payload = GetCoreFees {
-            limit: None,
-            page: None,
-            before: None,
-            after: None,
-            cursor: res.cursor,
-        };
+        let payload =
+            GetCoreFees { limit: None, page: None, before: None, after: None, cursor: res.cursor };
         let res = api.get_core_fees(payload).await.unwrap();
         let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
         assert_eq!(res.core_fees_account.len(), 25);
 
-        let payload = GetCoreFees {
-            limit: None,
-            page: None,
-            before: None,
-            after: None,
-            cursor: res.cursor,
-        };
+        let payload =
+            GetCoreFees { limit: None, page: None, before: None, after: None, cursor: res.cursor };
         let res = api.get_core_fees(payload).await.unwrap();
         let res: CoreFeesAccountsList = serde_json::from_value(res).unwrap();
         assert_eq!(res.core_fees_account.len(), 0);
@@ -2654,10 +2462,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert_eq!(res.grand_total, Some(total_assets as u32));
 
@@ -2671,10 +2476,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert_eq!(res.grand_total, Some(0));
 
@@ -2687,10 +2489,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert_eq!(res.grand_total, None);
     }
@@ -2745,10 +2544,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert!(res.native_balance.unwrap().total_price > 0.0);
     }
@@ -2763,11 +2559,7 @@ mod tests {
                 .storage
                 .db
                 .put_cf(
-                    &env.rocks_env
-                        .storage
-                        .db
-                        .cf_handle(AssetCompleteDetails::NAME)
-                        .unwrap(),
+                    &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                     collection.collection.value,
                     AssetCompleteDetails {
                         pubkey: collection.collection.value,
@@ -2866,12 +2658,7 @@ mod tests {
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = GetAsset {
-            id: generated_assets
-                .collections
-                .first()
-                .unwrap()
-                .pubkey
-                .to_string(),
+            id: generated_assets.collections.first().unwrap().pubkey.to_string(),
             options: Options {
                 show_unverified_collections: true,
                 show_collection_metadata: true,
@@ -2953,28 +2740,13 @@ mod tests {
         );
 
         let payload = GetAsset {
-            id: generated_assets
-                .collections
-                .first()
-                .unwrap()
-                .pubkey
-                .to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            id: generated_assets.collections.first().unwrap().pubkey.to_string(),
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
 
-        assert!(res
-            .grouping
-            .clone()
-            .unwrap()
-            .first()
-            .unwrap()
-            .collection_metadata
-            .is_none());
+        assert!(res.grouping.clone().unwrap().first().unwrap().collection_metadata.is_none());
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -3050,10 +2822,7 @@ mod tests {
             res.inscription.unwrap().validation_hash.unwrap(),
             "f5320ef28d5375d7b1a6ae70ec43edd115fd12ea933e0165306a788dcbeeca31"
         );
-        assert_eq!(
-            res.spl20.unwrap().get("op").unwrap().as_str().unwrap(),
-            "deploy"
-        );
+        assert_eq!(res.spl20.unwrap().get("op").unwrap().as_str().unwrap(), "deploy");
 
         let payload = GetAsset {
             id: asset_pk.to_string(),
@@ -3161,11 +2930,7 @@ mod tests {
             .storage
             .db
             .put_cf(
-                &env.rocks_env
-                    .storage
-                    .db
-                    .cf_handle(AssetCompleteDetails::NAME)
-                    .unwrap(),
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                 fungible_token_mint2,
                 ftm_complete.convert_to_fb_bytes(),
             )
@@ -3209,16 +2974,14 @@ mod tests {
             match asset_type {
                 AssetType::Fungible => {
                     tasks.spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(&rx, 0)
-                            .await
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await
                     });
-                }
+                },
                 AssetType::NonFungible => {
                     tasks.spawn(
                         async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
                     );
-                }
+                },
             }
         }
 
@@ -3264,79 +3027,36 @@ mod tests {
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // We created 2 fungible tokens^ 1 with real pubkey (MPLX)
         // so this token contain info about symbol and price
         // and 1 non-existed token, so response for it do not include such info
         assert_eq!(res.items.len(), 2);
+        assert_eq!(res.items[0].clone().token_info.unwrap().symbol.unwrap(), "MPLX".to_string());
         assert_eq!(
-            res.items[0].clone().token_info.unwrap().symbol.unwrap(),
-            "MPLX".to_string()
-        );
-        assert_eq!(
-            res.items[0]
-                .clone()
-                .token_info
-                .unwrap()
-                .associated_token_address
-                .unwrap(),
+            res.items[0].clone().token_info.unwrap().associated_token_address.unwrap(),
             fungible_token_account2.to_string()
         );
         assert_eq!(
-            res.items[0]
-                .clone()
-                .token_info
-                .unwrap()
-                .price_info
-                .unwrap()
-                .currency
-                .unwrap(),
+            res.items[0].clone().token_info.unwrap().price_info.unwrap().currency.unwrap(),
             "USDC".to_string()
         );
         assert!(
-            res.items[0]
-                .clone()
-                .token_info
-                .unwrap()
-                .price_info
-                .unwrap()
-                .total_price
-                .unwrap()
-                > 0.0
+            res.items[0].clone().token_info.unwrap().price_info.unwrap().total_price.unwrap() > 0.0
         );
         assert!(
-            res.items[0]
-                .clone()
-                .token_info
-                .unwrap()
-                .price_info
-                .unwrap()
-                .price_per_token
-                .unwrap()
+            res.items[0].clone().token_info.unwrap().price_info.unwrap().price_per_token.unwrap()
                 > 0.0
         );
 
         assert!(res.items[1].clone().token_info.unwrap().symbol.is_none());
         assert_eq!(
-            res.items[1]
-                .clone()
-                .token_info
-                .unwrap()
-                .associated_token_address
-                .unwrap(),
+            res.items[1].clone().token_info.unwrap().associated_token_address.unwrap(),
             fungible_token_account1.to_string()
         );
-        assert!(res.items[1]
-            .clone()
-            .token_info
-            .unwrap()
-            .price_info
-            .is_none());
+        assert!(res.items[1].clone().token_info.unwrap().price_info.is_none());
 
         let payload = SearchAssets {
             limit: Some(1000),
@@ -3349,10 +3069,7 @@ mod tests {
             token_type: Some(TokenType::NonFungible),
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // We have 1 NonFungible token, created in setup::TestEnvironment::create fn
@@ -3370,10 +3087,7 @@ mod tests {
             token_type: Some(TokenType::CompressedNFT),
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // Our NonFungible token is not compressed
@@ -3390,10 +3104,7 @@ mod tests {
             token_type: Some(TokenType::RegularNFT),
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // Our NonFungible token is not compressed
@@ -3412,10 +3123,7 @@ mod tests {
             token_type: Some(TokenType::All),
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // Totally we have 3 assets with required owner
@@ -3436,10 +3144,7 @@ mod tests {
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // We have only 1 token account with non-zero balance
@@ -3548,10 +3253,7 @@ mod tests {
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = GetAsset {
             id: fungible_token_mint1.to_string(),
-            options: Options {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
+            options: Options { show_unverified_collections: true, ..Default::default() },
         };
         let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
@@ -3689,16 +3391,14 @@ mod tests {
             match asset_type {
                 AssetType::Fungible => {
                     tasks.spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(&rx, 0)
-                            .await
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await
                     });
-                }
+                },
                 AssetType::NonFungible => {
                     tasks.spawn(
                         async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
                     );
-                }
+                },
             }
         }
 
@@ -3746,10 +3446,7 @@ mod tests {
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
-        let res = api
-            .search_assets(payload, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // We created 2 fungible tokens^ 1 with real pubkey (MPLX)
@@ -3757,21 +3454,11 @@ mod tests {
         // and 1 non-existed token, so response for it do not include such info
         assert_eq!(res.items.len(), 2);
         assert_eq!(
-            res.items[0]
-                .clone()
-                .token_info
-                .unwrap()
-                .associated_token_address
-                .unwrap(),
+            res.items[0].clone().token_info.unwrap().associated_token_address.unwrap(),
             fungible_token_account2.to_string()
         );
         assert_eq!(
-            res.items[1]
-                .clone()
-                .token_info
-                .unwrap()
-                .associated_token_address
-                .unwrap(),
+            res.items[1].clone().token_info.unwrap().associated_token_address.unwrap(),
             fungible_token_account1.to_string()
         );
     }
@@ -3838,11 +3525,7 @@ mod tests {
         batch_storage.flush().unwrap();
 
         // one more idx shoul've been added
-        let idx_fungible_asset_iter = env
-            .rocks_env
-            .storage
-            .fungible_assets_update_idx
-            .iter_start();
+        let idx_fungible_asset_iter = env.rocks_env.storage.fungible_assets_update_idx.iter_start();
         let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
         assert_eq!(idx_fungible_asset_iter.count(), 1);
         assert_eq!(idx_non_fungible_asset_iter.count(), cnt + 2);
@@ -3858,11 +3541,7 @@ mod tests {
         }
 
         // after sync idxs should be cleaned again
-        let idx_fungible_asset_iter = env
-            .rocks_env
-            .storage
-            .fungible_assets_update_idx
-            .iter_start();
+        let idx_fungible_asset_iter = env.rocks_env.storage.fungible_assets_update_idx.iter_start();
         let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
         assert_eq!(idx_fungible_asset_iter.count(), 1);
         assert_eq!(idx_non_fungible_asset_iter.count(), 1);

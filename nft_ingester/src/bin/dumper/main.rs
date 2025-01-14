@@ -1,17 +1,17 @@
-use std::fs::File;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{fs::File, path::PathBuf, sync::Arc};
 
 use clap::{command, Parser};
 use metrics_utils::SynchronizerMetricsConfig;
-use nft_ingester::error::IngesterError;
-use nft_ingester::index_syncronizer::shard_pubkeys;
-use nft_ingester::init::graceful_stop;
-use rocks_db::migrator::MigrationState;
-use rocks_db::storage_traits::{AssetUpdateIndexStorage, Dumper};
-use rocks_db::Storage;
-use tokio::sync::{broadcast, Mutex};
-use tokio::task::JoinSet;
+use nft_ingester::{error::IngesterError, index_syncronizer::shard_pubkeys, init::graceful_stop};
+use rocks_db::{
+    migrator::MigrationState,
+    storage_traits::{AssetUpdateIndexStorage, Dumper},
+    Storage,
+};
+use tokio::{
+    sync::{broadcast, Mutex},
+    task::JoinSet,
+};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -100,9 +100,8 @@ pub async fn main() -> Result<(), IngesterError> {
         return Ok(());
     };
 
-    let base_path = args
-        .dump_path
-        .unwrap_or_else(|| tempfile::TempDir::new().unwrap().path().to_path_buf());
+    let base_path =
+        args.dump_path.unwrap_or_else(|| tempfile::TempDir::new().unwrap().path().to_path_buf());
 
     let shards = shard_pubkeys(args.num_shards);
     let fungible_shards = shard_pubkeys(args.fungible_num_shards);
@@ -111,11 +110,8 @@ pub async fn main() -> Result<(), IngesterError> {
     let mut fungible_tasks = JoinSet::new();
 
     for (start, end) in shards.iter() {
-        let name_postfix = if args.num_shards > 1 {
-            format!("_shard_{}_{}", start, end)
-        } else {
-            "".to_string()
-        };
+        let name_postfix =
+            if args.num_shards > 1 { format!("_shard_{}_{}", start, end) } else { "".to_string() };
         let creators_path = base_path
             .join(format!("creators{}.csv", name_postfix))
             .to_str()
@@ -208,9 +204,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let mut total_assets = 0;
     while let Some(task) = tasks.join_next().await {
-        let cnt = task
-            .map_err(|e| e.to_string())?
-            .map_err(|e| e.to_string())?;
+        let cnt = task.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
         total_assets += cnt;
     }
     let duration = start_time.elapsed();
@@ -222,8 +216,7 @@ pub async fn main() -> Result<(), IngesterError> {
     );
 
     while let Some(task) = fungible_tasks.join_next().await {
-        task.map_err(|e| e.to_string())?
-            .map_err(|e| e.to_string())?;
+        task.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
     }
     tracing::info!("Dumping fungible tokens done");
     let keys_file = File::create(base_path.join("keys.csv")).expect("should create keys file");

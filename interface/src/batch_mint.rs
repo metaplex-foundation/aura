@@ -1,7 +1,8 @@
-use crate::error::UsecaseError;
 use async_trait::async_trait;
 use bubblegum_batch_sdk::model::{BatchMint, BatchMintInstruction};
 use mockall::automock;
+
+use crate::error::UsecaseError;
 
 #[automock]
 #[async_trait]

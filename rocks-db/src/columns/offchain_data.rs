@@ -1,11 +1,14 @@
-use crate::column::TypedColumn;
-use crate::errors::StorageError;
-use crate::generated::offchain_data_generated::off_chain_data as fb;
-use crate::key_encoders::{decode_string, encode_string};
-use crate::{Result, ToFlatbuffersConverter};
 use entities::models::OffChainDataGrpc;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde::{Deserialize, Serialize};
+
+use crate::{
+    column::TypedColumn,
+    errors::StorageError,
+    generated::offchain_data_generated::off_chain_data as fb,
+    key_encoders::{decode_string, encode_string},
+    Result, ToFlatbuffersConverter,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 pub enum StorageMutability {
@@ -99,10 +102,7 @@ impl<'a> ToFlatbuffersConverter<'a> for OffChainData {
     fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target> {
         let storage_mutability = self.storage_mutability.clone().into();
         let url = self.url.as_ref().map(|url| builder.create_string(url));
-        let metadata = self
-            .metadata
-            .as_ref()
-            .map(|metadata| builder.create_string(metadata));
+        let metadata = self.metadata.as_ref().map(|metadata| builder.create_string(metadata));
 
         fb::OffChainData::create(
             builder,

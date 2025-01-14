@@ -1,17 +1,21 @@
 pub mod errors;
 pub mod red;
 pub mod utils;
-use chrono::Utc;
-use red::RequestErrorDurationMetrics;
-use std::fmt;
-use std::sync::Arc;
 
-use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
-use prometheus_client::registry::Registry;
+use std::{fmt, sync::Arc};
+
+use chrono::Utc;
+use prometheus_client::{
+    encoding::{EncodeLabelSet, EncodeLabelValue},
+    metrics::{
+        counter::Counter,
+        family::Family,
+        gauge::Gauge,
+        histogram::{exponential_buckets, Histogram},
+    },
+    registry::Registry,
+};
+use red::RequestErrorDurationMetrics;
 
 pub struct IntegrityVerificationMetrics {
     pub integrity_verification_metrics: Arc<IntegrityVerificationMetricsConfig>,
@@ -142,11 +146,7 @@ impl MessageProcessMetricsConfig {
     }
 
     pub fn set_data_read_time(&self, label: &str, duration: f64) {
-        self.data_read
-            .get_or_create(&MetricLabel {
-                name: label.to_string(),
-            })
-            .observe(duration);
+        self.data_read.get_or_create(&MetricLabel { name: label.to_string() }).observe(duration);
     }
 
     pub fn register(&self, registry: &mut Registry) {
@@ -185,36 +185,21 @@ impl BackfillerMetricsConfig {
     }
 
     pub fn set_slot_delay_time(&self, label: &str, duration: f64) {
-        self.slot_delay
-            .get_or_create(&MetricLabel {
-                name: label.to_string(),
-            })
-            .observe(duration);
+        self.slot_delay.get_or_create(&MetricLabel { name: label.to_string() }).observe(duration);
     }
 
     pub fn inc_slots_collected(&self, label: &str, status: MetricStatus) -> u64 {
         self.slots_collected
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_owned(),
-                status,
-            })
+            .get_or_create(&MetricLabelWithStatus { name: label.to_owned(), status })
             .inc()
     }
 
     pub fn inc_data_processed(&self, label: &str) -> u64 {
-        self.data_processed
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .inc()
+        self.data_processed.get_or_create(&MetricLabel { name: label.to_owned() }).inc()
     }
 
     pub fn set_last_processed_slot(&self, label: &str, slot: i64) -> i64 {
-        self.last_processed_slot
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .set(slot)
+        self.last_processed_slot.get_or_create(&MetricLabel { name: label.to_owned() }).set(slot)
     }
 
     pub fn register_with_prefix(&self, registry: &mut Registry, prefix: &str) {
@@ -274,37 +259,25 @@ impl RpcBackfillerMetricsConfig {
 
     pub fn inc_transactions_processed(&self, label: &str, status: MetricStatus) -> u64 {
         self.transactions_processed
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_string(),
-                status,
-            })
+            .get_or_create(&MetricLabelWithStatus { name: label.to_string(), status })
             .inc()
     }
 
     pub fn inc_fetch_transactions(&self, label: &str, status: MetricStatus) -> u64 {
         self.fetch_transactions
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_string(),
-                status,
-            })
+            .get_or_create(&MetricLabelWithStatus { name: label.to_string(), status })
             .inc()
     }
 
     pub fn inc_fetch_signatures(&self, label: &str, status: MetricStatus) -> u64 {
         self.fetch_signatures
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_string(),
-                status,
-            })
+            .get_or_create(&MetricLabelWithStatus { name: label.to_string(), status })
             .inc()
     }
 
     pub fn inc_run_fetch_signatures(&self, label: &str, status: MetricStatus) -> u64 {
         self.run_fetch_signatures
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_string(),
-                status,
-            })
+            .get_or_create(&MetricLabelWithStatus { name: label.to_string(), status })
             .inc()
     }
 }
@@ -348,57 +321,41 @@ impl SynchronizerMetricsConfig {
 
     pub fn inc_number_of_records_synchronized(&self, label: &str, num_of_records: u64) -> u64 {
         self.number_of_records_synchronized
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
+            .get_or_create(&MetricLabel { name: label.to_owned() })
             .inc_by(num_of_records)
     }
 
     pub fn set_last_synchronized_slot(&self, label: &str, slot: i64) -> i64 {
-        self.last_synchronized_slot
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .set(slot)
+        self.last_synchronized_slot.get_or_create(&MetricLabel { name: label.to_owned() }).set(slot)
     }
 
     pub fn inc_num_of_assets_iter(&self, label: &str, num_of_records: u64) -> u64 {
         self.full_sync_num_of_assets_iter
-            .get_or_create(&MetricLabel {
-                name: label.to_string(),
-            })
+            .get_or_create(&MetricLabel { name: label.to_string() })
             .inc_by(num_of_records)
     }
 
     pub fn set_iter_over_assets_indexes(&self, duration: f64) {
         self.full_sync_iter_over_assets_indexes
-            .get_or_create(&MethodLabel {
-                method_name: "iter_over_asset_indexes".to_string(),
-            })
+            .get_or_create(&MethodLabel { method_name: "iter_over_asset_indexes".to_string() })
             .observe(duration);
     }
 
     pub fn inc_num_of_records_written(&self, label: &str, num: u64) -> u64 {
         self.full_sync_num_of_records_written
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
+            .get_or_create(&MetricLabel { name: label.to_owned() })
             .inc_by(num)
     }
 
     pub fn set_file_write_time(&self, label: &str, duration: f64) {
         self.full_sync_file_write_time
-            .get_or_create(&MethodLabel {
-                method_name: label.to_string(),
-            })
+            .get_or_create(&MethodLabel { method_name: label.to_string() })
             .observe(duration);
     }
 
     pub fn inc_num_of_records_sent_to_channel(&self, label: &str, num: u64) -> u64 {
         self.full_sync_num_of_records_sent_to_channel
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
+            .get_or_create(&MetricLabel { name: label.to_owned() })
             .inc_by(num)
     }
 
@@ -476,26 +433,18 @@ impl ApiMetricsConfig {
     }
 
     pub fn inc_requests(&self, label: &str) -> u64 {
-        self.requests
-            .get_or_create(&MethodLabel {
-                method_name: label.to_owned(),
-            })
-            .inc()
+        self.requests.get_or_create(&MethodLabel { method_name: label.to_owned() }).inc()
     }
 
     pub fn inc_search_asset_requests(&self, label: &str) -> u64 {
         self.search_asset_requests
-            .get_or_create(&MethodLabel {
-                method_name: label.to_owned(),
-            })
+            .get_or_create(&MethodLabel { method_name: label.to_owned() })
             .inc()
     }
 
     pub fn inc_token_info_fetch_errors(&self, label: &str) -> u64 {
         self.token_info_fetch_errors
-            .get_or_create(&MethodLabel {
-                method_name: label.to_owned(),
-            })
+            .get_or_create(&MethodLabel { method_name: label.to_owned() })
             .inc()
     }
 
@@ -505,26 +454,19 @@ impl ApiMetricsConfig {
 
     pub fn set_latency(&self, label: &str, duration: f64) {
         self.latency
-            .get_or_create(&MethodLabel {
-                method_name: label.to_owned(),
-            })
+            .get_or_create(&MethodLabel { method_name: label.to_owned() })
             .observe(duration);
     }
 
     pub fn inc_proof_checks(&self, label: &str, status: MetricStatus) -> u64 {
         self.proof_checks
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_owned(),
-                status,
-            })
+            .get_or_create(&MetricLabelWithStatus { name: label.to_owned(), status })
             .inc()
     }
 
     pub fn set_search_asset_latency(&self, label: &str, duration: f64) {
         self.search_asset_latency
-            .get_or_create(&MethodLabel {
-                method_name: label.to_owned(),
-            })
+            .get_or_create(&MethodLabel { method_name: label.to_owned() })
             .observe(duration);
     }
 
@@ -549,11 +491,7 @@ impl ApiMetricsConfig {
             "A histogram of the searchAsset request duration",
             self.search_asset_latency.clone(),
         );
-        registry.register(
-            "api_start_time",
-            "Binary start time",
-            self.start_time.clone(),
-        );
+        registry.register("api_start_time", "Binary start time", self.start_time.clone());
         registry.register(
             "api_proof_checks",
             "The number of proof checks made",
@@ -616,12 +554,10 @@ impl MetricsTrait for MetricState {
 
         self.synchronizer_metrics.register(&mut self.registry);
         self.json_migrator_metrics.register(&mut self.registry);
-        self.sequence_consistent_gapfill_metrics
-            .register(&mut self.registry);
+        self.sequence_consistent_gapfill_metrics.register(&mut self.registry);
         self.red_metrics.register(&mut self.registry);
         self.fork_cleaner_metrics.register(&mut self.registry);
-        self.batch_mint_processor_metrics
-            .register(&mut self.registry);
+        self.batch_mint_processor_metrics.register(&mut self.registry);
     }
 }
 
@@ -639,110 +575,80 @@ impl MetricsTrait for IntegrityVerificationMetrics {
         self.registry.register(
             "total_get_asset_tested",
             "Count of total getAsset method`s tests",
-            self.integrity_verification_metrics
-                .total_get_asset_tested
-                .clone(),
+            self.integrity_verification_metrics.total_get_asset_tested.clone(),
         );
         self.registry.register(
             "total_get_asset_proof_tested",
             "Count of total getAssetProof method`s tests",
-            self.integrity_verification_metrics
-                .total_get_asset_proof_tested
-                .clone(),
+            self.integrity_verification_metrics.total_get_asset_proof_tested.clone(),
         );
         self.registry.register(
             "total_get_assets_by_authority_tested",
             "Count of total getAssetsByAuthority method`s tests",
-            self.integrity_verification_metrics
-                .total_get_assets_by_authority_tested
-                .clone(),
+            self.integrity_verification_metrics.total_get_assets_by_authority_tested.clone(),
         );
         self.registry.register(
             "total_get_assets_by_creator_tested",
             "Count of total getAssetsByCreator method`s tests",
-            self.integrity_verification_metrics
-                .total_get_assets_by_creator_tested
-                .clone(),
+            self.integrity_verification_metrics.total_get_assets_by_creator_tested.clone(),
         );
         self.registry.register(
             "total_get_assets_by_owner_tested",
             "Count of total getAssetsByOwner method`s tests",
-            self.integrity_verification_metrics
-                .total_get_assets_by_owner_tested
-                .clone(),
+            self.integrity_verification_metrics.total_get_assets_by_owner_tested.clone(),
         );
         self.registry.register(
             "total_get_assets_by_group_tested",
             "Count of total getAssetsByGroup method`s tests",
-            self.integrity_verification_metrics
-                .total_get_assets_by_group_tested
-                .clone(),
+            self.integrity_verification_metrics.total_get_assets_by_group_tested.clone(),
         );
 
         self.registry.register(
             "failed_get_asset_tested",
             "Fail count of getAsset method`s tests",
-            self.integrity_verification_metrics
-                .failed_get_asset_tested
-                .clone(),
+            self.integrity_verification_metrics.failed_get_asset_tested.clone(),
         );
         self.registry.register(
             "failed_get_asset_proof_tested",
             "Fail count of getAssetProof method`s tests",
-            self.integrity_verification_metrics
-                .failed_get_asset_proof_tested
-                .clone(),
+            self.integrity_verification_metrics.failed_get_asset_proof_tested.clone(),
         );
         self.registry.register(
             "failed_get_assets_by_authority_tested",
             "Fail count of getAssetsByAuthority method`s tests",
-            self.integrity_verification_metrics
-                .failed_get_assets_by_authority_tested
-                .clone(),
+            self.integrity_verification_metrics.failed_get_assets_by_authority_tested.clone(),
         );
         self.registry.register(
             "failed_get_assets_by_creator_tested",
             "Fail count of getAssetsByCreator method`s tests",
-            self.integrity_verification_metrics
-                .failed_get_assets_by_creator_tested
-                .clone(),
+            self.integrity_verification_metrics.failed_get_assets_by_creator_tested.clone(),
         );
         self.registry.register(
             "failed_get_assets_by_owner_tested",
             "Fail count of getAssetsByOwner method`s tests",
-            self.integrity_verification_metrics
-                .failed_get_assets_by_owner_tested
-                .clone(),
+            self.integrity_verification_metrics.failed_get_assets_by_owner_tested.clone(),
         );
         self.registry.register(
             "failed_get_assets_by_group_tested",
             "Fail count of getAssetsByGroup method`s tests",
-            self.integrity_verification_metrics
-                .failed_get_assets_by_group_tested
-                .clone(),
+            self.integrity_verification_metrics.failed_get_assets_by_group_tested.clone(),
         );
 
         self.registry.register(
             "network_errors_testing_host",
             "Count of network errors from testing host",
-            self.integrity_verification_metrics
-                .network_errors_testing_host
-                .clone(),
+            self.integrity_verification_metrics.network_errors_testing_host.clone(),
         );
         self.registry.register(
             "network_errors_reference_host",
             "Count of network errors from reference host",
-            self.integrity_verification_metrics
-                .network_errors_reference_host
-                .clone(),
+            self.integrity_verification_metrics.network_errors_reference_host.clone(),
         );
 
         self.registry.register(
             "fetch_keys_errors",
             "Count of DB errors while fetching keys for tests",
-            self.integrity_verification_metrics
-                .fetch_keys_errors
-                .clone(),
+            self.integrity_verification_metrics.fetch_keys_errors.clone(),
         );
     }
 }
@@ -776,45 +682,27 @@ impl JsonMigratorMetricsConfig {
     }
 
     pub fn set_tasks_buffer(&self, label: &str, buffer_size: i64) {
-        self.tasks_buffer
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .set(buffer_size);
+        self.tasks_buffer.get_or_create(&MetricLabel { name: label.to_owned() }).set(buffer_size);
     }
 
     pub fn inc_jsons_migrated(&self, label: &str, status: MetricStatus) -> u64 {
         self.jsons_migrated
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_owned(),
-                status,
-            })
+            .get_or_create(&MetricLabelWithStatus { name: label.to_owned(), status })
             .inc()
     }
 
     pub fn inc_tasks_set(&self, label: &str, status: MetricStatus, inc_by: u64) -> u64 {
         self.tasks_set
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_owned(),
-                status,
-            })
+            .get_or_create(&MetricLabelWithStatus { name: label.to_owned(), status })
             .inc_by(inc_by)
     }
 
     pub fn register(&self, registry: &mut Registry) {
         self.start_time();
 
-        registry.register(
-            "json_migrator_start_time",
-            "Binary start time",
-            self.start_time.clone(),
-        );
+        registry.register("json_migrator_start_time", "Binary start time", self.start_time.clone());
 
-        registry.register(
-            "json_migrator_tasks_buffer",
-            "Buffer size",
-            self.tasks_buffer.clone(),
-        );
+        registry.register("json_migrator_tasks_buffer", "Buffer size", self.tasks_buffer.clone());
 
         registry.register(
             "json_migrator_jsons_migrated",
@@ -854,10 +742,8 @@ impl IngesterMetricsConfig {
             buffers: Family::<MetricLabel, Gauge>::default(),
             retries: Family::<MetricLabel, Counter>::default(),
             rocksdb_backup_latency: Histogram::new(
-                [
-                    60.0, 300.0, 600.0, 1200.0, 1800.0, 3600.0, 5400.0, 7200.0, 9000.0, 10800.0,
-                ]
-                .into_iter(),
+                [60.0, 300.0, 600.0, 1200.0, 1800.0, 3600.0, 5400.0, 7200.0, 9000.0, 10800.0]
+                    .into_iter(),
             ),
             instructions: Family::<MetricLabel, Counter>::default(),
             accounts: Family::<MetricLabel, Counter>::default(),
@@ -870,72 +756,39 @@ impl IngesterMetricsConfig {
     }
 
     pub fn set_latency(&self, label: &str, duration: f64) {
-        self.latency
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .observe(duration);
+        self.latency.get_or_create(&MetricLabel { name: label.to_owned() }).observe(duration);
     }
 
     pub fn set_rocksdb_backup_latency(&self, duration: f64) {
         self.rocksdb_backup_latency.observe(duration);
     }
     pub fn set_buffer(&self, label: &str, buffer_size: i64) {
-        self.buffers
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .set(buffer_size);
+        self.buffers.get_or_create(&MetricLabel { name: label.to_owned() }).set(buffer_size);
     }
 
     pub fn inc_process(&self, label: &str, status: MetricStatus) -> u64 {
-        self.process
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_owned(),
-                status,
-            })
-            .inc()
+        self.process.get_or_create(&MetricLabelWithStatus { name: label.to_owned(), status }).inc()
     }
 
     pub fn inc_query_db_retries(&self, label: &str) -> u64 {
-        self.retries
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .inc()
+        self.retries.get_or_create(&MetricLabel { name: label.to_owned() }).inc()
     }
 
     pub fn inc_instructions(&self, label: &str) -> u64 {
-        self.instructions
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .inc()
+        self.instructions.get_or_create(&MetricLabel { name: label.to_owned() }).inc()
     }
 
     pub fn inc_accounts(&self, label: &str) -> u64 {
-        self.accounts
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .inc()
+        self.accounts.get_or_create(&MetricLabel { name: label.to_owned() }).inc()
     }
 
     pub fn set_last_processed_slot(&self, label: &str, slot: i64) -> i64 {
-        self.last_processed_slot
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .set(slot)
+        self.last_processed_slot.get_or_create(&MetricLabel { name: label.to_owned() }).set(slot)
     }
 
     pub fn register(&self, registry: &mut Registry) {
         self.start_time();
-        registry.register(
-            "ingester_start_time",
-            "Binary start time",
-            self.start_time.clone(),
-        );
+        registry.register("ingester_start_time", "Binary start time", self.start_time.clone());
 
         registry.register(
             "ingester_processed",
@@ -1003,12 +856,7 @@ impl JsonDownloaderMetricsConfig {
     }
 
     pub fn inc_tasks(&self, label: &str, status: MetricStatus) -> u64 {
-        self.tasks
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_string(),
-                status,
-            })
-            .inc()
+        self.tasks.get_or_create(&MetricLabelWithStatus { name: label.to_string(), status }).inc()
     }
 
     pub fn set_tasks_to_execute(&self, count: i64) -> i64 {
@@ -1021,9 +869,7 @@ impl JsonDownloaderMetricsConfig {
 
     pub fn set_latency_task_executed(&self, label: &str, duration: f64) {
         self.latency_task_executed
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
+            .get_or_create(&MetricLabel { name: label.to_owned() })
             .observe(duration);
     }
 
@@ -1164,11 +1010,7 @@ impl IntegrityVerificationMetricsConfig {
     }
 
     pub fn inc_fetch_keys_errors(&self, label: &str) -> u64 {
-        self.fetch_keys_errors
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .inc()
+        self.fetch_keys_errors.get_or_create(&MetricLabel { name: label.to_owned() }).inc()
     }
 }
 
@@ -1215,11 +1057,7 @@ impl SequenceConsistentGapfillMetricsConfig {
             self.start_time.clone(),
         );
 
-        registry.register(
-            "gaps_count",
-            "Number of gaps found",
-            self.gaps_count.clone(),
-        );
+        registry.register("gaps_count", "Number of gaps found", self.gaps_count.clone());
 
         registry.register(
             "total_sequence_consistent_scans",
@@ -1334,17 +1172,11 @@ impl BatchMintProcessorMetricsConfig {
         self.start_time.set(Utc::now().timestamp())
     }
     pub fn inc_total_batch_mints(&self, label: &str) -> u64 {
-        self.total_batch_mints
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .inc()
+        self.total_batch_mints.get_or_create(&MetricLabel { name: label.to_owned() }).inc()
     }
     pub fn set_processing_latency(&self, label: &str, duration: f64) {
         self.processing_latency
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
+            .get_or_create(&MetricLabel { name: label.to_owned() })
             .observe(duration);
     }
     pub fn register(&self, registry: &mut Registry) {
@@ -1398,24 +1230,15 @@ impl BatchMintPersisterMetricsConfig {
     }
     pub fn inc_batch_mints_with_status(&self, label: &str, status: MetricStatus) -> u64 {
         self.batch_mints_with_status
-            .get_or_create(&MetricLabelWithStatus {
-                name: label.to_owned(),
-                status,
-            })
+            .get_or_create(&MetricLabelWithStatus { name: label.to_owned(), status })
             .inc()
     }
     pub fn inc_batch_mints(&self, label: &str) -> u64 {
-        self.batch_mints
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
-            .inc()
+        self.batch_mints.get_or_create(&MetricLabel { name: label.to_owned() }).inc()
     }
     pub fn set_persisting_latency(&self, label: &str, duration: f64) {
         self.persisting_latency
-            .get_or_create(&MetricLabel {
-                name: label.to_owned(),
-            })
+            .get_or_create(&MetricLabel { name: label.to_owned() })
             .observe(duration);
     }
     pub fn register(&self, registry: &mut Registry) {

@@ -1,8 +1,8 @@
-use figment::providers::Env;
-use figment::Figment;
+use std::path::PathBuf;
+
+use figment::{providers::Env, Figment};
 use serde_derive::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
-use std::path::PathBuf;
 
 #[derive(Deserialize, Default, PartialEq, Debug, Clone)]
 pub enum TestSourceMode {
@@ -52,9 +52,7 @@ pub fn setup_config(path: &str) -> IntegrityVerificationConfig {
         dotenvy::from_filename(path).unwrap();
     }
 
-    let figment = Figment::new()
-        .join(Env::prefixed("INTEGRITY_VERIFICATION_"))
-        .join(Env::raw());
+    let figment = Figment::new().join(Env::prefixed("INTEGRITY_VERIFICATION_")).join(Env::raw());
 
     figment.extract().unwrap()
 }

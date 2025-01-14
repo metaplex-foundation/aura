@@ -1,31 +1,29 @@
-use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashSet};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
-use clap::Parser;
-use indicatif::{ProgressBar, ProgressStyle};
-use metrics_utils::MetricState;
-use rocks_db::column::TypedColumn;
-use rocks_db::columns::offchain_data::OffChainData;
-use rocks_db::migrator::MigrationVersions;
-use rocks_db::Storage;
-use tokio::signal;
-use tokio::sync::{broadcast, Mutex as AsyncMutex};
-use tracing::{error, info, warn};
-
-use entities::models::RawBlock;
-use interface::slots_dumper::SlotsDumper;
-use usecase::bigtable::BigTableClient;
-use usecase::slots_collector::SlotsCollector;
-
-use blockbuster::programs::bubblegum::ID as BUBBLEGUM_PROGRAM_ID;
-
-use tokio_util::sync::CancellationToken;
+use std::{
+    cmp::Ordering,
+    collections::{BTreeSet, HashSet},
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 // For InMemorySlotsDumper
 use async_trait::async_trait;
+use blockbuster::programs::bubblegum::ID as BUBBLEGUM_PROGRAM_ID;
+use clap::Parser;
+use entities::models::RawBlock;
+use indicatif::{ProgressBar, ProgressStyle};
+use interface::slots_dumper::SlotsDumper;
+use metrics_utils::MetricState;
+use rocks_db::{
+    column::TypedColumn, columns::offchain_data::OffChainData, migrator::MigrationVersions, Storage,
+};
+use tokio::{
+    signal,
+    sync::{broadcast, Mutex as AsyncMutex},
+};
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
+use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -60,9 +58,7 @@ pub struct InMemorySlotsDumper {
 impl InMemorySlotsDumper {
     /// Creates a new instance of `InMemorySlotsDumper`.
     pub fn new() -> Self {
-        Self {
-            slots: AsyncMutex::new(BTreeSet::new()),
-        }
+        Self { slots: AsyncMutex::new(BTreeSet::new()) }
     }
 
     /// Retrieves the sorted keys in ascending order.
@@ -96,16 +92,12 @@ impl SlotsDumper for InMemorySlotsDumper {
 
 // Function to get the last persisted slot from RocksDB
 fn get_last_persisted_slots(rocks_db: Arc<Storage>) -> u64 {
-    let mut it = rocks_db
-        .db
-        .raw_iterator_cf(&rocks_db.db.cf_handle(RawBlock::NAME).unwrap());
+    let mut it = rocks_db.db.raw_iterator_cf(&rocks_db.db.cf_handle(RawBlock::NAME).unwrap());
     it.seek_to_last();
     if !it.valid() {
         return 0;
     }
-    it.key()
-        .and_then(|b| RawBlock::decode_key(b.to_vec()).ok())
-        .unwrap_or_default()
+    it.key().and_then(|b| RawBlock::decode_key(b.to_vec()).ok()).unwrap_or_default()
 }
 
 #[tokio::main]
@@ -186,10 +178,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Remove duplicates
         let slots_to_check: Vec<u64> = {
             let mut set = HashSet::new();
-            slots_to_check
-                .into_iter()
-                .filter(|x| set.insert(*x))
-                .collect()
+            slots_to_check.into_iter().filter(|x| set.insert(*x)).collect()
         };
 
         let total_slots_to_check = slots_to_check.len();
@@ -216,10 +205,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         slots_to_check.sort_unstable();
 
         // Prepare keys
-        let keys: Vec<_> = slots_to_check
-            .iter()
-            .map(|&slot| RawBlock::encode_key(slot))
-            .collect();
+        let keys: Vec<_> = slots_to_check.iter().map(|&slot| RawBlock::encode_key(slot)).collect();
 
         // Batch get
         let results = db.db.batched_multi_get_cf(&cf_handle, keys, true);
@@ -229,14 +215,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match result {
                 Ok(Some(_)) => {
                     present_slots.push(slot);
-                }
+                },
                 Ok(None) => {
                     missing_slots.push(slot);
-                }
+                },
                 Err(e) => {
                     error!("Error fetching slot {}: {}", slot, e);
                     missing_slots.push(slot); // Consider as missing on error
-                }
+                },
             }
             progress_bar.inc(1);
         }
@@ -254,10 +240,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Store missing slots
     let missing_slots = Arc::new(Mutex::new(Vec::new()));
 
-    info!(
-        "Starting to collect slots from {} to {}",
-        0, last_persisted_slot
-    );
+    info!("Starting to collect slots from {} to {}", 0, last_persisted_slot);
 
     // Initialize progress bar spinner for collection
     let progress_bar = ProgressBar::new_spinner();
@@ -291,10 +274,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let total_slots_to_check = collected_slots.len() as u64;
 
-    info!(
-        "Collected {} slots in range {} to {}",
-        total_slots_to_check, 0, last_persisted_slot
-    );
+    info!("Collected {} slots in range {} to {}", total_slots_to_check, 0, last_persisted_slot);
 
     // Initialize progress bar for verification
     let progress_bar = ProgressBar::new(total_slots_to_check);
@@ -352,7 +332,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         None
                     };
-                }
+                },
                 Ordering::Less => {
                     // Slot is missing in RocksDB
                     {
@@ -361,7 +341,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     // Advance slots iterator
                     next_slot = slots_iter.next();
-                }
+                },
                 Ordering::Greater => {
                     // slot > db_slot
                     // Advance RocksDB iterator
@@ -375,7 +355,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         None
                     };
-                }
+                },
             }
         } else {
             // No more slots in RocksDB, remaining slots are missing
