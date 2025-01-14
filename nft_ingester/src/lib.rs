@@ -10,6 +10,7 @@ pub mod flatbuffer_mapper;
 pub mod gapfiller;
 pub mod index_syncronizer;
 pub mod init;
+pub mod inmemory_slots_dumper;
 pub mod inscription_raw_parsing;
 pub mod json_worker;
 pub mod message_handler;

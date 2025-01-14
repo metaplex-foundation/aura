@@ -63,10 +63,10 @@ impl PgClient {
     pub async fn store_tasks(
         &self,
         tasks_buffer: Arc<Mutex<VecDeque<Task>>>,
-        tasks: &Vec<Task>,
+        tasks: &[Task],
         metrics: Arc<IngesterMetricsConfig>,
     ) {
-        let mut tasks_to_insert = tasks.clone();
+        let mut tasks_to_insert = tasks.to_owned();
 
         // scope crated to unlock mutex before insert_tasks func, which can be time consuming
         let tasks = {

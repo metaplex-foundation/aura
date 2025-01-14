@@ -1,9 +1,9 @@
 use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::column::TypedColumn;
+use rocks_db::columns::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::migrator::MigrationState;
-use rocks_db::Storage;
+use rocks_db::{SlotStorage, Storage};
 use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::str::FromStr;
@@ -43,15 +43,26 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
 
     println!("Opening DB...");
 
+    let js = Arc::new(Mutex::new(JoinSet::new()));
     let source_db = Storage::open(
         source_path,
-        Arc::new(Mutex::new(JoinSet::new())),
+        js.clone(),
         red_metrics.clone(),
         MigrationState::Last,
     )
     .map_err(|e| e.to_string())?;
 
     println!("Opened in {:?}", start.elapsed());
+
+    let slots_db = Arc::new(
+        SlotStorage::open_secondary(
+            source_path, // FIXME: provide correct paths for slots storage
+            source_path,
+            js.clone(),
+            red_metrics.clone(),
+        )
+        .expect("should open slots db"),
+    );
 
     println!("Iterating over column family...");
 
@@ -80,6 +91,7 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
                     if signatures.len() >= 2 {
                         check_assets_signatures(
                             &source_db,
+                            &slots_db,
                             &mut signatures,
                             &mut sequences_to_delete,
                             &current_asset,
@@ -105,6 +117,7 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
     if signatures.len() >= 2 {
         check_assets_signatures(
             &source_db,
+            &slots_db,
             &mut signatures,
             &mut sequences_to_delete,
             &current_asset,
@@ -132,6 +145,7 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
 
 async fn check_assets_signatures(
     source_db: &Storage,
+    slots_db: &SlotStorage,
     signatures: &mut Vec<(String, u64, u64)>,
     sequences_to_delete: &mut Vec<(Pubkey, u64)>,
     current_asset: &(String, u64),
@@ -152,7 +166,7 @@ async fn check_assets_signatures(
             before_last_sig.2
         };
 
-        match source_db.raw_blocks_cbor.has_key(higher_seq_slot).await {
+        match slots_db.raw_blocks_cbor.has_key(higher_seq_slot).await {
             Ok(has_block) => {
                 if !has_block {
                     // only block check is not enough because was found out that during forks

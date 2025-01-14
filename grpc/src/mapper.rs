@@ -6,12 +6,12 @@ use crate::gapfiller::{
     MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
     SpecificationVersions, SplMint, TokenStandard, UpdateVersionValue, UseMethod, Uses,
 };
-use entities::models::{CompleteAssetDetails, OffChainData, UpdateVersion, Updated};
+use entities::models::{AssetCompleteDetailsGrpc, OffChainDataGrpc, UpdateVersion, Updated};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
-impl From<CompleteAssetDetails> for AssetDetails {
-    fn from(value: CompleteAssetDetails) -> Self {
+impl From<AssetCompleteDetailsGrpc> for AssetDetails {
+    fn from(value: AssetCompleteDetailsGrpc) -> Self {
         let delegate = value.delegate.value.map(|key| DynamicBytesField {
             value: key.to_bytes().to_vec(),
             slot_updated: value.delegate.slot_updated,
@@ -81,11 +81,13 @@ impl From<CompleteAssetDetails> for AssetDetails {
             master_edition: value.master_edition.map(|e| e.into()),
             offchain_data: value.offchain_data.map(|e| e.into()),
             spl_mint: value.spl_mint.map(|e| e.into()),
+            is_current_owner: Some(value.is_current_owner.into()),
+            owner_record_pubkey: value.owner_record_pubkey.to_bytes().to_vec(),
         }
     }
 }
 
-impl TryFrom<AssetDetails> for CompleteAssetDetails {
+impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
     type Error = GrpcError;
 
     fn try_from(value: AssetDetails) -> Result<Self, Self::Error> {
@@ -136,9 +138,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .is_burnt
                 .map(Into::into)
                 .ok_or(GrpcError::MissingField("is_burnt".to_string()))?,
-            was_decompressed: value
-                .was_decompressed
-                .map(Into::into),
+            was_decompressed: value.was_decompressed.map(Into::into),
             creators: value
                 .creators
                 .map(TryInto::try_into)
@@ -190,8 +190,9 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .transpose()?
                 .ok_or(GrpcError::MissingField("owner_type".to_string()))?,
             owner_delegate_seq,
-            is_current_owner: todo!(),
-            owner_record_pubkey: todo!(),
+            is_current_owner: value.is_current_owner.map(Into::into).unwrap_or_default(),
+            owner_record_pubkey: Pubkey::try_from(value.owner_record_pubkey)
+                .map_err(GrpcError::PubkeyFrom)?,
             asset_leaf: value.asset_leaf.map(TryInto::try_into).transpose()?,
             collection: value.collection.map(TryInto::try_into).transpose()?,
             onchain_data: value.chain_data.map(TryInto::try_into).transpose()?,
@@ -203,7 +204,7 @@ impl TryFrom<AssetDetails> for CompleteAssetDetails {
                 .collect::<Result<Vec<_>, _>>()?,
             edition: value.edition.map(TryInto::try_into).transpose()?,
             master_edition: value.master_edition.map(TryInto::try_into).transpose()?,
-            offchain_data: value.offchain_data.map(|e| OffChainData {
+            offchain_data: value.offchain_data.map(|e| OffChainDataGrpc {
                 url: e.url,
                 metadata: e.metadata,
             }),
@@ -258,8 +259,8 @@ impl From<entities::models::SplMint> for SplMint {
     }
 }
 
-impl From<entities::models::OffChainData> for OffchainData {
-    fn from(value: OffChainData) -> Self {
+impl From<OffChainDataGrpc> for OffchainData {
+    fn from(value: OffChainDataGrpc) -> Self {
         Self {
             url: value.url,
             metadata: value.metadata,

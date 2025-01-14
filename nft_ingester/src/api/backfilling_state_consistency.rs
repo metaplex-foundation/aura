@@ -28,12 +28,12 @@ impl BackfillingStateConsistencyChecker {
         tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
         rx: tokio::sync::broadcast::Receiver<()>,
         rocks_db: Arc<Storage>,
-        consistence_backfilling_slots_threshold: u64,
+        _consistence_backfilling_slots_threshold: u64,
     ) {
         for asset_type in ASSET_TYPES {
-            let rocks_db = rocks_db.clone();
+            let _rocks_db = rocks_db.clone();
             let mut rx = rx.resubscribe();
-            let overwhelm_backfill_gap = match asset_type {
+            let _overwhelm_backfill_gap = match asset_type {
                 AssetType::NonFungible => self.overwhelm_nft_backfill_gap.clone(),
                 AssetType::Fungible => self.overwhelm_fungible_backfill_gap.clone(),
             };

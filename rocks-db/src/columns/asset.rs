@@ -1,24 +1,23 @@
 use std::collections::HashMap;
 
-use crate::inscriptions::{Inscription, InscriptionData};
+use crate::columns::inscriptions::{Inscription, InscriptionData};
+use crate::columns::offchain_data::OffChainData;
 use bincode::{deserialize, serialize};
 use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
 use entities::models::{
-    AssetIndex, EditionData, OffChainData, SplMint, TokenAccount, UpdateVersion, Updated,
-    UrlWithStatus,
+    AssetIndex, EditionData, SplMint, TokenAccount, UpdateVersion, Updated, UrlWithStatus,
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
-use solana_sdk::bs58;
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use std::cmp::{max, Ordering};
-use tracing::{error, warn};
+use tracing::error;
 
-use crate::asset_generated::asset as fb;
+use crate::generated::asset_generated::asset as fb;
 use crate::key_encoders::{decode_pubkey, decode_u64_pubkey, encode_pubkey, encode_u64_pubkey};
-use crate::Result;
 use crate::TypedColumn;
+use crate::{Result, ToFlatbuffersConverter};
 
 const MAX_OTHER_OWNERS: usize = 10;
 
@@ -59,18 +58,17 @@ impl From<AssetStaticDetails> for AssetCompleteDetails {
     }
 }
 
-impl AssetCompleteDetails {
-    pub fn convert_to_fb_bytes(&self) -> Vec<u8> {
+impl<'a> ToFlatbuffersConverter<'a> for AssetCompleteDetails {
+    type Target = fb::AssetCompleteDetails<'a>;
+
+    fn convert_to_fb_bytes(&self) -> Vec<u8> {
         let mut builder = FlatBufferBuilder::new();
         let asset_complete_details = self.convert_to_fb(&mut builder);
         builder.finish_minimal(asset_complete_details);
         builder.finished_data().to_vec()
     }
 
-    pub fn convert_to_fb<'a>(
-        &self,
-        builder: &mut FlatBufferBuilder<'a>,
-    ) -> WIPOffset<fb::AssetCompleteDetails<'a>> {
+    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target> {
         let pk = Some(builder.create_vector(&self.pubkey.to_bytes()));
         let static_details = self
             .static_details
@@ -2006,7 +2004,7 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                 .map(|v| (v.pubkey().map(|k| k.bytes()).unwrap_or_default(), v.into()))
                 .collect::<HashMap<_, FbOwnerContainer>>()
         })
-        .unwrap_or_else(HashMap::new);
+        .unwrap_or_default();
     for op in operands {
         if let Ok(new_val) = fb::root_as_asset_complete_details(op) {
             if pk.is_none() {
@@ -2228,35 +2226,33 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                                 .is_current_owner
                                 .map(|u| u.value())
                                 .unwrap_or(false)
-                            {
-                                if !owner_is_current_owner.map(|u| u.value()).unwrap_or(false)
-                                    || merged_owner
-                                        .is_current_owner
+                                && !owner_is_current_owner.map(|u| u.value()).unwrap_or(false)
+                                || merged_owner
+                                    .is_current_owner
+                                    .map(|u| u.slot_updated())
+                                    .unwrap_or_default()
+                                    > owner_is_current_owner
                                         .map(|u| u.slot_updated())
                                         .unwrap_or_default()
-                                        > owner_is_current_owner
-                                            .map(|u| u.slot_updated())
-                                            .unwrap_or_default()
-                                {
-                                    // if the merged owner is newer we set it as the owner and move the old owner into the other known owners
-                                    let previous_owner = FbOwnerContainer {
-                                        pubkey: owner_pubkey,
-                                        owner: owner_owner,
-                                        delegate: owner_delegate,
-                                        owner_type: owner_owner_type,
-                                        owner_delegate_seq: owner_owner_delegate_seq,
-                                        is_current_owner: owner_is_current_owner,
-                                    };
-                                    other_known_owners
-                                        .insert(owner_pubkey.unwrap().bytes(), previous_owner);
-                                    owner_pubkey = merged_owner.pubkey;
-                                    owner_owner = merged_owner.owner;
-                                    owner_delegate = merged_owner.delegate;
-                                    owner_owner_type = merged_owner.owner_type;
-                                    owner_owner_delegate_seq = merged_owner.owner_delegate_seq;
-                                    owner_is_current_owner = merged_owner.is_current_owner;
-                                    other_known_owners.remove(new_owner_pubkey.bytes());
-                                }
+                            {
+                                // if the merged owner is newer we set it as the owner and move the old owner into the other known owners
+                                let previous_owner = FbOwnerContainer {
+                                    pubkey: owner_pubkey,
+                                    owner: owner_owner,
+                                    delegate: owner_delegate,
+                                    owner_type: owner_owner_type,
+                                    owner_delegate_seq: owner_owner_delegate_seq,
+                                    is_current_owner: owner_is_current_owner,
+                                };
+                                other_known_owners
+                                    .insert(owner_pubkey.unwrap().bytes(), previous_owner);
+                                owner_pubkey = merged_owner.pubkey;
+                                owner_owner = merged_owner.owner;
+                                owner_delegate = merged_owner.delegate;
+                                owner_owner_type = merged_owner.owner_type;
+                                owner_owner_delegate_seq = merged_owner.owner_delegate_seq;
+                                owner_is_current_owner = merged_owner.is_current_owner;
+                                other_known_owners.remove(new_owner_pubkey.bytes());
                             }
                         }
                     }
@@ -2547,8 +2543,7 @@ pub fn merge_complete_details_fb_raw<'a>(
 
     let pubkey = all_assets
         .iter()
-        .filter_map(|asset| asset.pubkey())
-        .next()
+        .find_map(|asset| asset.pubkey())
         .map(|k| builder.create_vector(k.bytes()));
     pubkey?;
 
@@ -2601,8 +2596,7 @@ fn merge_static_details<'a>(
     let pk = iter
         .iter()
         .cloned()
-        .filter_map(|asset| asset.pubkey())
-        .next()
+        .find_map(|asset| asset.pubkey())
         .map(|k| builder.create_vector(k.bytes()));
     pk?;
     let args = fb::AssetStaticDetailsArgs {
@@ -2628,8 +2622,7 @@ fn merge_static_details<'a>(
         edition_address: iter
             .iter()
             .cloned()
-            .filter_map(|asset| asset.edition_address())
-            .next()
+            .find_map(|asset| asset.edition_address())
             .map(|k| builder.create_vector(k.bytes())),
     };
     Some(fb::AssetStaticDetails::create(builder, &args))
@@ -2639,7 +2632,7 @@ macro_rules! merge_updated_primitive {
     ($func_name:ident, $updated_type:ident, $updated_args:ident) => {
         fn $func_name<'a, T, F>(
             builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-            iter: impl Iterator<Item = T> + DoubleEndedIterator,
+            iter: impl DoubleEndedIterator<Item = T>,
             extract_fn: F,
         ) -> Option<flatbuffers::WIPOffset<fb::$updated_type<'a>>>
         where
@@ -2676,7 +2669,7 @@ macro_rules! merge_updated_offset {
     ($func_name:ident, $updated_type:ident, $updated_args:ident, $value_create_fn:path) => {
         fn $func_name<'a, T, F>(
             builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-            iter: impl Iterator<Item = T> + DoubleEndedIterator,
+            iter: impl DoubleEndedIterator<Item = T>,
             extract_fn: F,
         ) -> Option<flatbuffers::WIPOffset<fb::$updated_type<'a>>>
         where
@@ -2757,7 +2750,7 @@ merge_updated_offset!(
 
 fn merge_updated_creators<'a, T, F>(
     builder: &mut flatbuffers::FlatBufferBuilder<'a>,
-    iter: impl Iterator<Item = T> + DoubleEndedIterator,
+    iter: impl DoubleEndedIterator<Item = T>,
     extract_fn: F,
 ) -> Option<flatbuffers::WIPOffset<fb::UpdatedCreators<'a>>>
 where
@@ -2817,8 +2810,7 @@ fn merge_dynamic_details<'a>(
     let pk = iter
         .iter()
         .cloned()
-        .filter_map(|asset| asset.pubkey())
-        .next()
+        .find_map(|asset| asset.pubkey())
         .map(|k| builder.create_vector(k.bytes()));
     pk?;
     let is_compressible = merge_updated_bool(builder, iter.iter().cloned(), |asset| {
@@ -2913,8 +2905,7 @@ fn merge_authority<'a>(
     let pk = iter
         .iter()
         .cloned()
-        .filter_map(|asset| asset.pubkey())
-        .next()
+        .find_map(|asset| asset.pubkey())
         .map(|k| builder.create_vector(k.bytes()));
     pk?;
     iter.iter()
@@ -2965,8 +2956,7 @@ fn merge_owner<'a>(
     let pk = iter
         .iter()
         .cloned()
-        .filter_map(|owner| owner.pubkey())
-        .next()
+        .find_map(|owner| owner.pubkey())
         .map(|k| builder.create_vector(k.bytes()));
     pk?;
     let owner = merge_updated_optional_pubkey(builder, iter.iter().cloned(), |owner| owner.owner());
@@ -3000,8 +2990,7 @@ fn merge_collection<'a>(
     let pk = iter
         .iter()
         .cloned()
-        .filter_map(|collection| collection.pubkey())
-        .next()
+        .find_map(|collection| collection.pubkey())
         .map(|k| builder.create_vector(k.bytes()));
     pk?;
     let collection = merge_updated_pubkey(builder, iter.iter().cloned(), |collection| {
@@ -3304,7 +3293,7 @@ impl TypedColumn for AssetLeaf {
 
 impl AssetLeaf {
     pub fn merge_asset_leaf(
-        new_key: &[u8],
+        _new_key: &[u8],
         existing_val: Option<&[u8]>,
         operands: &MergeOperands,
     ) -> Option<Vec<u8>> {
@@ -3365,16 +3354,14 @@ impl AssetLeaf {
             // 1. Higher slot than current.
             // 2. If slot is equal, but leaf_seq is strictly greater.
             // 3. If from a finalized source and has a strictly greater leaf_seq than current.
-            let newer = if new_slot > slot {
-                true
-            } else if new_slot == slot {
-                match (leaf_seq, new_seq) {
+            let newer = match new_slot.cmp(&slot) {
+                Ordering::Greater => true,
+                Ordering::Equal => match (leaf_seq, new_seq) {
                     (Some(current_seq), Some(candidate_seq)) => candidate_seq > current_seq,
                     (None, Some(_)) => true, // previously no sequence, now we have one, lets use it
                     _ => false, // either both none or candidate_seq is none and current_seq is some
-                }
-            } else {
-                false
+                },
+                Ordering::Less => false,
             };
 
             let finalized_newer = new_val.is_from_finalized_source
@@ -3595,7 +3582,7 @@ mod tests {
     use super::*;
     use entities::models::Creator;
     use itertools::Itertools;
-    use std::{io::Read, str::FromStr};
+    use std::str::FromStr;
 
     const TEST_DATA:&str = "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";
     const EXISTING_OWNER: &str = "4ja2N12Zczh9K25zGFTfao6yPdTZSfA5Bw4QueSmQCYJ";
@@ -3603,7 +3590,7 @@ mod tests {
     fn create_full_complete_asset() -> AssetCompleteDetails {
         let pubkey = Pubkey::new_unique();
         let static_details = AssetStaticDetails {
-            pubkey: pubkey,
+            pubkey,
             specification_asset_class: SpecificationAssetClass::Nft,
             royalty_target_type: RoyaltyTargetType::Creators,
             created_at: 12345,
@@ -3611,7 +3598,7 @@ mod tests {
         };
 
         let dynamic_details = AssetDynamicDetails {
-            pubkey: pubkey,
+            pubkey,
             is_compressible: Updated::new(58, Some(UpdateVersion::Sequence(500)), false),
             is_compressed: Updated::new(580, Some(UpdateVersion::Sequence(530)), true),
             is_frozen: Updated::new(50, None, false),
@@ -3668,13 +3655,13 @@ mod tests {
         };
 
         let authority = AssetAuthority {
-            pubkey: pubkey,
+            pubkey,
             write_version: Some(500),
             slot_updated: 5000,
             authority: Pubkey::new_unique(),
         };
         let owner = AssetOwner {
-            pubkey: pubkey,
+            pubkey,
             owner_type: Updated::new(50, None, OwnerType::Single),
             owner: Updated::new(
                 51,
@@ -3691,7 +3678,7 @@ mod tests {
         };
 
         let collection = AssetCollection {
-            pubkey: pubkey,
+            pubkey,
             collection: Updated::new(50, None, Pubkey::new_unique()),
             is_collection_verified: Updated::new(50, None, true),
             authority: Updated::new(
@@ -3832,9 +3819,10 @@ mod tests {
 
         let asset;
         unsafe {
-            asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
-                data_bytes.as_slice(),
-            );
+            asset =
+                crate::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                    data_bytes.as_slice(),
+                );
         }
         let asset_mapped = AssetCompleteDetails::from(asset);
         println!("STATIC: {:#?}", asset.static_details().is_some());
@@ -3878,9 +3866,10 @@ mod tests {
 
         let asset;
         unsafe {
-            asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
-                merge_result.as_slice(),
-            );
+            asset =
+                crate::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                    merge_result.as_slice(),
+                );
         }
         assert!(asset.other_known_owners().is_none());
         let asset_mapped = AssetCompleteDetails::from(asset);
@@ -3920,9 +3909,10 @@ mod tests {
 
         let asset;
         unsafe {
-            asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
-                merge_result.as_slice(),
-            );
+            asset =
+                crate::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                    merge_result.as_slice(),
+                );
         }
         assert!(asset.other_known_owners().is_none());
         let asset_mapped = AssetCompleteDetails::from(asset);
@@ -4039,29 +4029,27 @@ mod tests {
 
         // Collect all the updates into a vector
         let updates = vec![
-            ("A", owner_a_not_an_owner_data.as_slice().clone()),
-            ("B1", owner_b_is_owner_data.as_slice().clone()),
-            ("B2", owner_b_not_owner_data.as_slice().clone()),
-            ("C", owner_c_is_owner_data.as_slice().clone()),
+            ("A", owner_a_not_an_owner_data.as_slice()),
+            ("B1", owner_b_is_owner_data.as_slice()),
+            ("B2", owner_b_not_owner_data.as_slice()),
+            ("C", owner_c_is_owner_data.as_slice()),
         ];
 
         // Generate all permutations of the updates
         let permutations = updates.iter().permutations(updates.len());
-        let mut expected_result: Option<Vec<u8>> = None;
-
         let merge_result = merge_complete_details_fb_simple_raw(
             &[],
             Some(&original_data_bytes.as_slice()),
             vec![
-                owner_a_not_an_owner_data.as_slice().clone(),
-                owner_b_is_owner_data.as_slice().clone(),
-                owner_b_not_owner_data.as_slice().clone(),
-                owner_c_is_owner_data.as_slice().clone(),
+                owner_a_not_an_owner_data.as_slice(),
+                owner_b_is_owner_data.as_slice(),
+                owner_b_not_owner_data.as_slice(),
+                owner_c_is_owner_data.as_slice(),
             ]
             .into_iter(), //perm.into_iter().map(|d| *d),
         )
         .expect("expected merge to return some value");
-        expected_result = Some(merge_result);
+        let expected_result = merge_result;
 
         for perm in permutations {
             let merge_result = merge_complete_details_fb_simple_raw(
@@ -4073,7 +4061,7 @@ mod tests {
             let perm_name = perm.iter().map(|(k, _)| k).join(", ");
             let asset;
             unsafe {
-                asset = crate::asset_generated::asset::root_as_asset_complete_details_unchecked(
+                asset = crate::generated::asset_generated::asset::root_as_asset_complete_details_unchecked(
                     merge_result.as_slice(),
                 );
             }
@@ -4111,13 +4099,11 @@ mod tests {
                     .value(),
                 false
             );
-            if let Some(expected) = &expected_result {
-                assert_eq!(
-                    &merge_result, expected,
-                    "Merge result differs for one permutation {}",
-                    perm_name,
-                );
-            }
+            assert_eq!(
+                merge_result, expected_result,
+                "Merge result differs for one permutation {}",
+                perm_name,
+            );
         }
     }
 }

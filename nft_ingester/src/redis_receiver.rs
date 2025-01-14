@@ -13,6 +13,7 @@ use plerkle_messenger::{
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::Mutex;
+use tracing::info;
 use tracing::log::error;
 
 pub struct RedisReceiver {
@@ -28,6 +29,7 @@ impl RedisReceiver {
         consumption_type: ConsumptionType,
         ack_channel: UnboundedSender<(&'static str, String)>,
     ) -> Result<Self, IngesterError> {
+        info!("Initializing RedisReceiver...");
         let message_parser = Arc::new(MessageParser::new());
         let messanger = Mutex::new(RedisMessenger::new(config).await?);
         Ok(Self {

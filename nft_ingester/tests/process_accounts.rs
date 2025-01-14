@@ -27,10 +27,11 @@ mod tests {
     use nft_ingester::processors::account_based::mpl_core_processor::MplCoreProcessor;
     use nft_ingester::processors::account_based::mplx_updates_processor::MplxAccountsProcessor;
     use nft_ingester::processors::account_based::token_updates_processor::TokenAccountsProcessor;
-    use rocks_db::asset::AssetCompleteDetails;
     use rocks_db::batch_savers::BatchSaveStorage;
     use rocks_db::column::TypedColumn;
-    use rocks_db::AssetAuthority;
+    use rocks_db::columns::asset::AssetAuthority;
+    use rocks_db::columns::asset::AssetCompleteDetails;
+    use rocks_db::ToFlatbuffersConverter;
     use solana_program::pubkey::Pubkey;
     use std::collections::HashMap;
     use std::str::FromStr;
@@ -274,7 +275,7 @@ mod tests {
             .rocks_env
             .storage
             .token_metadata_edition_cbor
-            .get_cbor_encoded(first_edition)
+            .get_async(first_edition)
             .await
             .unwrap()
             .unwrap();
@@ -282,7 +283,7 @@ mod tests {
             .rocks_env
             .storage
             .token_metadata_edition_cbor
-            .get_cbor_encoded(second_edition)
+            .get_async(second_edition)
             .await
             .unwrap()
             .unwrap();

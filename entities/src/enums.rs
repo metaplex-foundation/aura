@@ -376,6 +376,25 @@ pub enum UnprocessedAccount {
     MplCoreFee(CoreAssetFee),
 }
 
+impl std::fmt::Debug for UnprocessedAccount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnprocessedAccount::MetadataInfo(_) => write!(f, "UnprocessedAccount::MetadataInfo"),
+            UnprocessedAccount::Token(_) => write!(f, "UnprocessedAccount::Token"),
+            UnprocessedAccount::Mint(_) => write!(f, "UnprocessedAccount::Mint"),
+            UnprocessedAccount::Edition(_) => write!(f, "UnprocessedAccount::Edition"),
+            UnprocessedAccount::BurnMetadata(_) => write!(f, "UnprocessedAccount::BurnMetadata"),
+            UnprocessedAccount::BurnMplCore(_) => write!(f, "UnprocessedAccount::BurnMplCore"),
+            UnprocessedAccount::MplCore(_) => write!(f, "UnprocessedAccount::MplCore"),
+            UnprocessedAccount::Inscription(_) => write!(f, "UnprocessedAccount::Inscription"),
+            UnprocessedAccount::InscriptionData(_) => {
+                write!(f, "UnprocessedAccount::InscriptionData")
+            }
+            UnprocessedAccount::MplCoreFee(_) => write!(f, "UnprocessedAccount::MplCoreFee"),
+        }
+    }
+}
+
 impl From<UnprocessedAccount> for &str {
     fn from(value: UnprocessedAccount) -> Self {
         match value {

@@ -53,10 +53,10 @@ pub async fn start_metrics_server(
     Ok(())
 }
 
+type HttpResponseFuture = Box<dyn Future<Output = io::Result<Response<Body>>> + Send>;
+
 /// This function returns a HTTP handler (i.e. another function)
-pub fn make_handler(
-    registry: Arc<Registry>,
-) -> impl Fn(Request<Body>) -> Pin<Box<dyn Future<Output = io::Result<Response<Body>>> + Send>> {
+pub fn make_handler(registry: Arc<Registry>) -> impl Fn(Request<Body>) -> Pin<HttpResponseFuture> {
     // This closure accepts a request and responds with the OpenMetrics encoding of our metrics.
     move |_req: Request<Body>| {
         let reg = registry.clone();

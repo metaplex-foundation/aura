@@ -5,8 +5,6 @@ edition = "2021"
 publish = false
 
 [dependencies]
-serde_derive = { workspace = true }
-env_logger = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
@@ -27,7 +25,6 @@ solana-sdk = { workspace = true }
 spl-token = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-storage-bigtable = { workspace = true }
-solana-bigtable-connection = { workspace = true }
 stretto = { workspace = true }
 # is not used directly in this crate but stretto needs it and it's better to use exactly 2.3.1
 async-channel = { workspace = true }
@@ -38,7 +35,6 @@ bincode = { workspace = true }
 metrics-utils = { path = "../metrics_utils" }
 rocks-db = { path = "../rocks-db" }
 postgre-client = { path = "../postgre-client" }
-open-rpc-schema = { workspace = true }
 schemars = { workspace = true }
 jsonrpc-core = { workspace = true }
 jsonrpc-http-server = { workspace = true }
@@ -71,7 +67,6 @@ hex = { workspace = true }
 jemallocator = { workspace = true }
 arweave-rs = { workspace = true }
 serde_cbor = { workspace = true }
-triomphe = { workspace = true }
 bubblegum-batch-sdk = { workspace = true }
 jsonpath_lib = { workspace = true }
 mime_guess = { workspace = true }
@@ -92,8 +87,6 @@ testcontainers = { workspace = true }
 tracing-test = { workspace = true }
 criterion = { workspace = true }
 zip-extract = { workspace = true }
-csv = { workspace = true }
-rand = { workspace = true }
 assertables = "7"
 base64 = { workspace = true }
 spl-pod = { workspace = true }
@@ -115,6 +108,7 @@ rpc_tests = []
 integration_tests = []
 batch_mint_tests = []
 profiling = []
+big_table_tests = []
 
 [dependencies.utils]
 version = "0.1.8"

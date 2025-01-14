@@ -3,20 +3,20 @@ services:
   ingester:
     container_name: ingester
     restart: always
-    entrypoint: sh -c "if [ -z '${MALLOC_CONF}' ]; then exec ./ingester --slots-db-path $$INGESTER_SLOTS_DB_PATH --secondary-slots-db-path $$INGESTER_SECONDARY_SLOTS_DB_PATH; else exec ./profiling_ingester --slots-db-path $$INGESTER_SLOTS_DB_PATH --secondary-slots-db-path $$INGESTER_SECONDARY_SLOTS_DB_PATH; fi"
+    entrypoint: sh -c "if [ -z '${MALLOC_CONF}' ]; then exec ./ingester --rocks-slots-db-path $$ROCKS_SLOTS_DB_PATH --rocks-secondary-slots-db-path $$ROCKS_SECONDARY_SLOTS_DB_PATH; else exec ./profiling_ingester --rocks-slots-db-path $$ROCKS_SLOTS_DB_PATH --rocks-secondary-slots-db-path $$ROCKS_SECONDARY_SLOTS_DB_PATH; fi"
     env_file:
       - .env
     network_mode: host
     volumes:
-      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
-      - ${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:rw
-      - ${INGESTER_ROCKS_BACKUP_DIR}:${INGESTER_ROCKS_BACKUP_DIR}:rw
-      - ${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:${INGESTER_ROCKS_BACKUP_ARCHIVES_DIR}:rw
-      - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
-      - ${INGESTER_FILE_STORAGE_PATH}:${INGESTER_FILE_STORAGE_PATH_CONTAINER}:rw
-      - ${INGESTER_MIGRATION_STORAGE_PATH}:${INGESTER_MIGRATION_STORAGE_PATH}:rw
-      - ${INGESTER_SLOTS_DB_PATH}:${INGESTER_SLOTS_DB_PATH}:ro
-      - ${INGESTER_SECONDARY_SLOTS_DB_PATH}:${INGESTER_SECONDARY_SLOTS_DB_PATH}:rw
+      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH_CONTAINER}:rw
+      - ${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:rw
+      - ${ROCKS_BACKUP_DIR}:${ROCKS_BACKUP_DIR}:rw
+      - ${ROCKS_BACKUP_ARCHIVES_DIR}:${ROCKS_BACKUP_ARCHIVES_DIR}:rw
+      - ${PROFILING_FILE_PATH}:${PROFILING_FILE_PATH_CONTAINER}:rw
+      - ${FILE_STORAGE_PATH}:${FILE_STORAGE_PATH_CONTAINER}:rw
+      - ${ROCKS_MIGRATION_STORAGE_PATH}:${ROCKS_MIGRATION_STORAGE_PATH}:rw
+      - ${ROCKS_SLOTS_DB_PATH}:${ROCKS_SLOTS_DB_PATH}:ro
+      - ${ROCKS_SECONDARY_SLOTS_DB_PATH}:${ROCKS_SECONDARY_SLOTS_DB_PATH}:rw
       - ./creds.json:/usr/src/app/creds.json
       - ./migrations:/usr/src/app/migrations
       - ./arweave_wallet.json:/usr/src/app/arweave_wallet.json
@@ -39,10 +39,10 @@ services:
       - .env
     network_mode: host
     volumes:
-      - ${API_ROCKS_DB_PATH_CONTAINER}:${API_ROCKS_DB_PATH_CONTAINER}:ro
-      - ${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:${API_ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
-      - ${API_ARCHIVES_DIR}:${API_ARCHIVES_DIR}:ro
-      - ${API_FILE_STORAGE_PATH}:${API_FILE_STORAGE_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_PATH_CONTAINER}:${ROCKS_DB_PATH_CONTAINER}:ro
+      - ${ROCKS_DB_SECONDARY_PATH_CONTAINER}/api:${ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+      - ${ROCKS_ARCHIVES_DIR}:${ROCKS_ARCHIVES_DIR}:ro
+      - ${FILE_STORAGE_PATH}:${FILE_STORAGE_PATH_CONTAINER}:rw
       - ./heaps:/usr/src/app/heaps:rw
     depends_on:
       - db
@@ -62,9 +62,9 @@ services:
       - .env
     network_mode: host
     volumes:
-      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH_CONTAINER}:rw
-      - ${SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:rw
-      - ${SYNCHRONIZER_ROCKS_DB_SECONDARY_PATH_CONTAINER}:${SYNCHRONIZER_ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH_CONTAINER}:rw
+      - ${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:rw
+      - ${ROCKS_DB_SECONDARY_PATH_CONTAINER}/synchronizer:${ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
       - ./heaps:/usr/src/app/heaps:rw
       - ./migrations:/usr/src/app/migrations
     depends_on:
@@ -104,12 +104,12 @@ services:
     env_file:
       - .env
     environment:
-      SOURCE_SLOTS_DB_PATH: ${INGESTER_SLOTS_DB_PATH}
-      TARGET_MAIN_DB_PATH: ${INGESTER_ROCKS_DB_PATH}
+      SOURCE_SLOTS_DB_PATH: ${ROCKS_SLOTS_DB_PATH}
+      TARGET_MAIN_DB_PATH: ${ROCKS_DB_PATH}
     network_mode: host
     volumes:
-      - ${INGESTER_ROCKS_DB_PATH}:${INGESTER_ROCKS_DB_PATH}:rw
-      - ${INGESTER_SLOTS_DB_PATH}:${INGESTER_SLOTS_DB_PATH}:ro
+      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:rw
+      - ${ROCKS_SLOTS_DB_PATH}:${ROCKS_SLOTS_DB_PATH}:ro
     stop_grace_period: 5m
     build:
       context: .
@@ -129,13 +129,12 @@ services:
     env_file:
       - .env
     environment:
-      SLOTS_DB_PRIMARY_PATH: ${INGESTER_SLOTS_DB_PATH}
-      RPC_HOST: ${INGESTER_RPC_HOST}
+      SLOTS_DB_PRIMARY_PATH: ${ROCKS_SLOTS_DB_PATH}
       # BIG_TABLE_CREDENTIALS: /usr/src/app/creds.json # refactored this to account for the file doesn't exist case
       METRICS_PORT: 9090
     network_mode: host
     volumes:
-      - ${INGESTER_SLOTS_DB_PATH}:${INGESTER_SLOTS_DB_PATH}:rw
+      - ${ROCKS_SLOTS_DB_PATH}:${ROCKS_SLOTS_DB_PATH}:rw
       - ./creds.json:/usr/src/app/creds.json
     stop_grace_period: 5m
     build:
@@ -153,7 +152,7 @@ services:
       - .env
     network_mode: host
     volumes:
-      - ${INGESTER_PROFILING_FILE_PATH}:${INGESTER_PROFILING_FILE_PATH_CONTAINER}:rw
+      - ${PROFILING_FILE_PATH}:${PROFILING_FILE_PATH_CONTAINER}:rw
       - ./heaps:/usr/src/app/heaps:rw
     stop_grace_period: 5m
     build:
@@ -176,7 +175,7 @@ services:
       POSTGRES_DB: solana
     volumes:
       - ${POSTGRE_DB_PATH:-./db-data}:/var/lib/postgresql/data/:rw
-      - ${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:${INGESTER_SYNCHRONIZER_DUMP_PATH:-/tmp/rocks_dump}:ro
+      - ${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:ro
     logging:
       options:
         max-size: "100m"

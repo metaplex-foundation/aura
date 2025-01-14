@@ -206,7 +206,7 @@ async fn run_api(
     }
 
     let server = server.unwrap();
-    info!("API Server Started");
+    info!("API Server Started {}", server.address().to_string());
 
     loop {
         if !shutdown_rx.is_empty() {
@@ -271,7 +271,7 @@ impl BatchMintService {
                     .and_then(|ct| ct.to_str().ok())
                     .and_then(|ct| multer::parse_boundary(ct).ok());
 
-                return match boundary {
+                match boundary {
                     Some(boundary) => {
                         let mut multipart = Multipart::new(req.into_body(), boundary);
                         let file_name = format!("{}.json", Uuid::new_v4());
@@ -306,7 +306,7 @@ impl BatchMintService {
                         .status(StatusCode::BAD_REQUEST)
                         .body(Body::from("BAD REQUEST"))
                         .unwrap()),
-                };
+                }
             }
             _ => Ok(Response::builder()
                 .status(StatusCode::NOT_FOUND)

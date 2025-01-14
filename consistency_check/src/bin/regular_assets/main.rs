@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
     fs::File,
+    path::PathBuf,
     rc::Rc,
     str::FromStr,
     sync::{
@@ -38,6 +39,15 @@ struct Args {
 
     #[arg(long)]
     inner_workers: usize,
+
+    #[arg(long, default_value = "./missed_asset_data.csv")]
+    missed_asset_file: PathBuf,
+
+    #[arg(long, default_value = "./missed_mint_info.csv")]
+    missed_mint_file: PathBuf,
+
+    #[arg(long, default_value = "./missed_token_acc.csv")]
+    missed_token_file: PathBuf,
 }
 
 lazy_static! {
@@ -52,10 +62,6 @@ lazy_static! {
 const MINT_ACC_DATA_SIZE: usize = 82;
 
 const CHANNEL_SIZE: usize = 100_000_000;
-
-const MISSED_ASSET_FILE: &str = "./missed_asset_data.csv";
-const MISSED_MINT_FILE: &str = "./missed_mint_info.csv";
-const MISSED_TOKEN_FILE: &str = "./missed_token_acc.csv";
 
 enum AccountType {
     Core,
@@ -205,15 +211,15 @@ pub async fn main() {
 
     graceful_stop(&mut tasks).await;
 
-    if let Err(e) = write_data_to_file(MISSED_ASSET_FILE, &missed_asset_data).await {
+    if let Err(e) = write_data_to_file(config.missed_asset_file, &missed_asset_data).await {
         error!("Could not save keys with missed asset data: {}", e);
     }
 
-    if let Err(e) = write_data_to_file(MISSED_MINT_FILE, &missed_mint_info).await {
+    if let Err(e) = write_data_to_file(config.missed_mint_file, &missed_mint_info).await {
         error!("Could not save keys with missed mint data: {}", e);
     }
 
-    if let Err(e) = write_data_to_file(MISSED_TOKEN_FILE, &missed_token_acc).await {
+    if let Err(e) = write_data_to_file(config.missed_token_file, &missed_token_acc).await {
         error!("Could not save keys with missed token account data: {}", e);
     }
 }
@@ -256,7 +262,7 @@ async fn process_nfts(
                 let counter_missed_token_cloned = counter_missed_token.clone();
 
                 tokio::spawn(async move {
-                    match rocks_db_cloned.asset_data.key_exist(key).await {
+                    match rocks_db_cloned.asset_data.has_key(key).await {
                         Ok(exist) => {
                             if !exist {
                                 let _ = counter_missed_asset_cloned.fetch_add(1, Ordering::Relaxed);
@@ -275,7 +281,7 @@ async fn process_nfts(
                     match acc_type {
                         AccountType::Core => {} // already checked above
                         // if we've got mint account we also should check spl_mints column
-                        AccountType::Mint => match rocks_db_cloned.spl_mints.key_exist(key).await {
+                        AccountType::Mint => match rocks_db_cloned.spl_mints.has_key(key).await {
                             Ok(exist) => {
                                 if !exist {
                                     let _ =
@@ -362,7 +368,7 @@ async fn process_fungibles(
                 let counter_missed_token_cloned = counter_missed_token.clone();
 
                 tokio::spawn(async move {
-                    match rocks_db_cloned.token_accounts.key_exist(key).await {
+                    match rocks_db_cloned.token_accounts.has_key(key).await {
                         Ok(exist) => {
                             if !exist {
                                 let _ = counter_missed_token_cloned.fetch_add(1, Ordering::Relaxed);
@@ -412,7 +418,7 @@ async fn process_fungibles(
 }
 
 async fn write_data_to_file(
-    file_name: &str,
+    file_name: PathBuf,
     keys: &Arc<tokio::sync::Mutex<HashSet<String>>>,
 ) -> Result<(), String> {
     let file = File::create(file_name).map_err(|e| e.to_string())?;

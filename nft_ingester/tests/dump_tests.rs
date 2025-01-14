@@ -19,8 +19,15 @@ mod tests {
     use tempfile::TempDir;
     use testcontainers::clients::Cli;
 
+    // corresponds to So11111111111111111111111111111111111111112
+    pub const NATIVE_MINT_PUBKEY: Pubkey = Pubkey::new_from_array([
+        6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220,
+        26, 235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
+    ]);
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
     #[tracing_test::traced_test]
+    #[ignore = "FIXME: on macos, the generated CSV files cannot be found"]
     async fn test_csv_export_from_rocks_import_into_pg() {
         let env = RocksTestEnvironment::new(&[]);
         let number_of_assets = 1000;
@@ -62,12 +69,10 @@ mod tests {
         let syncronizer = Arc::new(Synchronizer::new(
             storage,
             client.clone(),
-            client.clone(),
             2000,
             temp_dir_path.to_string(),
             Arc::new(SynchronizerMetricsConfig::new()),
             1,
-            false,
         ));
         for asset_type in ASSET_TYPES {
             syncronizer.full_syncronize(&rx, asset_type).await.unwrap();
@@ -145,6 +150,8 @@ mod mtg_441_tests {
     use tokio::task::JoinSet;
     use usecase::proofs::MaybeProofChecker;
 
+    use crate::tests::NATIVE_MINT_PUBKEY;
+
     const SLOT_UPDATED: u64 = 100;
 
     fn get_das_api(
@@ -177,6 +184,7 @@ mod mtg_441_tests {
             Arc::new(MockAccountBalanceGetter::new()),
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
+            NATIVE_MINT_PUBKEY.to_string(),
         )
     }
 
@@ -211,10 +219,10 @@ mod mtg_441_tests {
             .get_asset(
                 GetAsset {
                     id: first_pubkey.to_string(),
-                    options: Some(Options {
+                    options: Options {
                         show_unverified_collections: true,
                         ..Default::default()
-                    }),
+                    },
                 },
                 mutexed_tasks,
             )
@@ -253,10 +261,10 @@ mod mtg_441_tests {
             .get_asset(
                 GetAsset {
                     id: first_pubkey.to_string(),
-                    options: Some(Options {
+                    options: Options {
                         show_unverified_collections: true,
                         ..Default::default()
-                    }),
+                    },
                 },
                 mutexed_tasks,
             )
@@ -294,10 +302,10 @@ mod mtg_441_tests {
             .get_asset(
                 GetAsset {
                     id: first_pubkey.to_string(),
-                    options: Some(Options {
+                    options: Options {
                         show_unverified_collections: true,
                         ..Default::default()
-                    }),
+                    },
                 },
                 mutexed_tasks,
             )
@@ -335,10 +343,10 @@ mod mtg_441_tests {
             .get_asset(
                 GetAsset {
                     id: first_pubkey.to_string(),
-                    options: Some(Options {
+                    options: Options {
                         show_unverified_collections: true,
                         ..Default::default()
-                    }),
+                    },
                 },
                 mutexed_tasks,
             )

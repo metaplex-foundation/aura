@@ -33,10 +33,9 @@ impl PgClient {
         query_builder.push(" FROM random");
         let query = query_builder.build();
         let start_time = chrono::Utc::now();
-        let rows = query.fetch_all(&self.pool).await.map_err(|e| {
+        let rows = query.fetch_all(&self.pool).await.inspect_err(|_e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset_by_field");
-            e
         })?;
         self.metrics.observe_request(
             SQL_COMPONENT,
@@ -75,10 +74,9 @@ impl PgClient {
             .build()
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| {
+            .inspect_err(|_e| {
                 self.metrics
                     .observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset");
-                e
             })?;
         self.metrics
             .observe_request(SQL_COMPONENT, SELECT_ACTION, "integrity_asset", start_time);
@@ -128,13 +126,12 @@ impl IntegrityVerificationKeysFetcher for PgClient {
         let rows = sqlx::query(query)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| {
+            .inspect_err(|_e| {
                 self.metrics.observe_error(
                     SQL_COMPONENT,
                     SELECT_ACTION,
                     "integrity_asset_creators",
                 );
-                e
             })?;
         self.metrics.observe_request(
             SQL_COMPONENT,

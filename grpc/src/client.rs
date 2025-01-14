@@ -4,7 +4,7 @@ use crate::gapfiller::{GetRawBlockRequest, RangeRequest};
 use async_trait::async_trait;
 use futures::StreamExt;
 use interface::asset_streaming_and_discovery::{
-    AssetDetailsConsumer, AssetDetailsStreamNonSync, AsyncError, PeerDiscovery, RawBlocksConsumer,
+    AssetDetailsConsumer, AssetDetailsStreamNonSync, AsyncError, RawBlocksConsumer,
     RawBlocksStreamNonSync,
 };
 use interface::error::StorageError;
@@ -20,9 +20,8 @@ pub struct Client {
 }
 
 impl Client {
-    pub async fn connect(peer_discovery: impl PeerDiscovery) -> Result<Self, GrpcError> {
-        let url = Uri::from_str(peer_discovery.get_gapfiller_peer_addr().as_str())
-            .map_err(|e| GrpcError::UriCreate(e.to_string()))?;
+    pub async fn connect(peer_addr: &str) -> Result<Self, GrpcError> {
+        let url = Uri::from_str(peer_addr).map_err(|e| GrpcError::UriCreate(e.to_string()))?;
         let channel = Channel::builder(url).connect().await?;
 
         Ok(Self {

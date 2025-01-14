@@ -172,6 +172,8 @@ message AssetDetails {
     DynamicStringField mpl_core_unknown_external_plugins = 41;
     DynamicStringField mint_extensions = 42;
     SplMint spl_mint = 43;
+    DynamicBoolField is_current_owner = 44;
+    bytes owner_record_pubkey = 45;
 }
 
 // This field is a cbor encoded object of RawBlock type depending on

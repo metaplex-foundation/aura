@@ -104,7 +104,7 @@ impl ConsistencyChecker for SynchronizationStateConsistencyChecker {
             return false;
         }
 
-        return match call {
+        match call {
             Call::MethodCall(method_call) => {
                 INDEX_STORAGE_DEPENDS_METHODS.contains(&method_call.method.as_str())
             }
@@ -112,6 +112,6 @@ impl ConsistencyChecker for SynchronizationStateConsistencyChecker {
                 INDEX_STORAGE_DEPENDS_METHODS.contains(&notification.method.as_str())
             }
             _ => false,
-        };
+        }
     }
 }

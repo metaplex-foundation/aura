@@ -1,5 +1,5 @@
 # Initial stage: install cargo-chef
-FROM rust:1.76-bullseye AS chef
+FROM rust:1.84-bullseye AS chef
 RUN cargo install cargo-chef
 
 # Planning stage: determine dependencies
@@ -35,7 +35,7 @@ COPY . .
 RUN cargo build --release --bin integrity-verification
 
 # Final image
-FROM rust:1.76-slim-bullseye
+FROM rust:1.84-slim-bullseye
 ARG APP=/usr/src/app
 RUN apt update && apt install -y curl ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 ENV TZ=Etc/UTC APP_USER=appuser

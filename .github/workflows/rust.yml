@@ -22,7 +22,7 @@ jobs:
     - name: Install Rust specific version
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: 1.75
+        toolchain: 1.84
         profile: minimal
         components: clippy, rustfmt
         override: true
@@ -66,6 +66,19 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:14-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Check out
         uses: actions/checkout@v3
@@ -76,7 +89,7 @@ jobs:
       - name: Install Rust specific version
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.75
+          toolchain: 1.84
           profile: minimal
           components: clippy, rustfmt
           override: true
@@ -115,4 +128,8 @@ jobs:
           key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
 
       - name: Run tests
-        run: cargo test --features integration_tests -- --nocapture --quiet
+        env:
+          DATABASE_TEST_URL: "postgres://postgres:postgres@127.0.0.1:5432/postgres"
+          DEVNET_RPC_URL: ${{ secrets.SOLANA_DEVNET_RPC_URL }}
+          MAINNET_RPC_URL: ${{ secrets.SOLANA_MAINNET_RPC_URL }}
+        run: cargo test --features integration_tests -- --nocapture

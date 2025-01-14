@@ -7,10 +7,12 @@ use entities::models::{
 };
 use heck::ToSnakeCase;
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::asset::{AssetCollection, AssetCompleteDetails};
 use rocks_db::batch_savers::{BatchSaveStorage, MetadataModels};
+use rocks_db::columns::asset::{
+    AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetOwner,
+    AssetStaticDetails,
+};
 use rocks_db::errors::StorageError;
-use rocks_db::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails};
 use serde_json::Map;
 use serde_json::{json, Value};
 use solana_program::pubkey::Pubkey;
@@ -141,7 +143,7 @@ impl MplCoreProcessor {
             .iter()
             .map(|(key, value)| (format!("{:?}", key), value))
             .collect();
-        let mut plugins_json = serde_json::to_value(&ordered_plugins)
+        let mut plugins_json = serde_json::to_value(ordered_plugins)
             .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
 
         // Improve JSON output.

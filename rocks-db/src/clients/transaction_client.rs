@@ -6,6 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::asset::{AssetCompleteDetails, SourcedAssetLeaf};
 use crate::column::TypedColumn;
 use crate::parameters::Parameter;
+use crate::ToFlatbuffersConverter;
 use crate::{
     parameters,
     signature_client::SignatureIdx,
@@ -35,12 +36,16 @@ impl Storage {
         &self,
         tx: &TransactionResult,
         with_signatures: bool,
+        is_from_finalized_source: bool,
     ) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatch::default();
-        // this method is currently used only for the geyser plugin handling with confirmed transactions and for signature fetching also with confirmed transactions,
-        // so we can assume that the transactions are from non finalized source
-        self.store_transaction_result_with_batch(&mut batch, tx, with_signatures, false)
-            .await?;
+        self.store_transaction_result_with_batch(
+            &mut batch,
+            tx,
+            with_signatures,
+            is_from_finalized_source,
+        )
+        .await?;
         self.write_batch(batch)
             .await
             .map_err(|e| StorageError::Common(e.to_string()))?;
@@ -139,7 +144,7 @@ impl Storage {
             if let Some(ref offchain_data) = update.offchain_data_update {
                 if let Err(e) = self.asset_offchain_data.merge_with_batch(
                     batch,
-                    offchain_data.url.clone(),
+                    offchain_data.url.clone().expect("Url should not be empty"),
                     offchain_data,
                 ) {
                     tracing::error!("Failed to merge offchain data: {}", e);

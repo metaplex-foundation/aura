@@ -1,4 +1,1 @@
-pub mod clean_update_authorities;
-pub mod collection_authority;
-pub mod external_plugins;
-pub mod spl2022;
+pub mod offchain_data;

@@ -14,6 +14,7 @@ pub struct NFTSemaphores {
     pub authority: Arc<tokio::sync::Semaphore>,
     pub metadata: Arc<tokio::sync::Semaphore>,
 }
+
 impl NFTSemaphores {
     pub fn new() -> Self {
         Self {
@@ -22,6 +23,12 @@ impl NFTSemaphores {
             authority: Arc::new(tokio::sync::Semaphore::new(1)),
             metadata: Arc::new(tokio::sync::Semaphore::new(1)),
         }
+    }
+}
+
+impl Default for NFTSemaphores {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

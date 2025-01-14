@@ -1,10 +1,9 @@
-use crate::sequence_consistent::SequenceConsistentGapfiller;
 use backfill_rpc::rpc::BackfillRPC;
 use futures::StreamExt;
 use grpc::client::Client;
 use interface::asset_streaming_and_discovery::{AssetDetailsConsumer, RawBlocksConsumer};
-use interface::slots_dumper::SlotsDumper;
-use metrics_utils::SequenceConsistentGapfillMetricsConfig;
+use interface::signature_persistence::{BlockConsumer, BlockProducer};
+use metrics_utils::{BackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig};
 use rocks_db::Storage;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,7 +14,7 @@ use tokio::time::sleep as tokio_sleep;
 use tokio::time::Instant;
 use tracing::error;
 use tracing::log::info;
-use usecase::slots_collector::{SlotsCollector, SlotsGetter};
+use usecase::slots_collector::SlotsGetter;
 
 pub async fn process_asset_details_stream_wrapper(
     cloned_rx: Receiver<()>,
@@ -52,24 +51,23 @@ pub async fn process_asset_details_stream_wrapper(
     Ok(())
 }
 
-pub async fn run_sequence_consistent_gapfiller<T, R>(
-    slots_collector: SlotsCollector<T, R>,
+#[allow(clippy::too_many_arguments)]
+pub async fn run_sequence_consistent_gapfiller<R, BP, BC>(
     rocks_storage: Arc<Storage>,
+    backfiller_source: Arc<R>,
+    backfiller_metrics: Arc<BackfillerMetricsConfig>,
     sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
+    bp: Arc<BP>,
+    bc: Arc<BC>,
     rx: Receiver<()>,
     rpc_backfiller: Arc<BackfillRPC>,
     mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     sequence_consistent_checker_wait_period_sec: u64,
 ) where
-    T: SlotsDumper + Sync + Send + 'static,
     R: SlotsGetter + Sync + Send + 'static,
+    BP: BlockProducer,
+    BC: BlockConsumer,
 {
-    let sequence_consistent_gapfiller = SequenceConsistentGapfiller::new(
-        rocks_storage.clone(),
-        slots_collector,
-        sequence_consistent_gapfill_metrics.clone(),
-        rpc_backfiller.clone(),
-    );
     let mut rx = rx.resubscribe();
     let metrics = sequence_consistent_gapfill_metrics.clone();
 
@@ -77,9 +75,17 @@ pub async fn run_sequence_consistent_gapfiller<T, R>(
         tracing::info!("Start collecting sequences gaps...");
         loop {
             let start = Instant::now();
-            sequence_consistent_gapfiller
-                .collect_sequences_gaps(rx.resubscribe())
-                .await;
+            crate::sequence_consistent::collect_sequences_gaps(
+                rpc_backfiller.clone(),
+                rocks_storage.clone(),
+                backfiller_source.clone(),
+                backfiller_metrics.clone(),
+                sequence_consistent_gapfill_metrics.clone(),
+                bp.clone(),
+                bc.clone(),
+                rx.resubscribe(),
+            )
+            .await;
             metrics.set_scans_latency(start.elapsed().as_secs_f64());
             metrics.inc_total_scans();
 
@@ -102,12 +108,13 @@ pub async fn run_sequence_consistent_gapfiller<T, R>(
 }
 
 /// Method returns the number of successfully processed assets
+#[allow(clippy::let_and_return)]
 pub async fn process_raw_blocks_stream(
-    rx: Receiver<()>,
-    storage: Arc<Storage>,
-    start_slot: u64,
-    end_slot: u64,
-    mut raw_blocks_consumer: impl RawBlocksConsumer,
+    _rx: Receiver<()>,
+    _storage: Arc<Storage>,
+    _start_slot: u64,
+    _end_slot: u64,
+    _raw_blocks_consumer: impl RawBlocksConsumer,
 ) -> u64 {
     // TODO: move to slot persister
     // let mut raw_blocks_streamer = match raw_blocks_consumer
@@ -121,14 +128,14 @@ pub async fn process_raw_blocks_stream(
     //     }
     // };
 
-    let mut processed_slots = 0;
+    let processed_slots = 0;
 
     // while rx.is_empty() {
     //     match raw_blocks_streamer.next().await {
     //         Some(Ok(block)) => {
     //             if let Some(e) = storage
     //                 .raw_blocks_cbor
-    //                 .put_cbor_encoded(block.slot, block)
+    //                 .put(block.slot, block)
     //                 .await
     //                 .err()
     //             {

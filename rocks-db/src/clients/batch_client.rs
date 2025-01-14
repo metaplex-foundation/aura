@@ -4,22 +4,24 @@ use crate::asset::{
     AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, FungibleAssetsUpdateIdx,
     MplCoreCollectionAuthority, SlotAssetIdx, SlotAssetIdxKey, SourcedAssetLeaf,
 };
-use crate::asset_generated::asset as fb;
 use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey, SourcedClItem};
 use crate::column::TypedColumn;
+use crate::columns::offchain_data::OffChainData;
 use crate::errors::StorageError;
+use crate::generated::asset_generated::asset as fb;
 use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
 use crate::storage_traits::{
     AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage, AssetUpdatedKey,
 };
 use crate::{
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
-    BATCH_GET_ACTION, BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION, ROCKS_COMPONENT,
+    ToFlatbuffersConverter, BATCH_GET_ACTION, BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION,
+    ROCKS_COMPONENT,
 };
 use async_trait::async_trait;
 use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
 use entities::models::{
-    AssetIndex, CompleteAssetDetails, FungibleAssetIndex, UpdateVersion, Updated,
+    AssetCompleteDetailsGrpc, AssetIndex, FungibleAssetIndex, UpdateVersion, Updated,
 };
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
@@ -111,7 +113,7 @@ impl AssetUpdateIndexStorage for Storage {
             // Skip keys that are in the skip_keys set
             if skip_keys
                 .as_ref()
-                .map_or(false, |sk| sk.contains(&decoded_key.pubkey))
+                .is_some_and(|sk| sk.contains(&decoded_key.pubkey))
             {
                 continue;
             }
@@ -168,7 +170,7 @@ impl AssetUpdateIndexStorage for Storage {
             }
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
             if let Some(ref last_key) = last_key {
-                if decoded_key.seq != last_key.seq + 1 {
+                if decoded_key.seq != last_key.seq + 1 && decoded_key.seq != last_key.seq {
                     info!("Breaking the NFT sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
                     break;
                 }
@@ -177,7 +179,7 @@ impl AssetUpdateIndexStorage for Storage {
             // Skip keys that are in the skip_keys set
             if skip_keys
                 .as_ref()
-                .map_or(false, |sk| sk.contains(&decoded_key.pubkey))
+                .is_some_and(|sk| sk.contains(&decoded_key.pubkey))
             {
                 continue;
             }
@@ -382,10 +384,13 @@ impl AssetIndexReader for Storage {
             .await?
             .into_iter()
             .flatten()
-            .map(|offchain_data| {
+            .filter(|off_chain_data| {
+                off_chain_data.url.is_some() && off_chain_data.metadata.is_some()
+            })
+            .map(|off_chain_data| {
                 (
-                    offchain_data.url.clone(),
-                    !offchain_data.metadata.is_empty(),
+                    off_chain_data.url.unwrap().clone(),
+                    !off_chain_data.metadata.unwrap().is_empty(),
                 )
             })
             .collect::<HashMap<_, _>>();
@@ -405,7 +410,7 @@ impl AssetIndexReader for Storage {
                 || asset_index.specification_asset_class == SpecificationAssetClass::FungibleAsset)
                 && is_nft_map
                     .get(&asset_index.pubkey)
-                    .map(|v| *v)
+                    .copied()
                     .unwrap_or_default()
             {
                 asset_index.specification_asset_class = SpecificationAssetClass::Nft;
@@ -436,7 +441,7 @@ impl AssetSlotStorage for Storage {
 }
 
 impl Storage {
-    pub async fn insert_gaped_data(&self, data: CompleteAssetDetails) -> Result<()> {
+    pub async fn insert_gaped_data(&self, data: AssetCompleteDetailsGrpc) -> Result<()> {
         let write_version = if let Some(write_v) = data.authority.update_version {
             match write_v {
                 UpdateVersion::WriteVersion(v) => Some(v),
@@ -566,25 +571,24 @@ impl Storage {
             )?;
         }
         if let Some(edition) = data.edition {
-            self.token_metadata_edition_cbor.merge_with_batch_cbor(
+            self.token_metadata_edition_cbor.merge_with_batch(
                 &mut batch,
                 edition.key,
                 &TokenMetadataEdition::EditionV1(edition),
             )?;
         }
         if let Some(master_edition) = data.master_edition {
-            self.token_metadata_edition_cbor.merge_with_batch_cbor(
+            self.token_metadata_edition_cbor.merge_with_batch(
                 &mut batch,
                 master_edition.key,
                 &TokenMetadataEdition::MasterEdition(master_edition),
             )?;
         }
-        if let Some(offchain_data) = data.offchain_data {
-            self.asset_offchain_data.merge_with_batch_cbor(
-                &mut batch,
-                offchain_data.url.clone(),
-                &offchain_data,
-            )?;
+        if let Some(off_chain_data) = data.offchain_data {
+            let url = off_chain_data.url.clone();
+            let off_chain_data = OffChainData::from(off_chain_data);
+            self.asset_offchain_data
+                .merge_with_batch(&mut batch, url, &off_chain_data)?;
         }
         if let Some(spl_mint) = data.spl_mint {
             self.spl_mints

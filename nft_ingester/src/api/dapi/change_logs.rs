@@ -3,7 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use interface::proofs::ProofChecker;
 use metrics_utils::ApiMetricsConfig;
-use rocks_db::cl_items::{ClItemKey, ClLeafKey};
+use rocks_db::columns::cl_items::{ClItemKey, ClLeafKey};
 use rocks_db::errors::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use tracing::{debug, warn};
@@ -11,7 +11,7 @@ use tracing::{debug, warn};
 use crate::api::dapi::model;
 use crate::api::dapi::rpc_asset_models::AssetProof;
 use interface::processing_possibility::ProcessingPossibilityChecker;
-use rocks_db::asset_streaming_client::get_required_nodes_for_proof;
+use rocks_db::clients::asset_streaming_client::get_required_nodes_for_proof;
 use rocks_db::Storage;
 use spl_concurrent_merkle_tree::node::empty_node;
 
@@ -48,62 +48,68 @@ pub async fn get_proof_for_assets<
     let mut results: HashMap<String, Option<AssetProof>> =
         asset_ids.iter().map(|id| (id.to_string(), None)).collect();
 
-    let tree_ids = fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
-        .values()
-        .map(|asset| {
-            (
-                asset.tree_id,
-                (asset.pubkey, asset.nonce.unwrap_or_default()),
-            )
-        })
-        .collect::<HashMap<_, _>>();
-    let keys = rocks_db
-        .cl_leafs
-        .batch_get(
-            tree_ids
-                .clone()
-                .into_iter()
-                .map(|(tree, (_, nonce))| ClLeafKey::new(nonce, tree))
-                .collect::<Vec<_>>(),
-        )
-        .await?
-        .into_iter()
-        .filter_map(|cl_leaf| {
-            cl_leaf.map(|leaf| ClItemKey::new(leaf.cli_node_idx, leaf.cli_tree_key))
-        })
-        .collect::<Vec<_>>();
-    let cl_items_first_leaf = rocks_db.cl_items.batch_get(keys.clone()).await?;
+    // Instead of using a HashMap keyed by tree_id, we keep a Vec of (tree_id, pubkey, nonce).
+    let tree_pubkeys: Vec<(Pubkey, Pubkey, u64)> =
+        fetch_asset_data!(rocks_db, asset_leaf_data, asset_ids)
+            .values()
+            .map(|asset| (asset.tree_id, asset.pubkey, asset.nonce.unwrap_or_default()))
+            .collect();
 
-    if cl_items_first_leaf.is_empty() {
+    // Construct leaf keys for all requested assets
+    let leaf_keys: Vec<ClLeafKey> = tree_pubkeys
+        .iter()
+        .map(|(tree_id, _pubkey, nonce)| ClLeafKey::new(*nonce, *tree_id))
+        .collect();
+
+    // Batch get leaves
+    let leaf_entries = rocks_db.cl_leafs.batch_get(leaf_keys.clone()).await?;
+
+    // Create ClItemKeys from the obtained leaves, maintaining the order
+    let mut cl_item_keys = Vec::with_capacity(leaf_entries.len());
+    for leaf in leaf_entries.iter() {
+        if let Some(leaf) = leaf {
+            cl_item_keys.push(ClItemKey::new(leaf.cli_node_idx, leaf.cli_tree_key));
+        } else {
+            // If leaf is not found, push a dummy key. Alternatively, handle it by skipping.
+            cl_item_keys.push(ClItemKey::new(0, Pubkey::default()));
+        }
+    }
+
+    // If no items found at all, return early
+    if cl_item_keys.iter().all(|k| k.tree_id == Pubkey::default()) {
         return Ok(HashMap::new());
     }
 
-    let leaves: HashMap<_, (model::ClItemsModel, u64)> = cl_items_first_leaf
+    // Batch get cl_items
+    let cl_items_first_leaf = rocks_db.cl_items.batch_get(cl_item_keys.clone()).await?;
+
+    // Build the leaves map directly by iterating over tree_pubkeys and the fetched items in parallel
+    let leaves: HashMap<Vec<u8>, (model::ClItemsModel, u64)> = tree_pubkeys
         .into_iter()
-        .filter_map(|leaf| {
-            leaf.and_then(|leaf| {
-                tree_ids.get(&leaf.cli_tree_key).map(|(pubkey, nonce)| {
+        .zip(cl_items_first_leaf.into_iter())
+        .filter_map(|((tree_id, pubkey, nonce), leaf_opt)| {
+            leaf_opt.map(|leaf| {
+                (
+                    pubkey.to_bytes().to_vec(),
                     (
-                        pubkey.to_bytes().to_vec(),
-                        (
-                            model::ClItemsModel {
-                                id: 0,
-                                tree: leaf.cli_tree_key.to_bytes().to_vec(),
-                                node_idx: leaf.cli_node_idx as i64,
-                                leaf_idx: leaf.cli_leaf_idx.map(|idx| idx as i64),
-                                seq: leaf.cli_seq as i64,
-                                level: leaf.cli_level as i64,
-                                hash: leaf.cli_hash,
-                            },
-                            *nonce,
-                        ),
-                    )
-                })
+                        model::ClItemsModel {
+                            id: 0,
+                            tree: tree_id.to_bytes().to_vec(),
+                            node_idx: leaf.cli_node_idx as i64,
+                            leaf_idx: leaf.cli_leaf_idx.map(|idx| idx as i64),
+                            seq: leaf.cli_seq as i64,
+                            level: leaf.cli_level as i64,
+                            hash: leaf.cli_hash,
+                        },
+                        nonce,
+                    ),
+                )
             })
         })
         .collect();
 
-    let all_req_keys: Vec<_> = keys
+    // Gather all required nodes for proofs
+    let all_req_keys: Vec<_> = cl_item_keys
         .into_iter()
         .flat_map(|ClItemKey { node_id, tree_id }| {
             get_required_nodes_for_proof(node_id as i64)
@@ -111,6 +117,7 @@ pub async fn get_proof_for_assets<
                 .map(move |node| ClItemKey::new(node as u64, tree_id))
         })
         .collect();
+
     let all_nodes = rocks_db
         .cl_items
         .batch_get(all_req_keys)
@@ -126,6 +133,7 @@ pub async fn get_proof_for_assets<
         })
         .collect::<Vec<_>>();
 
+    // Compute proofs for each asset
     for asset_id in asset_ids.clone().iter() {
         let proof = get_asset_proof(
             asset_id,

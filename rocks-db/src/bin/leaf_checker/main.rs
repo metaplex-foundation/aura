@@ -3,7 +3,7 @@ use std::{env, str::FromStr, sync::Arc, time::Instant};
 use bincode::deserialize;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::{
-    cl_items::{ClItemKey, ClLeaf},
+    columns::cl_items::{ClItemKey, ClLeaf},
     migrator::MigrationState,
     Storage,
 };
