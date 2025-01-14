@@ -512,13 +512,4 @@ where
         let res = db.get_cf(cf, &encoded_key)?;
         Ok(res.is_some())
     }
-
-    pub async fn key_exist(&self, key: C::KeyType) -> Result<bool> {
-        let db = self.backend.clone();
-        tokio::task::spawn_blocking(move || {
-            let cf = &db.cf_handle(C::NAME).unwrap();
-            let encoded_key = C::encode_key(key);
-            Ok(db.key_may_exist_cf(cf, &encoded_key))
-        }).await.map_err(|e| StorageError::Common(e.to_string()))?
-    }
 }
