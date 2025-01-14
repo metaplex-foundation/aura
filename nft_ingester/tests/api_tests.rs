@@ -10,9 +10,6 @@ mod tests {
     use nft_ingester::cleaners::indexer_cleaner::clean_syncronized_idxs;
     use rocks_db::column::TypedColumn;
 
-    use std::str::FromStr;
-    use std::{collections::HashMap, sync::Arc};
-    use std::time::Duration;
     use blockbuster::token_metadata::accounts::Metadata;
     use entities::api_req_params::{
         DisplayOptions, GetAssetProof, GetAssetSignatures, GetByMethodsOptions, GetCoreFees,
@@ -67,15 +64,18 @@ mod tests {
     use spl_pod::primitives::{PodU16, PodU64};
     use spl_token_2022::extension::interest_bearing_mint::BasisPoints;
     use sqlx::{query, QueryBuilder};
+    use std::str::FromStr;
+    use std::time::Duration;
+    use std::{collections::HashMap, sync::Arc};
     use testcontainers::clients::Cli;
-    use tokio::{sync::Mutex, task::JoinSet};
     use tokio::time::timeout;
+    use tokio::{sync::Mutex, task::JoinSet};
     use usecase::proofs::MaybeProofChecker;
 
     const SLOT_UPDATED: u64 = 100;
     // api_query_max_statement_timeout_sec
     const API_DEFAULT_QUERY_STATEMENT_TIMEPOU_SEC: u64 = 120;
-    
+
     // corresponds to So11111111111111111111111111111111111111112
     pub const NATIVE_MINT_PUBKEY: Pubkey = Pubkey::new_from_array([
         6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220,
@@ -517,12 +517,16 @@ mod tests {
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let pg_pool = env.pg_env.pool.clone();
 
-        let query_timeout = Duration::from_secs(2); 
+        let query_timeout = Duration::from_secs(2);
 
         let result = timeout(query_timeout, query("SELECT pg_sleep(3)").execute(&pg_pool)).await;
 
         match result {
-            Ok(Ok(res)) => assert!(false, "Query should have timed out, but completed successfully: {:?}", res),
+            Ok(Ok(res)) => assert!(
+                false,
+                "Query should have timed out, but completed successfully: {:?}",
+                res
+            ),
             Ok(Err(e)) => assert!(false, "Query should have timed out, but failed: {:?}", e),
             Err(_) => println!("Query timed out as expected"),
         }
@@ -541,11 +545,17 @@ mod tests {
 
         match result {
             Ok(Ok(res)) => println!("Query completed successfully: {:?}", res),
-            Ok(Err(e)) => assert!(false, "Query should completed successfully, but failed: {:?}", e),
-            Err(_) => assert!(false, "Query should completed successfully but have timedout",),
+            Ok(Err(e)) => assert!(
+                false,
+                "Query should completed successfully, but failed: {:?}",
+                e
+            ),
+            Err(_) => assert!(
+                false,
+                "Query should completed successfully but have timedout",
+            ),
         }
     }
-
 
     #[tokio::test]
     #[tracing_test::traced_test]

@@ -92,7 +92,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
-            API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
+            API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC,
         );
 
         let _buffer = Arc::new(Buffer::new());
@@ -205,7 +205,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
-            API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC
+            API_DEFAULT_QUERY_STATEMENT_TIMEOUT_SEC,
         );
 
         let _buffer = Arc::new(Buffer::new());

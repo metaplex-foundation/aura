@@ -128,7 +128,7 @@ pub async fn start_api(
             red_metrics,
         )),
         native_mint_pubkey,
-        api_query_max_statement_timeout_sec
+        api_query_max_statement_timeout_sec,
     );
 
     run_api(

@@ -306,7 +306,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 account_balance_getter,
                 args.storage_service_base_url,
                 args.native_mint_pubkey,
-                args.api_max_query_statement_timeout_sec
+                args.api_max_query_statement_timeout_sec,
             )
             .await
             {

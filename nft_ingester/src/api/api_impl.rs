@@ -4,8 +4,8 @@ use interface::json::{JsonDownloader, JsonPersister};
 use interface::processing_possibility::ProcessingPossibilityChecker;
 use interface::proofs::ProofChecker;
 use postgre_client::PgClient;
-use std::{sync::Arc, time::Instant};
 use std::time::Duration;
+use std::{sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 
@@ -719,37 +719,37 @@ where
         Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
         Self::validate_options(&options, &query)?;
 
-        let res = timeout(Duration::from_secs(self.max_query_statement_timeout_sec), search_assets(
-            pg_client,
-            rocks_db,
-            query,
-            sort_by,
-            pagination.limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
-            pagination.page.map(|p| p as u64),
-            pagination.before,
-            pagination.after,
-            pagination.cursor,
-            options,
-            self.json_downloader.clone(),
-            self.json_persister.clone(),
-            self.json_middleware_config.max_urls_to_parse,
-            tasks,
-            self.account_balance_getter.clone(),
-            self.storage_service_base_path.clone(),
-            self.token_price_fetcher.clone(),
-            self.metrics.clone(),
-            &self.tree_gaps_checker,
-            &self.native_mint_pubkey,
-        )).await;
+        let res = timeout(
+            Duration::from_secs(self.max_query_statement_timeout_sec),
+            search_assets(
+                pg_client,
+                rocks_db,
+                query,
+                sort_by,
+                pagination.limit.map_or(DEFAULT_LIMIT as u64, |l| l as u64),
+                pagination.page.map(|p| p as u64),
+                pagination.before,
+                pagination.after,
+                pagination.cursor,
+                options,
+                self.json_downloader.clone(),
+                self.json_persister.clone(),
+                self.json_middleware_config.max_urls_to_parse,
+                tasks,
+                self.account_balance_getter.clone(),
+                self.storage_service_base_path.clone(),
+                self.token_price_fetcher.clone(),
+                self.metrics.clone(),
+                &self.tree_gaps_checker,
+                &self.native_mint_pubkey,
+            ),
+        )
+        .await;
 
         match res {
             Ok(Ok(res)) => Ok(res),
-            Ok(Err(e)) => {
-                Err(DasApiError::InternalDdError(e.to_string()))
-            },
-            Err(_) => {
-                Err(DasApiError::QueryTimedOut)
-            }
+            Ok(Err(e)) => Err(DasApiError::InternalDdError(e.to_string())),
+            Err(_) => Err(DasApiError::QueryTimedOut),
         }
     }
 }
