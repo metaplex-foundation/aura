@@ -4,7 +4,7 @@ mod tests {
     use nft_ingester::price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater, SOLANA_CURRENCY};
     use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
     use solana_program::pubkey::Pubkey;
-    use std::str::FromStr;
+
     use testcontainers::clients::Cli;
 
     #[tokio::test(flavor = "multi_thread")]
@@ -32,12 +32,16 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_token_price_fetch() {
         let token_price_fetcher = RaydiumTokenPriceFetcher::default();
-        let token_rocket =
-            Pubkey::from_str("J4YFAQRJg9Us4wiGBewHuHxHG7bjDgZ2mRG7z4HT84Nm").unwrap();
-        let token_z = Pubkey::from_str("Hqc9MLy4ebx2z6PNgS1w7PiU3umYdciQZfno6wR33iqy").unwrap();
-        let token_pie = Pubkey::from_str("HmwZ7aL6GtQZBAd7w9mSJMVy5fRU9ra57c6bnuPCinvD").unwrap();
-        let non_existed_token = Pubkey::new_unique();
-        let tokens = &[token_rocket, token_z, token_pie, non_existed_token];
+        let token_rocket = "J4YFAQRJg9Us4wiGBewHuHxHG7bjDgZ2mRG7z4HT84Nm".to_owned();
+        let token_z = "Hqc9MLy4ebx2z6PNgS1w7PiU3umYdciQZfno6wR33iqy".to_owned();
+        let token_pie = "HmwZ7aL6GtQZBAd7w9mSJMVy5fRU9ra57c6bnuPCinvD".to_owned();
+        let non_existed_token = Pubkey::new_unique().to_string();
+        let tokens = &[
+            token_rocket.clone(),
+            token_z.clone(),
+            token_pie.clone(),
+            non_existed_token.clone(),
+        ];
         let prices = token_price_fetcher
             .fetch_token_prices(tokens)
             .await
@@ -47,14 +51,14 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(symbols.get(&token_rocket.to_string()).unwrap(), "ROCKET");
-        assert_eq!(symbols.get(&token_z.to_string()).unwrap(), "Z");
-        assert_eq!(symbols.get(&token_pie.to_string()).unwrap(), "$PIE");
-        assert!(symbols.get(&non_existed_token.to_string()).is_none());
+        assert_eq!(symbols.get(&token_rocket).unwrap(), "ROCKET");
+        assert_eq!(symbols.get(&token_z).unwrap(), "Z");
+        assert_eq!(symbols.get(&token_pie).unwrap(), "$PIE");
+        assert!(symbols.get(&non_existed_token).is_none());
 
-        assert!(prices.get(&token_rocket.to_string()).unwrap().clone() > 0.0);
-        assert!(prices.get(&token_z.to_string()).unwrap().clone() > 0.0);
-        assert!(prices.get(&token_pie.to_string()).unwrap().clone() > 0.0);
-        assert!(prices.get(&non_existed_token.to_string()).is_none());
+        assert!(prices.get(&token_rocket).unwrap().clone() > 0.0);
+        assert!(prices.get(&token_z).unwrap().clone() > 0.0);
+        assert!(prices.get(&token_pie).unwrap().clone() > 0.0);
+        assert!(prices.get(&non_existed_token).is_none());
     }
 }

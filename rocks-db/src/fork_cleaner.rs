@@ -1,6 +1,6 @@
 use crate::{
-    cl_items::ClItemKey, column::TypedColumn, leaf_signatures::LeafSignature, SlotStorage, Storage,
-    DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT,
+    cl_items::ClItemKey, column::TypedColumn, columns::leaf_signatures::LeafSignature, SlotStorage,
+    Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT,
     ROCKS_COMPONENT,
 };
 use async_trait::async_trait;

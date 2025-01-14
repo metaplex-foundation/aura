@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anchor_lang::prelude::*;
+#[cfg(feature = "batch_mint_tests")]
 use async_trait::async_trait;
 use mockall::predicate;
 use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
@@ -13,13 +14,15 @@ use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
 use bubblegum_batch_sdk::batch_mint_client::BatchMintClient;
 use bubblegum_batch_sdk::batch_mint_validations::generate_batch_mint;
 use bubblegum_batch_sdk::model::BatchMint;
-use entities::api_req_params::GetAssetProof;
+use entities::api_req_params::{GetAssetProof, GetAssetProofBatch};
 use entities::enums::{BatchMintState, FailedBatchMintState, PersistingBatchMintState};
 use entities::models::BufferedTransaction;
 use entities::models::{BatchMintToVerify, BatchMintWithState};
 use flatbuffers::FlatBufferBuilder;
 use interface::account_balance::MockAccountBalanceGetter;
-use interface::batch_mint::{BatchMintDownloader, MockBatchMintDownloader};
+#[cfg(feature = "batch_mint_tests")]
+use interface::batch_mint::BatchMintDownloader;
+use interface::batch_mint::MockBatchMintDownloader;
 use interface::error::UsecaseError;
 use metrics_utils::ApiMetricsConfig;
 use metrics_utils::BatchMintPersisterMetricsConfig;
@@ -40,7 +43,7 @@ use nft_ingester::processors::transaction_based::bubblegum_updates_processor::Bu
 use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
-use rocks_db::batch_mint::FailedBatchMintKey;
+use rocks_db::columns::batch_mint::FailedBatchMintKey;
 use rocks_db::Storage;
 use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -57,12 +60,10 @@ use solana_sdk::transaction::Transaction;
 use solana_transaction_status::TransactionStatusMeta;
 use solana_transaction_status::{InnerInstruction, InnerInstructions};
 use spl_account_compression::ConcurrentMerkleTree;
-use std::collections::VecDeque;
 use tempfile::TempDir;
 use testcontainers::clients::Cli;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast;
-use tokio::sync::Mutex;
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
@@ -119,8 +120,13 @@ fn test_generate_10_000_000_batch_mint() {
     serde_json::to_writer(file, &batch_mint).unwrap()
 }
 
+#[cfg(feature = "batch_mint_tests")]
 const BATCH_MINT_ASSETS_TO_SAVE: usize = 1_000;
+
+#[cfg(feature = "batch_mint_tests")]
 struct TestBatchMintCreator;
+
+#[cfg(feature = "batch_mint_tests")]
 #[async_trait]
 impl BatchMintDownloader for TestBatchMintCreator {
     async fn download_batch_mint(
@@ -189,12 +195,9 @@ async fn save_batch_mint_to_queue_test() {
     let cli = Cli::default();
     let (env, _) = setup::TestEnvironment::create(&cli, cnt, 100).await;
 
-    let tasks = Arc::new(Mutex::new(VecDeque::new()));
-
     let bubblegum_updates_processor = BubblegumTxProcessor::new(
         env.rocks_env.storage.clone(),
         Arc::new(IngesterMetricsConfig::new()),
-        tasks.clone(),
     );
 
     let metadata_url = "url".to_string();
@@ -275,7 +278,7 @@ async fn save_batch_mint_to_queue_test() {
     };
 
     bubblegum_updates_processor
-        .process_transaction(buffered_transaction)
+        .process_transaction(buffered_transaction, true)
         .await
         .unwrap();
 
@@ -431,6 +434,7 @@ async fn batch_mint_with_verified_creators_test() {
         Arc::new(MockAccountBalanceGetter::new()),
         None,
         Arc::new(RaydiumTokenPriceFetcher::default()),
+        "".to_string(),
     );
 
     let payload = GetAssetProof {
@@ -586,6 +590,7 @@ async fn batch_mint_with_unverified_creators_test() {
         Arc::new(MockAccountBalanceGetter::new()),
         None,
         Arc::new(RaydiumTokenPriceFetcher::default()),
+        "".to_string(),
     );
 
     let payload = GetAssetProof {
@@ -684,6 +689,7 @@ async fn batch_mint_persister_test() {
         Arc::new(MockAccountBalanceGetter::new()),
         None,
         Arc::new(RaydiumTokenPriceFetcher::default()),
+        "".to_string(),
     );
 
     let leaf_index = 4u32;
@@ -746,6 +752,21 @@ async fn batch_mint_persister_test() {
             .is_some(),
         true
     );
+    // Test get asset proof batch
+    let payload = GetAssetProofBatch {
+        ids: test_batch_mint
+            .batch_mints
+            .into_iter()
+            .map(|lu| lu.leaf_update.id().to_string())
+            .take(10)
+            .collect(),
+    };
+    let proof_result = api.get_asset_proof_batch(payload).await.unwrap();
+    let asset_proofs: HashMap<String, Option<AssetProof>> =
+        serde_json::from_value(proof_result).unwrap();
+    for (_key, proof) in asset_proofs {
+        assert!(proof.is_some())
+    }
 }
 
 #[tokio::test]

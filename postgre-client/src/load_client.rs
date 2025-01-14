@@ -46,7 +46,7 @@ impl PgClient {
         Ok(())
     }
 
-    pub(crate) async fn set_unlogged_on(
+    pub(crate) async fn _set_unlogged_on(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
@@ -57,7 +57,7 @@ impl PgClient {
             .await
     }
 
-    pub(crate) async fn set_logged_on(
+    pub(crate) async fn _set_logged_on(
         &self,
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
@@ -505,12 +505,16 @@ impl PgClient {
         {
             Ok(_) => {
                 transaction.commit().await?;
-                guard.map(|g| drop(g));
+                if let Some(g) = guard {
+                    drop(g);
+                }
                 Ok(())
             }
             Err(e) => {
                 transaction.rollback().await?;
-                guard.map(|g| drop(g));
+                if let Some(g) = guard {
+                    drop(g);
+                }
                 Err(e)
             }
         }

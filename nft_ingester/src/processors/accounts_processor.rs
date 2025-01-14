@@ -17,7 +17,7 @@ use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::Instant;
-use tracing::error;
+use tracing::{debug, error};
 
 use super::account_based::{
     inscriptions_processor::InscriptionsProcessor,
@@ -190,6 +190,11 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         batch_fill_instant: &mut Instant,
     ) {
         for unprocessed_account in unprocessed_accounts {
+            debug!(
+                "Process account with Id: {:?} {:?}",
+                &unprocessed_account.id, &unprocessed_account.account
+            );
+
             let processing_result = match &unprocessed_account.account {
                 UnprocessedAccount::MetadataInfo(metadata_info) => self
                     .mplx_accounts_processor

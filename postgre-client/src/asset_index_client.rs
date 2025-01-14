@@ -43,10 +43,9 @@ impl PgClient {
         query_builder.push(format!(" WHERE id = {}", asset_type as i32));
         let start_time = chrono::Utc::now();
         let query = query_builder.build_query_as::<(Option<Vec<u8>>,)>();
-        let result = query.fetch_one(executor).await.map_err(|e| {
+        let result = query.fetch_one(executor).await.inspect_err(|_e| {
             self.metrics
                 .observe_error(SQL_COMPONENT, SELECT_ACTION, table_name);
-            e
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, SELECT_ACTION, table_name, start_time);
@@ -383,7 +382,7 @@ impl AssetIndexStorage for PgClient {
                 "base_dump_path is not set".to_string(),
             ));
         };
-        let temp_postfix = Uuid::new_v4().to_string().replace("-", "");
+        let temp_postfix = Uuid::new_v4().to_string().replace('-', "");
         let mut copy_tasks: JoinSet<Result<(), IndexDbError>> = JoinSet::new();
         for (file_path, table, columns, semaphore) in [
             ( base_path.join(creators_file_name),
@@ -902,10 +901,9 @@ impl PgClient {
         query_builder.push(");");
         let query = query_builder.build_query_as::<CreatorRawResponse>();
         let start_time = chrono::Utc::now();
-        let creators_result = query.fetch_all(transaction).await.map_err(|err| {
+        let creators_result = query.fetch_all(transaction).await.inspect_err(|_err| {
             self.metrics
                 .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, table);
-            err
         })?;
         self.metrics
             .observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, table, start_time);

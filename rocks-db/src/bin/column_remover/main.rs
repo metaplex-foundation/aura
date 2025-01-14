@@ -1,37 +1,17 @@
 use std::sync::Arc;
 
-use entities::schedule::ScheduledJob;
-use rocks_db::asset::{
-    self, AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetDynamicDetailsDeprecated,
-    AssetOwnerDeprecated, AssetStaticDetailsDeprecated, MetadataMintMap,
-};
-use rocks_db::asset_previews::{AssetPreviews, UrlToDownload};
-use rocks_db::batch_mint::BatchMintWithStaker;
 use rocks_db::column::TypedColumn;
-use rocks_db::inscriptions::{Inscription, InscriptionData};
-use rocks_db::leaf_signatures::LeafSignature;
-use rocks_db::token_prices::TokenPrice;
-use rocks_db::tree_seq::{TreeSeqIdx, TreesGaps};
-use rocks_db::{
-    bubblegum_slots, cl_items, parameters, signature_client, AssetAuthority, AssetDynamicDetails,
-    AssetOwner, AssetStaticDetails,
-};
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+
 use tracing::info;
 
 use rocksdb::{Options, DB};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
-use entities::enums::TokenMetadataEdition;
-use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount,
-};
+use entities::models::RawBlock;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::migrator::MigrationState;
-use rocks_db::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use std::{env, option};
+
+use std::env;
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), String> {
@@ -83,12 +63,12 @@ pub async fn main() -> Result<(), String> {
 }
 
 fn remove_column_families(db_path: String, columns_to_remove: &[&str]) {
-    let mut options = Options::default();
+    let options = Options::default();
 
     // Get the existing column families
     let cf_names = DB::list_cf(&options, &db_path).expect("Failed to list column families.");
 
-    let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let _red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let db = DB::open_cf(&options, &db_path, &cf_names).expect("Failed to open DB.");
     columns_to_remove.iter().for_each(|cf_name| {
         if !cf_names.contains(&cf_name.to_string()) {

@@ -1,7 +1,19 @@
-use asset_previews::{AssetPreviews, UrlToDownload};
+use clients::signature_client;
+use columns::asset::{
+    self, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
+};
+use columns::asset_previews::{AssetPreviews, UrlToDownload};
+use columns::batch_mint::{self, BatchMintWithStaker};
+use columns::inscriptions::{Inscription, InscriptionData};
+use columns::leaf_signatures::LeafSignature;
+use columns::offchain_data::{OffChainData, OffChainDataDeprecated};
+use columns::parameters::ParameterColumn;
+use columns::token_accounts::{self, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
+use columns::token_prices::TokenPrice;
+use columns::{bubblegum_slots, cl_items, parameters};
 use entities::schedule::ScheduledJob;
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use inflector::Inflector;
-use leaf_signatures::LeafSignature;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::{marker::PhantomData, sync::Arc};
@@ -11,79 +23,41 @@ use asset::{
     AssetDynamicDetailsDeprecated, AssetOwnerDeprecated, AssetStaticDetailsDeprecated,
     FungibleAssetsUpdateIdx, MetadataMintMap, MplCoreCollectionAuthority, SlotAssetIdx,
 };
-use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, DB};
+use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 
-use crate::migrator::{MigrationState, MigrationVersions, RocksMigration};
-pub use asset::{
-    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
-};
+use crate::migrator::{MigrationState, MigrationVersions};
+
 use column::{Column, TypedColumn};
 use entities::enums::TokenMetadataEdition;
 use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, OffChainData, RawBlock, SplMint,
-    TokenAccount,
+    AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount,
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
-use crate::batch_mint::BatchMintWithStaker;
 use crate::errors::StorageError;
-use crate::inscriptions::{Inscription, InscriptionData};
-use crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration;
-use crate::migrations::collection_authority::{
-    AssetCollectionVersion0, CollectionAuthorityMigration,
-};
-use crate::migrations::external_plugins::AssetDynamicDetailsV0;
-use crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration;
-use crate::parameters::ParameterColumn;
-use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use crate::token_prices::TokenPrice;
 use crate::tree_seq::{TreeSeqIdx, TreesGaps};
 
-pub mod asset;
-mod asset_client;
-pub mod asset_previews;
-pub mod asset_signatures;
-pub mod asset_streaming_client;
 pub mod backup_service;
-mod batch_client;
-pub mod batch_mint;
 pub mod batch_savers;
-pub mod bubblegum_slots;
-pub mod cl_items;
+pub mod clients;
 pub mod column;
-pub mod dump_client;
-pub mod editions;
+pub mod columns;
 pub mod errors;
 pub mod fork_cleaner;
-pub mod inscriptions;
 pub mod key_encoders;
-pub mod leaf_signatures;
 pub mod migrations;
 pub mod migrator;
-pub mod offchain_data;
-pub mod parameters;
 pub mod processing_possibility;
-pub mod raw_block;
-pub mod raw_blocks_streaming_client;
 pub mod schedule;
 pub mod sequence_consistent;
-pub mod signature_client;
 pub mod storage_traits;
-pub mod token_accounts;
-pub mod token_prices;
 pub mod transaction;
-pub mod transaction_client;
 pub mod tree_seq;
 // import the flatbuffers runtime library
 extern crate flatbuffers;
-#[allow(
-    clippy::missing_safety_doc,
-    unused_imports,
-    clippy::extra_unused_lifetimes
-)]
-pub mod asset_generated;
+pub mod generated;
 pub mod mappers;
 
 pub type Result<T> = std::result::Result<T, StorageError>;
@@ -119,7 +93,11 @@ impl SlotStorage {
     }
 
     pub fn cf_names() -> Vec<&'static str> {
-        vec![RawBlock::NAME, MigrationVersions::NAME, OffChainData::NAME]
+        vec![
+            RawBlock::NAME,
+            MigrationVersions::NAME,
+            OffChainDataDeprecated::NAME,
+        ]
     }
 
     pub fn open<P>(
@@ -189,6 +167,7 @@ pub struct Storage {
     pub asset_owner_data: Column<AssetOwner>,
     pub asset_collection_data: Column<asset::AssetCollection>,
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
+    pub asset_offchain_data_deprecated: Column<OffChainDataDeprecated>,
     // Deprecated, remove end
     pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
@@ -244,6 +223,7 @@ impl Storage {
         let asset_leaf_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data_deprecated = Self::column(db.clone(), red_metrics.clone());
+        let asset_offchain_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_offchain_data = Self::column(db.clone(), red_metrics.clone());
 
         let cl_items = Self::column(db.clone(), red_metrics.clone());
@@ -275,6 +255,7 @@ impl Storage {
         let spl_mints = Self::column(db.clone(), red_metrics.clone());
 
         Self {
+            asset_offchain_data_deprecated,
             asset_data,
             mpl_core_collection_authorities,
 
@@ -411,6 +392,7 @@ impl Storage {
     fn create_cf_descriptors(migration_state: &MigrationState) -> Vec<ColumnFamilyDescriptor> {
         vec![
             Self::new_cf_descriptor::<OffChainData>(migration_state),
+            Self::new_cf_descriptor::<OffChainDataDeprecated>(migration_state),
             Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
             Self::new_cf_descriptor::<MplCoreCollectionAuthority>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
@@ -545,13 +527,9 @@ impl Storage {
             }
             asset::AssetDynamicDetails::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => match *version {
-                        CollectionAuthorityMigration::VERSION => {
-                            AssetDynamicDetailsV0::merge_dynamic_details
-                        }
-                        _ => asset::AssetDynamicDetails::merge_dynamic_details,
-                    },
-                    MigrationState::Last => asset::AssetDynamicDetails::merge_dynamic_details,
+                    MigrationState::Last | MigrationState::Version(_) => {
+                        asset::AssetDynamicDetails::merge_dynamic_details
+                    }
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
                     }
@@ -595,15 +573,10 @@ impl Storage {
                 );
             }
             asset::AssetCollection::NAME => {
-                let mf = if matches!(
-                    migration_state,
-                    &MigrationState::Version(CollectionAuthorityMigration::VERSION)
-                ) {
-                    AssetCollectionVersion0::merge_asset_collection
-                } else {
-                    asset::AssetCollection::merge_asset_collection
-                };
-                cf_options.set_merge_operator_associative("merge_fn_asset_collection", mf);
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_asset_collection",
+                    asset::AssetCollection::merge_asset_collection,
+                );
             }
             cl_items::ClItem::NAME => {
                 cf_options.set_merge_operator_associative(
@@ -629,10 +602,14 @@ impl Storage {
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
             }
+            OffChainDataDeprecated::NAME => cf_options.set_merge_operator_associative(
+                "merge_fn_off_chain_data_keep_existing_deprecated",
+                asset::AssetStaticDetails::merge_keep_existing,
+            ),
             OffChainData::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_off_chain_data_keep_existing",
-                    asset::AssetStaticDetails::merge_keep_existing,
+                    OffChainData::merge_off_chain_data,
                 );
             }
             cl_items::ClLeaf::NAME => {
@@ -680,7 +657,7 @@ impl Storage {
             TokenMetadataEdition::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_metadata_edition_keep_existing",
-                    crate::editions::merge_token_metadata_edition,
+                    crate::columns::editions::merge_token_metadata_edition,
                 );
             }
             AssetStaticDetailsDeprecated::NAME => {
@@ -697,14 +674,9 @@ impl Storage {
             }
             TokenAccount::NAME => {
                 let mf = match migration_state {
-                    MigrationState::Version(version) => match *version {
-                        CollectionAuthorityMigration::VERSION
-                            ..=TokenAccounts2022ExtentionsMigration::VERSION => {
-                            AssetDynamicDetailsV0::merge_dynamic_details
-                        }
-                        _ => token_accounts::merge_token_accounts,
-                    },
-                    MigrationState::Last => crate::token_accounts::merge_token_accounts,
+                    MigrationState::Last | MigrationState::Version(_) => {
+                        token_accounts::merge_token_accounts
+                    }
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
                     }
@@ -819,11 +791,20 @@ impl Storage {
 
         for cf in column_families_to_remove {
             let cf_handler = self.db.cf_handle(cf).unwrap();
-            for res in self.db.full_iterator_cf(&cf_handler, IteratorMode::Start) {
-                if let Ok((key, _value)) = res {
-                    self.db.delete_cf(&cf_handler, key).unwrap();
-                }
+            for (key, _) in self
+                .db
+                .full_iterator_cf(&cf_handler, rocksdb::IteratorMode::Start)
+                .flatten()
+            {
+                self.db.delete_cf(&cf_handler, key).unwrap();
             }
         }
     }
+}
+
+#[allow(unused_variables)]
+pub trait ToFlatbuffersConverter<'a> {
+    type Target: 'a;
+    fn convert_to_fb(&self, builder: &mut FlatBufferBuilder<'a>) -> WIPOffset<Self::Target>;
+    fn convert_to_fb_bytes(&self) -> Vec<u8>;
 }

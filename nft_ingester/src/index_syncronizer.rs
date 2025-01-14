@@ -178,6 +178,24 @@ where
         }))
     }
 
+    pub async fn synchronize_asset_indexes(
+        &self,
+        asset_type: AssetType,
+        rx: &tokio::sync::broadcast::Receiver<()>,
+        run_full_sync_threshold: i64,
+    ) -> Result<(), IngesterError> {
+        match asset_type {
+            AssetType::NonFungible => {
+                self.synchronize_nft_asset_indexes(rx, run_full_sync_threshold)
+                    .await
+            }
+            AssetType::Fungible => {
+                self.synchronize_fungible_asset_indexes(rx, run_full_sync_threshold)
+                    .await
+            }
+        }
+    }
+
     pub async fn synchronize_nft_asset_indexes(
         &self,
         rx: &tokio::sync::broadcast::Receiver<()>,
@@ -289,8 +307,8 @@ where
             .await?;
 
         let shards = shard_pubkeys(num_shards);
-        let mut tasks: JoinSet<Result<(usize, String, String, String, String), String>> =
-            JoinSet::new();
+        type ResultWithPaths = Result<(usize, String, String, String, String), String>;
+        let mut tasks: JoinSet<ResultWithPaths> = JoinSet::new();
         for (start, end) in shards.iter() {
             let name_postfix = if num_shards > 1 {
                 format!("_shard_{}_{}", start, end)
@@ -334,8 +352,8 @@ where
             let metadata_file = File::create(metadata_path.clone())
                 .map_err(|e| format!("Could not create file for metadata dump: {}", e))?;
 
-            let start = start.clone();
-            let end = end.clone();
+            let start = *start;
+            let end = *end;
             let shutdown_rx = rx.resubscribe();
             let metrics = self.metrics.clone();
             let rocks_storage = self.primary_storage.clone();
@@ -423,8 +441,8 @@ where
             let fungible_tokens_file = File::create(fungible_tokens_path.clone())
                 .map_err(|e| format!("Could not create file for fungible tokens dump: {}", e))?;
 
-            let start = start.clone();
-            let end = end.clone();
+            let start = *start;
+            let end = *end;
             let shutdown_rx = rx.resubscribe();
             let metrics = self.metrics.clone();
             let rocks_storage = self.primary_storage.clone();
@@ -703,7 +721,7 @@ where
 /// Returns a vector of tuples (start_pubkey, end_pubkey) for each shard.
 pub fn shard_pubkeys(num_shards: u64) -> Vec<(Pubkey, Pubkey)> {
     // Total keyspace as BigUint
-    let total_keyspace = BigUint::from_bytes_be(&[0xffu8; 32].as_slice());
+    let total_keyspace = BigUint::from_bytes_be([0xffu8; 32].as_slice());
     let shard_size = &total_keyspace / num_shards;
 
     let mut shards = Vec::new();
@@ -739,42 +757,6 @@ fn pad_to_32_bytes(bytes: &[u8]) -> [u8; 32] {
     let offset = 32 - bytes.len();
     array[offset..].copy_from_slice(bytes); // Copy the bytes into the rightmost part of the array
     array
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_shard_pubkeys_1() {
-        let shards = shard_pubkeys(1);
-        assert_eq!(shards.len(), 1);
-        assert_eq!(
-            shards[0],
-            (
-                Pubkey::new_from_array([0; 32]),
-                Pubkey::new_from_array([0xff; 32])
-            )
-        );
-    }
-
-    #[test]
-    fn test_shard_pubkeys_2() {
-        let shards = shard_pubkeys(2);
-        assert_eq!(shards.len(), 2);
-        let first_key = [0x0; 32];
-        let mut last_key = [0xff; 32];
-        last_key[0] = 0x7f;
-        last_key[31] = 0xfe;
-        assert_eq!(shards[0].0.to_bytes(), first_key);
-        assert_eq!(shards[0].1.to_bytes(), last_key);
-
-        let mut first_key = last_key;
-        first_key[31] = 0xff;
-        let last_key = [0xff; 32];
-        assert_eq!(shards[1].0.to_bytes(), first_key);
-        assert_eq!(shards[1].1.to_bytes(), last_key);
-    }
 }
 
 #[cfg(test)]
@@ -830,7 +812,6 @@ mod tests {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
-        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
         index_storage
@@ -847,12 +828,10 @@ mod tests {
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
-            temp_client_provider,
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
-            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
@@ -887,7 +866,6 @@ mod tests {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
-        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
         ASSET_TYPES.iter().for_each(|_e| {
             index_storage
@@ -941,12 +919,10 @@ mod tests {
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
-            temp_client_provider,
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
-            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
@@ -980,7 +956,6 @@ mod tests {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
-        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
         // Index storage starts empty
@@ -1046,12 +1021,10 @@ mod tests {
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
-            temp_client_provider,
             1,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
-            false,
         ); // Small batch size
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
@@ -1085,7 +1058,6 @@ mod tests {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
-        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
         let index_key = AssetUpdatedKey::new(95, 2, Pubkey::new_unique());
@@ -1195,12 +1167,10 @@ mod tests {
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
-            temp_client_provider,
             2,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
-            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
@@ -1234,7 +1204,6 @@ mod tests {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
-        let temp_client_provider = MockTempClientProviderMock::new();
         metrics_state.register_metrics();
 
         let key = Pubkey::new_unique();
@@ -1269,12 +1238,10 @@ mod tests {
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
             Arc::new(index_storage),
-            temp_client_provider,
             200_000,
             "".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
-            false,
         );
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
@@ -1301,5 +1268,36 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_shard_pubkeys_1() {
+        let shards = shard_pubkeys(1);
+        assert_eq!(shards.len(), 1);
+        assert_eq!(
+            shards[0],
+            (
+                Pubkey::new_from_array([0; 32]),
+                Pubkey::new_from_array([0xff; 32])
+            )
+        );
+    }
+
+    #[test]
+    fn test_shard_pubkeys_2() {
+        let shards = shard_pubkeys(2);
+        assert_eq!(shards.len(), 2);
+        let first_key = [0x0; 32];
+        let mut last_key = [0xff; 32];
+        last_key[0] = 0x7f;
+        last_key[31] = 0xfe;
+        assert_eq!(shards[0].0.to_bytes(), first_key);
+        assert_eq!(shards[0].1.to_bytes(), last_key);
+
+        let mut first_key = last_key;
+        first_key[31] = 0xff;
+        let last_key = [0xff; 32];
+        assert_eq!(shards[1].0.to_bytes(), first_key);
+        assert_eq!(shards[1].1.to_bytes(), last_key);
     }
 }

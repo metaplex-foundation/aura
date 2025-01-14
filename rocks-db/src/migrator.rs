@@ -28,16 +28,19 @@ pub enum MigrationState {
 pub enum SerializationType {
     Bincode,
     Cbor,
+    Flatbuffers,
 }
 
 pub trait RocksMigration {
     const VERSION: u64;
+    const DESERIALIZATION_TYPE: SerializationType;
     const SERIALIZATION_TYPE: SerializationType;
     type NewDataType: Sync + Serialize + DeserializeOwned + Send + TypedColumn;
     type OldDataType: Sync
         + Serialize
         + DeserializeOwned
         + Send
+        + TypedColumn
         + Into<<Self::NewDataType as TypedColumn>::ValueType>;
 }
 
@@ -67,32 +70,16 @@ impl Storage {
         migration_version_manager: Arc<impl PrimaryStorageMigrationVersionManager>,
     ) -> Result<()> {
         // TODO: how do I fix this for a brand new DB?
-        // let applied_migrations = migration_version_manager
-        //     .get_all_applied_migrations()
-        //     .map_err(StorageError::Common)?;
-        // let migration_applier =
-        //     MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
+        let applied_migrations = migration_version_manager
+            .get_all_applied_migrations()
+            .map_err(StorageError::Common)?;
+        let migration_applier =
+            MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
 
-        // // apply all migrations
-        // migration_applier
-        //     .apply_migration(crate::migrations::collection_authority::CollectionAuthorityMigration)
-        //     .await?;
-        // migration_applier
-        //     .apply_migration(crate::migrations::external_plugins::ExternalPluginsMigration)
-        //     .await?;
-        // migration_applier
-        //     .apply_migration(
-        //         crate::migrations::clean_update_authorities::CleanCollectionAuthoritiesMigration,
-        //     )
-        //     .await?;
-        // migration_applier
-        //     .apply_migration(crate::migrations::spl2022::TokenAccounts2022ExtentionsMigration)
-        //     .await?;
-        // migration_applier
-        //     .apply_migration(
-        //         crate::migrations::spl2022::DynamicDataToken2022MintExtentionsMigration,
-        //     )
-        //     .await?;
+        migration_applier
+            .apply_migration(crate::migrations::offchain_data::OffChainDataMigration)
+            .await?;
+
         Ok(())
     }
 
@@ -176,6 +163,8 @@ struct MigrationApplier<'a> {
     applied_migration_versions: HashSet<u64>,
 }
 
+type ColumnIteratorItem = (Box<[u8]>, Box<[u8]>);
+
 impl<'a> MigrationApplier<'a> {
     fn new(
         db_path: &'a str,
@@ -255,10 +244,10 @@ impl<'a> MigrationApplier<'a> {
             batch.put_cf(
                 &temporary_migration_storage
                     .db
-                    .cf_handle(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)
+                    .cf_handle(<<M as RocksMigration>::OldDataType as TypedColumn>::NAME)
                     .ok_or(StorageError::Common(format!(
                         "Cannot get cf_handle for {}",
-                        <<M as RocksMigration>::NewDataType as TypedColumn>::NAME
+                        <<M as RocksMigration>::OldDataType as TypedColumn>::NAME
                     )))?,
                 key,
                 value,
@@ -314,13 +303,13 @@ impl<'a> MigrationApplier<'a> {
 
     fn migration_column_iter<M: RocksMigration>(
         db: &Arc<DB>,
-    ) -> Result<impl Iterator<Item = (Box<[u8]>, Box<[u8]>)> + '_> {
+    ) -> Result<impl Iterator<Item = ColumnIteratorItem> + '_> {
         Ok(db
             .iterator_cf(
-                &db.cf_handle(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)
+                &db.cf_handle(<<M as RocksMigration>::OldDataType as TypedColumn>::NAME)
                     .ok_or(StorageError::Common(format!(
                         "Cannot get cf_handle for {}",
-                        <<M as RocksMigration>::NewDataType as TypedColumn>::NAME
+                        <<M as RocksMigration>::OldDataType as TypedColumn>::NAME
                     )))?,
                 IteratorMode::Start,
             )
@@ -335,7 +324,7 @@ impl<'a> MigrationApplier<'a> {
         <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
-        match M::SERIALIZATION_TYPE {
+        match M::DESERIALIZATION_TYPE {
             SerializationType::Bincode => deserialize::<M::OldDataType>(value).map_err(|e| {
                 error!("migration data deserialize: {:?}, {}", key_decoded, e);
                 e.into()
@@ -345,6 +334,11 @@ impl<'a> MigrationApplier<'a> {
                     error!("migration data deserialize: {:?}, {}", key_decoded, e);
                     StorageError::Common(e.to_string())
                 })
+            }
+            SerializationType::Flatbuffers => {
+                unreachable!(
+                    "Deserialization from Flatbuffers in term of migration is not supported yet"
+                )
             }
         }
     }
@@ -360,9 +354,6 @@ impl<'a> MigrationApplier<'a> {
         <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
-        match M::SERIALIZATION_TYPE {
-            SerializationType::Bincode => column.put_batch(std::mem::take(batch)).await,
-            SerializationType::Cbor => column.put_batch_cbor(std::mem::take(batch)).await,
-        }
+        column.put_batch(std::mem::take(batch)).await
     }
 }

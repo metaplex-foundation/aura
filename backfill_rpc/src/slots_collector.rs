@@ -54,9 +54,7 @@ fn fetch_related_signature(
     collected_key: &solana_program::pubkey::Pubkey,
     block_with_start_signature: Option<UiConfirmedBlock>,
 ) -> Option<String> {
-    let Some(txs) = block_with_start_signature.and_then(|block| block.transactions) else {
-        return None;
-    };
+    let txs = block_with_start_signature.and_then(|block| block.transactions)?;
     for tx in txs {
         if tx.meta.and_then(|meta| meta.err).is_some() {
             continue;
@@ -109,7 +107,7 @@ async fn test_rpc_get_slots() {
 
     let client = BackfillRPC::connect("https://api.mainnet-beta.solana.com".to_string());
     let slots = client
-        .get_slots(
+        .get_slots_sorted_desc(
             &Pubkey::from_str("Vote111111111111111111111111111111111111111").unwrap(),
             253484000,
             2,
@@ -117,5 +115,5 @@ async fn test_rpc_get_slots() {
         .await
         .unwrap();
 
-    assert_eq!(slots.is_empty(), false)
+    assert!(!slots.is_empty())
 }

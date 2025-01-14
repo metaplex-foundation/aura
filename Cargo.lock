@@ -3844,6 +3844,7 @@ dependencies = [
  "anyhow",
  "borsh 0.10.3",
  "entities",
+ "env_logger 0.10.2",
  "flatbuffers 23.5.26",
  "function_name",
  "futures",
@@ -3870,6 +3871,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-test",
  "usecase",
 ]
 
@@ -4774,9 +4776,7 @@ dependencies = [
  "clap 4.5.4",
  "coingecko",
  "criterion",
- "csv",
  "entities",
- "env_logger 0.10.2",
  "figment",
  "flatbuffers 23.5.26",
  "futures",
@@ -4802,23 +4802,19 @@ dependencies = [
  "multer",
  "num-bigint 0.4.5",
  "num-traits",
- "open-rpc-schema",
  "plerkle_messenger",
  "plerkle_serialization",
  "postgre-client",
  "pprof",
  "prometheus-client",
- "rand 0.8.5",
  "reqwest",
  "rocks-db",
  "rocksdb",
  "schemars",
  "serde",
  "serde_cbor",
- "serde_derive",
  "serde_json",
  "setup",
- "solana-bigtable-connection",
  "solana-client",
  "solana-program",
  "solana-sdk",
@@ -4841,7 +4837,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-test",
- "triomphe",
  "url",
  "usecase",
  "utils",
@@ -5155,18 +5150,6 @@ name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
-
-[[package]]
-name = "open-rpc-schema"
-version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6919654a78166b8d8f266f702ce763c0880c11a2e75e1de9cc3e51704abf620"
-dependencies = [
- "schemars",
- "schemars_derive",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "openssl"

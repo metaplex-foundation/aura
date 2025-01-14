@@ -35,6 +35,7 @@ impl MaybeProofChecker {
 
 #[async_trait]
 impl ProofChecker for MaybeProofChecker {
+    #[allow(clippy::result_large_err)]
     async fn check_proof(
         &self,
         tree_id_pk: Pubkey,
@@ -67,6 +68,7 @@ impl ProofChecker for MaybeProofChecker {
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn validate_proofs(
     mut tree_acc_info: Vec<u8>,
     initial_proofs: Vec<Pubkey>,

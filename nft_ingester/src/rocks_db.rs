@@ -1,4 +1,4 @@
-use crate::config::{IngesterConfig, INGESTER_BACKUP_NAME};
+use crate::config::INGESTER_BACKUP_NAME;
 use metrics_utils::IngesterMetricsConfig;
 use rocks_db::backup_service::BackupService;
 use rocks_db::errors::BackupServiceError;
@@ -51,29 +51,25 @@ pub async fn receive_last_saved_slot(
     Ok(())
 }
 
-pub async fn restore_rocksdb(config: &IngesterConfig) -> Result<(), BackupServiceError> {
-    let rocks_backup_archives_dir = config.rocks_backup_archives_dir.clone();
-
-    create_dir_all(&rocks_backup_archives_dir)?;
+pub async fn restore_rocksdb(
+    rocks_backup_url: &str,
+    rocks_backup_archives_dir: &str,
+    rocks_db_path_container: &str,
+) -> Result<(), BackupServiceError> {
+    create_dir_all(rocks_backup_archives_dir)?;
 
     let backup_path = format!("{}/{}", rocks_backup_archives_dir, INGESTER_BACKUP_NAME);
 
-    backup_service::download_backup_archive(&config.rocks_backup_url, &backup_path).await?;
-    backup_service::unpack_backup_archive(&backup_path, &rocks_backup_archives_dir)?;
+    backup_service::download_backup_archive(rocks_backup_url, &backup_path).await?;
+    backup_service::unpack_backup_archive(&backup_path, rocks_backup_archives_dir)?;
 
     let unpacked_archive = format!(
         "{}/{}",
         &rocks_backup_archives_dir,
-        backup_service::get_backup_dir_name(config.rocks_backup_dir.as_str())
+        backup_service::get_backup_dir_name(rocks_backup_url)
     );
 
-    backup_service::restore_external_backup(
-        &unpacked_archive,
-        config
-            .rocks_db_path_container
-            .as_deref()
-            .unwrap_or("./my_rocksdb"),
-    )?;
+    backup_service::restore_external_backup(&unpacked_archive, rocks_db_path_container)?;
 
     // remove unpacked files
     remove_dir_all(unpacked_archive)?;

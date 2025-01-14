@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use entities::models::OffChainData;
-use rocks_db::asset_previews::UrlToDownload;
+use rocks_db::columns::asset_previews::UrlToDownload;
+use rocks_db::columns::offchain_data::OffChainData;
 use tracing::log::error;
 
 use rocks_db::Storage;
@@ -53,7 +53,7 @@ impl Scheduler {
     /// It executes jobs one by one sequentially.
     pub async fn run(&mut self) {
         loop {
-            let mut sleep_to_next_run = u64::max_value();
+            let mut sleep_to_next_run = u64::MAX;
             let mut to_remove = Vec::new();
             for job in self.jobs.iter_mut() {
                 let mut sched = match self.storage.get_schedule(job.id()) {
@@ -95,7 +95,7 @@ impl Scheduler {
                 }
             }
             self.jobs.retain(|j| to_remove.contains(&j.id()));
-            if self.jobs.is_empty() || sleep_to_next_run == u64::max_value() {
+            if self.jobs.is_empty() || sleep_to_next_run == u64::MAX {
                 break;
             }
             tokio::time::sleep(Duration::from_secs(sleep_to_next_run)).await;
@@ -213,7 +213,9 @@ impl Job for InitUrlsToDownloadJob {
 
         let urls: HashMap<String, UrlToDownload> = data
             .into_iter()
-            .filter_map(|(_, OffChainData { url: _, metadata })| parse_files(&metadata))
+            .filter_map(|(_, OffChainData { metadata, .. })| {
+                metadata.as_deref().and_then(parse_files)
+            })
             .flat_map(|files| files.into_iter().filter_map(|f| f.uri))
             .map(|uri| {
                 (
