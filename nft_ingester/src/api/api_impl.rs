@@ -121,7 +121,7 @@ where
         self.pg_client
             .check_health()
             .await
-            .map_err(|e| DasApiError::InternalDdError(e.to_string()))?;
+            .map_err(|e| DasApiError::InternalDbError(e.to_string()))?;
 
         self.metrics
             .set_latency(label, latency_timer.elapsed().as_millis() as f64);
@@ -748,7 +748,7 @@ where
 
         match res {
             Ok(Ok(res)) => Ok(res),
-            Ok(Err(e)) => Err(DasApiError::InternalDdError(e.to_string())),
+            Ok(Err(e)) => Err(DasApiError::InternalDbError(e.to_string())),
             Err(_) => Err(DasApiError::QueryTimedOut),
         }
     }

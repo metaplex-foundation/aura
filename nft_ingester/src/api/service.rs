@@ -71,7 +71,7 @@ pub async fn start_api(
     account_balance_getter: Arc<AccountBalanceGetterImpl>,
     storage_service_base_url: Option<String>,
     native_mint_pubkey: String,
-    api_query_max_statement_timeout_sec: u64,
+    api_query_max_statement_timeout_secs: u64,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -128,7 +128,7 @@ pub async fn start_api(
             red_metrics,
         )),
         native_mint_pubkey,
-        api_query_max_statement_timeout_sec,
+        api_query_max_statement_timeout_secs,
     );
 
     run_api(

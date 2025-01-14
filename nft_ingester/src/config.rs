@@ -258,7 +258,7 @@ pub struct IngesterClapArgs {
         default_value = "120",
         help = "Specifies the maximum execution time of a SQL query for API."
     )]
-    pub api_max_query_statement_timeout_sec: u64,
+    pub api_query_max_statement_timeout_secs: u64,
 
     #[clap(
         long,
@@ -444,7 +444,7 @@ pub struct ApiClapArgs {
         default_value = "120",
         help = "Specifies the maximum execution time of a SQL query for API."
     )]
-    pub api_query_max_statement_timeout_sec: u64,
+    pub api_query_max_statement_timeout_secs: u64,
 
     #[clap(
         long,
