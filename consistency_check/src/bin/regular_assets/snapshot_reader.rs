@@ -1,3 +1,7 @@
+#![allow(dead_code)]
+#![allow(clippy::needless_lifetimes)]
+#![allow(clippy::unnecessary_cast)]
+
 // Copyright 2022 Solana Foundation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -44,7 +48,7 @@ use thiserror::Error;
 use tracing::info;
 
 use std::ffi::OsStr;
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::{BufReader, Read};
 use std::path::{Component, Path};
 use std::pin::Pin;

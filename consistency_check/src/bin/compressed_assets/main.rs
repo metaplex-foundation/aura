@@ -113,7 +113,7 @@ pub async fn main() {
         Arc::new(Mutex::new(HashMap::new()));
     let failed_check: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 
-    let chunk_size = (keys.len() + config.workers - 1) / config.workers;
+    let chunk_size = keys.len().div_ceil(config.workers);
 
     for chunk in keys.chunks(chunk_size) {
         tasks.spawn(verify_tree_batch(
@@ -182,6 +182,7 @@ pub async fn main() {
     progress_bar.finish_with_message("Processing complete");
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn verify_tree_batch(
     progress_bar: Arc<ProgressBar>,
     assets_processed: Arc<AtomicU64>,
@@ -251,7 +252,7 @@ async fn verify_tree_batch(
                             rate_cloned,
                             progress_bar_cloned,
                             permit,
-                            std::mem::replace(&mut assets_batch, vec![]),
+                            std::mem::take(&mut assets_batch),
                         ));
                     }
                 }
@@ -299,6 +300,7 @@ async fn verify_tree_batch(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_assets_batch(
     rocks: Arc<Storage>,
     api_metrics: Arc<ApiMetricsConfig>,
@@ -447,7 +449,7 @@ async fn process_failed_checks(
 ) -> Result<(), csv::Error> {
     let mut f_ch = failed_check.lock().await;
     for t in f_ch.iter() {
-        writer.write_record(&[t])?;
+        writer.write_record([t])?;
     }
     writer.flush()?;
     f_ch.clear();
@@ -461,7 +463,7 @@ async fn process_failed_proofs(
     let mut f_ch = failed_proofs.lock().await;
     for (t, assets) in f_ch.iter() {
         for a in assets {
-            writer.write_record(&[t, a])?;
+            writer.write_record([t, a])?;
         }
     }
     writer.flush()?;

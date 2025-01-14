@@ -120,7 +120,7 @@ pub async fn main() {
     let mut tasks = JoinSet::new();
 
     tasks.spawn(process_nfts(
-        config.inner_workers.clone(),
+        config.inner_workers,
         db_client.clone(),
         shutdown_token.clone(),
         nfts_channel_rx,
@@ -135,7 +135,7 @@ pub async fn main() {
     ));
 
     tasks.spawn(process_fungibles(
-        config.inner_workers.clone(),
+        config.inner_workers,
         db_client.clone(),
         shutdown_token.clone(),
         fungibles_channel_rx,
@@ -190,13 +190,12 @@ pub async fn main() {
                             {
                                 error!("Could not send mint key to the channel: {}", e.to_string());
                             }
-                        } else {
-                            if let Err(e) = fungibles_channel_tx.send(account.meta.pubkey).await {
-                                error!(
-                                    "Could not send token account to the channel: {}",
-                                    e.to_string()
-                                );
-                            }
+                        } else if let Err(e) = fungibles_channel_tx.send(account.meta.pubkey).await
+                        {
+                            error!(
+                                "Could not send token account to the channel: {}",
+                                e.to_string()
+                            );
                         }
                     }
                 }
@@ -224,6 +223,7 @@ pub async fn main() {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_nfts(
     inner_workers: usize,
     rocks_db: Arc<Storage>,
@@ -332,6 +332,7 @@ async fn process_nfts(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn process_fungibles(
     inner_workers: usize,
     rocks_db: Arc<Storage>,
@@ -426,7 +427,7 @@ async fn write_data_to_file(
 
     let keys = keys.lock().await;
     for key in keys.iter() {
-        wrt.write_record(&[key]).map_err(|e| e.to_string())?;
+        wrt.write_record([key]).map_err(|e| e.to_string())?;
     }
     wrt.flush().map_err(|e| e.to_string())?;
     Ok(())
