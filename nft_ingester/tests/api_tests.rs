@@ -521,12 +521,11 @@ mod tests {
         let result = timeout(query_timeout, query("SELECT pg_sleep(3)").execute(&pg_pool)).await;
 
         match result {
-            Ok(Ok(res)) => assert!(
-                false,
+            Ok(Ok(res)) => panic!(
                 "Query should have timed out, but completed successfully: {:?}",
                 res
             ),
-            Ok(Err(e)) => assert!(false, "Query should have timed out, but failed: {:?}", e),
+            Ok(Err(e)) => panic!("Query should have timed out, but failed: {:?}", e),
             Err(_) => println!("Query timed out as expected"),
         }
     }
@@ -544,15 +543,11 @@ mod tests {
 
         match result {
             Ok(Ok(res)) => println!("Query completed successfully: {:?}", res),
-            Ok(Err(e)) => assert!(
-                false,
-                "Query should completed successfully, but failed: {:?}",
+            Ok(Err(e)) => panic!(
+                "Query should have timed out, but completed successfully: {:?}",
                 e
             ),
-            Err(_) => assert!(
-                false,
-                "Query should completed successfully but have timedout",
-            ),
+            Err(_) => panic!("Query should completed successfully but have timeout",),
         }
     }
 
