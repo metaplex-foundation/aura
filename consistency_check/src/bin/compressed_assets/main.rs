@@ -64,11 +64,8 @@ pub async fn main() {
     let file = File::open(config.trees_file_path).unwrap();
     let mut rdr = csv::Reader::from_reader(file);
 
-    let keys: Vec<String> = rdr
-        .records()
-        .filter_map(Result::ok)
-        .map(|r| r.as_slice().to_string())
-        .collect();
+    let keys: Vec<String> =
+        rdr.records().filter_map(Result::ok).map(|r| r.as_slice().to_string()).collect();
 
     let rpc_client = Arc::new(RpcClient::new(config.rpc_endpoint));
 
@@ -138,11 +135,7 @@ pub async fn main() {
     let shutdown_token_clone = shutdown_token.clone();
 
     // update rate on the background
-    tokio::spawn(update_rate(
-        shutdown_token_clone,
-        assets_processed_clone,
-        rate_clone,
-    ));
+    tokio::spawn(update_rate(shutdown_token_clone, assets_processed_clone, rate_clone));
 
     // write found problematic assets to the files
     writers.spawn(async move {
@@ -208,7 +201,7 @@ async fn verify_tree_batch(
                 let mut f_ch = failed_check.lock().await;
                 f_ch.insert(tree.clone());
                 continue;
-            }
+            },
         };
 
         let tree_config_key = Pubkey::find_program_address(&[t_key.as_ref()], &mpl_bubblegum::ID).0;
@@ -337,7 +330,7 @@ async fn process_assets_batch(
                             )
                             .await;
                         }
-                    }
+                    },
                     Err(e) => {
                         save_asset_w_inv_proofs(
                             assets_with_failed_proofs.clone(),
@@ -347,7 +340,7 @@ async fn process_assets_batch(
                             Some(e),
                         )
                         .await;
-                    }
+                    },
                 }
             } else {
                 save_asset_w_inv_proofs(
@@ -355,10 +348,7 @@ async fn process_assets_batch(
                     failed_proofs.clone(),
                     tree.clone(),
                     asset.clone(),
-                    Some(format!(
-                        "API did not return any proofs for asset: {:?}",
-                        asset
-                    )),
+                    Some(format!("API did not return any proofs for asset: {:?}", asset)),
                 )
                 .await;
             }
@@ -407,11 +397,8 @@ async fn check_if_asset_proofs_valid(asset_proofs_response: AssetProof) -> Resul
         .map_err(|e| e.to_string())?
         .to_bytes();
 
-    let recomputed_root = recompute(
-        leaf_key,
-        asset_proofs.as_ref(),
-        asset_proofs_response.node_index as u32,
-    );
+    let recomputed_root =
+        recompute(leaf_key, asset_proofs.as_ref(), asset_proofs_response.node_index as u32);
 
     Ok(recomputed_root == root_key)
 }
@@ -508,9 +495,8 @@ mod tests {
             tree_id: "AxM84SgtLjS51ffA9DucZpGZc3xKDF7H4zU7U6hJQYbR".to_string(),
         };
 
-        let proofs_valid = check_if_asset_proofs_valid(correct_asset_proofs_response.clone())
-            .await
-            .unwrap();
+        let proofs_valid =
+            check_if_asset_proofs_valid(correct_asset_proofs_response.clone()).await.unwrap();
 
         assert!(proofs_valid);
 
@@ -519,9 +505,7 @@ mod tests {
         invalid_first_proof_hash.proof[0] =
             "GuR1VgjoFvHU1vkh81LK1znDyWGjf1B2e4rQ4zQivAvT".to_string();
 
-        let proofs_valid = check_if_asset_proofs_valid(invalid_first_proof_hash)
-            .await
-            .unwrap();
+        let proofs_valid = check_if_asset_proofs_valid(invalid_first_proof_hash).await.unwrap();
 
         assert_eq!(proofs_valid, false);
 
@@ -529,9 +513,7 @@ mod tests {
         // change leaf hash to incorrect one
         invalid_leaf_hash.leaf = "GuR1VgjoFvHU1vkh81LK1znDyWGjf1B2e4rQ4zQivAvT".to_string();
 
-        let proofs_valid = check_if_asset_proofs_valid(invalid_leaf_hash)
-            .await
-            .unwrap();
+        let proofs_valid = check_if_asset_proofs_valid(invalid_leaf_hash).await.unwrap();
 
         assert_eq!(proofs_valid, false);
     }

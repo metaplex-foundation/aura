@@ -44,17 +44,20 @@ pub struct IngesterClapArgs {
     #[clap(short('r'), long, env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
     pub redis_connection_config: Dict,
 
-    #[clap(long, env, default_value = "20")]
+    #[clap(long, env, default_value = "5")]
     pub redis_accounts_parsing_workers: u32,
 
-    #[clap(long, env, default_value = "20")]
+    #[clap(long, env, default_value = "1")]
     pub redis_transactions_parsing_workers: u32,
 
     #[clap(long, env, default_value = "60")]
     pub sequence_consistent_checker_wait_period_sec: u64,
 
-    #[clap(long, env, default_value = "250")]
+    #[clap(long, env, default_value = "100")]
     pub account_processor_buffer_size: usize,
+
+    #[clap(long, env, default_value = "100")]
+    pub tx_processor_buffer_size: usize,
 
     #[clap(long, env, default_value = "50")]
     pub account_processor_mpl_fees_buffer_size: usize,

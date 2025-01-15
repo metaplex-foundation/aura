@@ -215,10 +215,7 @@ where
         let accounts_db_fields_post_time = Instant::now();
         drop(snapshot_file);
 
-        println!(
-            "Read bank fields in {:?}",
-            versioned_bank_post_time - pre_unpack
-        );
+        println!("Read bank fields in {:?}", versioned_bank_post_time - pre_unpack);
         println!(
             "Read accounts DB fields in {:?}",
             accounts_db_fields_post_time - versioned_bank_post_time
@@ -241,11 +238,7 @@ where
             _ => return false,
         };
         // Check if slot number file is valid u64.
-        if slot_number_str_1
-            .to_str()
-            .and_then(|s| s.parse::<u64>().ok())
-            .is_none()
-        {
+        if slot_number_str_1.to_str().and_then(|s| s.parse::<u64>().ok()).is_none() {
             return false;
         }
         let slot_number_str_2 = match components.next() {
@@ -268,22 +261,18 @@ where
     }
 
     fn unboxed_iter(&mut self) -> impl Iterator<Item = Result<AppendVec>> + '_ {
-        self.entries
-            .take()
-            .into_iter()
-            .flatten()
-            .filter_map(|entry| {
-                let mut entry = match entry {
-                    Ok(x) => x,
-                    Err(e) => return Some(Err(e.into())),
-                };
-                let path = match entry.path() {
-                    Ok(x) => x,
-                    Err(e) => return Some(Err(e.into())),
-                };
-                let (slot, id) = path.file_name().and_then(parse_append_vec_name)?;
-                Some(self.process_entry(&mut entry, slot, id))
-            })
+        self.entries.take().into_iter().flatten().filter_map(|entry| {
+            let mut entry = match entry {
+                Ok(x) => x,
+                Err(e) => return Some(Err(e.into())),
+            };
+            let path = match entry.path() {
+                Ok(x) => x,
+                Err(e) => return Some(Err(e.into())),
+            };
+            let (slot, id) = path.file_name().and_then(parse_append_vec_name)?;
+            Some(self.process_entry(&mut entry, slot, id))
+        })
     }
 
     fn process_entry(
@@ -292,22 +281,13 @@ where
         slot: u64,
         id: u64,
     ) -> Result<AppendVec> {
-        let known_vecs = self
-            .accounts_db_fields
-            .0
-            .get(&slot)
-            .map(|v| &v[..])
-            .unwrap_or(&[]);
+        let known_vecs = self.accounts_db_fields.0.get(&slot).map(|v| &v[..]).unwrap_or(&[]);
         let known_vec = known_vecs.iter().find(|entry| entry.id == (id as usize));
         let known_vec = match known_vec {
             None => return Err(SnapshotError::UnexpectedAppendVec),
             Some(v) => v,
         };
-        Ok(AppendVec::new_from_reader(
-            entry,
-            known_vec.accounts_current_len,
-            slot,
-        )?)
+        Ok(AppendVec::new_from_reader(entry, known_vec.accounts_current_len, slot)?)
     }
 
     pub fn iter(&mut self) -> AppendVecIterator<'_> {
@@ -424,7 +404,7 @@ pub fn append_vec_iter(append_vec: Rc<AppendVec>) -> impl Iterator<Item = Stored
             Some((_, next_offset)) => {
                 offsets.push(offset);
                 offset = next_offset;
-            }
+            },
         }
     }
     let append_vec = Rc::clone(&append_vec);
@@ -495,11 +475,7 @@ impl AppendVec {
         current_len: usize,
         slot: u64,
     ) -> io::Result<Self> {
-        let data = OpenOptions::new()
-            .read(true)
-            .write(false)
-            .create(false)
-            .open(&path)?;
+        let data = OpenOptions::new().read(true).write(false).create(false).open(&path)?;
 
         let file_size = std::fs::metadata(&path)?.len();
         AppendVec::sanitize_len_and_size(current_len, file_size as usize)?;
@@ -513,12 +489,7 @@ impl AppendVec {
             result?
         };
 
-        let new = AppendVec {
-            map,
-            current_len,
-            file_size,
-            slot,
-        };
+        let new = AppendVec { map, current_len, file_size, slot };
 
         Ok(new)
     }
@@ -578,17 +549,7 @@ impl AppendVec {
         let (hash, next): (&'a Hash, _) = self.get_type(next)?;
         let (data, next) = self.get_slice(next, meta.data_len as usize)?;
         let stored_size = next - offset;
-        Some((
-            StoredAccountMeta {
-                meta,
-                account_meta,
-                data,
-                offset,
-                stored_size,
-                hash,
-            },
-            next,
-        ))
+        Some((StoredAccountMeta { meta, account_meta, data, offset, stored_size, hash }, next))
     }
 
     pub fn get_slot(&self) -> u64 {

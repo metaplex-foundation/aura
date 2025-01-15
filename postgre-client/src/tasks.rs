@@ -195,9 +195,7 @@ impl PgClient {
     }
 
     pub async fn get_tasks_count(&self) -> Result<i64, IndexDbError> {
-        let resp = sqlx::query("SELECT COUNT(*) FROM tasks")
-            .fetch_one(&self.pool)
-            .await?;
+        let resp = sqlx::query("SELECT COUNT(*) FROM tasks").fetch_one(&self.pool).await?;
         let count: i64 = resp.get(0);
 
         Ok(count)
@@ -232,11 +230,7 @@ impl PgClient {
             let metadata_url: String = row.get("tsk_metadata_url");
             let status: TaskStatus = row.get("tsk_status");
 
-            tasks.push(JsonTask {
-                tsk_id,
-                metadata_url,
-                status,
-            });
+            tasks.push(JsonTask { tsk_id, metadata_url, status });
         }
 
         Ok(tasks)

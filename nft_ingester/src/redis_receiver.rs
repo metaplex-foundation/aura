@@ -76,6 +76,7 @@ impl UnprocessedAccountsGetter for RedisReceiver {
             .recv(ACCOUNT_STREAM, self.consumption_type.clone())
             .await
             .map_err(|e| UsecaseError::Messenger(e.to_string()))?;
+
         let mut result = Vec::new();
         let mut unknown_account_types_ids = Vec::new();
         for item in recv_data {

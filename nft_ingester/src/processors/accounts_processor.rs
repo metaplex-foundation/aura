@@ -21,6 +21,7 @@ use tokio::{
     time::Instant,
 };
 use tracing::{debug, error};
+use uuid::Uuid;
 
 use super::account_based::{
     inscriptions_processor::InscriptionsProcessor,
@@ -98,6 +99,7 @@ pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
     core_fees_processor: MplCoreFeeProcessor,
     metrics: Arc<IngesterMetricsConfig>,
     message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
+    processor_name: String,
 }
 
 // AccountsProcessor responsible for processing all account updates received
@@ -115,7 +117,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
         postgre_client: Arc<PgClient>,
         rpc_client: Arc<RpcClient>,
-        join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
+        join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Result<Self, IngesterError> {
         let mplx_accounts_processor = MplxAccountsProcessor::new(metrics.clone());
         let token_accounts_processor = TokenAccountsProcessor::new(metrics.clone());
@@ -125,6 +127,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             MplCoreFeeProcessor::build(postgre_client, metrics.clone(), rpc_client, join_set)
                 .await?;
         core_fees_processor.update_rent(rx).await;
+        let processor_name = Uuid::new_v4().to_string();
 
         Ok(Self {
             fees_batch_size,
@@ -136,6 +139,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             core_fees_processor,
             metrics,
             message_process_metrics,
+            processor_name,
         })
     }
 
@@ -151,6 +155,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         let mut ack_ids = Vec::new();
         let mut interval = tokio::time::interval(FLUSH_INTERVAL);
         let mut batch_fill_instant = Instant::now();
+
         while rx.is_empty() {
             tokio::select! {
                 unprocessed_accounts = self.unprocessed_account_getter.next_accounts(accounts_batch_size) => {
@@ -163,6 +168,13 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                                 continue;
                             }
                         };
+
+                        if unprocessed_accounts.is_empty() {
+                            tokio::time::sleep(Duration::from_millis(1000)).await;
+                        }
+
+                        debug!("Processor {}, Unprocessed_accounts: {}  {:?}", self.processor_name, unprocessed_accounts.len(), unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", "));
+
                         self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_instant).await;
                     },
                 _ = interval.tick() => {

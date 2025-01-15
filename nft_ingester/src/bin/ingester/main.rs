@@ -65,6 +65,7 @@ use usecase::{
     asset_streamer::AssetStreamer, proofs::MaybeProofChecker, raw_blocks_streamer::BlocksStreamer,
     signature_fetcher::SignatureFetcher,
 };
+use uuid::Uuid;
 
 #[cfg(feature = "profiling")]
 #[global_allocator]
@@ -163,8 +164,19 @@ pub async fn main() -> Result<(), IngesterError> {
         create_ack_channel(cloned_rx, message_config.clone(), mutexed_tasks.clone()).await;
 
     for _ in 0..args.redis_accounts_parsing_workers {
+        let personal_message_config = MessengerConfig {
+            messenger_type: MessengerType::Redis,
+            connection_config: {
+                let mut config = args.redis_connection_config.clone();
+                config.insert("consumer_id".to_string(), Uuid::new_v4().to_string().into());
+                config
+                    .entry("batch_size".to_string())
+                    .or_insert_with(|| args.account_processor_buffer_size.into());
+                config
+            },
+        };
         let redis_receiver = Arc::new(
-            RedisReceiver::new(message_config.clone(), ConsumptionType::All, ack_channel.clone())
+            RedisReceiver::new(personal_message_config, ConsumptionType::All, ack_channel.clone())
                 .await?,
         );
 
@@ -185,10 +197,26 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     for _ in 0..args.redis_transactions_parsing_workers {
+        let personal_message_config = MessengerConfig {
+            messenger_type: MessengerType::Redis,
+            connection_config: {
+                let mut config = args.redis_connection_config.clone();
+                config.insert("consumer_id".to_string(), Uuid::new_v4().to_string().into());
+                config
+                    .entry("batch_size".to_string())
+                    .or_insert_with(|| args.tx_processor_buffer_size.into());
+                config
+            },
+        };
         let redis_receiver = Arc::new(
-            RedisReceiver::new(message_config.clone(), ConsumptionType::All, ack_channel.clone())
-                .await?,
+            RedisReceiver::new(
+                personal_message_config.clone(),
+                ConsumptionType::All,
+                ack_channel.clone(),
+            )
+            .await?,
         );
+
         run_transaction_processor(
             shutdown_rx.resubscribe(),
             mutexed_tasks.clone(),
