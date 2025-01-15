@@ -80,7 +80,7 @@ cargo r --bin jsons check-consistency --rocks_path /path/to/rocksdb --postgre-cr
 
 ### Change status
 
-This command will change statuses for links from csv file to `pending`. Once it happened JSON downloader will download that files and as a result gap will be filled.
+This command will change the statuses for links from the CSV file to pending. Once this happens, the JSON downloader will download those files and as a result, the gap will be filled.
 
 Launch command:
 
