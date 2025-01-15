@@ -90,8 +90,7 @@ impl DownloadError {
 /// Generated client implementations.
 pub mod asset_url_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::http::Uri;
-    use tonic::codegen::*;
+    use tonic::codegen::{http::Uri, *};
     #[derive(Debug, Clone)]
     pub struct AssetUrlServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -187,10 +186,8 @@ pub mod asset_url_service_client {
                 "/asseturls.AssetUrlService/GetAssetUrlsToDownload",
             );
             let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "asseturls.AssetUrlService",
-                "GetAssetUrlsToDownload",
-            ));
+            req.extensions_mut()
+                .insert(GrpcMethod::new("asseturls.AssetUrlService", "GetAssetUrlsToDownload"));
             self.inner.unary(req, path, codec).await
         }
         /// Used to notify about asset download results
@@ -209,10 +206,8 @@ pub mod asset_url_service_client {
                 "/asseturls.AssetUrlService/SubmitDownloadResult",
             );
             let mut req = request.into_request();
-            req.extensions_mut().insert(GrpcMethod::new(
-                "asseturls.AssetUrlService",
-                "SubmitDownloadResult",
-            ));
+            req.extensions_mut()
+                .insert(GrpcMethod::new("asseturls.AssetUrlService", "SubmitDownloadResult"));
             self.inner.unary(req, path, codec).await
         }
     }
@@ -353,7 +348,7 @@ pub mod asset_url_service_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                }
+                },
                 "/asseturls.AssetUrlService/SubmitDownloadResult" => {
                     #[allow(non_camel_case_types)]
                     struct SubmitDownloadResultSvc<T: AssetUrlService>(pub Arc<T>);
@@ -397,7 +392,7 @@ pub mod asset_url_service_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                }
+                },
                 _ => Box::pin(async move {
                     Ok(http::Response::builder()
                         .status(200)

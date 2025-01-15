@@ -66,19 +66,12 @@ pub async fn main() {
     let args = Args::parse();
 
     match args.cmd {
-        Commands::CheckConsistency {
-            rocks_path,
-            postgre_creds,
-            batch,
-        } => {
+        Commands::CheckConsistency { rocks_path, postgre_creds, batch } => {
             check_jsons_consistency(rocks_path, postgre_creds, batch).await;
-        }
-        Commands::ChangeStatus {
-            postgre_creds,
-            file_path,
-        } => {
+        },
+        Commands::ChangeStatus { postgre_creds, file_path } => {
             change_jsons_status(postgre_creds, file_path).await;
-        }
+        },
     }
 }
 
@@ -101,11 +94,8 @@ async fn change_jsons_status(postgre_creds: String, file_path: String) {
     let spinner_style =
         ProgressStyle::with_template("{prefix:>10.bold.dim} {spinner} total={human_pos} {msg}")
             .unwrap();
-    let links_spinner = Arc::new(
-        ProgressBar::new_spinner()
-            .with_style(spinner_style)
-            .with_prefix("links"),
-    );
+    let links_spinner =
+        Arc::new(ProgressBar::new_spinner().with_style(spinner_style).with_prefix("links"));
     let mut links_processed = 0;
 
     let mut missed_jsons = csv::Reader::from_path(file_path).unwrap();
@@ -223,20 +213,13 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
     let assets_processed_clone = assets_processed.clone();
     let shutdown_token_clone = shutdown_token.clone();
     let rate_clone = rate.clone();
-    tokio::spawn(update_rate(
-        shutdown_token_clone,
-        assets_processed_clone,
-        rate_clone,
-    ));
+    tokio::spawn(update_rate(shutdown_token_clone, assets_processed_clone, rate_clone));
 
     let mut last_key_in_batch = None;
 
     info!("Launching main loop...");
     loop {
-        match index_pg_storage
-            .get_tasks(batch as i64, last_key_in_batch.clone())
-            .await
-        {
+        match index_pg_storage.get_tasks(batch as i64, last_key_in_batch.clone()).await {
             Ok(tasks) => {
                 if tasks.is_empty() {
                     info!(
@@ -256,11 +239,7 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
                     .map(|t| t.metadata_url.clone())
                     .collect();
 
-                match db_client
-                    .asset_offchain_data
-                    .batch_get(keys_to_check.clone())
-                    .await
-                {
+                match db_client.asset_offchain_data.batch_get(keys_to_check.clone()).await {
                     Ok(jsons) => {
                         let mut ms_jn = missed_jsons.lock().await;
 
@@ -280,17 +259,14 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
                                 count_of_missed_jsons.fetch_add(1, Ordering::Relaxed);
                             }
                         }
-                    }
+                    },
                     Err(e) => {
-                        error!(
-                            "Error during selecting data from the Rocks: {}",
-                            e.to_string()
-                        );
+                        error!("Error during selecting data from the Rocks: {}", e.to_string());
                         count_of_missed_jsons
                             .fetch_add(keys_to_check.len() as u64, Ordering::Relaxed);
                         let mut ms_jn = missed_jsons.lock().await;
                         ms_jn.extend(keys_to_check);
-                    }
+                    },
                 }
 
                 assets_processed.fetch_add(tasks.len() as u64, Ordering::Relaxed);
@@ -300,14 +276,11 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
                     info!("Selected from the Postgre less jSONs that expected - meaning it's finished");
                     break;
                 }
-            }
+            },
             Err(e) => {
-                error!(
-                    "Error during selecting data from the Postgre: {}",
-                    e.to_string()
-                );
+                error!("Error during selecting data from the Postgre: {}", e.to_string());
                 tokio::time::sleep(Duration::from_secs(5)).await;
-            }
+            },
         }
 
         let current_missed_jsons = count_of_missed_jsons.load(Ordering::Relaxed);
