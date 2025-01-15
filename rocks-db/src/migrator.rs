@@ -1,21 +1,24 @@
-use crate::asset::{AssetCollection, AssetCompleteDetails};
-use crate::column::{Column, TypedColumn};
-use crate::errors::StorageError;
-use crate::key_encoders::{decode_u64, encode_u64};
-use crate::Storage;
-use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    sync::Arc,
+};
+
 use bincode::deserialize;
 use interface::migration_version_manager::PrimaryStorageMigrationVersionManager;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{IteratorMode, DB};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use tokio::{sync::Mutex, task::JoinSet};
 use tracing::{error, info};
+
+use crate::{
+    asset::{AssetCollection, AssetCompleteDetails},
+    column::{Column, TypedColumn},
+    errors::StorageError,
+    key_encoders::{decode_u64, encode_u64},
+    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
+};
 
 pub(crate) const BATCH_SIZE: usize = 1_000_000;
 
@@ -70,9 +73,8 @@ impl Storage {
         migration_version_manager: Arc<impl PrimaryStorageMigrationVersionManager>,
     ) -> Result<()> {
         // TODO: how do I fix this for a brand new DB?
-        let applied_migrations = migration_version_manager
-            .get_all_applied_migrations()
-            .map_err(StorageError::Common)?;
+        let applied_migrations =
+            migration_version_manager.get_all_applied_migrations().map_err(StorageError::Common)?;
         let migration_applier =
             MigrationApplier::new(db_path, migration_storage_path, applied_migrations);
 
@@ -85,36 +87,11 @@ impl Storage {
 
     pub async fn apply_migration_merge(&self) -> Result<()> {
         let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
-        convert_and_merge!(
-            self.asset_static_data,
-            builder,
-            &self.asset_data.handle(),
-            self.db
-        );
-        convert_and_merge!(
-            self.asset_dynamic_data,
-            builder,
-            &self.asset_data.handle(),
-            self.db
-        );
-        convert_and_merge!(
-            self.asset_authority_data,
-            builder,
-            &self.asset_data.handle(),
-            self.db
-        );
-        convert_and_merge!(
-            self.asset_owner_data,
-            builder,
-            &self.asset_data.handle(),
-            self.db
-        );
-        convert_and_merge!(
-            self.asset_collection_data,
-            builder,
-            &self.asset_data.handle(),
-            self.db
-        );
+        convert_and_merge!(self.asset_static_data, builder, &self.asset_data.handle(), self.db);
+        convert_and_merge!(self.asset_dynamic_data, builder, &self.asset_data.handle(), self.db);
+        convert_and_merge!(self.asset_authority_data, builder, &self.asset_data.handle(), self.db);
+        convert_and_merge!(self.asset_owner_data, builder, &self.asset_data.handle(), self.db);
+        convert_and_merge!(self.asset_collection_data, builder, &self.asset_data.handle(), self.db);
 
         self.db.drop_cf(AssetStaticDetails::NAME)?;
         self.db.drop_cf(AssetDynamicDetails::NAME)?;
@@ -171,11 +148,7 @@ impl<'a> MigrationApplier<'a> {
         migration_storage_path: &'a str,
         applied_migration_versions: HashSet<u64>,
     ) -> Self {
-        Self {
-            db_path,
-            migration_storage_path,
-            applied_migration_versions,
-        }
+        Self { db_path, migration_storage_path, applied_migration_versions }
     }
 
     async fn apply_migration<M: RocksMigration>(&self, _: M) -> Result<()>
@@ -192,9 +165,7 @@ impl<'a> MigrationApplier<'a> {
         {
             let old_storage = Self::open_migration_storage(self.db_path, M::VERSION)?;
             Self::copy_data_to_temporary_storage::<M>(&old_storage, &temporary_migration_storage)?;
-            old_storage
-                .db
-                .drop_cf(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)?;
+            old_storage.db.drop_cf(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)?;
         }
         let new_storage = Self::open_migration_storage(self.db_path, M::VERSION + 1)?;
         let column_to_migrate = Storage::column::<M::NewDataType>(
@@ -204,10 +175,7 @@ impl<'a> MigrationApplier<'a> {
 
         Self::migrate_data::<M>(&temporary_migration_storage, &column_to_migrate).await?;
         // Mark migration as applied and drop the temporary column family
-        new_storage
-            .migration_version
-            .put_async(M::VERSION, MigrationVersions {})
-            .await?;
+        new_storage.migration_version.put_async(M::VERSION, MigrationVersions {}).await?;
         temporary_migration_storage
             .db
             .drop_cf(<<M as RocksMigration>::NewDataType as TypedColumn>::NAME)?;
@@ -234,10 +202,7 @@ impl<'a> MigrationApplier<'a> {
         <<M as RocksMigration>::NewDataType as TypedColumn>::ValueType: 'static + Clone,
         <<M as RocksMigration>::NewDataType as TypedColumn>::KeyType: 'static + Hash + Eq,
     {
-        info!(
-            "Start copying data into temporary storage Version {}",
-            M::VERSION
-        );
+        info!("Start copying data into temporary storage Version {}", M::VERSION);
 
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for (key, value) in Self::migration_column_iter::<M>(&old_storage.db)? {
@@ -259,10 +224,7 @@ impl<'a> MigrationApplier<'a> {
         }
         temporary_migration_storage.db.write(batch)?;
 
-        info!(
-            "Finish copying data into temporary storage Version {}",
-            M::VERSION
-        );
+        info!("Finish copying data into temporary storage Version {}", M::VERSION);
 
         Ok(())
     }
@@ -282,7 +244,7 @@ impl<'a> MigrationApplier<'a> {
                 Err(e) => {
                     error!("migration data decode_key: {:?}, {}", key.to_vec(), e);
                     continue;
-                }
+                },
             };
             let Ok(value_decoded) = Self::decode_value::<M>(&value, &key_decoded) else {
                 continue;
@@ -306,11 +268,12 @@ impl<'a> MigrationApplier<'a> {
     ) -> Result<impl Iterator<Item = ColumnIteratorItem> + '_> {
         Ok(db
             .iterator_cf(
-                &db.cf_handle(<<M as RocksMigration>::OldDataType as TypedColumn>::NAME)
-                    .ok_or(StorageError::Common(format!(
+                &db.cf_handle(<<M as RocksMigration>::OldDataType as TypedColumn>::NAME).ok_or(
+                    StorageError::Common(format!(
                         "Cannot get cf_handle for {}",
                         <<M as RocksMigration>::OldDataType as TypedColumn>::NAME
-                    )))?,
+                    )),
+                )?,
                 IteratorMode::Start,
             )
             .flatten())
@@ -334,12 +297,12 @@ impl<'a> MigrationApplier<'a> {
                     error!("migration data deserialize: {:?}, {}", key_decoded, e);
                     StorageError::Common(e.to_string())
                 })
-            }
+            },
             SerializationType::Flatbuffers => {
                 unreachable!(
                     "Deserialization from Flatbuffers in term of migration is not supported yet"
                 )
-            }
+            },
         }
     }
 

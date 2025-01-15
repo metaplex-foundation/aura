@@ -1,10 +1,12 @@
+use std::{future::Future, sync::Arc};
+
 use futures::future::Either;
 use interface::consistency_check::ConsistencyChecker;
-use jsonrpc_core::futures_util::future;
-use jsonrpc_core::middleware::{NoopCallFuture, NoopFuture};
-use jsonrpc_core::{Call, Failure, Metadata, Middleware, Output, Version};
-use std::future::Future;
-use std::sync::Arc;
+use jsonrpc_core::{
+    futures_util::future,
+    middleware::{NoopCallFuture, NoopFuture},
+    Call, Failure, Metadata, Middleware, Output, Version,
+};
 
 #[derive(Default, Clone)]
 pub struct RpcMetaMiddleware {
@@ -14,9 +16,7 @@ impl Metadata for RpcMetaMiddleware {}
 
 impl RpcMetaMiddleware {
     pub(crate) fn new(consistency_checkers: Vec<Arc<dyn ConsistencyChecker>>) -> Self {
-        Self {
-            consistency_checkers,
-        }
+        Self { consistency_checkers }
     }
 
     fn cannot_service_request() -> Option<Output> {
@@ -37,11 +37,7 @@ impl<M: Metadata> Middleware<M> for RpcMetaMiddleware {
         F: Fn(Call, M) -> X + Send + Sync,
         X: Future<Output = Option<Output>> + Send + 'static,
     {
-        if self
-            .consistency_checkers
-            .iter()
-            .any(|checker| checker.should_cancel_request(&call))
-        {
+        if self.consistency_checkers.iter().any(|checker| checker.should_cancel_request(&call)) {
             return Either::Left(Box::pin(future::ready(Self::cannot_service_request())));
         }
         Either::Right(next(call, meta))

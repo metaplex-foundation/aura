@@ -1,24 +1,19 @@
-use crate::error::IngesterError;
-use metrics_utils::red::RequestErrorDurationMetrics;
-use metrics_utils::MetricState;
-use postgre_client::PgClient;
-use pprof::protos::Message;
-use pprof::ProfilerGuard;
-use rocks_db::migrator::MigrationState;
-use rocks_db::Storage;
-use std::fs::File;
-use std::io::Write;
-use std::ops::DerefMut;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tempfile::TempDir;
-use tokio::process::Command;
-use tokio::sync::broadcast::Sender;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
-use tokio_util::sync::CancellationToken;
+use std::{fs::File, io::Write, ops::DerefMut, path::PathBuf, sync::Arc};
 
+use metrics_utils::{red::RequestErrorDurationMetrics, MetricState};
+use postgre_client::PgClient;
+use pprof::{protos::Message, ProfilerGuard};
+use rocks_db::{migrator::MigrationState, Storage};
+use tempfile::TempDir;
+use tokio::{
+    process::Command,
+    sync::{broadcast::Sender, Mutex},
+    task::{JoinError, JoinSet},
+};
+use tokio_util::sync::CancellationToken;
 use tracing::error;
+
+use crate::error::IngesterError;
 
 const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
 
@@ -30,21 +25,13 @@ pub async fn init_index_storage_with_migration(
     pg_migrations_path: &str,
     base_dump_path: Option<PathBuf>,
 ) -> Result<PgClient, IngesterError> {
-    let pg_client = PgClient::new(
-        url,
-        min_pg_connections,
-        max_pg_connections,
-        base_dump_path,
-        red_metrics,
-    )
-    .await
-    .map_err(|e| e.to_string())
-    .map_err(IngesterError::SqlxError)?;
+    let pg_client =
+        PgClient::new(url, min_pg_connections, max_pg_connections, base_dump_path, red_metrics)
+            .await
+            .map_err(|e| e.to_string())
+            .map_err(IngesterError::SqlxError)?;
 
-    pg_client
-        .run_migration(pg_migrations_path)
-        .await
-        .map_err(IngesterError::SqlxError)?;
+    pg_client.run_migration(pg_migrations_path).await.map_err(IngesterError::SqlxError)?;
 
     Ok(pg_client)
 }
@@ -75,11 +62,9 @@ pub async fn init_primary_storage(
 
         Storage::apply_all_migrations(
             db_path,
-            migration_storage_path
-                .as_deref()
-                .ok_or(IngesterError::ConfigurationError {
-                    msg: "Migration storage path is not set".to_string(),
-                })?,
+            migration_storage_path.as_deref().ok_or(IngesterError::ConfigurationError {
+                msg: "Migration storage path is not set".to_string(),
+            })?,
             Arc::new(migration_version_manager),
         )
         .await?;
@@ -137,7 +122,7 @@ async fn generate_profiling_gif(heap_path: &str) {
         Err(e) => {
             error!("Cannot get program path: {}", e);
             return;
-        }
+        },
     };
 
     let output = Command::new("sh")

@@ -1,12 +1,12 @@
 use std::{collections::HashSet, fs::File};
 
 use async_trait::async_trait;
+use entities::models::{AssetIndex, FungibleAssetIndex};
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
 
 pub use crate::Result;
 use crate::Storage;
-use entities::models::{AssetIndex, FungibleAssetIndex};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AssetUpdatedKey {
@@ -102,13 +102,11 @@ impl MockAssetIndexStorage {
 
 impl AssetUpdateIndexStorage for MockAssetIndexStorage {
     fn last_known_nft_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
-        self.mock_update_index_storage
-            .last_known_nft_asset_updated_key()
+        self.mock_update_index_storage.last_known_nft_asset_updated_key()
     }
 
     fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
-        self.mock_update_index_storage
-            .last_known_fungible_asset_updated_key()
+        self.mock_update_index_storage.last_known_fungible_asset_updated_key()
     }
 
     fn fetch_nft_asset_updated_keys(
@@ -118,8 +116,7 @@ impl AssetUpdateIndexStorage for MockAssetIndexStorage {
         limit: usize,
         skip_keys: Option<HashSet<Pubkey>>,
     ) -> Result<(HashSet<Pubkey>, Option<AssetUpdatedKey>)> {
-        self.mock_update_index_storage
-            .fetch_nft_asset_updated_keys(from, up_to, limit, skip_keys)
+        self.mock_update_index_storage.fetch_nft_asset_updated_keys(from, up_to, limit, skip_keys)
     }
 
     fn fetch_fungible_asset_updated_keys(
@@ -140,15 +137,11 @@ impl AssetIndexReader for MockAssetIndexStorage {
         &self,
         keys: &[Pubkey],
     ) -> Result<Vec<FungibleAssetIndex>> {
-        self.mock_asset_index_reader
-            .get_fungible_assets_indexes(keys)
-            .await
+        self.mock_asset_index_reader.get_fungible_assets_indexes(keys).await
     }
 
     async fn get_nft_asset_indexes<'a>(&self, keys: &[Pubkey]) -> Result<Vec<AssetIndex>> {
-        self.mock_asset_index_reader
-            .get_nft_asset_indexes(keys)
-            .await
+        self.mock_asset_index_reader.get_nft_asset_indexes(keys).await
     }
 }
 

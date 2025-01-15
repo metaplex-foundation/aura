@@ -1,13 +1,15 @@
-use crate::error::IndexDbError;
-use crate::PgClient;
-use entities::enums::TaskStatus;
-use entities::models::{JsonDownloadTask, Task, UrlWithStatus};
+use std::{collections::VecDeque, sync::Arc};
+
+use entities::{
+    enums::TaskStatus,
+    models::{JsonDownloadTask, Task, UrlWithStatus},
+};
 use metrics_utils::IngesterMetricsConfig;
 use sqlx::{Postgres, QueryBuilder, Row};
-use std::collections::VecDeque;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 use usecase::save_metrics::result_to_metrics;
+
+use crate::{error::IndexDbError, PgClient};
 
 // arbitrary number, should be enough to not overflow batch insert command at Postgre
 pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
@@ -80,9 +82,7 @@ impl PgClient {
                 }
             };
 
-            tasks_buffer
-                .drain(0..number_of_tasks)
-                .collect::<Vec<Task>>()
+            tasks_buffer.drain(0..number_of_tasks).collect::<Vec<Task>>()
         };
 
         tasks_to_insert.extend(tasks);
@@ -151,12 +151,7 @@ impl PgClient {
             let attempts: i16 = row.get("tsk_attempts");
             let max_attempts: i16 = row.get("tsk_max_attempts");
 
-            tasks.push(JsonDownloadTask {
-                metadata_url,
-                status,
-                attempts,
-                max_attempts,
-            });
+            tasks.push(JsonDownloadTask { metadata_url, status, attempts, max_attempts });
         }
 
         Ok(tasks)

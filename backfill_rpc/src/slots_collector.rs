@@ -1,13 +1,16 @@
-use crate::rpc::BackfillRPC;
+use std::{collections::HashSet, str::FromStr};
+
 use async_trait::async_trait;
 use interface::error::UsecaseError;
 use solana_client::rpc_config::RpcBlockConfig;
-use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
-use solana_sdk::signature::Signature;
+use solana_sdk::{
+    commitment_config::{CommitmentConfig, CommitmentLevel},
+    signature::Signature,
+};
 use solana_transaction_status::{EncodedTransaction, TransactionDetails, UiConfirmedBlock};
-use std::collections::HashSet;
-use std::str::FromStr;
 use usecase::slots_collector::SlotsGetter;
+
+use crate::rpc::BackfillRPC;
 
 const TRY_SKIPPED_BLOCKS_COUNT: u64 = 25;
 
@@ -24,9 +27,7 @@ impl SlotsGetter for BackfillRPC {
         let mut slots = HashSet::new();
         let mut before = signature.and_then(|s| Signature::from_str(&s).ok());
         loop {
-            let signatures = self
-                .get_signatures_by_address(None, before, collected_key)
-                .await?;
+            let signatures = self.get_signatures_by_address(None, before, collected_key).await?;
             if signatures.is_empty() {
                 break;
             }
@@ -60,10 +61,7 @@ fn fetch_related_signature(
             continue;
         }
         if let EncodedTransaction::Accounts(tx) = tx.transaction {
-            if tx
-                .account_keys
-                .iter()
-                .any(|a| a.pubkey == collected_key.to_string())
+            if tx.account_keys.iter().any(|a| a.pubkey == collected_key.to_string())
                 && !tx.signatures.is_empty()
             {
                 return Some(tx.signatures[0].clone());

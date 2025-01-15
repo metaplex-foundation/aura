@@ -1,27 +1,35 @@
-use std::collections::HashMap;
-use std::string::ToString;
-use std::sync::Arc;
+use std::{collections::HashMap, string::ToString, sync::Arc};
 
-use entities::api_req_params::{AssetSortDirection, Options};
-use entities::enums::SpecificationAssetClass;
-use entities::models::AssetSignatureWithPagination;
-use interface::asset_sigratures::AssetSignaturesGetter;
-use interface::json::{JsonDownloadResult, JsonDownloader, JsonPersister};
-use rocks_db::columns::offchain_data::{OffChainData, StorageMutability};
-use rocks_db::errors::StorageError;
+use entities::{
+    api_req_params::{AssetSortDirection, Options},
+    enums::SpecificationAssetClass,
+    models::AssetSignatureWithPagination,
+};
+use futures::{stream, StreamExt};
+use interface::{
+    asset_sigratures::AssetSignaturesGetter,
+    json::{JsonDownloadResult, JsonDownloader, JsonPersister},
+    price_fetcher::TokenPriceFetcher,
+    processing_possibility::ProcessingPossibilityChecker,
+};
+use itertools::Itertools;
+use metrics_utils::ApiMetricsConfig;
+use rocks_db::{
+    columns::{
+        asset::{AssetLeaf, AssetSelectedMaps},
+        offchain_data::{OffChainData, StorageMutability},
+    },
+    errors::StorageError,
+    Storage,
+};
 use solana_sdk::pubkey::Pubkey;
+use tokio::{
+    sync::Mutex,
+    task::{JoinError, JoinSet},
+};
 use tracing::error;
 
 use crate::api::dapi::rpc_asset_models::FullAsset;
-use futures::{stream, StreamExt};
-use interface::price_fetcher::TokenPriceFetcher;
-use interface::processing_possibility::ProcessingPossibilityChecker;
-use itertools::Itertools;
-use metrics_utils::ApiMetricsConfig;
-use rocks_db::columns::asset::{AssetLeaf, AssetSelectedMaps};
-use rocks_db::Storage;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
 
 pub const COLLECTION_GROUP_KEY: &str = "collection";
 pub const METADATA_CACHE_TTL: i64 = 86400; // 1 day
@@ -36,37 +44,29 @@ fn convert_rocks_asset_model(
     let data = asset_selected_maps
         .asset_complete_details
         .get(asset_pubkey)
-        .ok_or(StorageError::Common(
-            "No relevant asset_complete_details".to_string(),
-        ))?;
-    let static_data = data.static_details.as_ref().ok_or(StorageError::Common(
-        "No relevant assets_static_data".to_string(),
-    ))?;
-    let dynamic_data = data.dynamic_details.as_ref().ok_or(StorageError::Common(
-        "No relevant asset_dynamic_data".to_string(),
-    ))?;
-    let owner = data.owner.as_ref().ok_or(StorageError::Common(
-        "No relevant assets_owners".to_string(),
-    ))?;
+        .ok_or(StorageError::Common("No relevant asset_complete_details".to_string()))?;
+    let static_data = data
+        .static_details
+        .as_ref()
+        .ok_or(StorageError::Common("No relevant assets_static_data".to_string()))?;
+    let dynamic_data = data
+        .dynamic_details
+        .as_ref()
+        .ok_or(StorageError::Common("No relevant asset_dynamic_data".to_string()))?;
+    let owner =
+        data.owner.as_ref().ok_or(StorageError::Common("No relevant assets_owners".to_string()))?;
 
-    let leaf = asset_selected_maps
-        .assets_leaf
-        .get(asset_pubkey)
-        .cloned()
-        .unwrap_or(AssetLeaf::default()); // Asset may not have a leaf but we still can make the conversion
+    let leaf =
+        asset_selected_maps.assets_leaf.get(asset_pubkey).cloned().unwrap_or(AssetLeaf::default()); // Asset may not have a leaf but we still can make the conversion
 
     let collection_data = data
         .collection
         .as_ref()
         .and_then(|collection| {
-            asset_selected_maps
-                .asset_complete_details
-                .get(&collection.collection.value)
+            asset_selected_maps.asset_complete_details.get(&collection.collection.value)
         })
         .cloned();
-    let collection_dynamic_data = collection_data
-        .as_ref()
-        .and_then(|c| c.dynamic_details.clone());
+    let collection_dynamic_data = collection_data.as_ref().and_then(|c| c.dynamic_details.clone());
 
     let inscription = asset_selected_maps.inscriptions.get(asset_pubkey).cloned();
     Ok(FullAsset {
@@ -84,32 +84,21 @@ fn convert_rocks_asset_model(
             .collection
             .as_ref()
             .and_then(|collection| {
-                asset_selected_maps
-                    .mpl_core_collections
-                    .get(&collection.collection.value)
+                asset_selected_maps.mpl_core_collections.get(&collection.collection.value)
             })
             .cloned(),
         collection_offchain_data: collection_dynamic_data
             .as_ref()
-            .and_then(|dynamic_data| {
-                asset_selected_maps
-                    .offchain_data
-                    .get(&dynamic_data.url.value)
-            })
+            .and_then(|dynamic_data| asset_selected_maps.offchain_data.get(&dynamic_data.url.value))
             .cloned(),
         collection_dynamic_data,
         inscription_data: inscription
             .as_ref()
             .and_then(|inscription| {
-                asset_selected_maps
-                    .inscriptions_data
-                    .get(&inscription.inscription_data_account)
+                asset_selected_maps.inscriptions_data.get(&inscription.inscription_data_account)
             })
             .cloned(),
-        token_account: asset_selected_maps
-            .token_accounts
-            .get(asset_pubkey)
-            .cloned(),
+        token_account: asset_selected_maps.token_accounts.get(asset_pubkey).cloned(),
         inscription,
         spl_mint: asset_selected_maps.spl_mints.get(asset_pubkey).cloned(),
         token_symbol: token_symbols.get(&asset_pubkey.to_string()).cloned(),
@@ -161,14 +150,8 @@ fn asset_selected_maps_into_full_asset(
         .and_then(|url| asset_selected_maps.offchain_data.get(url).cloned())
         .unwrap_or_default();
 
-    convert_rocks_asset_model(
-        id,
-        asset_selected_maps,
-        token_prices,
-        token_symbols,
-        offchain_data,
-    )
-    .ok()
+    convert_rocks_asset_model(id, asset_selected_maps, token_prices, token_symbols, offchain_data)
+        .ok()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -196,10 +179,7 @@ pub async fn get_by_ids<
     }
     // if at least one asset is from inconsistent tree request will not be processed
     if let Some(tree_gaps_checker) = tree_gaps_checker {
-        if !tree_gaps_checker
-            .can_process_assets(asset_ids.as_slice())
-            .await
-        {
+        if !tree_gaps_checker.can_process_assets(asset_ids.as_slice()).await {
             return Err(StorageError::CannotServiceRequest);
         }
     }
@@ -207,18 +187,11 @@ pub async fn get_by_ids<
     // index need to save order of IDs in response
     let mut unique_asset_ids_map = HashMap::new();
     for (index, id) in asset_ids.iter().enumerate() {
-        unique_asset_ids_map
-            .entry(*id)
-            .or_insert_with(Vec::new)
-            .push(index);
+        unique_asset_ids_map.entry(*id).or_insert_with(Vec::new).push(index);
     }
 
     let unique_asset_ids: Vec<Pubkey> = unique_asset_ids_map.keys().cloned().collect();
-    let asset_ids_string = asset_ids
-        .clone()
-        .into_iter()
-        .map(|id| id.to_string())
-        .collect_vec();
+    let asset_ids_string = asset_ids.clone().into_iter().map(|id| id.to_string()).collect_vec();
     let (token_prices, token_symbols) = if options.show_fungible {
         let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids_string.as_slice());
         let token_symbols_fut =
@@ -266,15 +239,15 @@ pub async fn get_by_ids<
                             if metadata.is_empty() {
                                 download_needed = true;
                             }
-                        }
+                        },
                         None => {
                             download_needed = true;
-                        }
+                        },
                     }
-                }
+                },
                 None => {
                     download_needed = true;
-                }
+                },
             }
 
             if download_needed {
@@ -315,7 +288,7 @@ pub async fn get_by_ids<
                                 last_read_at,
                             },
                         );
-                    }
+                    },
                     Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
                         asset_selected_maps.offchain_data.insert(
                             json_url.clone(),
@@ -329,8 +302,8 @@ pub async fn get_by_ids<
                                 last_read_at,
                             },
                         );
-                    }
-                    Err(_) => {}
+                    },
+                    Err(_) => {},
                 }
             }
 
@@ -395,7 +368,7 @@ pub async fn get_asset_signatures(
         (Some(tree_id), Some(leaf_idx), None) => {
             // Directly use tree_id and leaf_idx if both are provided
             (tree_id, leaf_idx)
-        }
+        },
         (None, None, Some(asset_id)) => {
             // if only asset_id is provided, fetch the latest tree and leaf_idx (asset.nonce) for the asset
             // and use them to fetch transactions
@@ -410,13 +383,13 @@ pub async fn get_asset_signatures(
                     // Not found error
                 })?,
             )
-        }
+        },
         _ => {
             // If neither set of parameters is provided, return an error
             return Err(StorageError::Common(
                 "Either 'id' or both 'tree' and 'leafIndex' must be provided".to_string(),
             ));
-        }
+        },
     };
 
     Ok(storage.get_asset_signatures(

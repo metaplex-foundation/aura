@@ -1,22 +1,22 @@
-use crate::column::TypedColumn;
-use crate::key_encoders::{decode_pubkeyx2, decode_pubkeyx3, encode_pubkeyx2, encode_pubkeyx3};
-use crate::Result;
-use crate::Storage;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use bincode::deserialize;
-use entities::models::SplMint;
 use entities::models::{
-    ResponseTokenAccount, TokenAccResponse, TokenAccount, TokenAccountIterableIdx,
+    ResponseTokenAccount, SplMint, TokenAccResponse, TokenAccount, TokenAccountIterableIdx,
     TokenAccountMintOwnerIdxKey, TokenAccountOwnerIdxKey,
 };
-use interface::error::UsecaseError;
-use interface::token_accounts::TokenAccountsGetter;
+use interface::{error::UsecaseError, token_accounts::TokenAccountsGetter};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use tracing::log::error;
 use usecase::response_prettier::filter_non_null_fields;
+
+use crate::{
+    column::TypedColumn,
+    key_encoders::{decode_pubkeyx2, decode_pubkeyx3, encode_pubkeyx2, encode_pubkeyx3},
+    Result, Storage,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenAccountOwnerIdx {
@@ -42,10 +42,7 @@ impl TypedColumn for TokenAccountOwnerIdx {
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
         let (owner, token_account) = decode_pubkeyx2(bytes)?;
-        Ok(TokenAccountOwnerIdxKey {
-            owner,
-            token_account,
-        })
+        Ok(TokenAccountOwnerIdxKey { owner, token_account })
     }
 }
 
@@ -61,11 +58,7 @@ impl TypedColumn for TokenAccountMintOwnerIdx {
 
     fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
         let (mint, owner, token_account) = decode_pubkeyx3(bytes)?;
-        Ok(TokenAccountMintOwnerIdxKey {
-            mint,
-            owner,
-            token_account,
-        })
+        Ok(TokenAccountMintOwnerIdxKey { mint, owner, token_account })
     }
 }
 
@@ -101,14 +94,10 @@ macro_rules! impl_merge_values {
                         Ok(value) => {
                             write_version = value.write_version;
                             result = existing_val.to_vec();
-                        }
+                        },
                         Err(e) => {
-                            error!(
-                                "RocksDB: {} deserialize existing_val: {}",
-                                stringify!($ty),
-                                e
-                            )
-                        }
+                            error!("RocksDB: {} deserialize existing_val: {}", stringify!($ty), e)
+                        },
                     }
                 }
 
@@ -119,10 +108,10 @@ macro_rules! impl_merge_values {
                                 write_version = new_val.write_version;
                                 result = op.to_vec();
                             }
-                        }
+                        },
                         Err(e) => {
                             error!("RocksDB: {} deserialize new_val: {}", stringify!($ty), e)
-                        }
+                        },
                     }
                 }
 
@@ -144,10 +133,10 @@ pub fn merge_token_accounts(
             Ok(value) => {
                 write_version = value.write_version;
                 result = existing_val.to_vec();
-            }
+            },
             Err(e) => {
                 error!("RocksDB: TokenAccount deserialize existing_val: {}", e)
-            }
+            },
         }
     }
 
@@ -158,10 +147,10 @@ pub fn merge_token_accounts(
                     write_version = new_val.write_version;
                     result = op.to_vec();
                 }
-            }
+            },
             Err(e) => {
                 error!("RocksDB: TokenAccount deserialize new_val: {}", e)
-            }
+            },
         }
     }
 
@@ -207,7 +196,7 @@ impl TokenAccountsGetter for Storage {
                     }),
                     self.token_account_owner_idx.handle(),
                 )
-            }
+            },
         };
 
         let iter = self.db.iterator_cf(
@@ -227,17 +216,15 @@ impl TokenAccountsGetter for Storage {
             .flat_map(move |(key, value)| {
                 let mut res = match mint {
                     Some(_) => {
-                        let key = self
-                            .token_account_mint_owner_idx
-                            .decode_key(key.to_vec())
-                            .ok()?;
+                        let key =
+                            self.token_account_mint_owner_idx.decode_key(key.to_vec()).ok()?;
                         TokenAccountIterableIdx {
                             mint: Some(key.mint),
                             owner: key.owner,
                             token_account: key.token_account,
                             is_zero_balance: false,
                         }
-                    }
+                    },
                     None => {
                         let key = self.token_account_owner_idx.decode_key(key.to_vec()).ok()?;
                         TokenAccountIterableIdx {
@@ -246,7 +233,7 @@ impl TokenAccountsGetter for Storage {
                             token_account: key.token_account,
                             is_zero_balance: false,
                         }
-                    }
+                    },
                 };
                 // TokenAccountMintOwnerIdx and TokenAccountOwnerIdx have the same data struct
                 let value: TokenAccountMintOwnerIdx =
@@ -342,10 +329,10 @@ pub fn merge_mints(
             Ok(value) => {
                 write_version = value.write_version;
                 result = existing_val.to_vec();
-            }
+            },
             Err(e) => {
                 error!("RocksDB: SplMint deserialize existing_val: {}", e)
-            }
+            },
         }
     }
 
@@ -356,10 +343,10 @@ pub fn merge_mints(
                     write_version = new_val.write_version;
                     result = op.to_vec();
                 }
-            }
+            },
             Err(e) => {
                 error!("RocksDB: SplMint deserialize new_val: {}", e)
-            }
+            },
         }
     }
 
@@ -418,14 +405,10 @@ impl Storage {
             limit,
             show_zero_balance,
         )? {
-            if limit
-                .map(|limit| pubkeys.len() >= limit as usize)
-                .unwrap_or_default()
+            if limit.map(|limit| pubkeys.len() >= limit as usize).unwrap_or_default()
                 || owner.map(|owner| owner != key.owner).unwrap_or_default()
                 || mint != key.mint
-                || until_token_acc
-                    .map(|k| key.token_account > k)
-                    .unwrap_or_default()
+                || until_token_acc.map(|k| key.token_account > k).unwrap_or_default()
             {
                 break;
             }
@@ -461,9 +444,7 @@ pub fn encode_sorting_key(owner: &Pubkey, token_account: &Pubkey) -> String {
 }
 
 pub fn decode_sorting_key(key: &String) -> std::result::Result<(Pubkey, Pubkey), String> {
-    let decoded = general_purpose::STANDARD_NO_PAD
-        .decode(key)
-        .map_err(|e| e.to_string())?;
+    let decoded = general_purpose::STANDARD_NO_PAD.decode(key).map_err(|e| e.to_string())?;
 
     let mut raw_owner_pubkey = [0; 32];
     raw_owner_pubkey.copy_from_slice(&decoded[0..32]);
@@ -471,8 +452,5 @@ pub fn decode_sorting_key(key: &String) -> std::result::Result<(Pubkey, Pubkey),
     let mut raw_token_pubkey = [0; 32];
     raw_token_pubkey.copy_from_slice(&decoded[32..]);
 
-    Ok((
-        Pubkey::new_from_array(raw_token_pubkey),
-        Pubkey::new_from_array(raw_owner_pubkey),
-    ))
+    Ok((Pubkey::new_from_array(raw_token_pubkey), Pubkey::new_from_array(raw_owner_pubkey)))
 }

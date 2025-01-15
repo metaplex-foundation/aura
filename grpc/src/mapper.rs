@@ -1,14 +1,17 @@
-use crate::error::GrpcError;
-use crate::gapfiller::{
-    AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ChainMutability, ClItem, ClLeaf,
-    Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
-    DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
-    MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType, SpecificationAssetClass,
-    SpecificationVersions, SplMint, TokenStandard, UpdateVersionValue, UseMethod, Uses,
-};
 use entities::models::{AssetCompleteDetailsGrpc, OffChainDataGrpc, UpdateVersion, Updated};
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{hash::Hash, pubkey::Pubkey};
+
+use crate::{
+    error::GrpcError,
+    gapfiller::{
+        AssetCollection, AssetDetails, AssetLeaf, ChainDataV1, ChainMutability, ClItem, ClLeaf,
+        Creator, DynamicBoolField, DynamicBytesField, DynamicChainMutability, DynamicCreatorsField,
+        DynamicEnumField, DynamicStringField, DynamicUint32Field, DynamicUint64Field, EditionV1,
+        MasterEdition, OffchainData, OwnerType, RawBlock, RoyaltyTargetType,
+        SpecificationAssetClass, SpecificationVersions, SplMint, TokenStandard, UpdateVersionValue,
+        UseMethod, Uses,
+    },
+};
 
 impl From<AssetCompleteDetailsGrpc> for AssetDetails {
     fn from(value: AssetCompleteDetailsGrpc) -> Self {
@@ -23,14 +26,11 @@ impl From<AssetCompleteDetailsGrpc> for AssetDetails {
             update_version: value.owner.update_version.map(Into::into),
         });
 
-        let owner_delegate_seq = value
-            .owner_delegate_seq
-            .value
-            .map(|seq| DynamicUint64Field {
-                value: seq,
-                slot_updated: value.owner_delegate_seq.slot_updated,
-                update_version: value.owner_delegate_seq.update_version.map(Into::into),
-            });
+        let owner_delegate_seq = value.owner_delegate_seq.value.map(|seq| DynamicUint64Field {
+            value: seq,
+            slot_updated: value.owner_delegate_seq.slot_updated,
+            update_version: value.owner_delegate_seq.update_version.map(Into::into),
+        });
 
         Self {
             pubkey: value.pubkey.to_bytes().to_vec(),
@@ -94,11 +94,7 @@ impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
         let owner_delegate_seq = value
             .owner_delegate_seq
             .map(|val| {
-                Updated::new(
-                    val.slot_updated,
-                    val.update_version.map(Into::into),
-                    Some(val.value),
-                )
+                Updated::new(val.slot_updated, val.update_version.map(Into::into), Some(val.value))
             })
             .unwrap_or_default();
 
@@ -148,10 +144,7 @@ impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
                 .royalty_amount
                 .map(Into::into)
                 .ok_or(GrpcError::MissingField("royalty_amount".to_string()))?,
-            url: value
-                .url
-                .map(Into::into)
-                .ok_or(GrpcError::MissingField("url".to_string()))?,
+            url: value.url.map(Into::into).ok_or(GrpcError::MissingField("url".to_string()))?,
             chain_mutability: value.chain_mutability.map(TryInto::try_into).transpose()?,
             lamports: value.lamports.map(Into::into),
             executable: value.executable.map(Into::into),
@@ -174,16 +167,8 @@ impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
                 .transpose()?
                 .ok_or(GrpcError::MissingField("authority".to_string()))?,
             // unwrap_or_default used for fields with Update<Option<_>> type
-            owner: value
-                .owner
-                .map(TryInto::try_into)
-                .transpose()?
-                .unwrap_or_default(),
-            delegate: value
-                .delegate
-                .map(TryInto::try_into)
-                .transpose()?
-                .unwrap_or_default(),
+            owner: value.owner.map(TryInto::try_into).transpose()?.unwrap_or_default(),
+            delegate: value.delegate.map(TryInto::try_into).transpose()?.unwrap_or_default(),
             owner_type: value
                 .owner_type
                 .map(TryInto::try_into)
@@ -204,10 +189,9 @@ impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
                 .collect::<Result<Vec<_>, _>>()?,
             edition: value.edition.map(TryInto::try_into).transpose()?,
             master_edition: value.master_edition.map(TryInto::try_into).transpose()?,
-            offchain_data: value.offchain_data.map(|e| OffChainDataGrpc {
-                url: e.url,
-                metadata: e.metadata,
-            }),
+            offchain_data: value
+                .offchain_data
+                .map(|e| OffChainDataGrpc { url: e.url, metadata: e.metadata }),
             spl_mint: value.spl_mint.map(TryInto::try_into).transpose()?,
         })
     }
@@ -261,23 +245,18 @@ impl From<entities::models::SplMint> for SplMint {
 
 impl From<OffChainDataGrpc> for OffchainData {
     fn from(value: OffChainDataGrpc) -> Self {
-        Self {
-            url: value.url,
-            metadata: value.metadata,
-        }
+        Self { url: value.url, metadata: value.metadata }
     }
 }
 
 impl From<UpdateVersion> for UpdateVersionValue {
     fn from(value: UpdateVersion) -> Self {
         match value {
-            UpdateVersion::Sequence(seq) => Self {
-                r#type: crate::gapfiller::UpdateVersion::Sequence.into(),
-                value: seq,
+            UpdateVersion::Sequence(seq) => {
+                Self { r#type: crate::gapfiller::UpdateVersion::Sequence.into(), value: seq }
             },
-            UpdateVersion::WriteVersion(wv) => Self {
-                r#type: crate::gapfiller::UpdateVersion::WriteVersion.into(),
-                value: wv,
+            UpdateVersion::WriteVersion(wv) => {
+                Self { r#type: crate::gapfiller::UpdateVersion::WriteVersion.into(), value: wv }
             },
         }
     }
@@ -732,15 +711,16 @@ impl TryFrom<AssetCollection> for entities::models::AssetCollection {
                 .collection
                 .ok_or(GrpcError::MissingField("collection".to_string()))
                 .and_then(|v| {
-                    Ok::<Updated<Pubkey>, GrpcError>(Updated::new(
-                        v.slot_updated,
-                        v.update_version.map(Into::into),
-                        Pubkey::try_from(v.value).map_err(GrpcError::PubkeyFrom)?,
-                    ))
-                })?,
-            is_collection_verified: value.is_collection_verified.map(|v| v.into()).ok_or(
-                GrpcError::MissingField("is_collection_verified".to_string()),
-            )?,
+                Ok::<Updated<Pubkey>, GrpcError>(Updated::new(
+                    v.slot_updated,
+                    v.update_version.map(Into::into),
+                    Pubkey::try_from(v.value).map_err(GrpcError::PubkeyFrom)?,
+                ))
+            })?,
+            is_collection_verified: value
+                .is_collection_verified
+                .map(|v| v.into())
+                .ok_or(GrpcError::MissingField("is_collection_verified".to_string()))?,
             authority: value
                 .authority
                 .map(|v| {
@@ -798,9 +778,7 @@ impl TryFrom<entities::models::RawBlock> for RawBlock {
     type Error = GrpcError;
 
     fn try_from(value: entities::models::RawBlock) -> Result<Self, Self::Error> {
-        Ok(Self {
-            block: serde_cbor::to_vec(&value).map_err(Into::<GrpcError>::into)?,
-        })
+        Ok(Self { block: serde_cbor::to_vec(&value).map_err(Into::<GrpcError>::into)? })
     }
 }
 
@@ -836,14 +814,7 @@ macro_rules! impl_from_enum {
     };
 }
 
-impl_from_enum!(
-    entities::enums::SpecificationVersions,
-    SpecificationVersions,
-    Unknown,
-    V0,
-    V1,
-    V2
-);
+impl_from_enum!(entities::enums::SpecificationVersions, SpecificationVersions, Unknown, V0, V1, V2);
 impl_from_enum!(
     entities::enums::SpecificationAssetClass,
     SpecificationAssetClass,
@@ -868,13 +839,7 @@ impl_from_enum!(
     Fanout,
     Single
 );
-impl_from_enum!(
-    entities::enums::OwnerType,
-    OwnerType,
-    Unknown,
-    Token,
-    Single
-);
+impl_from_enum!(entities::enums::OwnerType, OwnerType, Unknown, Token, Single);
 impl_from_enum!(
     entities::enums::TokenStandard,
     TokenStandard,
@@ -885,16 +850,5 @@ impl_from_enum!(
     ProgrammableNonFungible,
     ProgrammableNonFungibleEdition
 );
-impl_from_enum!(
-    entities::enums::UseMethod,
-    UseMethod,
-    Burn,
-    Multiple,
-    Single
-);
-impl_from_enum!(
-    entities::enums::ChainMutability,
-    ChainMutability,
-    Immutable,
-    Mutable
-);
+impl_from_enum!(entities::enums::UseMethod, UseMethod, Burn, Multiple, Single);
+impl_from_enum!(entities::enums::ChainMutability, ChainMutability, Immutable, Mutable);

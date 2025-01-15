@@ -1,31 +1,33 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::asset::{
-    AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, FungibleAssetsUpdateIdx,
-    MplCoreCollectionAuthority, SlotAssetIdx, SlotAssetIdxKey, SourcedAssetLeaf,
-};
-use crate::cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey, SourcedClItem};
-use crate::column::TypedColumn;
-use crate::columns::offchain_data::OffChainData;
-use crate::errors::StorageError;
-use crate::generated::asset_generated::asset as fb;
-use crate::key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey};
-use crate::storage_traits::{
-    AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage, AssetUpdatedKey,
-};
-use crate::{
-    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
-    ToFlatbuffersConverter, BATCH_GET_ACTION, BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION,
-    ROCKS_COMPONENT,
-};
 use async_trait::async_trait;
-use entities::enums::{SpecificationAssetClass, TokenMetadataEdition};
-use entities::models::{
-    AssetCompleteDetailsGrpc, AssetIndex, FungibleAssetIndex, UpdateVersion, Updated,
+use entities::{
+    enums::{SpecificationAssetClass, TokenMetadataEdition},
+    models::{AssetCompleteDetailsGrpc, AssetIndex, FungibleAssetIndex, UpdateVersion, Updated},
 };
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
 use tracing::info;
+
+use crate::{
+    asset::{
+        AssetCollection, AssetCompleteDetails, AssetLeaf, AssetsUpdateIdx, FungibleAssetsUpdateIdx,
+        MplCoreCollectionAuthority, SlotAssetIdx, SlotAssetIdxKey, SourcedAssetLeaf,
+    },
+    cl_items::{ClItem, ClItemKey, ClLeaf, ClLeafKey, SourcedClItem},
+    column::TypedColumn,
+    columns::offchain_data::OffChainData,
+    errors::StorageError,
+    generated::asset_generated::asset as fb,
+    key_encoders::{decode_u64x2_pubkey, encode_u64x2_pubkey},
+    storage_traits::{
+        AssetIndexReader, AssetSlotStorage, AssetUpdateIndexStorage, AssetUpdatedKey,
+    },
+    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
+    ToFlatbuffersConverter, BATCH_GET_ACTION, BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION,
+    ROCKS_COMPONENT,
+};
+
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
         _ = self.db.try_catch_up_with_primary();
@@ -87,7 +89,7 @@ impl AssetUpdateIndexStorage for Storage {
                 let mut iter = self.fungible_assets_update_idx.iter(encoded);
                 iter.next(); // Skip the first key, as it is the `from`
                 iter
-            }
+            },
             None => self.fungible_assets_update_idx.iter_start(),
         };
 
@@ -111,10 +113,7 @@ impl AssetUpdateIndexStorage for Storage {
             }
             last_key = Some(decoded_key.clone());
             // Skip keys that are in the skip_keys set
-            if skip_keys
-                .as_ref()
-                .is_some_and(|sk| sk.contains(&decoded_key.pubkey))
-            {
+            if skip_keys.as_ref().is_some_and(|sk| sk.contains(&decoded_key.pubkey)) {
                 continue;
             }
 
@@ -154,7 +153,7 @@ impl AssetUpdateIndexStorage for Storage {
                 let mut iter = self.assets_update_idx.iter(encoded);
                 iter.next(); // Skip the first key, as it is the `from`
                 iter
-            }
+            },
             None => self.assets_update_idx.iter_start(),
         };
 
@@ -177,10 +176,7 @@ impl AssetUpdateIndexStorage for Storage {
             }
             last_key = Some(decoded_key.clone());
             // Skip keys that are in the skip_keys set
-            if skip_keys
-                .as_ref()
-                .is_some_and(|sk| sk.contains(&decoded_key.pubkey))
-            {
+            if skip_keys.as_ref().is_some_and(|sk| sk.contains(&decoded_key.pubkey)) {
                 continue;
             }
 
@@ -226,13 +222,9 @@ impl Storage {
                     }
                     let key =
                         Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
-                    asset
-                        .collection()
-                        .and_then(|c| c.collection())
-                        .and_then(|c| c.value())
-                        .map(|c| {
-                            assets_collection_pks.insert(Pubkey::try_from(c.bytes()).unwrap())
-                        });
+                    asset.collection().and_then(|c| c.collection()).and_then(|c| c.value()).map(
+                        |c| assets_collection_pks.insert(Pubkey::try_from(c.bytes()).unwrap()),
+                    );
                     asset
                         .dynamic_details()
                         .and_then(|d| d.url())
@@ -251,11 +243,8 @@ impl Storage {
     pub async fn get_assets_with_collections_and_urls(
         &self,
         asset_ids: Vec<Pubkey>,
-    ) -> Result<(
-        HashMap<Pubkey, AssetCompleteDetails>,
-        HashSet<Pubkey>,
-        HashMap<Pubkey, String>,
-    )> {
+    ) -> Result<(HashMap<Pubkey, AssetCompleteDetails>, HashSet<Pubkey>, HashMap<Pubkey, String>)>
+    {
         let db = self.db.clone();
         let red_metrics = self.red_metrics.clone();
         tokio::task::spawn_blocking(move || {
@@ -276,13 +265,9 @@ impl Storage {
                         .map_err(|e| StorageError::Common(e.to_string()))?;
                     let key =
                         Pubkey::new_from_array(asset.pubkey().unwrap().bytes().try_into().unwrap());
-                    asset
-                        .collection()
-                        .and_then(|c| c.collection())
-                        .and_then(|c| c.value())
-                        .map(|c| {
-                            assets_collection_pks.insert(Pubkey::try_from(c.bytes()).unwrap())
-                        });
+                    asset.collection().and_then(|c| c.collection()).and_then(|c| c.value()).map(
+                        |c| assets_collection_pks.insert(Pubkey::try_from(c.bytes()).unwrap()),
+                    );
                     asset
                         .dynamic_details()
                         .and_then(|d| d.url())
@@ -353,9 +338,8 @@ impl AssetIndexReader for Storage {
             .flatten()
             .map(|spl_mint| (spl_mint.pubkey, spl_mint.is_nft()))
             .collect::<HashMap<_, _>>();
-        let offchain_data_downloaded_map_fut = self
-            .asset_offchain_data
-            .batch_get(urls.values().map(|u| u.to_string()).collect());
+        let offchain_data_downloaded_map_fut =
+            self.asset_offchain_data.batch_get(urls.values().map(|u| u.to_string()).collect());
 
         let mut mpl_core_collections = HashMap::new();
         let core_collections_iterator = self.db.batched_multi_get_cf(
@@ -388,10 +372,7 @@ impl AssetIndexReader for Storage {
                 off_chain_data.url.is_some() && off_chain_data.metadata.is_some()
             })
             .map(|off_chain_data| {
-                (
-                    off_chain_data.url.unwrap().clone(),
-                    !off_chain_data.metadata.unwrap().is_empty(),
-                )
+                (off_chain_data.url.unwrap().clone(), !off_chain_data.metadata.unwrap().is_empty())
             })
             .collect::<HashMap<_, _>>();
 
@@ -408,10 +389,7 @@ impl AssetIndexReader for Storage {
             // We can not trust this field and have to double check it
             if (asset_index.specification_asset_class == SpecificationAssetClass::FungibleToken
                 || asset_index.specification_asset_class == SpecificationAssetClass::FungibleAsset)
-                && is_nft_map
-                    .get(&asset_index.pubkey)
-                    .copied()
-                    .unwrap_or_default()
+                && is_nft_map.get(&asset_index.pubkey).copied().unwrap_or_default()
             {
                 asset_index.specification_asset_class = SpecificationAssetClass::Nft;
             }
@@ -587,12 +565,10 @@ impl Storage {
         if let Some(off_chain_data) = data.offchain_data {
             let url = off_chain_data.url.clone();
             let off_chain_data = OffChainData::from(off_chain_data);
-            self.asset_offchain_data
-                .merge_with_batch(&mut batch, url, &off_chain_data)?;
+            self.asset_offchain_data.merge_with_batch(&mut batch, url, &off_chain_data)?;
         }
         if let Some(spl_mint) = data.spl_mint {
-            self.spl_mints
-                .merge_with_batch(&mut batch, spl_mint.pubkey, &spl_mint)?;
+            self.spl_mints.merge_with_batch(&mut batch, spl_mint.pubkey, &spl_mint)?;
         }
         self.write_batch(batch).await?;
         Ok(())

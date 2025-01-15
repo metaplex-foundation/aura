@@ -1,28 +1,18 @@
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+
 use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
 use entities::models::RawBlock;
 use futures::future::join_all;
-use interface::signature_persistence::BlockProducer;
-use interface::slot_getter::FinalizedSlotGetter;
-
-use metrics_utils::utils::start_metrics;
-use metrics_utils::{MetricState, MetricsTrait};
-use nft_ingester::backfiller::BackfillSource;
-use nft_ingester::inmemory_slots_dumper::InMemorySlotsDumper;
-use rocks_db::column::TypedColumn;
-use rocks_db::SlotStorage;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast;
-use tokio::sync::Semaphore;
-use tokio_retry::strategy::ExponentialBackoff;
-use tokio_retry::RetryIf;
+use interface::{signature_persistence::BlockProducer, slot_getter::FinalizedSlotGetter};
+use metrics_utils::{utils::start_metrics, MetricState, MetricsTrait};
+use nft_ingester::{backfiller::BackfillSource, inmemory_slots_dumper::InMemorySlotsDumper};
+use rocks_db::{column::TypedColumn, SlotStorage};
+use tokio::sync::{broadcast, Semaphore};
+use tokio_retry::{strategy::ExponentialBackoff, RetryIf};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-use usecase::bigtable::BigTableClient;
-use usecase::slots_collector::SlotsCollector;
+use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
 
 const MAX_RETRIES: usize = 5;
 const INITIAL_DELAY_MS: u64 = 100;
@@ -79,16 +69,12 @@ struct Args {
 }
 
 pub fn get_last_persisted_slot(rocks_db: Arc<SlotStorage>) -> u64 {
-    let mut it = rocks_db
-        .db
-        .raw_iterator_cf(&rocks_db.db.cf_handle(RawBlock::NAME).unwrap());
+    let mut it = rocks_db.db.raw_iterator_cf(&rocks_db.db.cf_handle(RawBlock::NAME).unwrap());
     it.seek_to_last();
     if !it.valid() {
         return 0;
     }
-    it.key()
-        .map(|b| RawBlock::decode_key(b.to_vec()).unwrap_or_default())
-        .unwrap_or_default()
+    it.key().map(|b| RawBlock::decode_key(b.to_vec()).unwrap_or_default()).unwrap_or_default()
 }
 
 #[derive(Debug)]
@@ -121,24 +107,15 @@ async fn fetch_block_with_retries(
                     Err((slot, FetchError::Cancelled))
                 } else {
                     debug!("Fetching slot {}", slot);
-                    match block_getter
-                        .get_block(slot, None::<Arc<BigTableClient>>)
-                        .await
-                    {
+                    match block_getter.get_block(slot, None::<Arc<BigTableClient>>).await {
                         Ok(block_data) => {
                             debug!("Successfully fetched block for slot {}", slot);
-                            Ok((
-                                slot,
-                                RawBlock {
-                                    slot,
-                                    block: block_data,
-                                },
-                            ))
-                        }
+                            Ok((slot, RawBlock { slot, block: block_data }))
+                        },
                         Err(e) => {
                             error!("Error fetching block for slot {}: {}", slot, e);
                             Err((slot, FetchError::Other(e.to_string())))
-                        }
+                        },
                     }
                 }
             }
@@ -200,10 +177,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 info!("Received Ctrl+C, shutting down gracefully...");
                 shutdown_token_clone.cancel();
                 shutdown_tx.send(()).unwrap();
-            }
+            },
             Err(err) => {
                 error!("Unable to listen for shutdown signal: {}", err);
-            }
+            },
         }
     });
 
@@ -254,14 +231,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Total slots to process: {}", provided_slots.len());
 
         // Proceed to process the provided slots
-        process_slots(
-            provided_slots,
-            backfill_source,
-            target_db,
-            &args,
-            shutdown_token.clone(),
-        )
-        .await;
+        process_slots(provided_slots, backfill_source, target_db, &args, shutdown_token.clone())
+            .await;
         return Ok(()); // Exit after processing provided slots
     }
     let mut start_slot = start_slot;
@@ -320,10 +291,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     shutdown_token.clone(),
                 )
                 .await;
-            }
+            },
             Err(e) => {
                 error!("Error getting finalized slot: {}", e);
-            }
+            },
         }
 
         let sleep = tokio::time::sleep(wait_period);
@@ -388,11 +359,11 @@ async fn process_slots(
                 match result {
                     Ok((slot, raw_block)) => {
                         successful_blocks.insert(slot, raw_block);
-                    }
+                    },
                     Err((slot, e)) => {
                         new_failed_slots.push(slot);
                         error!("Failed to fetch slot {}: {:?}", slot, e);
-                    }
+                    },
                 }
             }
 
@@ -402,10 +373,7 @@ async fn process_slots(
                     "All slots fetched successfully for current batch. Saving {} slots to RocksDB.",
                     successful_blocks.len()
                 );
-                if let Err(e) = target_db
-                    .raw_blocks_cbor
-                    .put_batch(successful_blocks.clone())
-                    .await
+                if let Err(e) = target_db.raw_blocks_cbor.put_batch(successful_blocks.clone()).await
                 {
                     error!("Failed to save blocks to RocksDB: {}", e);
                     // Handle error or retry saving as needed
@@ -426,10 +394,7 @@ async fn process_slots(
                 } else {
                     // Successfully saved, proceed to next batch
                     let last_slot = successful_blocks.keys().max().cloned().unwrap_or(0);
-                    info!(
-                        "Successfully saved batch to RocksDB. Last stored slot: {}",
-                        last_slot
-                    );
+                    info!("Successfully saved batch to RocksDB. Last stored slot: {}", last_slot);
                     break;
                 }
             } else {

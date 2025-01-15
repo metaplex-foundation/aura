@@ -2,8 +2,10 @@
 mod tests {
     use entities::enums::OwnershipModel;
     use itertools::Itertools;
-    use nft_ingester::api::dapi::asset_preview::populate_previews_opt;
-    use nft_ingester::api::dapi::rpc_asset_models::{Asset, Content, File, MetadataMap, Ownership};
+    use nft_ingester::api::dapi::{
+        asset_preview::populate_previews_opt,
+        rpc_asset_models::{Asset, Content, File, MetadataMap, Ownership},
+    };
     use rocks_db::columns::asset_previews::AssetPreviews;
     use setup::rocks::RocksTestEnvironment;
     use solana_sdk::keccak::{self, HASH_BYTES};
@@ -15,51 +17,29 @@ mod tests {
 
         // given
         let files = vec![
-            vec![
-                "http://host/url1".to_string(),
-                "http://host/url2".to_string(),
-            ],
+            vec!["http://host/url1".to_string(), "http://host/url2".to_string()],
             vec!["http://host/url3".to_string()],
         ];
 
         rocks_env
             .storage
             .asset_previews
-            .put(
-                keccak::hash("http://host/url1".as_bytes()).to_bytes(),
-                AssetPreviews::new(400),
-            )
+            .put(keccak::hash("http://host/url1".as_bytes()).to_bytes(), AssetPreviews::new(400))
             .unwrap();
         rocks_env
             .storage
             .asset_previews
-            .put(
-                keccak::hash("http://host/url3".as_bytes()).to_bytes(),
-                AssetPreviews::new(400),
-            )
+            .put(keccak::hash("http://host/url3".as_bytes()).to_bytes(), AssetPreviews::new(400))
             .unwrap();
 
-        let mut assets = files
-            .into_iter()
-            .map(|v| Some(test_asset_for_content(v)))
-            .collect_vec();
+        let mut assets = files.into_iter().map(|v| Some(test_asset_for_content(v))).collect_vec();
 
         // when
-        populate_previews_opt("http://storage/", &rocks_env.storage, &mut assets)
-            .await
-            .unwrap();
+        populate_previews_opt("http://storage/", &rocks_env.storage, &mut assets).await.unwrap();
 
         // expected
         assert_eq!(
-            assets[0]
-                .as_ref()
-                .unwrap()
-                .content
-                .as_ref()
-                .unwrap()
-                .files
-                .as_ref()
-                .unwrap()[0]
+            assets[0].as_ref().unwrap().content.as_ref().unwrap().files.as_ref().unwrap()[0]
                 .cdn_uri
                 .as_ref()
                 .unwrap()
@@ -71,29 +51,13 @@ mod tests {
         );
 
         assert_eq!(
-            assets[0]
-                .as_ref()
-                .unwrap()
-                .content
-                .as_ref()
-                .unwrap()
-                .files
-                .as_ref()
-                .unwrap()[1]
+            assets[0].as_ref().unwrap().content.as_ref().unwrap().files.as_ref().unwrap()[1]
                 .cdn_uri,
             None,
         );
 
         assert_eq!(
-            assets[1]
-                .as_ref()
-                .unwrap()
-                .content
-                .as_ref()
-                .unwrap()
-                .files
-                .as_ref()
-                .unwrap()[0]
+            assets[1].as_ref().unwrap().content.as_ref().unwrap().files.as_ref().unwrap()[0]
                 .cdn_uri
                 .as_ref()
                 .unwrap()
@@ -168,8 +132,7 @@ mod tests {
         let cf = &rocks_env.storage.asset_previews;
 
         for i in vec![1, 3, 4, 6, 8] {
-            cf.put(tst_url_hash(i), AssetPreviews::new(i as u32))
-                .unwrap();
+            cf.put(tst_url_hash(i), AssetPreviews::new(i as u32)).unwrap();
         }
 
         // Fetch in not sorted order
@@ -191,8 +154,7 @@ mod tests {
 
         // inserting more records to cause btree change
         for i in vec![7, 0, 5, 2, 10, 9] {
-            cf.put(tst_url_hash(i), AssetPreviews::new(i as u32))
-                .unwrap();
+            cf.put(tst_url_hash(i), AssetPreviews::new(i as u32)).unwrap();
         }
 
         // Fetch again
@@ -246,14 +208,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            assert_eq!(
-                res,
-                vec![
-                    None,
-                    Some(AssetPreviews::new(2)),
-                    Some(AssetPreviews::new(1))
-                ]
-            );
+            assert_eq!(res, vec![None, Some(AssetPreviews::new(2)), Some(AssetPreviews::new(1))]);
         }
     }
 

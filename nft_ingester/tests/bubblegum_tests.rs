@@ -1,29 +1,31 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
+    use std::{
+        fs::File,
+        io::{self, Read},
+        sync::Arc,
+    };
+
     use entities::api_req_params::{GetAsset, GetAssetProof, Options};
     use interface::account_balance::MockAccountBalanceGetter;
-    use metrics_utils::red::RequestErrorDurationMetrics;
-    use metrics_utils::{ApiMetricsConfig, BackfillerMetricsConfig, IngesterMetricsConfig};
-    use nft_ingester::config::JsonMiddlewareConfig;
-    use nft_ingester::json_worker::JsonWorker;
-    use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
-    use nft_ingester::{
-        backfiller::DirectBlockParser, buffer::Buffer,
-        processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
-        transaction_ingester,
+    use metrics_utils::{
+        red::RequestErrorDurationMetrics, ApiMetricsConfig, BackfillerMetricsConfig,
+        IngesterMetricsConfig,
     };
-    use rocks_db::columns::offchain_data::OffChainData;
-    use rocks_db::migrator::MigrationState;
-    use rocks_db::Storage;
+    use nft_ingester::{
+        backfiller::DirectBlockParser, buffer::Buffer, config::JsonMiddlewareConfig,
+        json_worker::JsonWorker,
+        processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
+        raydium_price_fetcher::RaydiumTokenPriceFetcher, transaction_ingester,
+    };
+    use rocks_db::{columns::offchain_data::OffChainData, migrator::MigrationState, Storage};
     use solana_program::pubkey::Pubkey;
-    use std::fs::File;
-    use std::io::{self, Read};
-    use std::sync::Arc;
     use testcontainers::clients::Cli;
-    use tokio::sync::broadcast;
-    use tokio::sync::Mutex;
-    use tokio::task::JoinSet;
+    use tokio::{
+        sync::{broadcast, Mutex},
+        task::JoinSet,
+    };
     use usecase::proofs::MaybeProofChecker;
 
     // corresponds to So11111111111111111111111111111111111111112
@@ -54,11 +56,7 @@ mod tests {
 
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let transactions_storage = Storage::open(
-            &format!(
-                "{}{}",
-                tx_storage_dir.path().to_str().unwrap(),
-                "/test_rocks"
-            ),
+            &format!("{}{}", tx_storage_dir.path().to_str().unwrap(), "/test_rocks"),
             mutexed_tasks.clone(),
             red_metrics.clone(),
             MigrationState::Last,
@@ -133,9 +131,7 @@ mod tests {
         ];
 
         for asset in assets_to_test_proof_for.iter() {
-            let payload = GetAssetProof {
-                id: asset.to_string(),
-            };
+            let payload = GetAssetProof { id: asset.to_string() };
             let proof_result = api.get_asset_proof(payload).await.unwrap();
 
             assert_eq!(proof_result, expected_results[*asset]);
@@ -166,11 +162,7 @@ mod tests {
 
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let transactions_storage = Storage::open(
-            &format!(
-                "{}{}",
-                tx_storage_dir.path().to_str().unwrap(),
-                "/test_rocks"
-            ),
+            &format!("{}{}", tx_storage_dir.path().to_str().unwrap(), "/test_rocks"),
             mutexed_tasks.clone(),
             red_metrics.clone(),
             MigrationState::Last,
@@ -271,10 +263,7 @@ mod tests {
         for asset in assets_to_test_proof_for.iter() {
             let payload = GetAsset {
                 id: asset.to_string(),
-                options: Options {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                options: Options { show_unverified_collections: true, ..Default::default() },
             };
             let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 

@@ -62,10 +62,12 @@ mod tests {
 
         use backfill_rpc::rpc::BackfillRPC;
         use metrics_utils::MetricState;
-        use nft_ingester::backfiller::DirectBlockParser;
-        use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
-        use nft_ingester::sequence_consistent::collect_sequences_gaps;
-        use nft_ingester::transaction_ingester::BackfillTransactionIngester;
+        use nft_ingester::{
+            backfiller::DirectBlockParser,
+            processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
+            sequence_consistent::collect_sequences_gaps,
+            transaction_ingester::BackfillTransactionIngester,
+        };
         use tokio::sync::broadcast;
         use usecase::bigtable::BigTableClient;
         // Tests the following gap is filled: Gap found for MRKt4uPZY5ytQzxvAYEkeGAd3A8ir12khRUNfZvNb5U tree. Sequences: [39739, 39742], slots: [305441204, 305441218]
@@ -75,14 +77,8 @@ mod tests {
         let tree_key =
             solana_program::pubkey::Pubkey::from_str("MRKt4uPZY5ytQzxvAYEkeGAd3A8ir12khRUNfZvNb5U")
                 .unwrap();
-        storage
-            .tree_seq_idx
-            .put((tree_key, 39739), TreeSeqIdx { slot: 305441204 })
-            .unwrap();
-        storage
-            .tree_seq_idx
-            .put((tree_key, 39742), TreeSeqIdx { slot: 305441218 })
-            .unwrap();
+        storage.tree_seq_idx.put((tree_key, 39739), TreeSeqIdx { slot: 305441204 }).unwrap();
+        storage.tree_seq_idx.put((tree_key, 39742), TreeSeqIdx { slot: 305441218 }).unwrap();
 
         let metrics_state = MetricState::new();
         let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
@@ -103,9 +99,8 @@ mod tests {
                 .await
                 .expect("should create bigtable client"),
         );
-        let rpc_backfiller = Arc::new(BackfillRPC::connect(
-            "https://api.mainnet-beta.solana.com".to_string(),
-        ));
+        let rpc_backfiller =
+            Arc::new(BackfillRPC::connect("https://api.mainnet-beta.solana.com".to_string()));
         let (_tx, rx) = broadcast::channel::<()>(1);
         collect_sequences_gaps(
             rpc_backfiller.clone(),
@@ -119,13 +114,9 @@ mod tests {
         )
         .await;
 
-        let it = storage
-            .tree_seq_idx
-            .pairs_iterator(storage.tree_seq_idx.iter_start());
-        let slots: Vec<_> = it
-            .filter(|((k, _), _)| *k == tree_key)
-            .map(|((_, seq), _)| seq)
-            .collect();
+        let it = storage.tree_seq_idx.pairs_iterator(storage.tree_seq_idx.iter_start());
+        let slots: Vec<_> =
+            it.filter(|((k, _), _)| *k == tree_key).map(|((_, seq), _)| seq).collect();
         assert_eq!(slots, vec![39738, 39739, 39740, 39741, 39742]);
     }
 }

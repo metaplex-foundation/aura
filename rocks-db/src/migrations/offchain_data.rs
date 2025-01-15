@@ -1,7 +1,9 @@
 use rocksdb::MergeOperands;
 
-use crate::columns::offchain_data::{OffChainData, OffChainDataDeprecated, StorageMutability};
-use crate::migrator::{RocksMigration, SerializationType};
+use crate::{
+    columns::offchain_data::{OffChainData, OffChainDataDeprecated, StorageMutability},
+    migrator::{RocksMigration, SerializationType},
+};
 
 impl From<OffChainDataDeprecated> for OffChainData {
     fn from(value: OffChainDataDeprecated) -> Self {

@@ -1,16 +1,18 @@
-use entities::enums::{OwnerType, SpecificationAssetClass};
-use entities::models::{Mint, TokenAccount, UpdateVersion, Updated};
-use metrics_utils::IngesterMetricsConfig;
-use rocks_db::batch_savers::BatchSaveStorage;
-use rocks_db::columns::asset::{
-    AssetCompleteDetails, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
-};
-use rocks_db::errors::StorageError;
-use solana_program::pubkey::Pubkey;
 use std::sync::Arc;
+
+use entities::{
+    enums::{OwnerType, SpecificationAssetClass},
+    models::{Mint, TokenAccount, UpdateVersion, Updated},
+};
+use metrics_utils::IngesterMetricsConfig;
+use rocks_db::{
+    batch_savers::BatchSaveStorage,
+    columns::asset::{AssetCompleteDetails, AssetDynamicDetails, AssetOwner, AssetStaticDetails},
+    errors::StorageError,
+};
+use solana_program::pubkey::Pubkey;
 use tokio::time::Instant;
-use usecase::response_prettier::filter_non_null_fields;
-use usecase::save_metrics::result_to_metrics;
+use usecase::{response_prettier::filter_non_null_fields, save_metrics::result_to_metrics};
 
 pub struct TokenAccountsProcessor {
     metrics: Arc<IngesterMetricsConfig>,
@@ -33,8 +35,7 @@ impl TokenAccountsProcessor {
         let begin_processing = Instant::now();
         let res: Result<(), StorageError> = operation(storage);
 
-        self.metrics
-            .set_latency(metric_name, begin_processing.elapsed().as_millis() as f64);
+        self.metrics.set_latency(metric_name, begin_processing.elapsed().as_millis() as f64);
         result_to_metrics(self.metrics.clone(), &res, metric_name);
         res
     }
@@ -134,10 +135,7 @@ impl TokenAccountsProcessor {
                 serde_json::to_value(extensions).map_err(|e| StorageError::Common(e.to_string()))
             })
             .transpose()?;
-        let metadata = mint
-            .extensions
-            .as_ref()
-            .and_then(|extensions| extensions.metadata.clone());
+        let metadata = mint.extensions.as_ref().and_then(|extensions| extensions.metadata.clone());
         let metadata_json = metadata
             .as_ref()
             .map(|metadata| {
@@ -190,11 +188,7 @@ impl TokenAccountsProcessor {
             ..Default::default()
         };
 
-        let owner_type_value = if mint.supply > 1 {
-            OwnerType::Token
-        } else {
-            OwnerType::Single
-        };
+        let owner_type_value = if mint.supply > 1 { OwnerType::Token } else { OwnerType::Single };
         let asset_owner_details = AssetOwner {
             pubkey: mint.pubkey,
             owner_type: Updated::new(

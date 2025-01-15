@@ -1,19 +1,20 @@
+use std::{sync::Arc, time::Duration};
+
 use backfill_rpc::rpc::BackfillRPC;
 use futures::StreamExt;
 use grpc::client::Client;
-use interface::asset_streaming_and_discovery::{AssetDetailsConsumer, RawBlocksConsumer};
-use interface::signature_persistence::{BlockConsumer, BlockProducer};
+use interface::{
+    asset_streaming_and_discovery::{AssetDetailsConsumer, RawBlocksConsumer},
+    signature_persistence::{BlockConsumer, BlockProducer},
+};
 use metrics_utils::{BackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig};
 use rocks_db::Storage;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast::Receiver;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
-use tokio::time::sleep as tokio_sleep;
-use tokio::time::Instant;
-use tracing::error;
-use tracing::log::info;
+use tokio::{
+    sync::{broadcast::Receiver, Mutex},
+    task::{JoinError, JoinSet},
+    time::{sleep as tokio_sleep, Instant},
+};
+use tracing::{error, log::info};
 use usecase::slots_collector::SlotsGetter;
 
 pub async fn process_asset_details_stream_wrapper(
@@ -101,10 +102,7 @@ pub async fn run_sequence_consistent_gapfiller<R, BP, BC>(
         Ok(())
     };
 
-    mutexed_tasks
-        .lock()
-        .await
-        .spawn(run_sequence_consistent_gapfiller);
+    mutexed_tasks.lock().await.spawn(run_sequence_consistent_gapfiller);
 }
 
 /// Method returns the number of successfully processed assets
@@ -170,7 +168,7 @@ pub async fn process_asset_details_stream(
         Err(e) => {
             error!("Error consume asset details stream in range: {e}");
             return 0;
-        }
+        },
     };
 
     let mut processed_assets = 0;
@@ -183,10 +181,10 @@ pub async fn process_asset_details_stream(
                 } else {
                     processed_assets += 1;
                 }
-            }
+            },
             Some(Err(e)) => {
                 error!("Error processing asset details stream item: {e}");
-            }
+            },
             None => return processed_assets,
         }
     }

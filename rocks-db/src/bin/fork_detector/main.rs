@@ -1,16 +1,15 @@
+use std::{env, str::FromStr, sync::Arc, time::Instant};
+
 use entities::models::AssetSignature;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::column::TypedColumn;
-use rocks_db::columns::cl_items::{ClItemKey, ClLeafKey};
-use rocks_db::migrator::MigrationState;
-use rocks_db::{SlotStorage, Storage};
+use rocks_db::{
+    column::TypedColumn,
+    columns::cl_items::{ClItemKey, ClLeafKey},
+    migrator::MigrationState,
+    SlotStorage, Storage,
+};
 use solana_sdk::pubkey::Pubkey;
-use std::env;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Instant;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+use tokio::{sync::Mutex, task::JoinSet};
 
 const BATCH_TO_DROP: usize = 1000;
 
@@ -44,13 +43,9 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
     println!("Opening DB...");
 
     let js = Arc::new(Mutex::new(JoinSet::new()));
-    let source_db = Storage::open(
-        source_path,
-        js.clone(),
-        red_metrics.clone(),
-        MigrationState::Last,
-    )
-    .map_err(|e| e.to_string())?;
+    let source_db =
+        Storage::open(source_path, js.clone(), red_metrics.clone(), MigrationState::Last)
+            .map_err(|e| e.to_string())?;
 
     println!("Opened in {:?}", start.elapsed());
 
@@ -106,10 +101,10 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
                 } else {
                     signatures.push((value.tx, key.seq, value.slot));
                 }
-            }
+            },
             Err(e) => {
                 println!("Error: {:?}", e.to_string());
-            }
+            },
         }
     }
 
@@ -126,19 +121,12 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
     }
 
     if !sequences_to_delete.is_empty() {
-        if let Err(e) = source_db
-            .tree_seq_idx
-            .delete_batch(sequences_to_delete)
-            .await
-        {
+        if let Err(e) = source_db.tree_seq_idx.delete_batch(sequences_to_delete).await {
             println!("Could not drop sequences: {:?}", e.to_string());
         }
     }
 
-    println!(
-        "Found forks and deleted sequences for {:?}",
-        start.elapsed()
-    );
+    println!("Found forks and deleted sequences for {:?}", start.elapsed());
 
     Ok(())
 }
@@ -160,11 +148,8 @@ async fn check_assets_signatures(
         // take slot with highest seq because we merge data in CL_Items column family by sequence
         // meaning even if there was a fork but we got an update with higher sequence from NOT forked slot
         // everything is fine
-        let higher_seq_slot = if last_sig.1 > before_last_sig.1 {
-            last_sig.2
-        } else {
-            before_last_sig.2
-        };
+        let higher_seq_slot =
+            if last_sig.1 > before_last_sig.1 { last_sig.2 } else { before_last_sig.2 };
 
         match slots_db.raw_blocks_cbor.has_key(higher_seq_slot).await {
             Ok(has_block) => {
@@ -203,13 +188,13 @@ async fn check_assets_signatures(
                                             )
                                             .await;
                                         }
-                                    }
+                                    },
                                     Err(e) => {
                                         println!(
                                             "Error during cl_items selecting: {:?}",
                                             e.to_string()
                                         );
-                                    }
+                                    },
                                 }
                             } else {
                                 let tree_pubkey = Pubkey::from_str(&current_asset.0).unwrap();
@@ -230,20 +215,20 @@ async fn check_assets_signatures(
                                 )
                                 .await;
                             }
-                        }
+                        },
                         Err(e) => {
                             println!("Error during leaf selecting: {:?}", e.to_string());
-                        }
+                        },
                     }
                 }
-            }
+            },
             Err(e) => {
                 println!(
                     "Error during block({:?}) selecting: {:?}",
                     higher_seq_slot,
                     e.to_string()
                 );
-            }
+            },
         }
     }
 }
@@ -258,11 +243,7 @@ async fn delete_sequence(
 
     if sequences_to_delete.len() >= BATCH_TO_DROP {
         // clone vec instead of move to try delete data again if error happened
-        if let Err(e) = source_db
-            .tree_seq_idx
-            .delete_batch(sequences_to_delete.clone())
-            .await
-        {
+        if let Err(e) = source_db.tree_seq_idx.delete_batch(sequences_to_delete.clone()).await {
             println!("Could not drop sequences: {:?}", e.to_string());
         } else {
             sequences_to_delete.clear();

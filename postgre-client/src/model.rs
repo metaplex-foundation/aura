@@ -1,8 +1,12 @@
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
+
 use entities::enums::TokenType;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use std::fmt;
-use std::fmt::{Display, Formatter};
+
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "royalty_target_type", rename_all = "snake_case")]
 pub enum RoyaltyTargetType {
@@ -134,9 +138,7 @@ impl From<entities::api_req_params::AssetSorting> for AssetSorting {
     fn from(sorting: entities::api_req_params::AssetSorting) -> Self {
         Self {
             sort_by: sorting.sort_by.into(),
-            sort_direction: sorting
-                .sort_direction
-                .map_or(AssetSortDirection::Desc, |v| v.into()),
+            sort_direction: sorting.sort_direction.map_or(AssetSortDirection::Desc, |v| v.into()),
         }
     }
 }
@@ -168,14 +170,14 @@ impl From<BatchMintState> for entities::enums::BatchMintState {
             BatchMintState::ValidationFail => entities::enums::BatchMintState::ValidationFail,
             BatchMintState::ValidationComplete => {
                 entities::enums::BatchMintState::ValidationComplete
-            }
+            },
             BatchMintState::UploadedToArweave => entities::enums::BatchMintState::UploadedToArweave,
             BatchMintState::FailUploadToArweave => {
                 entities::enums::BatchMintState::FailUploadToArweave
-            }
+            },
             BatchMintState::FailSendingTransaction => {
                 entities::enums::BatchMintState::FailSendingTransaction
-            }
+            },
             BatchMintState::Complete => entities::enums::BatchMintState::Complete,
         }
     }
@@ -205,13 +207,7 @@ mod tests {
     #[test]
     fn test_display_verification_required_field() {
         assert_eq!(VerificationRequiredField::Owner.to_string(), "ast_owner");
-        assert_eq!(
-            VerificationRequiredField::Authority.to_string(),
-            "ast_authority"
-        );
-        assert_eq!(
-            VerificationRequiredField::Group.to_string(),
-            "ast_collection"
-        );
+        assert_eq!(VerificationRequiredField::Authority.to_string(), "ast_authority");
+        assert_eq!(VerificationRequiredField::Group.to_string(), "ast_collection");
     }
 }

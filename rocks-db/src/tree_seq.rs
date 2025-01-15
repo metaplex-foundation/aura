@@ -1,7 +1,7 @@
-use crate::column::TypedColumn;
-use crate::key_encoders;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
+
+use crate::{column::TypedColumn, key_encoders};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TreeSeqIdx {

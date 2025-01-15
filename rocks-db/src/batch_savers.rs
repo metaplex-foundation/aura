@@ -1,22 +1,27 @@
-use crate::asset::{AssetCollection, AssetCompleteDetails, MetadataMintMap};
-use crate::column::TypedColumn;
-use crate::columns::inscriptions::InscriptionData;
-use crate::generated::asset_generated::asset as fb;
-use crate::token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use crate::Result;
-use crate::{AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Storage};
-use entities::enums::TokenMetadataEdition;
-use entities::models::{
-    InscriptionDataInfo, InscriptionInfo, Mint, TokenAccount, TokenAccountMintOwnerIdxKey,
-    TokenAccountOwnerIdxKey,
+use std::sync::Arc;
+
+use entities::{
+    enums::TokenMetadataEdition,
+    models::{
+        InscriptionDataInfo, InscriptionInfo, Mint, TokenAccount, TokenAccountMintOwnerIdxKey,
+        TokenAccountOwnerIdxKey,
+    },
 };
 use metrics_utils::IngesterMetricsConfig;
 use num_traits::Zero;
 use solana_sdk::pubkey::Pubkey;
-use std::sync::Arc;
 use tokio::time::Instant;
 use tracing::error;
 use usecase::save_metrics::result_to_metrics;
+
+use crate::{
+    asset::{AssetCollection, AssetCompleteDetails, MetadataMintMap},
+    column::TypedColumn,
+    columns::inscriptions::InscriptionData,
+    generated::asset_generated::asset as fb,
+    token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx},
+    AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
+};
 
 pub struct BatchSaveStorage {
     storage: Arc<Storage>,
@@ -60,10 +65,7 @@ impl From<&MetadataModels> for AssetCompleteDetails {
 #[macro_export]
 macro_rules! store_assets {
     ($self:expr, $asset:expr, $db_field:ident, $metric_name:expr) => {{
-        let res = $self
-            .storage
-            .$db_field
-            .merge_with_batch(&mut $self.batch, $asset.pubkey, $asset);
+        let res = $self.storage.$db_field.merge_with_batch(&mut $self.batch, $asset.pubkey, $asset);
 
         result_to_metrics($self.metrics.clone(), &res, $metric_name);
         res
@@ -76,29 +78,17 @@ impl BatchSaveStorage {
         batch_size: usize,
         metrics: Arc<IngesterMetricsConfig>,
     ) -> Self {
-        Self {
-            storage,
-            batch_size,
-            batch: Default::default(),
-            metrics,
-        }
+        Self { storage, batch_size, batch: Default::default(), metrics }
     }
 
     pub fn flush(&mut self) -> Result<()> {
-        self.metrics
-            .set_buffer("accounts_batch_size", self.batch.len() as i64);
+        self.metrics.set_buffer("accounts_batch_size", self.batch.len() as i64);
         let begin_processing = Instant::now();
-        let res = self
-            .storage
-            .db
-            .write(std::mem::take(&mut self.batch))
-            .map_err(Into::into);
+        let res = self.storage.db.write(std::mem::take(&mut self.batch)).map_err(Into::into);
 
         result_to_metrics(self.metrics.clone(), &res, "accounts_batch_flush");
-        self.metrics.set_latency(
-            "accounts_batch_flush",
-            begin_processing.elapsed().as_millis() as f64,
-        );
+        self.metrics
+            .set_latency("accounts_batch_flush", begin_processing.elapsed().as_millis() as f64);
         res
     }
     pub fn batch_filled(&self) -> bool {
@@ -106,14 +96,9 @@ impl BatchSaveStorage {
     }
 
     pub fn store_complete(&mut self, data: &AssetCompleteDetails) -> Result<()> {
-        self.storage
-            .merge_compete_details_with_batch(&mut self.batch, data)?;
+        self.storage.merge_compete_details_with_batch(&mut self.batch, data)?;
         let res = Ok(());
-        result_to_metrics(
-            self.metrics.clone(),
-            &res,
-            "accounts_complete_data_merge_with_batch",
-        );
+        result_to_metrics(self.metrics.clone(), &res, "accounts_complete_data_merge_with_batch");
         res
     }
 
@@ -136,18 +121,14 @@ impl BatchSaveStorage {
     }
     pub fn store_spl_mint(&mut self, mint: &Mint) -> Result<()> {
         let res =
-            self.storage
-                .spl_mints
-                .merge_with_batch(&mut self.batch, mint.pubkey, &mint.into());
+            self.storage.spl_mints.merge_with_batch(&mut self.batch, mint.pubkey, &mint.into());
 
         result_to_metrics(self.metrics.clone(), &res, "spl_mints_merge_with_batch");
         res
     }
 
     pub fn store_edition(&mut self, key: Pubkey, edition: &TokenMetadataEdition) -> Result<()> {
-        self.storage
-            .token_metadata_edition_cbor
-            .merge_with_batch(&mut self.batch, key, edition)?;
+        self.storage.token_metadata_edition_cbor.merge_with_batch(&mut self.batch, key, edition)?;
         Ok(())
     }
     pub fn store_inscription(&mut self, inscription: &InscriptionInfo) -> Result<()> {
@@ -175,14 +156,12 @@ impl BatchSaveStorage {
         Ok(())
     }
     pub fn fungible_asset_updated_with_batch(&mut self, slot: u64, pubkey: Pubkey) -> Result<()> {
-        self.storage
-            .fungible_asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
+        self.storage.fungible_asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
         Ok(())
     }
 
     pub fn asset_updated_with_batch(&mut self, slot: u64, pubkey: Pubkey) -> Result<()> {
-        self.storage
-            .asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
+        self.storage.asset_updated_with_batch(&mut self.batch, slot, pubkey)?;
         Ok(())
     }
     pub fn save_token_account_with_idxs(
@@ -190,9 +169,7 @@ impl BatchSaveStorage {
         key: Pubkey,
         token_account: &TokenAccount,
     ) -> Result<()> {
-        self.storage
-            .token_accounts
-            .merge_with_batch(&mut self.batch, key, token_account)?;
+        self.storage.token_accounts.merge_with_batch(&mut self.batch, key, token_account)?;
         self.storage.token_account_owner_idx.merge_with_batch(
             &mut self.batch,
             TokenAccountOwnerIdxKey {
@@ -219,14 +196,11 @@ impl BatchSaveStorage {
     }
 
     pub fn get_authority(&self, address: Pubkey) -> Option<Pubkey> {
-        if let Ok(Some(data)) = self.storage.db.get_pinned_cf(
-            &self
-                .storage
-                .db
-                .cf_handle(AssetCompleteDetails::NAME)
-                .unwrap(),
-            address,
-        ) {
+        if let Ok(Some(data)) = self
+            .storage
+            .db
+            .get_pinned_cf(&self.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(), address)
+        {
             let asset = fb::root_as_asset_complete_details(&data);
             return asset
                 .ok()

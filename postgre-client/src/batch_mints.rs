@@ -1,10 +1,10 @@
-use crate::model::BatchMintState;
-use crate::{PgClient, INSERT_ACTION, SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION};
 use chrono::Utc;
 use entities::models::BatchMintWithState;
-use sqlx::database::HasArguments;
-use sqlx::query::Query;
-use sqlx::{Postgres, QueryBuilder, Row};
+use sqlx::{database::HasArguments, query::Query, Postgres, QueryBuilder, Row};
+
+use crate::{
+    model::BatchMintState, PgClient, INSERT_ACTION, SELECT_ACTION, SQL_COMPONENT, UPDATE_ACTION,
+};
 
 impl PgClient {
     pub async fn insert_new_batch_mint(&self, file_path: &str) -> Result<(), String> {
@@ -17,19 +17,14 @@ impl PgClient {
         );
 
         let query = query_builder.build();
-        query
-            .bind(file_path)
-            .bind(BatchMintState::Uploaded)
-            .execute(&self.pool)
-            .await
-            .map_err(|err| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, INSERT_ACTION, "batch_mints");
+        query.bind(file_path).bind(BatchMintState::Uploaded).execute(&self.pool).await.map_err(
+            |err| {
+                self.metrics.observe_error(SQL_COMPONENT, INSERT_ACTION, "batch_mints");
                 format!("Insert batch_mint: {}", err)
-            })?;
+            },
+        )?;
 
-        self.metrics
-            .observe_request(SQL_COMPONENT, INSERT_ACTION, "batch_mints", start_time);
+        self.metrics.observe_request(SQL_COMPONENT, INSERT_ACTION, "batch_mints", start_time);
 
         Ok(())
     }
@@ -65,11 +60,7 @@ impl PgClient {
             "UPDATE batch_mints SET btm_state = $1, btm_error = $2 WHERE btm_file_name = $3",
         );
         self.update_batch_mint(
-            query_builder
-                .build()
-                .bind(state)
-                .bind(error_message)
-                .bind(file_path),
+            query_builder.build().bind(state).bind(error_message).bind(file_path),
         )
         .await
     }
@@ -101,8 +92,7 @@ impl PgClient {
     ) -> Result<(), String> {
         let mut query_builder =
             QueryBuilder::new("UPDATE batch_mints SET btm_state = $1 WHERE btm_file_name = $2");
-        self.update_batch_mint(query_builder.build().bind(state).bind(file_path))
-            .await
+        self.update_batch_mint(query_builder.build().bind(state).bind(file_path)).await
     }
 
     async fn fetch_batch_mint(
@@ -129,13 +119,11 @@ impl PgClient {
                 })
             })
             .map_err(|e| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "batch_mints");
+                self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "batch_mints");
                 e.to_string()
             })?;
 
-        self.metrics
-            .observe_request(SQL_COMPONENT, SELECT_ACTION, "batch_mints", start_time);
+        self.metrics.observe_request(SQL_COMPONENT, SELECT_ACTION, "batch_mints", start_time);
 
         Ok(result)
     }
@@ -146,13 +134,11 @@ impl PgClient {
     ) -> Result<(), String> {
         let start_time = chrono::Utc::now();
         let result = query.execute(&self.pool).await.map_err(|e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, UPDATE_ACTION, "batch_mints");
+            self.metrics.observe_error(SQL_COMPONENT, UPDATE_ACTION, "batch_mints");
             e.to_string()
         })?;
 
-        self.metrics
-            .observe_request(SQL_COMPONENT, UPDATE_ACTION, "batch_mints", start_time);
+        self.metrics.observe_request(SQL_COMPONENT, UPDATE_ACTION, "batch_mints", start_time);
 
         if result.rows_affected() == 0 {
             return Err("No batch_mint updated".to_string());

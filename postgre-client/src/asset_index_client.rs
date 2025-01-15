@@ -6,6 +6,10 @@ use std::{
 };
 
 use async_trait::async_trait;
+use entities::{
+    enums::AssetType,
+    models::{AssetIndex, Creator, FungibleAssetIndex, FungibleToken, UrlWithStatus},
+};
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Executor, Postgres, QueryBuilder, Transaction};
 use tokio::task::JoinSet;
@@ -18,10 +22,6 @@ use crate::{
     PgClient, BATCH_DELETE_ACTION, BATCH_SELECT_ACTION, BATCH_UPSERT_ACTION, CREATE_ACTION,
     DROP_ACTION, INSERT_TASK_PARAMETERS_COUNT, POSTGRES_PARAMETERS_COUNT_LIMIT, SELECT_ACTION,
     SQL_COMPONENT, TRANSACTION_ACTION, UPDATE_ACTION,
-};
-use entities::{
-    enums::AssetType,
-    models::{AssetIndex, Creator, FungibleAssetIndex, FungibleToken, UrlWithStatus},
 };
 
 pub const INSERT_ASSET_PARAMETERS_COUNT: usize = 19;
@@ -44,11 +44,9 @@ impl PgClient {
         let start_time = chrono::Utc::now();
         let query = query_builder.build_query_as::<(Option<Vec<u8>>,)>();
         let result = query.fetch_one(executor).await.inspect_err(|_e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, SELECT_ACTION, table_name);
+            self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, table_name);
         })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, SELECT_ACTION, table_name, start_time);
+        self.metrics.observe_request(SQL_COMPONENT, SELECT_ACTION, table_name, start_time);
         Ok(result.0)
     }
 
@@ -61,8 +59,7 @@ impl PgClient {
         for fungible_tokens_chunk in fungible_tokens
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_FUNGIBLE_TOKEN_PARAMETERS_COUNT)
         {
-            self.insert_fungible_tokens(transaction, fungible_tokens_chunk, &table_name)
-                .await?;
+            self.insert_fungible_tokens(transaction, fungible_tokens_chunk, &table_name).await?;
         }
         Ok(())
     }
@@ -77,8 +74,7 @@ impl PgClient {
             .metadata_urls
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_TASK_PARAMETERS_COUNT)
         {
-            self.insert_tasks(transaction, chunk, table_names.metadata_table.as_str())
-                .await?;
+            self.insert_tasks(transaction, chunk, table_names.metadata_table.as_str()).await?;
         }
         for chunk in updated_components
             .authorities
@@ -91,15 +87,11 @@ impl PgClient {
             .asset_indexes
             .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT / INSERT_ASSET_PARAMETERS_COUNT)
         {
-            self.insert_assets(transaction, chunk, table_names.assets_table.as_str())
-                .await?;
+            self.insert_assets(transaction, chunk, table_names.assets_table.as_str()).await?;
         }
 
         let mut existing_creators: Vec<(Pubkey, Creator)> = vec![];
-        for chunk in updated_components
-            .updated_keys
-            .chunks(POSTGRES_PARAMETERS_COUNT_LIMIT)
-        {
+        for chunk in updated_components.updated_keys.chunks(POSTGRES_PARAMETERS_COUNT_LIMIT) {
             let creators = self
                 .batch_get_creators(transaction, chunk, table_names.creators_table.as_str())
                 .await?;
@@ -107,12 +99,8 @@ impl PgClient {
         }
         let creator_updates =
             Self::diff(updated_components.all_creators.clone(), existing_creators);
-        self.update_creators(
-            transaction,
-            creator_updates,
-            table_names.creators_table.as_str(),
-        )
-        .await?;
+        self.update_creators(transaction, creator_updates, table_names.creators_table.as_str())
+            .await?;
 
         Ok(())
     }
@@ -218,13 +206,10 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let mut all_creators: Vec<(Pubkey, Creator, i64)> = asset_indexes
         .iter()
         .flat_map(|asset_index: &AssetIndex| {
-            asset_index.creators.iter().map(move |creator| {
-                (
-                    asset_index.pubkey,
-                    creator.clone(),
-                    asset_index.slot_updated,
-                )
-            })
+            asset_index
+                .creators
+                .iter()
+                .map(move |creator| (asset_index.pubkey, creator.clone(), asset_index.slot_updated))
         })
         .collect();
 
@@ -240,17 +225,11 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let mut authorities: HashMap<Pubkey, Authority> = HashMap::new();
     for asset in asset_indexes.iter() {
         let authority = asset.update_authority.or(asset.authority);
-        let authority_key = if asset.update_authority.is_some() {
-            asset.collection
-        } else {
-            Some(asset.pubkey)
-        };
+        let authority_key =
+            if asset.update_authority.is_some() { asset.collection } else { Some(asset.pubkey) };
         if let (Some(authority_key), Some(authority)) = (authority_key, authority) {
-            let new_entry = Authority {
-                key: authority_key,
-                authority,
-                slot_updated: asset.slot_updated,
-            };
+            let new_entry =
+                Authority { key: authority_key, authority, slot_updated: asset.slot_updated };
 
             authorities
                 .entry(authority_key)
@@ -265,13 +244,7 @@ pub(crate) fn split_assets_into_components(asset_indexes: &[AssetIndex]) -> Asse
     let mut authorities = authorities.into_values().collect::<Vec<_>>();
     authorities.sort_by(|a, b| a.key.cmp(&b.key));
 
-    AssetComponenents {
-        metadata_urls,
-        asset_indexes,
-        all_creators,
-        updated_keys,
-        authorities,
-    }
+    AssetComponenents { metadata_urls, asset_indexes, all_creators, updated_keys, authorities }
 }
 
 #[async_trait]
@@ -280,8 +253,7 @@ impl AssetIndexStorage for PgClient {
         &self,
         asset_type: AssetType,
     ) -> Result<Option<Vec<u8>>, IndexDbError> {
-        self.fetch_last_synced_id_impl("last_synced_key", &self.pool, asset_type)
-            .await
+        self.fetch_last_synced_id_impl("last_synced_key", &self.pool, asset_type).await
     }
 
     async fn update_nft_asset_indexes_batch(
@@ -299,9 +271,8 @@ impl AssetIndexStorage for PgClient {
         let mut transaction = self.start_transaction().await?;
 
         // Perform transactional operations
-        let result = self
-            .upsert_batched_nft(&mut transaction, table_names, updated_components)
-            .await;
+        let result =
+            self.upsert_batched_nft(&mut transaction, table_names, updated_components).await;
 
         match result {
             Ok(_) => {
@@ -314,7 +285,7 @@ impl AssetIndexStorage for PgClient {
                     operation_start_time,
                 );
                 Ok(())
-            }
+            },
             Err(e) => {
                 self.rollback_transaction(transaction).await?;
                 self.metrics.observe_request(
@@ -324,7 +295,7 @@ impl AssetIndexStorage for PgClient {
                     operation_start_time,
                 );
                 Err(e)
-            }
+            },
         }
     }
 
@@ -356,7 +327,7 @@ impl AssetIndexStorage for PgClient {
                     operation_start_time,
                 );
                 Ok(())
-            }
+            },
             Err(e) => {
                 self.rollback_transaction(transaction).await?;
                 self.metrics.observe_request(
@@ -366,7 +337,7 @@ impl AssetIndexStorage for PgClient {
                     operation_start_time,
                 );
                 Err(e)
-            }
+            },
         }
     }
     async fn load_from_dump_nfts(
@@ -378,9 +349,7 @@ impl AssetIndexStorage for PgClient {
         semaphore: Arc<NFTSemaphores>,
     ) -> Result<(), IndexDbError> {
         let Some(ref base_path) = self.base_dump_path else {
-            return Err(IndexDbError::BadArgument(
-                "base_dump_path is not set".to_string(),
-            ));
+            return Err(IndexDbError::BadArgument("base_dump_path is not set".to_string()));
         };
         let temp_postfix = Uuid::new_v4().to_string().replace('-', "");
         let mut copy_tasks: JoinSet<Result<(), IndexDbError>> = JoinSet::new();
@@ -408,11 +377,7 @@ impl AssetIndexStorage for PgClient {
             });
         }
 
-        let file_path = base_path
-            .join(metadata_file_name)
-            .to_str()
-            .unwrap_or_default()
-            .to_string();
+        let file_path = base_path.join(metadata_file_name).to_str().unwrap_or_default().to_string();
         let temp_postfix = temp_postfix.clone();
         let cl = self.clone();
         let semaphore = semaphore.metadata.clone();
@@ -449,17 +414,14 @@ impl AssetIndexStorage for PgClient {
 
     async fn destructive_prep_to_batch_nft_load(&self) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
-        match self
-            .destructive_prep_to_batch_nft_load_tx(&mut transaction)
-            .await
-        {
+        match self.destructive_prep_to_batch_nft_load_tx(&mut transaction).await {
             Ok(_) => {
                 self.commit_transaction(transaction).await?;
-            }
+            },
             Err(e) => {
                 self.rollback_transaction(transaction).await?;
                 return Err(e);
-            }
+            },
         }
         Ok(())
     }
@@ -479,17 +441,14 @@ impl AssetIndexStorage for PgClient {
 
     async fn destructive_prep_to_batch_fungible_load(&self) -> Result<(), IndexDbError> {
         let mut transaction = self.start_transaction().await?;
-        match self
-            .destructive_prep_to_batch_fungible_load_tx(&mut transaction)
-            .await
-        {
+        match self.destructive_prep_to_batch_fungible_load_tx(&mut transaction).await {
             Ok(_) => {
                 self.commit_transaction(transaction).await?;
-            }
+            },
             Err(e) => {
                 self.rollback_transaction(transaction).await?;
                 return Err(e);
-            }
+            },
         }
         Ok(())
     }
@@ -498,11 +457,11 @@ impl AssetIndexStorage for PgClient {
         match self.finalize_batch_fungible_load_tx(&mut transaction).await {
             Ok(_) => {
                 self.commit_transaction(transaction).await?;
-            }
+            },
             Err(e) => {
                 self.rollback_transaction(transaction).await?;
                 return Err(e);
-            }
+            },
         }
         Ok(())
     }
@@ -520,11 +479,11 @@ impl AssetIndexStorage for PgClient {
             Ok(_) => {
                 self.commit_transaction(transaction).await?;
                 Ok(())
-            }
+            },
             Err(e) => {
                 self.rollback_transaction(transaction).await?;
                 Err(e)
-            }
+            },
         }
     }
 }
@@ -554,9 +513,7 @@ impl PgClient {
         let mut transaction = self.start_transaction().await?;
 
         // Call the transactional logic method
-        let result = self
-            .get_existing_metadata_keys_logic(&mut transaction)
-            .await;
+        let result = self.get_existing_metadata_keys_logic(&mut transaction).await;
         // Roll back the transaction (since we only used it for the cursor)
         self.rollback_transaction(transaction).await?;
         self.metrics.observe_request(
@@ -588,8 +545,7 @@ impl PgClient {
                 QueryBuilder::new("FETCH 10000 FROM all_tasks");
             let query = query_builder.build_query_as::<TaskIdRawResponse>();
             let rows = query.fetch_all(&mut *transaction).await.map_err(|e| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "FETCH_CURSOR");
+                self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "FETCH_CURSOR");
                 IndexDbError::QueryExecErr(e)
             })?;
 
@@ -658,9 +614,7 @@ impl PgClient {
         query_builder.push(" WHERE (asc_creator, asc_pubkey) IN ");
 
         query_builder.push_tuples(removed_creators, |mut builder, (pubkey, creator)| {
-            builder
-                .push_bind(creator.creator.to_bytes())
-                .push_bind(pubkey.to_bytes());
+            builder.push_bind(creator.creator.to_bytes()).push_bind(pubkey.to_bytes());
         });
         self.execute_query_with_metrics(
             transaction,
@@ -706,18 +660,11 @@ impl PgClient {
             ast_slot_updated) ",
         );
         query_builder.push_values(asset_indexes, |mut builder, asset_index| {
-            let metadata_id = asset_index
-                .metadata_url
-                .as_ref()
-                .map(|u| u.get_metadata_id());
+            let metadata_id = asset_index.metadata_url.as_ref().map(|u| u.get_metadata_id());
             builder
                 .push_bind(asset_index.pubkey.to_bytes().to_vec())
-                .push_bind(SpecificationVersions::from(
-                    asset_index.specification_version,
-                ))
-                .push_bind(SpecificationAssetClass::from(
-                    asset_index.specification_asset_class,
-                ))
+                .push_bind(SpecificationVersions::from(asset_index.specification_version))
+                .push_bind(SpecificationAssetClass::from(asset_index.specification_asset_class))
                 .push_bind(RoyaltyTargetType::from(asset_index.royalty_target_type))
                 .push_bind(asset_index.royalty_amount)
                 .push_bind(asset_index.slot_created)
@@ -902,11 +849,9 @@ impl PgClient {
         let query = query_builder.build_query_as::<CreatorRawResponse>();
         let start_time = chrono::Utc::now();
         let creators_result = query.fetch_all(transaction).await.inspect_err(|_err| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, table);
+            self.metrics.observe_error(SQL_COMPONENT, BATCH_SELECT_ACTION, table);
         })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, table, start_time);
+        self.metrics.observe_request(SQL_COMPONENT, BATCH_SELECT_ACTION, table, start_time);
         Ok(creators_result
             .iter()
             .map(|c| {
@@ -955,15 +900,12 @@ impl PgClient {
                     }) =>
                 {
                     new_or_updated.push((pubkey, creator, slot))
-                }
+                },
                 None => new_or_updated.push((pubkey, creator, slot)),
                 _ => (),
             }
         }
-        CreatorsUpdates {
-            new_or_updated,
-            to_remove,
-        }
+        CreatorsUpdates { new_or_updated, to_remove }
     }
 
     pub(crate) async fn update_last_synced_key(
@@ -976,9 +918,7 @@ impl PgClient {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("UPDATE ");
         query_builder.push(table);
         query_builder.push(" SET last_synced_asset_update_key = ");
-        query_builder
-            .push_bind(last_key)
-            .push(format!(" WHERE id = {}", asset_type as i32));
+        query_builder.push_bind(last_key).push(format!(" WHERE id = {}", asset_type as i32));
         self.execute_query_with_metrics(transaction, &mut query_builder, UPDATE_ACTION, table)
             .await?;
         Ok(())
@@ -1068,11 +1008,8 @@ mod tests {
             (create_pubkey(1), create_creator(1, true), 7000),
             (create_pubkey(2), create_creator(2, false), 8000),
         ];
-        let existing_creators = all_creators
-            .clone()
-            .into_iter()
-            .map(|(pk, c, _)| (pk, c))
-            .collect();
+        let existing_creators =
+            all_creators.clone().into_iter().map(|(pk, c, _)| (pk, c)).collect();
 
         let updates = PgClient::diff(all_creators, existing_creators);
 

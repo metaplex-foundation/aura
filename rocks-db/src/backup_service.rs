@@ -1,17 +1,23 @@
-use crate::errors::BackupServiceError;
+use std::{
+    ffi::OsStr,
+    fs::File,
+    io::{BufReader, Write},
+    path::Path,
+    sync::Arc,
+    time::Duration,
+};
+
 use futures_util::StreamExt;
 use metrics_utils::IngesterMetricsConfig;
-use rocksdb::backup::{BackupEngine, BackupEngineOptions, RestoreOptions};
-use rocksdb::{Env, DB};
+use rocksdb::{
+    backup::{BackupEngine, BackupEngineOptions, RestoreOptions},
+    Env, DB,
+};
 use serde::{Deserialize, Serialize};
-use std::ffi::OsStr;
-use std::fs::File;
-use std::io::{BufReader, Write};
-use std::path::Path;
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
+
+use crate::errors::BackupServiceError;
 
 const BACKUP_PREFIX: &str = "backup-rocksdb";
 const BACKUP_POSTFIX: &str = ".tar.lz4";
@@ -51,11 +57,7 @@ impl BackupService {
         let backup_options = BackupEngineOptions::new(config.rocks_backup_dir.clone())?;
         let backup_engine = BackupEngine::open(&backup_options, &env)?;
 
-        Ok(Self {
-            backup_engine,
-            backup_config: config.clone(),
-            db,
-        })
+        Ok(Self { backup_engine, backup_config: config.clone(), db })
     }
 
     fn create_backup(&mut self, backup_id: u32) -> Result<(), BackupServiceError> {
@@ -84,7 +86,7 @@ impl BackupService {
                         continue;
                     }
                     backup_info.backup_id + 1
-                }
+                },
             };
 
             if let Err(err) = self.create_backup(last_backup_id) {
@@ -124,11 +126,8 @@ impl BackupService {
             BACKUP_POSTFIX
         );
         std::fs::create_dir_all(self.backup_config.rocks_backup_archives_dir.clone())?;
-        let file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(file_path)?;
+        let file =
+            std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(file_path)?;
         let mut enc = lz4::EncoderBuilder::new().level(1).build(file)?;
         let mut tar = tar::Builder::new(&mut enc);
 
@@ -149,9 +148,7 @@ impl BackupService {
         for backup_info in backup_infos.iter() {
             self.verify_backup_single(backup_info.backup_id)?;
             if backup_info.size == 0 {
-                return Err(BackupServiceError::BackupEngineInfoSizeIsZero(
-                    backup_info.backup_id,
-                ));
+                return Err(BackupServiceError::BackupEngineInfoSizeIsZero(backup_info.backup_id));
             }
         }
 
@@ -161,10 +158,7 @@ impl BackupService {
     pub fn verify_backup_single(&self, backup_id: u32) -> Result<(), BackupServiceError> {
         match self.backup_engine.verify_backup(backup_id) {
             Ok(_) => Ok(()),
-            Err(err) => Err(BackupServiceError::BackupEngineInfo(
-                backup_id,
-                err.to_string(),
-            )),
+            Err(err) => Err(BackupServiceError::BackupEngineInfo(backup_id, err.to_string())),
         }
     }
 
@@ -189,8 +183,7 @@ impl BackupService {
 
     pub fn delete_old_backups(&mut self) -> Result<(), BackupServiceError> {
         if self.backup_engine.get_backup_info().capacity() > ROCKS_NUM_BACKUPS_TO_KEEP {
-            self.backup_engine
-                .purge_old_backups(ROCKS_NUM_BACKUPS_TO_KEEP)?;
+            self.backup_engine.purge_old_backups(ROCKS_NUM_BACKUPS_TO_KEEP)?;
         }
 
         Ok(())

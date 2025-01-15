@@ -1,9 +1,9 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use interface::account_balance::AccountBalanceGetter;
-use interface::error::UsecaseError;
+use interface::{account_balance::AccountBalanceGetter, error::UsecaseError};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use std::sync::Arc;
 
 pub struct AccountBalanceGetterImpl {
     client: Arc<RpcClient>,

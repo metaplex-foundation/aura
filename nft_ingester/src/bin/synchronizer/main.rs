@@ -1,20 +1,22 @@
+use std::{path::PathBuf, sync::Arc};
+
 use clap::Parser;
 use entities::enums::ASSET_TYPES;
-use nft_ingester::config::{init_logger, SynchronizerClapArgs};
-use nft_ingester::error::IngesterError;
-use nft_ingester::index_syncronizer::{SyncStatus, Synchronizer};
-use nft_ingester::init::{graceful_stop, init_index_storage_with_migration};
+use metrics_utils::SynchronizerMetricsConfig;
+use nft_ingester::{
+    config::{init_logger, SynchronizerClapArgs},
+    error::IngesterError,
+    index_syncronizer::{SyncStatus, Synchronizer},
+    init::{graceful_stop, init_index_storage_with_migration},
+};
 use postgre_client::PG_MIGRATIONS_PATH;
 use prometheus_client::registry::Registry;
-use std::path::PathBuf;
-use std::sync::Arc;
+use rocks_db::{migrator::MigrationState, Storage};
+use tokio::{
+    sync::{broadcast, Mutex},
+    task::JoinSet,
+};
 use tokio_util::sync::CancellationToken;
-
-use metrics_utils::SynchronizerMetricsConfig;
-use rocks_db::migrator::MigrationState;
-use rocks_db::Storage;
-use tokio::sync::{broadcast, Mutex};
-use tokio::task::JoinSet;
 
 #[cfg(feature = "profiling")]
 #[global_allocator]
@@ -29,12 +31,7 @@ pub async fn main() -> Result<(), IngesterError> {
     tracing::info!("Starting Synchronizer server...");
 
     let guard = if args.is_run_profiling {
-        Some(
-            pprof::ProfilerGuardBuilder::default()
-                .frequency(100)
-                .build()
-                .unwrap(),
-        )
+        Some(pprof::ProfilerGuardBuilder::default().frequency(100).build().unwrap())
     } else {
         None
     };

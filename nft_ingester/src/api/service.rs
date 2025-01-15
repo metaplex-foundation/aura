@@ -1,39 +1,41 @@
+use std::{net::SocketAddr, sync::Arc};
+
 use hyper::{header::CONTENT_TYPE, Body, Method, Request, Response, Server, StatusCode};
-use jsonrpc_http_server::hyper;
-use jsonrpc_http_server::hyper::service::{make_service_fn, service_fn};
-use metrics_utils::red::RequestErrorDurationMetrics;
+use interface::consistency_check::ConsistencyChecker;
+use jsonrpc_http_server::{
+    cors::AccessControlAllowHeaders,
+    hyper,
+    hyper::service::{make_service_fn, service_fn},
+    AccessControlAllowOrigin, DomainsValidation, ServerBuilder,
+};
+use metrics_utils::{red::RequestErrorDurationMetrics, ApiMetricsConfig};
 use multer::Multipart;
 use postgre_client::PgClient;
-use std::sync::Arc;
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
-use tokio::sync::broadcast::Receiver;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
-use tracing::error;
-use tracing::info;
+use rocks_db::Storage;
+use tokio::{
+    fs::File,
+    io::AsyncWriteExt,
+    sync::{broadcast::Receiver, Mutex},
+    task::{JoinError, JoinSet},
+};
+use tracing::{error, info};
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
-use crate::api::backfilling_state_consistency::BackfillingStateConsistencyChecker;
-use interface::consistency_check::ConsistencyChecker;
-use metrics_utils::ApiMetricsConfig;
-use rocks_db::Storage;
-
-use crate::api::account_balance::AccountBalanceGetterImpl;
-use crate::api::error::DasApiError;
-use {crate::api::DasApi, std::net::SocketAddr};
-use {
-    jsonrpc_http_server::cors::AccessControlAllowHeaders,
-    jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
+use crate::{
+    api::{
+        account_balance::AccountBalanceGetterImpl,
+        backfilling_state_consistency::BackfillingStateConsistencyChecker,
+        builder::RpcApiBuilder,
+        error::DasApiError,
+        middleware::{RpcRequestMiddleware, RpcResponseMiddleware},
+        synchronization_state_consistency::SynchronizationStateConsistencyChecker,
+        DasApi,
+    },
+    config::JsonMiddlewareConfig,
+    json_worker::JsonWorker,
+    raydium_price_fetcher::RaydiumTokenPriceFetcher,
 };
-
-use crate::api::builder::RpcApiBuilder;
-use crate::api::middleware::{RpcRequestMiddleware, RpcResponseMiddleware};
-use crate::api::synchronization_state_consistency::SynchronizationStateConsistencyChecker;
-use crate::config::JsonMiddlewareConfig;
-use crate::json_worker::JsonWorker;
-use crate::raydium_price_fetcher::RaydiumTokenPriceFetcher;
 
 pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10);
 // 50kB
@@ -131,11 +133,7 @@ pub async fn start_api(
 
     run_api(
         api,
-        Some(MiddlewaresData {
-            response_middleware,
-            request_middleware,
-            consistency_checkers,
-        }),
+        Some(MiddlewaresData { response_middleware, request_middleware, consistency_checkers }),
         addr,
         tasks,
         batch_mint_service_port,
@@ -166,10 +164,7 @@ async fn run_api(
 ) -> Result<(), DasApiError> {
     let rpc = RpcApiBuilder::build(
         api,
-        middlewares_data
-            .clone()
-            .map(|m| m.consistency_checkers)
-            .unwrap_or_default(),
+        middlewares_data.clone().map(|m| m.consistency_checkers).unwrap_or_default(),
         tasks,
     )?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -181,9 +176,7 @@ async fn run_api(
     let mut builder = ServerBuilder::new(rpc)
         .event_loop_executor(runtime.handle().clone())
         .threads(1)
-        .cors(DomainsValidation::AllowOnly(vec![
-            AccessControlAllowOrigin::Any,
-        ]))
+        .cors(DomainsValidation::AllowOnly(vec![AccessControlAllowOrigin::Any]))
         .cors_allow_headers(AccessControlAllowHeaders::Any)
         .cors_max_age(Some(MAX_CORS_AGE))
         .max_request_body_size(MAX_REQUEST_BODY_SIZE)
@@ -231,10 +224,7 @@ struct BatchMintService {
 
 impl BatchMintService {
     fn new(pg_client: Arc<PgClient>, file_storage_path: String) -> Self {
-        Self {
-            pg_client,
-            file_storage_path,
-        }
+        Self { pg_client, file_storage_path }
     }
 
     fn upload_file_page() -> Response<Body> {
@@ -284,7 +274,7 @@ impl BatchMintService {
                                         .status(StatusCode::INTERNAL_SERVER_ERROR)
                                         .body(Body::from(format!("Failed to read file: {}", e)))
                                         .unwrap())
-                                }
+                                },
                             };
                             if let Err(e) = Self::save_file(&full_file_path, bytes.as_ref()).await {
                                 return Ok(Response::builder()
@@ -301,13 +291,13 @@ impl BatchMintService {
                                 .unwrap());
                         }
                         Ok(Response::new(Body::from("File uploaded successfully")))
-                    }
+                    },
                     None => Ok(Response::builder()
                         .status(StatusCode::BAD_REQUEST)
                         .body(Body::from("BAD REQUEST"))
                         .unwrap()),
                 }
-            }
+            },
             _ => Ok(Response::builder()
                 .status(StatusCode::NOT_FOUND)
                 .body(Body::from("Page not found"))
@@ -332,11 +322,9 @@ async fn run_batch_mint_service(
             }))
         }
     });
-    let server = Server::bind(&addr)
-        .serve(make_svc)
-        .with_graceful_shutdown(async {
-            shutdown_rx.recv().await.unwrap();
-        });
+    let server = Server::bind(&addr).serve(make_svc).with_graceful_shutdown(async {
+        shutdown_rx.recv().await.unwrap();
+    });
     if let Err(e) = server.await {
         error!("server error: {}", e);
     }

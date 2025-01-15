@@ -1,47 +1,57 @@
-use crate::error::IngesterError;
-use crate::flatbuffer_mapper::FlatbufferMapper;
-use crate::plerkle;
-use crate::plerkle::PlerkleTransactionInfo;
-use blockbuster::programs::bubblegum::{BubblegumInstruction, Payload};
+use std::{
+    collections::{HashSet, VecDeque},
+    str::FromStr,
+    sync::Arc,
+};
+
 use blockbuster::{
     instruction::{order_instructions, InstructionBundle, IxPair},
     program_handler::ProgramParser,
-    programs::{bubblegum::BubblegumParser, ProgramParseResult},
+    programs::{
+        bubblegum::{BubblegumInstruction, BubblegumParser, Payload},
+        ProgramParseResult,
+    },
 };
 use bubblegum_batch_sdk::model::BatchMint;
 use chrono::Utc;
-use entities::enums::{
-    ChainMutability, OwnerType, PersistingBatchMintState, RoyaltyTargetType,
-    SpecificationAssetClass, TokenStandard, UseMethod,
+use entities::{
+    enums::{
+        ChainMutability, OwnerType, PersistingBatchMintState, RoyaltyTargetType,
+        SpecificationAssetClass, TokenStandard, UseMethod,
+    },
+    models::{
+        BatchMintToVerify, BufferedTransaction, ChainDataV1, Creator, SignatureWithSlot,
+        UpdateVersion, Updated, Uses,
+    },
 };
-use entities::models::{
-    BatchMintToVerify, BufferedTransaction, SignatureWithSlot, UpdateVersion, Updated,
-};
-use entities::models::{ChainDataV1, Creator, Uses};
 use lazy_static::lazy_static;
 use metrics_utils::IngesterMetricsConfig;
-use mpl_bubblegum::types::LeafSchema;
-use mpl_bubblegum::InstructionName;
+use mpl_bubblegum::{types::LeafSchema, InstructionName};
 use num_traits::FromPrimitive;
-use rocks_db::columns::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner, AssetStaticDetails,
+use rocks_db::{
+    columns::{
+        asset::{
+            AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner,
+            AssetStaticDetails,
+        },
+        offchain_data::OffChainData,
+    },
+    transaction::{
+        AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
+        TreeUpdate,
+    },
+    Storage,
 };
-use rocks_db::columns::offchain_data::OffChainData;
-use rocks_db::transaction::{
-    AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
-    TreeUpdate,
-};
-use rocks_db::Storage;
 use serde_json::json;
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use std::collections::{HashSet, VecDeque};
-use std::str::FromStr;
-use std::sync::Arc;
+use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
 use tokio::time::Instant;
 use tracing::{debug, error};
 use usecase::save_metrics::result_to_metrics;
+
+use crate::{
+    error::IngesterError, flatbuffer_mapper::FlatbufferMapper, plerkle,
+    plerkle::PlerkleTransactionInfo,
+};
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
 const BATCH_MINT_BATCH_FLUSH_SIZE: usize = 10_000;
@@ -106,10 +116,8 @@ impl BubblegumTxProcessor {
             .map_err(|e| IngesterError::DatabaseError(e.to_string()));
 
         result_to_metrics(self.metrics.clone(), &res, "process_transaction");
-        self.metrics.set_latency(
-            "process_transaction",
-            begin_processing.elapsed().as_millis() as f64,
-        );
+        self.metrics
+            .set_latency("process_transaction", begin_processing.elapsed().as_millis() as f64);
 
         res
     }
@@ -129,9 +137,8 @@ impl BubblegumTxProcessor {
                     utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
                         &data.transaction,
                     ).unwrap();
-            transaction_info_bytes = transaction_parser
-                .map_tx_fb_bytes(tx_update, seen_at)
-                .unwrap();
+            transaction_info_bytes =
+                transaction_parser.map_tx_fb_bytes(tx_update, seen_at).unwrap();
         }
         let transaction_info =
             plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())
@@ -167,7 +174,7 @@ impl BubblegumTxProcessor {
             InstructionName::FinalizeTreeWithRoot => "FinalizeTreeWithRoot",
             InstructionName::FinalizeTreeWithRootAndCollection => {
                 "FinalizeTreeWithRootAndCollection"
-            }
+            },
         }
     }
 
@@ -211,14 +218,12 @@ impl BubblegumTxProcessor {
                 ));
             }
             let ix_accounts =
-                ix_accounts
-                    .iter()
-                    .fold(Vec::with_capacity(ix_account_len), |mut acc, a| {
-                        if let Some(key) = tx.account_keys.get(*a as usize) {
-                            acc.push(*key);
-                        }
-                        acc
-                    });
+                ix_accounts.iter().fold(Vec::with_capacity(ix_account_len), |mut acc, a| {
+                    if let Some(key) = tx.account_keys.get(*a as usize) {
+                        acc.push(*key);
+                    }
+                    acc
+                });
             let ix = InstructionBundle {
                 txn_id: &signature.to_string(),
                 program,
@@ -239,17 +244,14 @@ impl BubblegumTxProcessor {
                 match ix_parse_res {
                     Ok(ix_result) => {
                         transaction_result.instruction_results.push(ix_result);
-                    }
+                    },
                     Err(e) => {
-                        error!(
-                            "Failed to handle bubblegum instruction for txn {}: {:?}",
-                            sig, e
-                        );
+                        error!("Failed to handle bubblegum instruction for txn {}: {:?}", sig, e);
                         return Err(IngesterError::TransactionParsingError(format!(
                             "Failed to parse transaction: {:?}",
                             sig
                         )));
-                    }
+                    },
                 };
             }
         }
@@ -282,51 +284,47 @@ impl BubblegumTxProcessor {
         let instruction: Result<InstructionResult, IngesterError> = match ix_type {
             InstructionName::Transfer
             | InstructionName::CancelRedeem
-            | InstructionName::Delegate => Self::get_update_owner_update(parsing_result, bundle)
-                .map(From::from)
-                .map(Ok)?,
-            InstructionName::Burn => Self::get_burn_update(parsing_result, bundle)
-                .map(From::from)
-                .map(Ok)?,
+            | InstructionName::Delegate => {
+                Self::get_update_owner_update(parsing_result, bundle).map(From::from).map(Ok)?
+            },
+            InstructionName::Burn => {
+                Self::get_burn_update(parsing_result, bundle).map(From::from).map(Ok)?
+            },
             InstructionName::MintV1 | InstructionName::MintToCollectionV1 => {
-                Self::get_mint_v1_update(parsing_result, bundle.slot)
-                    .map(From::from)
-                    .map(Ok)?
-            }
-            InstructionName::Redeem => Self::get_redeem_update(parsing_result, bundle)
-                .map(From::from)
-                .map(Ok)?,
+                Self::get_mint_v1_update(parsing_result, bundle.slot).map(From::from).map(Ok)?
+            },
+            InstructionName::Redeem => {
+                Self::get_redeem_update(parsing_result, bundle).map(From::from).map(Ok)?
+            },
             InstructionName::DecompressV1 => Ok(Self::get_decompress_update(bundle).into()), // no change log here? really?
             InstructionName::VerifyCreator | InstructionName::UnverifyCreator => {
                 Self::get_creator_verification_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
-            }
+            },
             InstructionName::VerifyCollection
             | InstructionName::UnverifyCollection
             | InstructionName::SetAndVerifyCollection => {
                 Self::get_collection_verification_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
-            }
+            },
             InstructionName::UpdateMetadata => {
-                Self::get_update_metadata_update(parsing_result, bundle)
-                    .map(From::from)
-                    .map(Ok)?
-            }
+                Self::get_update_metadata_update(parsing_result, bundle).map(From::from).map(Ok)?
+            },
             InstructionName::FinalizeTreeWithRoot
             | InstructionName::FinalizeTreeWithRootAndCollection => {
                 Self::get_create_tree_with_root_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
-            }
+            },
             _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
                 Ok(InstructionResult::default())
-            } // InstructionName::Unknown => todo!(),
-              // InstructionName::Compress => todo!(),
-              // InstructionName::CreateTree => todo!(),
-              // InstructionName::SetDecompressibleState => todo!(),
+            }, // InstructionName::Unknown => todo!(),
+               // InstructionName::Compress => todo!(),
+               // InstructionName::CreateTree => todo!(),
+               // InstructionName::SetDecompressibleState => todo!(),
         };
         let mut instruction = instruction?;
         instruction.tree_update = tree_update;
@@ -356,9 +354,7 @@ impl BubblegumTxProcessor {
             return Ok(upd);
         }
 
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
     pub fn get_update_owner_update(
@@ -367,12 +363,7 @@ impl BubblegumTxProcessor {
     ) -> Result<AssetUpdateEvent, IngesterError> {
         if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
             match le.schema {
-                LeafSchema::V1 {
-                    id,
-                    owner,
-                    delegate,
-                    ..
-                } => {
+                LeafSchema::V1 { id, owner, delegate, .. } => {
                     let leaf = Some(AssetLeaf {
                         pubkey: id,
                         tree_id: cl.id,
@@ -414,19 +405,14 @@ impl BubblegumTxProcessor {
                             leaf,
                             dynamic_data: None,
                         }),
-                        owner_update: Some(AssetUpdate {
-                            pk: id,
-                            details: owner,
-                        }),
+                        owner_update: Some(AssetUpdate { pk: id, details: owner }),
                         ..Default::default()
                     };
                     return Ok(asset_update);
-                }
+                },
             }
         }
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
     pub fn get_burn_update(
@@ -435,11 +421,7 @@ impl BubblegumTxProcessor {
     ) -> Result<AssetUpdateEvent, IngesterError> {
         if let Some(cl) = &parsing_result.tree_update {
             let (asset_id, _) = Pubkey::find_program_address(
-                &[
-                    "asset".as_bytes(),
-                    cl.id.as_ref(),
-                    Self::u32_to_u8_array(cl.index).as_ref(),
-                ],
+                &["asset".as_bytes(), cl.id.as_ref(), Self::u32_to_u8_array(cl.index).as_ref()],
                 &mpl_bubblegum::ID,
             );
 
@@ -479,41 +461,21 @@ impl BubblegumTxProcessor {
             return Ok(asset_update);
         }
 
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
     pub fn get_mint_v1_update(
         parsing_result: &BubblegumInstruction,
         slot: u64,
     ) -> Result<AssetUpdateEvent, IngesterError> {
-        if let (
-            Some(le),
-            Some(cl),
-            Some(Payload::MintV1 {
-                args,
-                authority,
-                tree_id,
-            }),
-        ) = (
-            &parsing_result.leaf_update,
-            &parsing_result.tree_update,
-            &parsing_result.payload,
-        ) {
-            let mut asset_update = AssetUpdateEvent {
-                ..Default::default()
-            };
+        if let (Some(le), Some(cl), Some(Payload::MintV1 { args, authority, tree_id })) =
+            (&parsing_result.leaf_update, &parsing_result.tree_update, &parsing_result.payload)
+        {
+            let mut asset_update = AssetUpdateEvent { ..Default::default() };
 
             let uri = args.uri.trim().replace('\0', "");
             match le.schema {
-                LeafSchema::V1 {
-                    id,
-                    delegate,
-                    owner,
-                    nonce,
-                    ..
-                } => {
+                LeafSchema::V1 { id, delegate, owner, nonce, .. } => {
                     let chain_mutability = match args.is_mutable {
                         true => ChainMutability::Mutable,
                         false => ChainMutability::Immutable,
@@ -541,10 +503,8 @@ impl BubblegumTxProcessor {
                         created_at: slot as i64,
                         edition_address: None,
                     };
-                    asset_update.static_update = Some(AssetUpdate {
-                        pk: id,
-                        details: asset_static_details,
-                    });
+                    asset_update.static_update =
+                        Some(AssetUpdate { pk: id, details: asset_static_details });
 
                     let creators = {
                         let mut creators = vec![];
@@ -627,10 +587,8 @@ impl BubblegumTxProcessor {
                         slot_updated: slot,
                         write_version: None,
                     };
-                    asset_update.authority_update = Some(AssetUpdate {
-                        pk: id,
-                        details: asset_authority,
-                    });
+                    asset_update.authority_update =
+                        Some(AssetUpdate { pk: id, details: asset_authority });
                     let owner = AssetOwner {
                         pubkey: id,
                         owner: Updated::new(
@@ -655,10 +613,7 @@ impl BubblegumTxProcessor {
                             true,
                         ),
                     };
-                    asset_update.owner_update = Some(AssetUpdate {
-                        pk: id,
-                        details: owner,
-                    });
+                    asset_update.owner_update = Some(AssetUpdate { pk: id, details: owner });
 
                     if let Some(collection) = &args.collection {
                         let asset_collection = AssetCollection {
@@ -679,19 +634,15 @@ impl BubblegumTxProcessor {
                                 None,
                             ),
                         };
-                        asset_update.collection_update = Some(AssetUpdate {
-                            pk: id,
-                            details: asset_collection,
-                        });
+                        asset_update.collection_update =
+                            Some(AssetUpdate { pk: id, details: asset_collection });
                     }
-                }
+                },
             }
 
             return Ok(asset_update);
         }
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
     pub fn get_redeem_update(
@@ -701,11 +652,7 @@ impl BubblegumTxProcessor {
         if let Some(cl) = &parsing_result.tree_update {
             let leaf_index = cl.index;
             let (asset_id, _) = Pubkey::find_program_address(
-                &[
-                    "asset".as_bytes(),
-                    cl.id.as_ref(),
-                    Self::u32_to_u8_array(leaf_index).as_ref(),
-                ],
+                &["asset".as_bytes(), cl.id.as_ref(), Self::u32_to_u8_array(leaf_index).as_ref()],
                 &mpl_bubblegum::ID,
             );
 
@@ -732,9 +679,7 @@ impl BubblegumTxProcessor {
             return Ok(asset_update);
         }
 
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
     pub fn get_decompress_update(bundle: &InstructionBundle) -> AssetUpdate<AssetDynamicDetails> {
@@ -756,17 +701,11 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
-        if let (Some(le), Some(cl), Some(payload)) = (
-            &parsing_result.leaf_update,
-            &parsing_result.tree_update,
-            &parsing_result.payload,
-        ) {
+        if let (Some(le), Some(cl), Some(payload)) =
+            (&parsing_result.leaf_update, &parsing_result.tree_update, &parsing_result.payload)
+        {
             let updated_creators = match payload {
-                Payload::CreatorVerification {
-                    metadata,
-                    creator,
-                    verify,
-                } => {
+                Payload::CreatorVerification { metadata, creator, verify } => {
                     let updated_creators: Vec<Creator> = metadata
                         .creators
                         .iter()
@@ -785,23 +724,14 @@ impl BubblegumTxProcessor {
                         .collect();
 
                     updated_creators
-                }
+                },
                 _ => {
-                    return Err(IngesterError::ParsingError(
-                        "Ix not parsed correctly".to_string(),
-                    ));
-                }
+                    return Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()));
+                },
             };
-            let mut asset_update = AssetUpdateEvent {
-                ..Default::default()
-            };
+            let mut asset_update = AssetUpdateEvent { ..Default::default() };
             match le.schema {
-                LeafSchema::V1 {
-                    id,
-                    owner,
-                    delegate,
-                    ..
-                } => {
+                LeafSchema::V1 { id, owner, delegate, .. } => {
                     asset_update.update = Some(AssetDynamicUpdate {
                         pk: id,
                         slot: bundle.slot,
@@ -865,42 +795,33 @@ impl BubblegumTxProcessor {
                             true,
                         ),
                     };
-                    asset_update.owner_update = Some(AssetUpdate {
-                        pk: id,
-                        details: owner,
-                    });
-                }
+                    asset_update.owner_update = Some(AssetUpdate { pk: id, details: owner });
+                },
             }
 
             return Ok(asset_update);
         }
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
     pub fn get_collection_verification_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
-        if let (Some(le), Some(cl), Some(payload)) = (
-            &parsing_result.leaf_update,
-            &parsing_result.tree_update,
-            &parsing_result.payload,
-        ) {
-            let mut asset_update = AssetUpdateEvent {
-                ..Default::default()
-            };
+        if let (Some(le), Some(cl), Some(payload)) =
+            (&parsing_result.leaf_update, &parsing_result.tree_update, &parsing_result.payload)
+        {
+            let mut asset_update = AssetUpdateEvent { ..Default::default() };
 
             let (collection, verify) = match payload {
-                Payload::CollectionVerification {
-                    collection, verify, ..
-                } => (*collection, *verify),
+                Payload::CollectionVerification { collection, verify, .. } => {
+                    (*collection, *verify)
+                },
                 _ => {
                     return Err(IngesterError::DatabaseError(
                         "Ix not parsed correctly".to_string(),
                     ));
-                }
+                },
             };
 
             match le.schema {
@@ -940,18 +861,14 @@ impl BubblegumTxProcessor {
                         ),
                     };
 
-                    asset_update.collection_update = Some(AssetUpdate {
-                        pk: id,
-                        details: collection,
-                    });
-                }
+                    asset_update.collection_update =
+                        Some(AssetUpdate { pk: id, details: collection });
+                },
             }
 
             return Ok(asset_update);
         };
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
     pub fn get_update_metadata_update(
@@ -961,19 +878,10 @@ impl BubblegumTxProcessor {
         if let (
             Some(le),
             Some(cl),
-            Some(Payload::UpdateMetadata {
-                current_metadata,
-                update_args,
-                tree_id,
-            }),
-        ) = (
-            &parsing_result.leaf_update,
-            &parsing_result.tree_update,
-            &parsing_result.payload,
-        ) {
-            let mut asset_update = AssetUpdateEvent {
-                ..Default::default()
-            };
+            Some(Payload::UpdateMetadata { current_metadata, update_args, tree_id }),
+        ) = (&parsing_result.leaf_update, &parsing_result.tree_update, &parsing_result.payload)
+        {
+            let mut asset_update = AssetUpdateEvent { ..Default::default() };
 
             return match le.schema {
                 LeafSchema::V1 { id, nonce, .. } => {
@@ -1111,12 +1019,10 @@ impl BubblegumTxProcessor {
                     });
 
                     Ok(asset_update)
-                }
+                },
             };
         }
-        Err(IngesterError::ParsingError(
-            "Ix not parsed correctly".to_string(),
-        ))
+        Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
     pub async fn store_batch_mint_update(
@@ -1167,15 +1073,11 @@ impl BubblegumTxProcessor {
 
             transaction_result.instruction_results.push(ix);
             if transaction_result.instruction_results.len() >= BATCH_MINT_BATCH_FLUSH_SIZE {
-                rocks_db
-                    .store_transaction_result(&transaction_result, false, false)
-                    .await?;
+                rocks_db.store_transaction_result(&transaction_result, false, false).await?;
                 transaction_result.instruction_results.clear();
             }
         }
-        rocks_db
-            .store_transaction_result(&transaction_result, true, false)
-            .await?;
+        rocks_db.store_transaction_result(&transaction_result, true, false).await?;
 
         Ok(())
     }
@@ -1192,11 +1094,8 @@ fn use_method_from_mpl_bubblegum_state(
 }
 
 fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Updated<Option<Pubkey>> {
-    let delegate = if owner == delegate || delegate.to_bytes() == [0; 32] {
-        None
-    } else {
-        Some(delegate)
-    };
+    let delegate =
+        if owner == delegate || delegate.to_bytes() == [0; 32] { None } else { Some(delegate) };
 
     Updated::new(slot, Some(UpdateVersion::Sequence(seq)), delegate)
 }

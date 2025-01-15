@@ -1,3 +1,5 @@
+use std::{collections::HashSet, fs::File, sync::Arc};
+
 use entities::enums::AssetType;
 use metrics_utils::SynchronizerMetricsConfig;
 use num_bigint::BigUint;
@@ -7,7 +9,6 @@ use rocks_db::{
     storage_traits::{AssetIndexStorage as AssetIndexSourceStorage, AssetUpdatedKey},
 };
 use solana_sdk::pubkey::Pubkey;
-use std::{collections::HashSet, fs::File, sync::Arc};
 use tokio::task::JoinSet;
 use tracing::warn;
 
@@ -72,10 +73,7 @@ where
         timeout_duration: tokio::time::Duration,
     ) {
         while rx.is_empty() {
-            if let Err(e) = self
-                .synchronize_nft_asset_indexes(rx, run_full_sync_threshold)
-                .await
-            {
+            if let Err(e) = self.synchronize_nft_asset_indexes(rx, run_full_sync_threshold).await {
                 tracing::error!("Non fungible synchronization failed: {:?}", e);
             } else {
                 tracing::info!("Non fungible synchronization finished successfully");
@@ -93,9 +91,8 @@ where
         timeout_duration: tokio::time::Duration,
     ) {
         while rx.is_empty() {
-            if let Err(e) = self
-                .synchronize_fungible_asset_indexes(rx, run_full_sync_threshold)
-                .await
+            if let Err(e) =
+                self.synchronize_fungible_asset_indexes(rx, run_full_sync_threshold).await
             {
                 tracing::error!("Fungible synchronization failed: {:?}", e);
             } else {
@@ -117,15 +114,12 @@ where
 
         // Fetch the last known key from the primary storage
         let (last_key, prefix) = match asset_type {
-            AssetType::NonFungible => (
-                self.primary_storage.last_known_nft_asset_updated_key()?,
-                "nft",
-            ),
-            AssetType::Fungible => (
-                self.primary_storage
-                    .last_known_fungible_asset_updated_key()?,
-                "fungible",
-            ),
+            AssetType::NonFungible => {
+                (self.primary_storage.last_known_nft_asset_updated_key()?, "nft")
+            },
+            AssetType::Fungible => {
+                (self.primary_storage.last_known_fungible_asset_updated_key()?, "fungible")
+            },
         };
         let Some(last_key) = last_key else {
             return Ok(SyncStatus::NoSyncRequired);
@@ -149,10 +143,7 @@ where
 
         self.metrics.set_last_synchronized_slot(
             &format!("last_synchronized_{}_slot", prefix),
-            last_indexed_key
-                .as_ref()
-                .map(|k| k.slot)
-                .unwrap_or_default() as i64,
+            last_indexed_key.as_ref().map(|k| k.slot).unwrap_or_default() as i64,
         );
         self.metrics.set_last_synchronized_slot(
             &format!("last_synchronized_{}_seq", prefix),
@@ -186,13 +177,11 @@ where
     ) -> Result<(), IngesterError> {
         match asset_type {
             AssetType::NonFungible => {
-                self.synchronize_nft_asset_indexes(rx, run_full_sync_threshold)
-                    .await
-            }
+                self.synchronize_nft_asset_indexes(rx, run_full_sync_threshold).await
+            },
             AssetType::Fungible => {
-                self.synchronize_fungible_asset_indexes(rx, run_full_sync_threshold)
-                    .await
-            }
+                self.synchronize_fungible_asset_indexes(rx, run_full_sync_threshold).await
+            },
         }
     }
 
@@ -203,19 +192,15 @@ where
     ) -> Result<(), IngesterError> {
         let asset_type = AssetType::NonFungible;
 
-        let state = self
-            .get_sync_state(run_full_sync_threshold, asset_type)
-            .await?;
+        let state = self.get_sync_state(run_full_sync_threshold, asset_type).await?;
         match state {
             SyncStatus::FullSyncRequired(state) => {
                 tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
-                self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await
-            }
+                self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key).await
+            },
             SyncStatus::RegularSyncRequired(state) => {
-                self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await
-            }
+                self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key).await
+            },
             SyncStatus::NoSyncRequired => Ok(()),
         }
     }
@@ -227,20 +212,18 @@ where
     ) -> Result<(), IngesterError> {
         let asset_type = AssetType::Fungible;
 
-        let state = self
-            .get_sync_state(run_full_sync_threshold, asset_type)
-            .await?;
+        let state = self.get_sync_state(run_full_sync_threshold, asset_type).await?;
 
         match state {
             SyncStatus::FullSyncRequired(state) => {
                 tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
                     .await
-            }
+            },
             SyncStatus::RegularSyncRequired(state) => {
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
                     .await
-            }
+            },
             SyncStatus::NoSyncRequired => Ok(()),
         }
     }
@@ -252,20 +235,14 @@ where
     ) -> Result<(), IngesterError> {
         let last_known_key = match asset_type {
             AssetType::NonFungible => self.primary_storage.last_known_nft_asset_updated_key()?,
-            AssetType::Fungible => self
-                .primary_storage
-                .last_known_fungible_asset_updated_key()?,
+            AssetType::Fungible => self.primary_storage.last_known_fungible_asset_updated_key()?,
         };
         let Some(last_known_key) = last_known_key else {
             return Ok(());
         };
-        let last_included_rocks_key = encode_u64x2_pubkey(
-            last_known_key.seq,
-            last_known_key.slot,
-            last_known_key.pubkey,
-        );
-        self.dump_sync(last_included_rocks_key.as_slice(), rx, asset_type)
-            .await
+        let last_included_rocks_key =
+            encode_u64x2_pubkey(last_known_key.seq, last_known_key.slot, last_known_key.pubkey);
+        self.dump_sync(last_included_rocks_key.as_slice(), rx, asset_type).await
     }
 
     async fn dump_sync(
@@ -274,21 +251,15 @@ where
         rx: &tokio::sync::broadcast::Receiver<()>,
         asset_type: AssetType,
     ) -> Result<(), IngesterError> {
-        tracing::info!(
-            "Dumping {:?} from the primary storage to {}",
-            asset_type,
-            self.dump_path
-        );
+        tracing::info!("Dumping {:?} from the primary storage to {}", asset_type, self.dump_path);
 
         match asset_type {
             AssetType::NonFungible => {
-                self.dump_sync_nft(rx, last_included_rocks_key, NFT_SHARDS)
-                    .await?;
-            }
+                self.dump_sync_nft(rx, last_included_rocks_key, NFT_SHARDS).await?;
+            },
             AssetType::Fungible => {
-                self.dump_sync_fungibles(rx, last_included_rocks_key, FUNGIBLE_SHARDS)
-                    .await?;
-            }
+                self.dump_sync_fungibles(rx, last_included_rocks_key, FUNGIBLE_SHARDS).await?;
+            },
         }
 
         tracing::info!("{:?} Dump is complete and loaded", asset_type);
@@ -302,19 +273,14 @@ where
         num_shards: u64,
     ) -> Result<(), IngesterError> {
         let base_path = std::path::Path::new(self.dump_path.as_str());
-        self.index_storage
-            .destructive_prep_to_batch_nft_load()
-            .await?;
+        self.index_storage.destructive_prep_to_batch_nft_load().await?;
 
         let shards = shard_pubkeys(num_shards);
         type ResultWithPaths = Result<(usize, String, String, String, String), String>;
         let mut tasks: JoinSet<ResultWithPaths> = JoinSet::new();
         for (start, end) in shards.iter() {
-            let name_postfix = if num_shards > 1 {
-                format!("_shard_{}_{}", start, end)
-            } else {
-                "".to_string()
-            };
+            let name_postfix =
+                if num_shards > 1 { format!("_shard_{}_{}", start, end) } else { "".to_string() };
             let creators_path = base_path
                 .join(format!("creators{}.csv", name_postfix))
                 .to_str()
@@ -399,8 +365,7 @@ where
             });
         }
         while let Some(task) = index_tasks.join_next().await {
-            task.map_err(|e| e.to_string())?
-                .map_err(|e| e.to_string())?;
+            task.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
         }
         tracing::info!("All NFT assets loads complete. Finalizing the batch load");
         self.index_storage.finalize_batch_nft_load().await?;
@@ -418,18 +383,13 @@ where
         num_shards: u64,
     ) -> Result<(), IngesterError> {
         let base_path = std::path::Path::new(self.dump_path.as_str());
-        self.index_storage
-            .destructive_prep_to_batch_fungible_load()
-            .await?;
+        self.index_storage.destructive_prep_to_batch_fungible_load().await?;
 
         let shards = shard_pubkeys(num_shards);
         let mut tasks: JoinSet<Result<(usize, String), String>> = JoinSet::new();
         for (start, end) in shards.iter() {
-            let name_postfix = if num_shards > 1 {
-                format!("_shard_{}_{}", start, end)
-            } else {
-                "".to_string()
-            };
+            let name_postfix =
+                if num_shards > 1 { format!("_shard_{}_{}", start, end) } else { "".to_string() };
 
             let fungible_tokens_path = base_path
                 .join(format!("fungible_tokens{}.csv", name_postfix))
@@ -472,8 +432,7 @@ where
             });
         }
         while let Some(task) = index_tasks.join_next().await {
-            task.map_err(|e| e.to_string())?
-                .map_err(|e| e.to_string())?;
+            task.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
         }
         tracing::info!("All token accounts/fungibles loads complete. Finalizing the batch load");
         self.index_storage.finalize_batch_fungible_load().await?;
@@ -542,8 +501,7 @@ where
             }
 
             while let Some(task) = tasks.join_next().await {
-                task.map_err(|e| e.to_string())?
-                    .map_err(|e| e.to_string())?;
+                task.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
             }
             if let Some(last_included_rocks_key) = last_included_rocks_key {
                 self.metrics.set_last_synchronized_slot(
@@ -570,8 +528,7 @@ where
                 break;
             }
         }
-        self.metrics
-            .inc_number_of_records_synchronized("synchronization_runs", 1);
+        self.metrics.inc_number_of_records_synchronized("synchronization_runs", 1);
         Ok(())
     }
 
@@ -633,8 +590,7 @@ where
             }
 
             while let Some(task) = tasks.join_next().await {
-                task.map_err(|e| e.to_string())?
-                    .map_err(|e| e.to_string())?;
+                task.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
             }
             if let Some(last_included_rocks_key) = last_included_rocks_key {
                 self.metrics.set_last_synchronized_slot(
@@ -661,8 +617,7 @@ where
                 break;
             }
         }
-        self.metrics
-            .inc_number_of_records_synchronized("synchronization_runs", 1);
+        self.metrics.inc_number_of_records_synchronized("synchronization_runs", 1);
         Ok(())
     }
 
@@ -672,18 +627,14 @@ where
         updated_keys_refs: &[Pubkey],
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), IngesterError> {
-        let asset_indexes = primary_storage
-            .get_nft_asset_indexes(updated_keys_refs)
-            .await?;
+        let asset_indexes = primary_storage.get_nft_asset_indexes(updated_keys_refs).await?;
 
         if asset_indexes.is_empty() {
             warn!("No asset indexes found for keys: {:?}", updated_keys_refs);
             return Ok(());
         }
 
-        index_storage
-            .update_nft_asset_indexes_batch(asset_indexes.as_slice())
-            .await?;
+        index_storage.update_nft_asset_indexes_batch(asset_indexes.as_slice()).await?;
         metrics.inc_number_of_records_synchronized(
             "synchronized_records",
             updated_keys_refs.len() as u64,
@@ -697,18 +648,14 @@ where
         updated_keys_refs: &[Pubkey],
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), IngesterError> {
-        let asset_indexes = primary_storage
-            .get_fungible_assets_indexes(updated_keys_refs)
-            .await?;
+        let asset_indexes = primary_storage.get_fungible_assets_indexes(updated_keys_refs).await?;
 
         if asset_indexes.is_empty() {
             warn!("No asset indexes found for keys: {:?}", updated_keys_refs);
             return Ok(());
         }
 
-        index_storage
-            .update_fungible_asset_indexes_batch(asset_indexes.as_slice())
-            .await?;
+        index_storage.update_fungible_asset_indexes_batch(asset_indexes.as_slice()).await?;
         metrics.inc_number_of_records_synchronized(
             "synchronized_records",
             updated_keys_refs.len() as u64,
@@ -742,10 +689,7 @@ pub fn shard_pubkeys(num_shards: u64) -> Vec<(Pubkey, Pubkey)> {
         let start_pubkey = pad_to_32_bytes(&shard_start_bytes);
         let end_pubkey = pad_to_32_bytes(&shard_end_bytes);
 
-        shards.push((
-            Pubkey::new_from_array(start_pubkey),
-            Pubkey::new_from_array(end_pubkey),
-        ));
+        shards.push((Pubkey::new_from_array(start_pubkey), Pubkey::new_from_array(end_pubkey)));
     }
 
     shards
@@ -761,7 +705,6 @@ fn pad_to_32_bytes(bytes: &[u8]) -> [u8; 32] {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use entities::{
         enums::ASSET_TYPES,
         models::{AssetIndex, UrlWithStatus},
@@ -771,6 +714,8 @@ mod tests {
     use postgre_client::storage_traits::MockAssetIndexStorageMock;
     use rocks_db::storage_traits::MockAssetIndexStorage as MockPrimaryStorage;
     use tokio;
+
+    use super::*;
 
     fn create_test_asset_index(pubkey: &Pubkey) -> AssetIndex {
         AssetIndex {
@@ -814,10 +759,7 @@ mod tests {
         let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
 
-        index_storage
-            .expect_fetch_last_synced_id()
-            .once()
-            .return_once(|_| Ok(None));
+        index_storage.expect_fetch_last_synced_id().once().return_once(|_| Ok(None));
 
         primary_storage
             .mock_update_index_storage
@@ -843,20 +785,14 @@ mod tests {
             match asset_type {
                 AssetType::Fungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
             }
         }
     }
@@ -868,10 +804,7 @@ mod tests {
         let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
         ASSET_TYPES.iter().for_each(|_e| {
-            index_storage
-                .expect_fetch_last_synced_id()
-                .once()
-                .return_once(|_| Ok(None));
+            index_storage.expect_fetch_last_synced_id().once().return_once(|_| Ok(None));
         });
 
         let key = Pubkey::new_from_array([1u8; 32]);
@@ -910,10 +843,7 @@ mod tests {
             .return_once(|_| Ok(()));
         index_storage
             .expect_update_last_synced_key()
-            .with(
-                mockall::predicate::eq(binary_key),
-                mockall::predicate::eq(AssetType::Fungible),
-            )
+            .with(mockall::predicate::eq(binary_key), mockall::predicate::eq(AssetType::Fungible))
             .once()
             .return_once(|_, _| Ok(()));
         let synchronizer = Synchronizer::new(
@@ -933,20 +863,14 @@ mod tests {
             match asset_type {
                 AssetType::Fungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
             }
         }
     }
@@ -960,10 +884,7 @@ mod tests {
 
         // Index storage starts empty
         ASSET_TYPES.iter().for_each(|_| {
-            index_storage
-                .expect_fetch_last_synced_id()
-                .once()
-                .return_once(|_| Ok(None));
+            index_storage.expect_fetch_last_synced_id().once().return_once(|_| Ok(None));
         });
 
         let key = Pubkey::new_from_array([1u8; 32]);
@@ -1011,10 +932,7 @@ mod tests {
             .return_once(|_| Ok(()));
         index_storage
             .expect_update_last_synced_key()
-            .with(
-                mockall::predicate::eq(binary_key),
-                mockall::predicate::eq(AssetType::Fungible),
-            )
+            .with(mockall::predicate::eq(binary_key), mockall::predicate::eq(AssetType::Fungible))
             .once()
             .return_once(|_, _| Ok(()));
 
@@ -1035,20 +953,14 @@ mod tests {
             match asset_type {
                 AssetType::Fungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
             }
         }
     }
@@ -1103,10 +1015,7 @@ mod tests {
             .returning(move |_, _, _, _| {
                 call_count += 1;
                 if call_count == 1 {
-                    Ok((
-                        updated_keys_first_call.clone(),
-                        Some(index_key_first_batch.clone()),
-                    ))
+                    Ok((updated_keys_first_call.clone(), Some(index_key_first_batch.clone())))
                 } else {
                     Ok((
                         updated_keys_second_call.clone(),
@@ -1121,18 +1030,16 @@ mod tests {
         let indexes_second_batch_vec = expected_indexes_first_batch.clone();
         let expected_indexes_second_batch: Vec<AssetIndex> = expected_indexes_first_batch.clone();
         let mut call_count2 = 0;
-        primary_storage
-            .mock_asset_index_reader
-            .expect_get_nft_asset_indexes()
-            .times(2)
-            .returning(move |_| {
+        primary_storage.mock_asset_index_reader.expect_get_nft_asset_indexes().times(2).returning(
+            move |_| {
                 call_count2 += 1;
                 if call_count2 == 1 {
                     Ok(indexes_first_batch_vec.clone())
                 } else {
                     Ok(indexes_second_batch_vec.clone())
                 }
-            });
+            },
+        );
 
         index_storage
             .expect_update_nft_asset_indexes_batch()
@@ -1150,9 +1057,7 @@ mod tests {
 
         index_storage
             .expect_update_nft_asset_indexes_batch()
-            .with(mockall::predicate::eq(
-                expected_indexes_second_batch.clone(),
-            ))
+            .with(mockall::predicate::eq(expected_indexes_second_batch.clone()))
             .once()
             .return_once(|_| Ok(()));
         index_storage
@@ -1181,20 +1086,14 @@ mod tests {
             match asset_type {
                 AssetType::Fungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
             }
         }
     }
@@ -1217,23 +1116,17 @@ mod tests {
 
         ASSET_TYPES.iter().for_each(|_| {
             let index_key_clone = index_key.clone();
-            index_storage
-                .expect_fetch_last_synced_id()
-                .once()
-                .return_once(move |_| {
-                    Ok(Some(encode_u64x2_pubkey(
-                        index_key_clone.seq,
-                        index_key_clone.slot,
-                        index_key_clone.pubkey.clone(),
-                    )))
-                });
+            index_storage.expect_fetch_last_synced_id().once().return_once(move |_| {
+                Ok(Some(encode_u64x2_pubkey(
+                    index_key_clone.seq,
+                    index_key_clone.slot,
+                    index_key_clone.pubkey.clone(),
+                )))
+            });
         });
 
         // Expect no calls to fetch_asset_updated_keys since databases are synced
-        primary_storage
-            .mock_update_index_storage
-            .expect_fetch_nft_asset_updated_keys()
-            .never();
+        primary_storage.mock_update_index_storage.expect_fetch_nft_asset_updated_keys().never();
 
         let synchronizer = Synchronizer::new(
             Arc::new(primary_storage),
@@ -1252,20 +1145,14 @@ mod tests {
             match asset_type {
                 AssetType::Fungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
                 AssetType::NonFungible => {
                     tokio::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(&rx, 0)
-                            .await
-                            .unwrap();
+                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
                     });
-                }
+                },
             }
         }
     }
@@ -1276,10 +1163,7 @@ mod tests {
         assert_eq!(shards.len(), 1);
         assert_eq!(
             shards[0],
-            (
-                Pubkey::new_from_array([0; 32]),
-                Pubkey::new_from_array([0xff; 32])
-            )
+            (Pubkey::new_from_array([0; 32]), Pubkey::new_from_array([0xff; 32]))
         );
     }
 

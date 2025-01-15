@@ -2,8 +2,7 @@
 
 // @generated
 
-use core::cmp::Ordering;
-use core::mem;
+use core::{cmp::Ordering, mem};
 
 extern crate flatbuffers;
 use self::flatbuffers::{EndianScalar, Follow};
@@ -11,8 +10,7 @@ use self::flatbuffers::{EndianScalar, Follow};
 #[allow(unused_imports, dead_code)]
 pub mod asset {
 
-    use core::cmp::Ordering;
-    use core::mem;
+    use core::{cmp::Ordering, mem};
 
     extern crate flatbuffers;
     use self::flatbuffers::{EndianScalar, Follow};
@@ -448,11 +446,8 @@ pub mod asset {
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_UPDATE_VERSION_TYPE: [UpdateVersionType; 3] = [
-        UpdateVersionType::None,
-        UpdateVersionType::Sequence,
-        UpdateVersionType::WriteVersion,
-    ];
+    pub const ENUM_VALUES_UPDATE_VERSION_TYPE: [UpdateVersionType; 3] =
+        [UpdateVersionType::None, UpdateVersionType::Sequence, UpdateVersionType::WriteVersion];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
     #[repr(transparent)]
@@ -539,9 +534,7 @@ pub mod asset {
         type Inner = UpdateVersion<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -588,11 +581,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(UpdateVersion::VT_VERSION_VALUE, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(UpdateVersion::VT_VERSION_VALUE, Some(0)).unwrap() }
         }
     }
 
@@ -617,10 +606,7 @@ pub mod asset {
     impl<'a> Default for UpdateVersionArgs {
         #[inline]
         fn default() -> Self {
-            UpdateVersionArgs {
-                version_type: UpdateVersionType::None,
-                version_value: 0,
-            }
+            UpdateVersionArgs { version_type: UpdateVersionType::None, version_value: 0 }
         }
     }
 
@@ -639,18 +625,14 @@ pub mod asset {
         }
         #[inline]
         pub fn add_version_value(&mut self, version_value: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdateVersion::VT_VERSION_VALUE, version_value, 0);
+            self.fbb_.push_slot::<u64>(UpdateVersion::VT_VERSION_VALUE, version_value, 0);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdateVersionBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdateVersionBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdateVersionBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdateVersion<'a>> {
@@ -678,9 +660,7 @@ pub mod asset {
         type Inner = UpdatedBool<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -717,11 +697,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(UpdatedBool::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(UpdatedBool::VT_SLOT_UPDATED, Some(0)).unwrap() }
         }
         #[inline]
         pub fn update_version(&self) -> Option<UpdateVersion<'a>> {
@@ -729,11 +705,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
-                        UpdatedBool::VT_UPDATE_VERSION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
+                    UpdatedBool::VT_UPDATE_VERSION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -741,11 +716,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<bool>(UpdatedBool::VT_VALUE, Some(false))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<bool>(UpdatedBool::VT_VALUE, Some(false)).unwrap() }
         }
     }
 
@@ -776,11 +747,7 @@ pub mod asset {
     impl<'a> Default for UpdatedBoolArgs<'a> {
         #[inline]
         fn default() -> Self {
-            UpdatedBoolArgs {
-                slot_updated: 0,
-                update_version: None,
-                value: false,
-            }
+            UpdatedBoolArgs { slot_updated: 0, update_version: None, value: false }
         }
     }
 
@@ -791,34 +758,28 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UpdatedBoolBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdatedBool::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(UpdatedBool::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_update_version(
             &mut self,
             update_version: flatbuffers::WIPOffset<UpdateVersion<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
-                    UpdatedBool::VT_UPDATE_VERSION,
-                    update_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
+                UpdatedBool::VT_UPDATE_VERSION,
+                update_version,
+            );
         }
         #[inline]
         pub fn add_value(&mut self, value: bool) {
-            self.fbb_
-                .push_slot::<bool>(UpdatedBool::VT_VALUE, value, false);
+            self.fbb_.push_slot::<bool>(UpdatedBool::VT_VALUE, value, false);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdatedBoolBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdatedBoolBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdatedBoolBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdatedBool<'a>> {
@@ -847,9 +808,7 @@ pub mod asset {
         type Inner = UpdatedU64<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -886,11 +845,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(UpdatedU64::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(UpdatedU64::VT_SLOT_UPDATED, Some(0)).unwrap() }
         }
         #[inline]
         pub fn update_version(&self) -> Option<UpdateVersion<'a>> {
@@ -898,11 +853,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
-                        UpdatedU64::VT_UPDATE_VERSION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
+                    UpdatedU64::VT_UPDATE_VERSION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -941,11 +895,7 @@ pub mod asset {
     impl<'a> Default for UpdatedU64Args<'a> {
         #[inline]
         fn default() -> Self {
-            UpdatedU64Args {
-                slot_updated: 0,
-                update_version: None,
-                value: 0,
-            }
+            UpdatedU64Args { slot_updated: 0, update_version: None, value: 0 }
         }
     }
 
@@ -956,19 +906,17 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UpdatedU64Builder<'a, 'b, A> {
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdatedU64::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(UpdatedU64::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_update_version(
             &mut self,
             update_version: flatbuffers::WIPOffset<UpdateVersion<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
-                    UpdatedU64::VT_UPDATE_VERSION,
-                    update_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
+                UpdatedU64::VT_UPDATE_VERSION,
+                update_version,
+            );
         }
         #[inline]
         pub fn add_value(&mut self, value: u64) {
@@ -979,10 +927,7 @@ pub mod asset {
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdatedU64Builder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdatedU64Builder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdatedU64Builder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdatedU64<'a>> {
@@ -1011,9 +956,7 @@ pub mod asset {
         type Inner = UpdatedU32<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -1050,11 +993,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(UpdatedU32::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(UpdatedU32::VT_SLOT_UPDATED, Some(0)).unwrap() }
         }
         #[inline]
         pub fn update_version(&self) -> Option<UpdateVersion<'a>> {
@@ -1062,11 +1001,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
-                        UpdatedU32::VT_UPDATE_VERSION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
+                    UpdatedU32::VT_UPDATE_VERSION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -1105,11 +1043,7 @@ pub mod asset {
     impl<'a> Default for UpdatedU32Args<'a> {
         #[inline]
         fn default() -> Self {
-            UpdatedU32Args {
-                slot_updated: 0,
-                update_version: None,
-                value: 0,
-            }
+            UpdatedU32Args { slot_updated: 0, update_version: None, value: 0 }
         }
     }
 
@@ -1120,19 +1054,17 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UpdatedU32Builder<'a, 'b, A> {
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdatedU32::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(UpdatedU32::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_update_version(
             &mut self,
             update_version: flatbuffers::WIPOffset<UpdateVersion<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
-                    UpdatedU32::VT_UPDATE_VERSION,
-                    update_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
+                UpdatedU32::VT_UPDATE_VERSION,
+                update_version,
+            );
         }
         #[inline]
         pub fn add_value(&mut self, value: u32) {
@@ -1143,10 +1075,7 @@ pub mod asset {
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdatedU32Builder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdatedU32Builder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdatedU32Builder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdatedU32<'a>> {
@@ -1175,9 +1104,7 @@ pub mod asset {
         type Inner = UpdatedString<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -1216,11 +1143,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(UpdatedString::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(UpdatedString::VT_SLOT_UPDATED, Some(0)).unwrap() }
         }
         #[inline]
         pub fn update_version(&self) -> Option<UpdateVersion<'a>> {
@@ -1228,11 +1151,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
-                        UpdatedString::VT_UPDATE_VERSION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
+                    UpdatedString::VT_UPDATE_VERSION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -1241,8 +1163,7 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<&str>>(UpdatedString::VT_VALUE, None)
+                self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(UpdatedString::VT_VALUE, None)
             }
         }
     }
@@ -1274,11 +1195,7 @@ pub mod asset {
     impl<'a> Default for UpdatedStringArgs<'a> {
         #[inline]
         fn default() -> Self {
-            UpdatedStringArgs {
-                slot_updated: 0,
-                update_version: None,
-                value: None,
-            }
+            UpdatedStringArgs { slot_updated: 0, update_version: None, value: None }
         }
     }
 
@@ -1289,34 +1206,28 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UpdatedStringBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdatedString::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(UpdatedString::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_update_version(
             &mut self,
             update_version: flatbuffers::WIPOffset<UpdateVersion<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
-                    UpdatedString::VT_UPDATE_VERSION,
-                    update_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
+                UpdatedString::VT_UPDATE_VERSION,
+                update_version,
+            );
         }
         #[inline]
         pub fn add_value(&mut self, value: flatbuffers::WIPOffset<&'b str>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(UpdatedString::VT_VALUE, value);
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(UpdatedString::VT_VALUE, value);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdatedStringBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdatedStringBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdatedStringBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdatedString<'a>> {
@@ -1345,9 +1256,7 @@ pub mod asset {
         type Inner = UpdatedPubkey<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -1386,11 +1295,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(UpdatedPubkey::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(UpdatedPubkey::VT_SLOT_UPDATED, Some(0)).unwrap() }
         }
         #[inline]
         pub fn update_version(&self) -> Option<UpdateVersion<'a>> {
@@ -1398,11 +1303,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
-                        UpdatedPubkey::VT_UPDATE_VERSION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
+                    UpdatedPubkey::VT_UPDATE_VERSION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -1411,11 +1315,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        UpdatedPubkey::VT_VALUE,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    UpdatedPubkey::VT_VALUE,
+                    None,
+                )
             }
         }
     }
@@ -1451,11 +1354,7 @@ pub mod asset {
     impl<'a> Default for UpdatedPubkeyArgs<'a> {
         #[inline]
         fn default() -> Self {
-            UpdatedPubkeyArgs {
-                slot_updated: 0,
-                update_version: None,
-                value: None,
-            }
+            UpdatedPubkeyArgs { slot_updated: 0, update_version: None, value: None }
         }
     }
 
@@ -1466,34 +1365,28 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UpdatedPubkeyBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdatedPubkey::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(UpdatedPubkey::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_update_version(
             &mut self,
             update_version: flatbuffers::WIPOffset<UpdateVersion<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
-                    UpdatedPubkey::VT_UPDATE_VERSION,
-                    update_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
+                UpdatedPubkey::VT_UPDATE_VERSION,
+                update_version,
+            );
         }
         #[inline]
         pub fn add_value(&mut self, value: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(UpdatedPubkey::VT_VALUE, value);
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(UpdatedPubkey::VT_VALUE, value);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdatedPubkeyBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdatedPubkeyBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdatedPubkeyBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdatedPubkey<'a>> {
@@ -1522,9 +1415,7 @@ pub mod asset {
         type Inner = UpdatedOptionalPubkey<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -1564,9 +1455,7 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<u64>(UpdatedOptionalPubkey::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
+                self._tab.get::<u64>(UpdatedOptionalPubkey::VT_SLOT_UPDATED, Some(0)).unwrap()
             }
         }
         #[inline]
@@ -1575,11 +1464,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
-                        UpdatedOptionalPubkey::VT_UPDATE_VERSION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
+                    UpdatedOptionalPubkey::VT_UPDATE_VERSION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -1588,11 +1476,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        UpdatedOptionalPubkey::VT_VALUE,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    UpdatedOptionalPubkey::VT_VALUE,
+                    None,
+                )
             }
         }
     }
@@ -1628,11 +1515,7 @@ pub mod asset {
     impl<'a> Default for UpdatedOptionalPubkeyArgs<'a> {
         #[inline]
         fn default() -> Self {
-            UpdatedOptionalPubkeyArgs {
-                slot_updated: 0,
-                update_version: None,
-                value: None,
-            }
+            UpdatedOptionalPubkeyArgs { slot_updated: 0, update_version: None, value: None }
         }
     }
 
@@ -1643,19 +1526,17 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UpdatedOptionalPubkeyBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdatedOptionalPubkey::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(UpdatedOptionalPubkey::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_update_version(
             &mut self,
             update_version: flatbuffers::WIPOffset<UpdateVersion<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
-                    UpdatedOptionalPubkey::VT_UPDATE_VERSION,
-                    update_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
+                UpdatedOptionalPubkey::VT_UPDATE_VERSION,
+                update_version,
+            );
         }
         #[inline]
         pub fn add_value(&mut self, value: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
@@ -1669,10 +1550,7 @@ pub mod asset {
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdatedOptionalPubkeyBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdatedOptionalPubkeyBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdatedOptionalPubkeyBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdatedOptionalPubkey<'a>> {
@@ -1701,9 +1579,7 @@ pub mod asset {
         type Inner = UpdatedCreators<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -1742,11 +1618,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(UpdatedCreators::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(UpdatedCreators::VT_SLOT_UPDATED, Some(0)).unwrap() }
         }
         #[inline]
         pub fn update_version(&self) -> Option<UpdateVersion<'a>> {
@@ -1754,11 +1626,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
-                        UpdatedCreators::VT_UPDATE_VERSION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
+                    UpdatedCreators::VT_UPDATE_VERSION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -1809,11 +1680,7 @@ pub mod asset {
     impl<'a> Default for UpdatedCreatorsArgs<'a> {
         #[inline]
         fn default() -> Self {
-            UpdatedCreatorsArgs {
-                slot_updated: 0,
-                update_version: None,
-                value: None,
-            }
+            UpdatedCreatorsArgs { slot_updated: 0, update_version: None, value: None }
         }
     }
 
@@ -1824,19 +1691,17 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UpdatedCreatorsBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdatedCreators::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(UpdatedCreators::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_update_version(
             &mut self,
             update_version: flatbuffers::WIPOffset<UpdateVersion<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
-                    UpdatedCreators::VT_UPDATE_VERSION,
-                    update_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
+                UpdatedCreators::VT_UPDATE_VERSION,
+                update_version,
+            );
         }
         #[inline]
         pub fn add_value(
@@ -1853,10 +1718,7 @@ pub mod asset {
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdatedCreatorsBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdatedCreatorsBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdatedCreatorsBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdatedCreators<'a>> {
@@ -1885,9 +1747,7 @@ pub mod asset {
         type Inner = UpdatedChainMutability<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -1925,9 +1785,7 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<u64>(UpdatedChainMutability::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
+                self._tab.get::<u64>(UpdatedChainMutability::VT_SLOT_UPDATED, Some(0)).unwrap()
             }
         }
         #[inline]
@@ -1936,11 +1794,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
-                        UpdatedChainMutability::VT_UPDATE_VERSION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
+                    UpdatedChainMutability::VT_UPDATE_VERSION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2001,19 +1858,17 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UpdatedChainMutabilityBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdatedChainMutability::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(UpdatedChainMutability::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_update_version(
             &mut self,
             update_version: flatbuffers::WIPOffset<UpdateVersion<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
-                    UpdatedChainMutability::VT_UPDATE_VERSION,
-                    update_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
+                UpdatedChainMutability::VT_UPDATE_VERSION,
+                update_version,
+            );
         }
         #[inline]
         pub fn add_value(&mut self, value: ChainMutability) {
@@ -2028,10 +1883,7 @@ pub mod asset {
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdatedChainMutabilityBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdatedChainMutabilityBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdatedChainMutabilityBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdatedChainMutability<'a>> {
@@ -2060,9 +1912,7 @@ pub mod asset {
         type Inner = UpdatedOwnerType<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -2099,11 +1949,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(UpdatedOwnerType::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(UpdatedOwnerType::VT_SLOT_UPDATED, Some(0)).unwrap() }
         }
         #[inline]
         pub fn update_version(&self) -> Option<UpdateVersion<'a>> {
@@ -2111,11 +1957,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
-                        UpdatedOwnerType::VT_UPDATE_VERSION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdateVersion>>(
+                    UpdatedOwnerType::VT_UPDATE_VERSION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2173,34 +2018,28 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UpdatedOwnerTypeBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(UpdatedOwnerType::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(UpdatedOwnerType::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_update_version(
             &mut self,
             update_version: flatbuffers::WIPOffset<UpdateVersion<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
-                    UpdatedOwnerType::VT_UPDATE_VERSION,
-                    update_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdateVersion>>(
+                UpdatedOwnerType::VT_UPDATE_VERSION,
+                update_version,
+            );
         }
         #[inline]
         pub fn add_value(&mut self, value: OwnerType) {
-            self.fbb_
-                .push_slot::<OwnerType>(UpdatedOwnerType::VT_VALUE, value, OwnerType::Unknown);
+            self.fbb_.push_slot::<OwnerType>(UpdatedOwnerType::VT_VALUE, value, OwnerType::Unknown);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> UpdatedOwnerTypeBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            UpdatedOwnerTypeBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            UpdatedOwnerTypeBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<UpdatedOwnerType<'a>> {
@@ -2229,9 +2068,7 @@ pub mod asset {
         type Inner = Creator<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -2269,11 +2106,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        Creator::VT_CREATOR,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    Creator::VT_CREATOR,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2281,22 +2117,14 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<bool>(Creator::VT_CREATOR_VERIFIED, Some(false))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<bool>(Creator::VT_CREATOR_VERIFIED, Some(false)).unwrap() }
         }
         #[inline]
         pub fn creator_share(&self) -> u32 {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u32>(Creator::VT_CREATOR_SHARE, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u32>(Creator::VT_CREATOR_SHARE, Some(0)).unwrap() }
         }
     }
 
@@ -2327,11 +2155,7 @@ pub mod asset {
     impl<'a> Default for CreatorArgs<'a> {
         #[inline]
         fn default() -> Self {
-            CreatorArgs {
-                creator: None,
-                creator_verified: false,
-                creator_share: 0,
-            }
+            CreatorArgs { creator: None, creator_verified: false, creator_share: 0 }
         }
     }
 
@@ -2345,28 +2169,22 @@ pub mod asset {
             &mut self,
             creator: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(Creator::VT_CREATOR, creator);
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Creator::VT_CREATOR, creator);
         }
         #[inline]
         pub fn add_creator_verified(&mut self, creator_verified: bool) {
-            self.fbb_
-                .push_slot::<bool>(Creator::VT_CREATOR_VERIFIED, creator_verified, false);
+            self.fbb_.push_slot::<bool>(Creator::VT_CREATOR_VERIFIED, creator_verified, false);
         }
         #[inline]
         pub fn add_creator_share(&mut self, creator_share: u32) {
-            self.fbb_
-                .push_slot::<u32>(Creator::VT_CREATOR_SHARE, creator_share, 0);
+            self.fbb_.push_slot::<u32>(Creator::VT_CREATOR_SHARE, creator_share, 0);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> CreatorBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            CreatorBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            CreatorBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<Creator<'a>> {
@@ -2395,9 +2213,7 @@ pub mod asset {
         type Inner = AssetStaticDetails<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -2441,11 +2257,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        AssetStaticDetails::VT_PUBKEY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    AssetStaticDetails::VT_PUBKEY,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2481,11 +2296,7 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<i64>(AssetStaticDetails::VT_CREATED_AT, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<i64>(AssetStaticDetails::VT_CREATED_AT, Some(0)).unwrap() }
         }
         #[inline]
         pub fn edition_address(&self) -> Option<flatbuffers::Vector<'a, u8>> {
@@ -2493,11 +2304,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        AssetStaticDetails::VT_EDITION_ADDRESS,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    AssetStaticDetails::VT_EDITION_ADDRESS,
+                    None,
+                )
             }
         }
     }
@@ -2588,8 +2398,7 @@ pub mod asset {
         }
         #[inline]
         pub fn add_created_at(&mut self, created_at: i64) {
-            self.fbb_
-                .push_slot::<i64>(AssetStaticDetails::VT_CREATED_AT, created_at, 0);
+            self.fbb_.push_slot::<i64>(AssetStaticDetails::VT_CREATED_AT, created_at, 0);
         }
         #[inline]
         pub fn add_edition_address(
@@ -2606,10 +2415,7 @@ pub mod asset {
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> AssetStaticDetailsBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            AssetStaticDetailsBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            AssetStaticDetailsBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<AssetStaticDetails<'a>> {
@@ -2622,10 +2428,7 @@ pub mod asset {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("AssetStaticDetails");
             ds.field("pubkey", &self.pubkey());
-            ds.field(
-                "specification_asset_class",
-                &self.specification_asset_class(),
-            );
+            ds.field("specification_asset_class", &self.specification_asset_class());
             ds.field("royalty_target_type", &self.royalty_target_type());
             ds.field("created_at", &self.created_at());
             ds.field("edition_address", &self.edition_address());
@@ -2643,9 +2446,7 @@ pub mod asset {
         type Inner = AssetDynamicDetails<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -2779,11 +2580,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        AssetDynamicDetails::VT_PUBKEY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    AssetDynamicDetails::VT_PUBKEY,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2876,11 +2676,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
-                        AssetDynamicDetails::VT_ONCHAIN_DATA,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
+                    AssetDynamicDetails::VT_ONCHAIN_DATA,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2889,11 +2688,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedCreators>>(
-                        AssetDynamicDetails::VT_CREATORS,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedCreators>>(
+                    AssetDynamicDetails::VT_CREATORS,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2914,11 +2712,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
-                        AssetDynamicDetails::VT_URL,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
+                    AssetDynamicDetails::VT_URL,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2927,11 +2724,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedChainMutability>>(
-                        AssetDynamicDetails::VT_CHAIN_MUTABILITY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedChainMutability>>(
+                    AssetDynamicDetails::VT_CHAIN_MUTABILITY,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2964,11 +2760,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
-                        AssetDynamicDetails::VT_METADATA_OWNER,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
+                    AssetDynamicDetails::VT_METADATA_OWNER,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2977,11 +2772,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
-                        AssetDynamicDetails::VT_RAW_NAME,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
+                    AssetDynamicDetails::VT_RAW_NAME,
+                    None,
+                )
             }
         }
         #[inline]
@@ -2990,11 +2784,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
-                        AssetDynamicDetails::VT_MPL_CORE_PLUGINS,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
+                    AssetDynamicDetails::VT_MPL_CORE_PLUGINS,
+                    None,
+                )
             }
         }
         #[inline]
@@ -3003,11 +2796,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
-                        AssetDynamicDetails::VT_MPL_CORE_UNKNOWN_PLUGINS,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
+                    AssetDynamicDetails::VT_MPL_CORE_UNKNOWN_PLUGINS,
+                    None,
+                )
             }
         }
         #[inline]
@@ -3064,11 +2856,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
-                        AssetDynamicDetails::VT_MPL_CORE_EXTERNAL_PLUGINS,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
+                    AssetDynamicDetails::VT_MPL_CORE_EXTERNAL_PLUGINS,
+                    None,
+                )
             }
         }
         #[inline]
@@ -3077,11 +2868,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
-                        AssetDynamicDetails::VT_MPL_CORE_UNKNOWN_EXTERNAL_PLUGINS,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
+                    AssetDynamicDetails::VT_MPL_CORE_UNKNOWN_EXTERNAL_PLUGINS,
+                    None,
+                )
             }
         }
         #[inline]
@@ -3090,11 +2880,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
-                        AssetDynamicDetails::VT_MINT_EXTENSIONS,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedString>>(
+                    AssetDynamicDetails::VT_MINT_EXTENSIONS,
+                    None,
+                )
             }
         }
     }
@@ -3320,249 +3109,221 @@ pub mod asset {
             &mut self,
             is_compressible: flatbuffers::WIPOffset<UpdatedBool<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
-                    AssetDynamicDetails::VT_IS_COMPRESSIBLE,
-                    is_compressible,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
+                AssetDynamicDetails::VT_IS_COMPRESSIBLE,
+                is_compressible,
+            );
         }
         #[inline]
         pub fn add_is_compressed(
             &mut self,
             is_compressed: flatbuffers::WIPOffset<UpdatedBool<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
-                    AssetDynamicDetails::VT_IS_COMPRESSED,
-                    is_compressed,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
+                AssetDynamicDetails::VT_IS_COMPRESSED,
+                is_compressed,
+            );
         }
         #[inline]
         pub fn add_is_frozen(&mut self, is_frozen: flatbuffers::WIPOffset<UpdatedBool<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
-                    AssetDynamicDetails::VT_IS_FROZEN,
-                    is_frozen,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
+                AssetDynamicDetails::VT_IS_FROZEN,
+                is_frozen,
+            );
         }
         #[inline]
         pub fn add_supply(&mut self, supply: flatbuffers::WIPOffset<UpdatedU64<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
-                    AssetDynamicDetails::VT_SUPPLY,
-                    supply,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
+                AssetDynamicDetails::VT_SUPPLY,
+                supply,
+            );
         }
         #[inline]
         pub fn add_seq(&mut self, seq: flatbuffers::WIPOffset<UpdatedU64<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
-                    AssetDynamicDetails::VT_SEQ,
-                    seq,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
+                AssetDynamicDetails::VT_SEQ,
+                seq,
+            );
         }
         #[inline]
         pub fn add_is_burnt(&mut self, is_burnt: flatbuffers::WIPOffset<UpdatedBool<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
-                    AssetDynamicDetails::VT_IS_BURNT,
-                    is_burnt,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
+                AssetDynamicDetails::VT_IS_BURNT,
+                is_burnt,
+            );
         }
         #[inline]
         pub fn add_was_decompressed(
             &mut self,
             was_decompressed: flatbuffers::WIPOffset<UpdatedBool<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
-                    AssetDynamicDetails::VT_WAS_DECOMPRESSED,
-                    was_decompressed,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
+                AssetDynamicDetails::VT_WAS_DECOMPRESSED,
+                was_decompressed,
+            );
         }
         #[inline]
         pub fn add_onchain_data(
             &mut self,
             onchain_data: flatbuffers::WIPOffset<UpdatedString<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
-                    AssetDynamicDetails::VT_ONCHAIN_DATA,
-                    onchain_data,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
+                AssetDynamicDetails::VT_ONCHAIN_DATA,
+                onchain_data,
+            );
         }
         #[inline]
         pub fn add_creators(&mut self, creators: flatbuffers::WIPOffset<UpdatedCreators<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedCreators>>(
-                    AssetDynamicDetails::VT_CREATORS,
-                    creators,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedCreators>>(
+                AssetDynamicDetails::VT_CREATORS,
+                creators,
+            );
         }
         #[inline]
         pub fn add_royalty_amount(
             &mut self,
             royalty_amount: flatbuffers::WIPOffset<UpdatedU32<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedU32>>(
-                    AssetDynamicDetails::VT_ROYALTY_AMOUNT,
-                    royalty_amount,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedU32>>(
+                AssetDynamicDetails::VT_ROYALTY_AMOUNT,
+                royalty_amount,
+            );
         }
         #[inline]
         pub fn add_url(&mut self, url: flatbuffers::WIPOffset<UpdatedString<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
-                    AssetDynamicDetails::VT_URL,
-                    url,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
+                AssetDynamicDetails::VT_URL,
+                url,
+            );
         }
         #[inline]
         pub fn add_chain_mutability(
             &mut self,
             chain_mutability: flatbuffers::WIPOffset<UpdatedChainMutability<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedChainMutability>>(
-                    AssetDynamicDetails::VT_CHAIN_MUTABILITY,
-                    chain_mutability,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedChainMutability>>(
+                AssetDynamicDetails::VT_CHAIN_MUTABILITY,
+                chain_mutability,
+            );
         }
         #[inline]
         pub fn add_lamports(&mut self, lamports: flatbuffers::WIPOffset<UpdatedU64<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
-                    AssetDynamicDetails::VT_LAMPORTS,
-                    lamports,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
+                AssetDynamicDetails::VT_LAMPORTS,
+                lamports,
+            );
         }
         #[inline]
         pub fn add_executable(&mut self, executable: flatbuffers::WIPOffset<UpdatedBool<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
-                    AssetDynamicDetails::VT_EXECUTABLE,
-                    executable,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
+                AssetDynamicDetails::VT_EXECUTABLE,
+                executable,
+            );
         }
         #[inline]
         pub fn add_metadata_owner(
             &mut self,
             metadata_owner: flatbuffers::WIPOffset<UpdatedString<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
-                    AssetDynamicDetails::VT_METADATA_OWNER,
-                    metadata_owner,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
+                AssetDynamicDetails::VT_METADATA_OWNER,
+                metadata_owner,
+            );
         }
         #[inline]
         pub fn add_raw_name(&mut self, raw_name: flatbuffers::WIPOffset<UpdatedString<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
-                    AssetDynamicDetails::VT_RAW_NAME,
-                    raw_name,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
+                AssetDynamicDetails::VT_RAW_NAME,
+                raw_name,
+            );
         }
         #[inline]
         pub fn add_mpl_core_plugins(
             &mut self,
             mpl_core_plugins: flatbuffers::WIPOffset<UpdatedString<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
-                    AssetDynamicDetails::VT_MPL_CORE_PLUGINS,
-                    mpl_core_plugins,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
+                AssetDynamicDetails::VT_MPL_CORE_PLUGINS,
+                mpl_core_plugins,
+            );
         }
         #[inline]
         pub fn add_mpl_core_unknown_plugins(
             &mut self,
             mpl_core_unknown_plugins: flatbuffers::WIPOffset<UpdatedString<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
-                    AssetDynamicDetails::VT_MPL_CORE_UNKNOWN_PLUGINS,
-                    mpl_core_unknown_plugins,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
+                AssetDynamicDetails::VT_MPL_CORE_UNKNOWN_PLUGINS,
+                mpl_core_unknown_plugins,
+            );
         }
         #[inline]
         pub fn add_rent_epoch(&mut self, rent_epoch: flatbuffers::WIPOffset<UpdatedU64<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
-                    AssetDynamicDetails::VT_RENT_EPOCH,
-                    rent_epoch,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
+                AssetDynamicDetails::VT_RENT_EPOCH,
+                rent_epoch,
+            );
         }
         #[inline]
         pub fn add_num_minted(&mut self, num_minted: flatbuffers::WIPOffset<UpdatedU32<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedU32>>(
-                    AssetDynamicDetails::VT_NUM_MINTED,
-                    num_minted,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedU32>>(
+                AssetDynamicDetails::VT_NUM_MINTED,
+                num_minted,
+            );
         }
         #[inline]
         pub fn add_current_size(&mut self, current_size: flatbuffers::WIPOffset<UpdatedU32<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedU32>>(
-                    AssetDynamicDetails::VT_CURRENT_SIZE,
-                    current_size,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedU32>>(
+                AssetDynamicDetails::VT_CURRENT_SIZE,
+                current_size,
+            );
         }
         #[inline]
         pub fn add_plugins_json_version(
             &mut self,
             plugins_json_version: flatbuffers::WIPOffset<UpdatedU32<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedU32>>(
-                    AssetDynamicDetails::VT_PLUGINS_JSON_VERSION,
-                    plugins_json_version,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedU32>>(
+                AssetDynamicDetails::VT_PLUGINS_JSON_VERSION,
+                plugins_json_version,
+            );
         }
         #[inline]
         pub fn add_mpl_core_external_plugins(
             &mut self,
             mpl_core_external_plugins: flatbuffers::WIPOffset<UpdatedString<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
-                    AssetDynamicDetails::VT_MPL_CORE_EXTERNAL_PLUGINS,
-                    mpl_core_external_plugins,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
+                AssetDynamicDetails::VT_MPL_CORE_EXTERNAL_PLUGINS,
+                mpl_core_external_plugins,
+            );
         }
         #[inline]
         pub fn add_mpl_core_unknown_external_plugins(
             &mut self,
             mpl_core_unknown_external_plugins: flatbuffers::WIPOffset<UpdatedString<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
-                    AssetDynamicDetails::VT_MPL_CORE_UNKNOWN_EXTERNAL_PLUGINS,
-                    mpl_core_unknown_external_plugins,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
+                AssetDynamicDetails::VT_MPL_CORE_UNKNOWN_EXTERNAL_PLUGINS,
+                mpl_core_unknown_external_plugins,
+            );
         }
         #[inline]
         pub fn add_mint_extensions(
             &mut self,
             mint_extensions: flatbuffers::WIPOffset<UpdatedString<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
-                    AssetDynamicDetails::VT_MINT_EXTENSIONS,
-                    mint_extensions,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedString>>(
+                AssetDynamicDetails::VT_MINT_EXTENSIONS,
+                mint_extensions,
+            );
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> AssetDynamicDetailsBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            AssetDynamicDetailsBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            AssetDynamicDetailsBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<AssetDynamicDetails<'a>> {
@@ -3597,10 +3358,7 @@ pub mod asset {
             ds.field("num_minted", &self.num_minted());
             ds.field("current_size", &self.current_size());
             ds.field("plugins_json_version", &self.plugins_json_version());
-            ds.field(
-                "mpl_core_external_plugins",
-                &self.mpl_core_external_plugins(),
-            );
+            ds.field("mpl_core_external_plugins", &self.mpl_core_external_plugins());
             ds.field(
                 "mpl_core_unknown_external_plugins",
                 &self.mpl_core_unknown_external_plugins(),
@@ -3620,9 +3378,7 @@ pub mod asset {
         type Inner = AssetAuthority<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -3664,11 +3420,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        AssetAuthority::VT_PUBKEY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    AssetAuthority::VT_PUBKEY,
+                    None,
+                )
             }
         }
         #[inline]
@@ -3677,11 +3432,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        AssetAuthority::VT_AUTHORITY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    AssetAuthority::VT_AUTHORITY,
+                    None,
+                )
             }
         }
         #[inline]
@@ -3689,22 +3443,14 @@ pub mod asset {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(AssetAuthority::VT_SLOT_UPDATED, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(AssetAuthority::VT_SLOT_UPDATED, Some(0)).unwrap() }
         }
         #[inline]
         pub fn write_version(&self) -> u64 {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u64>(AssetAuthority::VT_WRITE_VERSION, Some(0))
-                    .unwrap()
-            }
+            unsafe { self._tab.get::<u64>(AssetAuthority::VT_WRITE_VERSION, Some(0)).unwrap() }
         }
     }
 
@@ -3741,12 +3487,7 @@ pub mod asset {
     impl<'a> Default for AssetAuthorityArgs<'a> {
         #[inline]
         fn default() -> Self {
-            AssetAuthorityArgs {
-                pubkey: None,
-                authority: None,
-                slot_updated: 0,
-                write_version: 0,
-            }
+            AssetAuthorityArgs { pubkey: None, authority: None, slot_updated: 0, write_version: 0 }
         }
     }
 
@@ -3772,23 +3513,18 @@ pub mod asset {
         }
         #[inline]
         pub fn add_slot_updated(&mut self, slot_updated: u64) {
-            self.fbb_
-                .push_slot::<u64>(AssetAuthority::VT_SLOT_UPDATED, slot_updated, 0);
+            self.fbb_.push_slot::<u64>(AssetAuthority::VT_SLOT_UPDATED, slot_updated, 0);
         }
         #[inline]
         pub fn add_write_version(&mut self, write_version: u64) {
-            self.fbb_
-                .push_slot::<u64>(AssetAuthority::VT_WRITE_VERSION, write_version, 0);
+            self.fbb_.push_slot::<u64>(AssetAuthority::VT_WRITE_VERSION, write_version, 0);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> AssetAuthorityBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            AssetAuthorityBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            AssetAuthorityBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<AssetAuthority<'a>> {
@@ -3818,9 +3554,7 @@ pub mod asset {
         type Inner = AssetOwner<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -3874,11 +3608,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        AssetOwner::VT_PUBKEY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    AssetOwner::VT_PUBKEY,
+                    None,
+                )
             }
         }
         #[inline]
@@ -3887,11 +3620,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedOptionalPubkey>>(
-                        AssetOwner::VT_OWNER,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedOptionalPubkey>>(
+                    AssetOwner::VT_OWNER,
+                    None,
+                )
             }
         }
         #[inline]
@@ -3900,11 +3632,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedOptionalPubkey>>(
-                        AssetOwner::VT_DELEGATE,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedOptionalPubkey>>(
+                    AssetOwner::VT_DELEGATE,
+                    None,
+                )
             }
         }
         #[inline]
@@ -3913,11 +3644,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedOwnerType>>(
-                        AssetOwner::VT_OWNER_TYPE,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedOwnerType>>(
+                    AssetOwner::VT_OWNER_TYPE,
+                    None,
+                )
             }
         }
         #[inline]
@@ -4017,67 +3747,58 @@ pub mod asset {
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> AssetOwnerBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_pubkey(&mut self, pubkey: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(AssetOwner::VT_PUBKEY, pubkey);
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AssetOwner::VT_PUBKEY, pubkey);
         }
         #[inline]
         pub fn add_owner(&mut self, owner: flatbuffers::WIPOffset<UpdatedOptionalPubkey<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedOptionalPubkey>>(
-                    AssetOwner::VT_OWNER,
-                    owner,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedOptionalPubkey>>(
+                AssetOwner::VT_OWNER,
+                owner,
+            );
         }
         #[inline]
         pub fn add_delegate(
             &mut self,
             delegate: flatbuffers::WIPOffset<UpdatedOptionalPubkey<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedOptionalPubkey>>(
-                    AssetOwner::VT_DELEGATE,
-                    delegate,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedOptionalPubkey>>(
+                AssetOwner::VT_DELEGATE,
+                delegate,
+            );
         }
         #[inline]
         pub fn add_owner_type(&mut self, owner_type: flatbuffers::WIPOffset<UpdatedOwnerType<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedOwnerType>>(
-                    AssetOwner::VT_OWNER_TYPE,
-                    owner_type,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedOwnerType>>(
+                AssetOwner::VT_OWNER_TYPE,
+                owner_type,
+            );
         }
         #[inline]
         pub fn add_owner_delegate_seq(
             &mut self,
             owner_delegate_seq: flatbuffers::WIPOffset<UpdatedU64<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
-                    AssetOwner::VT_OWNER_DELEGATE_SEQ,
-                    owner_delegate_seq,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedU64>>(
+                AssetOwner::VT_OWNER_DELEGATE_SEQ,
+                owner_delegate_seq,
+            );
         }
         #[inline]
         pub fn add_is_current_owner(
             &mut self,
             is_current_owner: flatbuffers::WIPOffset<UpdatedBool<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
-                    AssetOwner::VT_IS_CURRENT_OWNER,
-                    is_current_owner,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
+                AssetOwner::VT_IS_CURRENT_OWNER,
+                is_current_owner,
+            );
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> AssetOwnerBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            AssetOwnerBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            AssetOwnerBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<AssetOwner<'a>> {
@@ -4109,9 +3830,7 @@ pub mod asset {
         type Inner = AssetCollection<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -4157,11 +3876,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        AssetCollection::VT_PUBKEY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    AssetCollection::VT_PUBKEY,
+                    None,
+                )
             }
         }
         #[inline]
@@ -4170,11 +3888,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedPubkey>>(
-                        AssetCollection::VT_COLLECTION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedPubkey>>(
+                    AssetCollection::VT_COLLECTION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -4195,11 +3912,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UpdatedOptionalPubkey>>(
-                        AssetCollection::VT_AUTHORITY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<UpdatedOptionalPubkey>>(
+                    AssetCollection::VT_AUTHORITY,
+                    None,
+                )
             }
         }
     }
@@ -4266,43 +3982,37 @@ pub mod asset {
         }
         #[inline]
         pub fn add_collection(&mut self, collection: flatbuffers::WIPOffset<UpdatedPubkey<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedPubkey>>(
-                    AssetCollection::VT_COLLECTION,
-                    collection,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedPubkey>>(
+                AssetCollection::VT_COLLECTION,
+                collection,
+            );
         }
         #[inline]
         pub fn add_is_collection_verified(
             &mut self,
             is_collection_verified: flatbuffers::WIPOffset<UpdatedBool<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
-                    AssetCollection::VT_IS_COLLECTION_VERIFIED,
-                    is_collection_verified,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedBool>>(
+                AssetCollection::VT_IS_COLLECTION_VERIFIED,
+                is_collection_verified,
+            );
         }
         #[inline]
         pub fn add_authority(
             &mut self,
             authority: flatbuffers::WIPOffset<UpdatedOptionalPubkey<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UpdatedOptionalPubkey>>(
-                    AssetCollection::VT_AUTHORITY,
-                    authority,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UpdatedOptionalPubkey>>(
+                AssetCollection::VT_AUTHORITY,
+                authority,
+            );
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> AssetCollectionBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            AssetCollectionBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            AssetCollectionBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<AssetCollection<'a>> {
@@ -4332,9 +4042,7 @@ pub mod asset {
         type Inner = AssetCompleteDetails<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            Self {
-                _tab: flatbuffers::Table::new(buf, loc),
-            }
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
         }
     }
 
@@ -4392,11 +4100,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        AssetCompleteDetails::VT_PUBKEY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    AssetCompleteDetails::VT_PUBKEY,
+                    None,
+                )
             }
         }
         #[inline]
@@ -4405,11 +4112,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<AssetStaticDetails>>(
-                        AssetCompleteDetails::VT_STATIC_DETAILS,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<AssetStaticDetails>>(
+                    AssetCompleteDetails::VT_STATIC_DETAILS,
+                    None,
+                )
             }
         }
         #[inline]
@@ -4418,11 +4124,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<AssetDynamicDetails>>(
-                        AssetCompleteDetails::VT_DYNAMIC_DETAILS,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<AssetDynamicDetails>>(
+                    AssetCompleteDetails::VT_DYNAMIC_DETAILS,
+                    None,
+                )
             }
         }
         #[inline]
@@ -4431,11 +4136,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<AssetAuthority>>(
-                        AssetCompleteDetails::VT_AUTHORITY,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<AssetAuthority>>(
+                    AssetCompleteDetails::VT_AUTHORITY,
+                    None,
+                )
             }
         }
         #[inline]
@@ -4456,11 +4160,10 @@ pub mod asset {
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<AssetCollection>>(
-                        AssetCompleteDetails::VT_COLLECTION,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<AssetCollection>>(
+                    AssetCompleteDetails::VT_COLLECTION,
+                    None,
+                )
             }
         }
         #[inline]
@@ -4568,46 +4271,41 @@ pub mod asset {
             &mut self,
             static_details: flatbuffers::WIPOffset<AssetStaticDetails<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<AssetStaticDetails>>(
-                    AssetCompleteDetails::VT_STATIC_DETAILS,
-                    static_details,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<AssetStaticDetails>>(
+                AssetCompleteDetails::VT_STATIC_DETAILS,
+                static_details,
+            );
         }
         #[inline]
         pub fn add_dynamic_details(
             &mut self,
             dynamic_details: flatbuffers::WIPOffset<AssetDynamicDetails<'b>>,
         ) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<AssetDynamicDetails>>(
-                    AssetCompleteDetails::VT_DYNAMIC_DETAILS,
-                    dynamic_details,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<AssetDynamicDetails>>(
+                AssetCompleteDetails::VT_DYNAMIC_DETAILS,
+                dynamic_details,
+            );
         }
         #[inline]
         pub fn add_authority(&mut self, authority: flatbuffers::WIPOffset<AssetAuthority<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<AssetAuthority>>(
-                    AssetCompleteDetails::VT_AUTHORITY,
-                    authority,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<AssetAuthority>>(
+                AssetCompleteDetails::VT_AUTHORITY,
+                authority,
+            );
         }
         #[inline]
         pub fn add_owner(&mut self, owner: flatbuffers::WIPOffset<AssetOwner<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<AssetOwner>>(
-                    AssetCompleteDetails::VT_OWNER,
-                    owner,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<AssetOwner>>(
+                AssetCompleteDetails::VT_OWNER,
+                owner,
+            );
         }
         #[inline]
         pub fn add_collection(&mut self, collection: flatbuffers::WIPOffset<AssetCollection<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<AssetCollection>>(
-                    AssetCompleteDetails::VT_COLLECTION,
-                    collection,
-                );
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<AssetCollection>>(
+                AssetCompleteDetails::VT_COLLECTION,
+                collection,
+            );
         }
         #[inline]
         pub fn add_other_known_owners(
@@ -4626,10 +4324,7 @@ pub mod asset {
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> AssetCompleteDetailsBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            AssetCompleteDetailsBuilder {
-                fbb_: _fbb,
-                start_: start,
-            }
+            AssetCompleteDetailsBuilder { fbb_: _fbb, start_: start }
         }
         #[inline]
         pub fn finish(self) -> flatbuffers::WIPOffset<AssetCompleteDetails<'a>> {

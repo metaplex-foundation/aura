@@ -1,13 +1,13 @@
+use std::sync::Arc;
+
 use criterion::{criterion_group, criterion_main, Criterion};
 use entities::api_req_params::SearchAssets;
+use metrics_utils::ApiMetricsConfig;
 use nft_ingester::{api::middleware::JsonDownloaderMiddleware, index_syncronizer::Synchronizer};
 use rocks_db::storage_traits::AssetIndexReader;
 use setup::TestEnvironment;
-use std::sync::Arc;
-use usecase::proofs::MaybeProofChecker;
-
-use metrics_utils::ApiMetricsConfig;
 use testcontainers::clients::Cli;
+use usecase::proofs::MaybeProofChecker;
 
 const SLOT_UPDATED: u64 = 100;
 
@@ -15,10 +15,7 @@ async fn benchmark_search_assets(
     api: Arc<nft_ingester::api::api_impl::DasApi<MaybeProofChecker, JsonDownloaderMiddleware>>,
     limit: u32,
 ) {
-    let payload = SearchAssets {
-        limit: Some(limit),
-        ..Default::default()
-    };
+    let payload = SearchAssets { limit: Some(limit), ..Default::default() };
     let _res = api.search_assets(payload).await.unwrap();
     // You can add more assertions or processing here as needed
 }
@@ -81,11 +78,7 @@ async fn bench_get_dynamic_data_batch(
     assets: setup::rocks::GeneratedAssets,
 ) {
     let pubkeys = assets.pubkeys[50000..51000].to_vec();
-    rocks_db
-        .asset_dynamic_data
-        .batch_get(pubkeys.clone())
-        .await
-        .unwrap();
+    rocks_db.asset_dynamic_data.batch_get(pubkeys.clone()).await.unwrap();
 }
 
 fn pg_delete_benchmark(c: &mut Criterion) {

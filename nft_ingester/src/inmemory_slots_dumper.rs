@@ -1,6 +1,7 @@
+use std::collections::BTreeSet;
+
 use async_trait::async_trait;
 use interface::slots_dumper::SlotsDumper;
-use std::collections::BTreeSet;
 use tokio::sync::Mutex;
 
 pub struct InMemorySlotsDumper {
@@ -14,9 +15,7 @@ impl Default for InMemorySlotsDumper {
 impl InMemorySlotsDumper {
     /// Creates a new instance of `InMemorySlotsDumper`.
     pub fn new() -> Self {
-        Self {
-            slots: Mutex::new(BTreeSet::new()),
-        }
+        Self { slots: Mutex::new(BTreeSet::new()) }
     }
 
     /// Retrieves the sorted keys in ascending order.

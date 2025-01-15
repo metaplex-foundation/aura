@@ -1,19 +1,18 @@
-use bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError;
 use std::net::AddrParseError;
 
 use blockbuster::error::BlockbusterError;
+use bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError;
 use flatbuffers::InvalidFlatbuffer;
 use interface::error::UsecaseError;
 use plerkle_messenger::MessengerError;
 use plerkle_serialization::error::PlerkleSerializationError;
 use postgre_client::error::IndexDbError;
-use solana_sdk::pubkey::ParsePubkeyError;
-use solana_sdk::signature::ParseSignatureError;
+use rocks_db::errors::{BackupServiceError, StorageError};
+use solana_sdk::{pubkey::ParsePubkeyError, signature::ParseSignatureError};
 use solana_transaction_status::EncodeError;
 use thiserror::Error;
 
 use crate::plerkle::PlerkleDeserializerError;
-use rocks_db::errors::{BackupServiceError, StorageError};
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum IngesterError {

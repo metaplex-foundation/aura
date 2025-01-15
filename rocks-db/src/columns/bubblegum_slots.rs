@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::column::TypedColumn;
-use crate::key_encoders::{decode_u64, encode_u64};
-use crate::Result;
+use crate::{
+    column::TypedColumn,
+    key_encoders::{decode_u64, encode_u64},
+    Result,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ForceReingestableSlots {}

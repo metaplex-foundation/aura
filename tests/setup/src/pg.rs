@@ -1,17 +1,15 @@
-use entities::enums::*;
-use entities::models::{AssetIndex, Creator, UrlWithStatus};
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc};
+
+use entities::{
+    enums::*,
+    models::{AssetIndex, Creator, UrlWithStatus},
+};
 use metrics_utils::red::RequestErrorDurationMetrics;
-use postgre_client::storage_traits::AssetIndexStorage;
-use postgre_client::PgClient;
+use postgre_client::{storage_traits::AssetIndexStorage, PgClient};
 use rand::Rng;
 use solana_sdk::pubkey::Pubkey;
 use sqlx::{Executor, Pool, Postgres};
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
-use testcontainers::core::WaitFor;
-use testcontainers::{Container, Image};
+use testcontainers::{core::WaitFor, Container, Image};
 use testcontainers_modules::testcontainers::clients::Cli;
 use uuid::Uuid;
 
@@ -81,12 +79,7 @@ impl<'a> TestEnvironment<'a> {
             Arc::new(RequestErrorDurationMetrics::new()),
         );
 
-        TestEnvironment {
-            client: Arc::new(client),
-            pool,
-            db_name,
-            node,
-        }
+        TestEnvironment { client: Arc::new(client), pool, db_name, node }
     }
     pub async fn new(cli: &'a Cli) -> TestEnvironment<'a> {
         let image = PgContainer::new();
@@ -99,12 +92,7 @@ impl<'a> TestEnvironment<'a> {
             Arc::new(RequestErrorDurationMetrics::new()),
         );
 
-        TestEnvironment {
-            client: Arc::new(client),
-            pool,
-            db_name,
-            node,
-        }
+        TestEnvironment { client: Arc::new(client), pool, db_name, node }
     }
 
     pub async fn teardown(&self) {
@@ -112,61 +100,49 @@ impl<'a> TestEnvironment<'a> {
     }
 
     pub async fn count_rows_in_assets(&self) -> Result<i64, sqlx::Error> {
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM assets_v3")
-            .fetch_one(&self.pool)
-            .await?;
+        let (count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM assets_v3").fetch_one(&self.pool).await?;
 
         Ok(count)
     }
 
     pub async fn count_rows_in_creators(&self) -> Result<i64, sqlx::Error> {
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM asset_creators_v3")
-            .fetch_one(&self.pool)
-            .await?;
+        let (count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM asset_creators_v3").fetch_one(&self.pool).await?;
 
         Ok(count)
     }
 
     pub async fn count_rows_in_metadata(&self) -> Result<i64, sqlx::Error> {
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tasks")
-            .fetch_one(&self.pool)
-            .await?;
+        let (count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM tasks").fetch_one(&self.pool).await?;
 
         Ok(count)
     }
 
     pub async fn count_rows_in_authorities(&self) -> Result<i64, sqlx::Error> {
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM assets_authorities")
-            .fetch_one(&self.pool)
-            .await?;
+        let (count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM assets_authorities").fetch_one(&self.pool).await?;
 
         Ok(count)
     }
 
     pub async fn count_rows_in_fungible_tokens(&self) -> Result<i64, sqlx::Error> {
-        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM fungible_tokens")
-            .fetch_one(&self.pool)
-            .await?;
+        let (count,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM fungible_tokens").fetch_one(&self.pool).await?;
 
         Ok(count)
     }
 }
 
 pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres>, String) {
-    let default_connection_string = format!(
-        "postgres://postgres:postgres@localhost:{}",
-        node.get_host_port_ipv4(5432)
-    );
+    let default_connection_string =
+        format!("postgres://postgres:postgres@localhost:{}", node.get_host_port_ipv4(5432));
 
     // Connect to the default 'postgres' database to create a new database
-    let default_pool = Pool::<Postgres>::connect(&default_connection_string)
-        .await
-        .unwrap();
+    let default_pool = Pool::<Postgres>::connect(&default_connection_string).await.unwrap();
     let db_name = format!("test_{}", Uuid::new_v4()).replace('-', "_");
-    default_pool
-        .execute(format!("CREATE DATABASE {}", db_name).as_str())
-        .await
-        .unwrap();
+    default_pool.execute(format!("CREATE DATABASE {}", db_name).as_str()).await.unwrap();
 
     let connection_string = format!(
         "postgres://postgres:postgres@localhost:{}/{}",
@@ -182,36 +158,24 @@ pub async fn setup_database<T: Image>(node: &Container<'_, T>) -> (Pool<Postgres
         Arc::new(RequestErrorDurationMetrics::new()),
     );
 
-    asset_index_storage
-        .run_migration("../migrations")
-        .await
-        .unwrap();
+    asset_index_storage.run_migration("../migrations").await.unwrap();
 
     // Verify initial fetch_last_synced_id returns None
     for asset_type in ASSET_TYPES {
-        assert!(asset_index_storage
-            .fetch_last_synced_id(asset_type)
-            .await
-            .unwrap()
-            .is_none());
+        assert!(asset_index_storage.fetch_last_synced_id(asset_type).await.unwrap().is_none());
     }
 
     (test_db_pool, db_name)
 }
 
 pub async fn teardown<T: Image>(node: &Container<'_, T>, db_name: &str) {
-    let default_connection_string = format!(
-        "postgres://postgres:postgres@localhost:{}",
-        node.get_host_port_ipv4(5432)
-    );
+    let default_connection_string =
+        format!("postgres://postgres:postgres@localhost:{}", node.get_host_port_ipv4(5432));
 
     // Connect to the default 'postgres' database to create a new database
-    let default_pool = Pool::<Postgres>::connect(&default_connection_string)
-        .await
-        .unwrap();
-    if let Err(err) = default_pool
-        .execute(format!("DROP DATABASE IF EXISTS {}", db_name).as_str())
-        .await
+    let default_pool = Pool::<Postgres>::connect(&default_connection_string).await.unwrap();
+    if let Err(err) =
+        default_pool.execute(format!("DROP DATABASE IF EXISTS {}", db_name).as_str()).await
     {
         println!("Failed to drop database: {}", err);
     }

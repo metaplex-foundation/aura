@@ -1,21 +1,19 @@
+use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
+
 use clap::Parser;
 use itertools::Itertools;
 use nft_ingester::error::IngesterError;
-use rocks_db::column::TypedColumn;
-use rocks_db::columns::asset::AssetCompleteDetails;
-use rocks_db::generated::asset_generated::asset as fb;
-use rocks_db::key_encoders::decode_u64x2_pubkey;
-use rocks_db::migrator::MigrationState;
-use rocks_db::storage_traits::AssetIndexReader;
-use rocks_db::storage_traits::AssetUpdateIndexStorage;
-use rocks_db::Storage;
+use rocks_db::{
+    column::TypedColumn,
+    columns::asset::AssetCompleteDetails,
+    generated::asset_generated::asset as fb,
+    key_encoders::decode_u64x2_pubkey,
+    migrator::MigrationState,
+    storage_traits::{AssetIndexReader, AssetUpdateIndexStorage},
+    Storage,
+};
 use solana_sdk::pubkey::Pubkey;
-use std::collections::HashSet;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+use tokio::{sync::Mutex, task::JoinSet};
 use tracing::info;
 
 #[derive(Parser, Debug)]
@@ -64,13 +62,11 @@ pub async fn main() -> Result<(), IngesterError> {
     .unwrap();
     if let Some(index_after) = args.index_after {
         // Decode the Base58 string back into Vec<u8>
-        let decoded_data = bs58::decode(&index_after)
-            .into_vec()
-            .expect("index after should be base58 encoded");
+        let decoded_data =
+            bs58::decode(&index_after).into_vec().expect("index after should be base58 encoded");
         let starting_key = decode_u64x2_pubkey(decoded_data).expect("Failed to decode index after");
-        let (updated_keys, _last_included_key) = storage
-            .fetch_nft_asset_updated_keys(Some(starting_key), None, 500, None)
-            .unwrap();
+        let (updated_keys, _last_included_key) =
+            storage.fetch_nft_asset_updated_keys(Some(starting_key), None, 500, None).unwrap();
         let index = storage
             .get_nft_asset_indexes(updated_keys.into_iter().collect_vec().as_slice())
             .await
@@ -83,9 +79,8 @@ pub async fn main() -> Result<(), IngesterError> {
         let mut matching_pubkeys = HashSet::new();
         let mut total_assets_processed = 0;
 
-        let mut it = storage
-            .db
-            .raw_iterator_cf(&storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap());
+        let mut it =
+            storage.db.raw_iterator_cf(&storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap());
         it.seek_to_first();
         while it.valid() {
             total_assets_processed += 1;
@@ -125,10 +120,8 @@ pub async fn main() -> Result<(), IngesterError> {
             .iter()
             .map(|pk| Pubkey::from_str(pk).expect("invalid pubkey"))
             .collect_vec();
-        let index = storage
-            .get_nft_asset_indexes(keys.as_slice())
-            .await
-            .expect("Failed to get indexes");
+        let index =
+            storage.get_nft_asset_indexes(keys.as_slice()).await.expect("Failed to get indexes");
         println!("{:?}", index);
     }
     if let Some(get_asset_maps_ids) = args.get_asset_maps_ids {

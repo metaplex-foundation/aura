@@ -25,10 +25,7 @@ mod tests {
         // then
         await_async_for!(
             {
-                let UrlToDownload {
-                    timestamp,
-                    download_attempts,
-                } = storage
+                let UrlToDownload { timestamp, download_attempts } = storage
                     .urls_to_download
                     .get("http://good-url.xyz/".to_string())
                     .unwrap()
@@ -55,33 +52,16 @@ mod tests {
         // when
         let download_result = UrlDownloadNotification {
             url: "http://good-url.xyz/".to_string(),
-            outcome: DownloadOutcome::Success {
-                mime: "image/webp".to_string(),
-                size: 400,
-            },
+            outcome: DownloadOutcome::Success { mime: "image/webp".to_string(), size: 400 },
         };
-        storage
-            .submit_download_results(vec![download_result])
-            .unwrap();
+        storage.submit_download_results(vec![download_result]).unwrap();
 
         // then
-        assert_eq!(
-            None,
-            storage
-                .urls_to_download
-                .get("http://good-url.xyz/".to_string())
-                .unwrap()
-        );
+        assert_eq!(None, storage.urls_to_download.get("http://good-url.xyz/".to_string()).unwrap());
 
         let url_hash = keccak::hash("http://good-url.xyz/".as_bytes());
         let preview_rul = storage.asset_previews.get(url_hash.to_bytes()).unwrap();
-        assert_eq!(
-            preview_rul,
-            Some(AssetPreviews {
-                size: 400,
-                failed: None
-            })
-        )
+        assert_eq!(preview_rul, Some(AssetPreviews { size: 400, failed: None }))
     }
 
     #[tokio::test]
@@ -95,14 +75,9 @@ mod tests {
         // when submitting unknows URL nothing should happen
         let download_result = UrlDownloadNotification {
             url: "http://good-url.xyz/".to_string(),
-            outcome: DownloadOutcome::Success {
-                mime: "image/webp".to_string(),
-                size: 400,
-            },
+            outcome: DownloadOutcome::Success { mime: "image/webp".to_string(), size: 400 },
         };
-        storage
-            .submit_download_results(vec![download_result])
-            .unwrap();
+        storage.submit_download_results(vec![download_result]).unwrap();
     }
 
     #[tokio::test]
@@ -116,10 +91,7 @@ mod tests {
             .urls_to_download
             .put(
                 "http://good-url.xyz/".to_string(),
-                UrlToDownload {
-                    timestamp: 1,
-                    download_attempts: DL_MAX_ATTEMPTS + 1,
-                },
+                UrlToDownload { timestamp: 1, download_attempts: DL_MAX_ATTEMPTS + 1 },
             )
             .unwrap();
 
@@ -128,15 +100,11 @@ mod tests {
             url: "http://good-url.xyz/".to_string(),
             outcome: DownloadOutcome::ServerError,
         };
-        storage
-            .submit_download_results(vec![download_result.clone()])
-            .unwrap();
+        storage.submit_download_results(vec![download_result.clone()]).unwrap();
 
         // then
-        let url_to_download = storage
-            .urls_to_download
-            .get("http://good-url.xyz/".to_string())
-            .unwrap();
+        let url_to_download =
+            storage.urls_to_download.get("http://good-url.xyz/".to_string()).unwrap();
         assert_eq!(None, url_to_download);
 
         let url_hash = keccak::hash("http://good-url.xyz/".as_bytes());

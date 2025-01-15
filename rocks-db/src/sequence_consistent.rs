@@ -1,27 +1,25 @@
-use crate::tree_seq::{TreeSeqIdx, TreesGaps};
-use crate::{key_encoders, Storage};
 use async_trait::async_trait;
 use entities::models::TreeState;
-use interface::sequence_consistent::SequenceConsistentManager;
-use interface::slot_getter::LastProcessedSlotGetter;
+use interface::{
+    sequence_consistent::SequenceConsistentManager, slot_getter::LastProcessedSlotGetter,
+};
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
+
+use crate::{
+    key_encoders,
+    tree_seq::{TreeSeqIdx, TreesGaps},
+    Storage,
+};
 
 #[async_trait]
 impl SequenceConsistentManager for Storage {
     fn tree_sequence_iter(&self) -> impl Iterator<Item = TreeState> {
-        self.tree_seq_idx
-            .iter_start()
-            .filter_map(Result::ok)
-            .flat_map(|(key, value)| {
-                let (tree, seq) = key_encoders::decode_pubkey_u64(key.to_vec()).ok()?;
-                let tree_seq_idx = bincode::deserialize::<TreeSeqIdx>(value.as_ref()).ok()?;
-                Some(TreeState {
-                    tree,
-                    seq,
-                    slot: tree_seq_idx.slot,
-                })
-            })
+        self.tree_seq_idx.iter_start().filter_map(Result::ok).flat_map(|(key, value)| {
+            let (tree, seq) = key_encoders::decode_pubkey_u64(key.to_vec()).ok()?;
+            let tree_seq_idx = bincode::deserialize::<TreeSeqIdx>(value.as_ref()).ok()?;
+            Some(TreeState { tree, seq, slot: tree_seq_idx.slot })
+        })
     }
 
     fn gaps_count(&self) -> i64 {
@@ -35,11 +33,7 @@ impl SequenceConsistentManager for Storage {
             self.trees_gaps.delete(tree).map_err(Into::into)
         };
         if let Err(e) = result {
-            error!(
-                "{} tree gap: {}",
-                if gap_found { "Put" } else { "Delete" },
-                e
-            );
+            error!("{} tree gap: {}", if gap_found { "Put" } else { "Delete" }, e);
         }
     }
 }

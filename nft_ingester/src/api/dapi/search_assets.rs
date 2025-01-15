@@ -1,23 +1,31 @@
-use crate::api::dapi::asset;
-use crate::api::dapi::converters::{ConversionError, SearchAssetsQuery};
-use crate::api::dapi::response::{AssetList, NativeBalance};
-use crate::api::dapi::rpc_asset_convertors::asset_list_to_rpc;
-use entities::api_req_params::{AssetSorting, GetByMethodsOptions};
-use entities::enums::TokenType;
-use interface::account_balance::AccountBalanceGetter;
-use interface::json::{JsonDownloader, JsonPersister};
-use interface::price_fetcher::TokenPriceFetcher;
-use interface::processing_possibility::ProcessingPossibilityChecker;
-use metrics_utils::ApiMetricsConfig;
-use rocks_db::errors::StorageError;
-use rocks_db::Storage;
-use solana_sdk::pubkey::Pubkey;
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
+
+use entities::{
+    api_req_params::{AssetSorting, GetByMethodsOptions},
+    enums::TokenType,
+};
+use interface::{
+    account_balance::AccountBalanceGetter,
+    json::{JsonDownloader, JsonPersister},
+    price_fetcher::TokenPriceFetcher,
+    processing_possibility::ProcessingPossibilityChecker,
+};
+use metrics_utils::ApiMetricsConfig;
+use rocks_db::{errors::StorageError, Storage};
+use solana_sdk::pubkey::Pubkey;
+use tokio::{
+    sync::Mutex,
+    task::{JoinError, JoinSet},
+};
 use tracing::error;
 
 use super::asset_preview::populate_previews;
+use crate::api::dapi::{
+    asset,
+    converters::{ConversionError, SearchAssetsQuery},
+    response::{AssetList, NativeBalance},
+    rpc_asset_convertors::asset_list_to_rpc,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub async fn search_assets<
@@ -122,15 +130,9 @@ async fn fetch_assets<
         &filter.try_into();
     if let Err(ConversionError::IncompatibleGroupingKey(_)) = filter_result {
         // If the error is IncompatibleGroupingKey, return an empty response
-        return Ok(AssetList {
-            total: 0,
-            limit: limit as u32,
-            ..AssetList::default()
-        });
+        return Ok(AssetList { total: 0, limit: limit as u32, ..AssetList::default() });
     }
-    let filter = filter_result
-        .as_ref()
-        .map_err(|e| StorageError::Common(e.to_string()))?; // TODO: change error
+    let filter = filter_result.as_ref().map_err(|e| StorageError::Common(e.to_string()))?; // TODO: change error
 
     let cursor_enabled = before.is_none() && after.is_none() && page.is_none();
 
@@ -144,15 +146,7 @@ async fn fetch_assets<
     };
 
     let keys = index_client
-        .get_asset_pubkeys_filtered(
-            filter,
-            &sort_by.into(),
-            limit,
-            page,
-            before,
-            after,
-            &options,
-        )
+        .get_asset_pubkeys_filtered(filter, &sort_by.into(), limit, page, before, after, &options)
         .await
         .map_err(|e| StorageError::Common(e.to_string()))?;
     let asset_ids = keys

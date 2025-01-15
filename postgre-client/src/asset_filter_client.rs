@@ -2,8 +2,7 @@ use std::str::FromStr;
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use entities::api_req_params::GetByMethodsOptions;
-use entities::enums::TokenType;
+use entities::{api_req_params::GetByMethodsOptions, enums::TokenType};
 use solana_sdk::{bs58, pubkey::Pubkey};
 use sqlx::{Execute, Postgres, QueryBuilder, Row};
 use tracing::log::debug;
@@ -70,7 +69,7 @@ impl PgClient {
                         &mut query_builder,
                     )?;
                 }
-            }
+            },
             AssetSortBy::Key => {
                 if let Some(before) = before {
                     let comparison = match order.sort_direction {
@@ -99,7 +98,7 @@ impl PgClient {
                         &mut query_builder,
                     )?;
                 }
-            }
+            },
         }
         // Add GROUP BY clause if necessary
         if group_clause_required {
@@ -203,7 +202,7 @@ fn add_filter_clause<'a>(
                     SpecificationAssetClass::FungibleAsset,
                 ];
                 push_asset_class_filter(query_builder, &classes, None);
-            }
+            },
             TokenType::NonFungible => {
                 let classes = vec![
                     SpecificationAssetClass::MplCoreAsset,
@@ -212,7 +211,7 @@ fn add_filter_clause<'a>(
                     SpecificationAssetClass::ProgrammableNft,
                 ];
                 push_asset_class_filter(query_builder, &classes, None);
-            }
+            },
             TokenType::RegularNFT => {
                 let classes = vec![
                     SpecificationAssetClass::MplCoreAsset,
@@ -221,15 +220,13 @@ fn add_filter_clause<'a>(
                     SpecificationAssetClass::ProgrammableNft,
                 ];
                 push_asset_class_filter(query_builder, &classes, Some(false));
-            }
+            },
             TokenType::CompressedNFT => {
-                let classes = vec![
-                    SpecificationAssetClass::Nft,
-                    SpecificationAssetClass::ProgrammableNft,
-                ];
+                let classes =
+                    vec![SpecificationAssetClass::Nft, SpecificationAssetClass::ProgrammableNft];
                 push_asset_class_filter(query_builder, &classes, Some(true));
-            }
-            TokenType::All => {}
+            },
+            TokenType::All => {},
         }
     }
     if let Some(owner_address) = &filter.owner_address {
@@ -242,23 +239,23 @@ fn add_filter_clause<'a>(
                         query_builder.push(" AND fungible_tokens.fbt_balance > ");
                         query_builder.push_bind(0i64);
                     }
-                }
+                },
                 TokenType::NonFungible => {
                     query_builder.push(" AND assets_v3.ast_owner = ");
                     query_builder.push_bind(owner_address);
-                }
+                },
                 TokenType::RegularNFT => {
                     query_builder.push(" AND assets_v3.ast_owner = ");
                     query_builder.push_bind(owner_address);
                     query_builder.push(" AND assets_v3.ast_is_compressed = ");
                     query_builder.push_bind(false);
-                }
+                },
                 TokenType::CompressedNFT => {
                     query_builder.push(" AND assets_v3.ast_owner = ");
                     query_builder.push_bind(owner_address);
                     query_builder.push(" AND assets_v3.ast_is_compressed = ");
                     query_builder.push_bind(true);
-                }
+                },
                 TokenType::All => {
                     query_builder.push(" AND (assets_v3.ast_owner = ");
                     query_builder.push_bind(owner_address);
@@ -270,7 +267,7 @@ fn add_filter_clause<'a>(
                     }
                     query_builder.push(" ) ");
                     query_builder.push(" ) ");
-                }
+                },
             }
         } else {
             query_builder.push(" AND assets_v3.ast_owner = ");
@@ -322,11 +319,11 @@ fn add_filter_clause<'a>(
             AssetSupply::Equal(s) => {
                 query_builder.push(" AND assets_v3.ast_supply = ");
                 query_builder.push_bind(*s as i64);
-            }
+            },
             AssetSupply::Greater(s) => {
                 query_builder.push(" AND assets_v3.ast_supply > ");
                 query_builder.push_bind(*s as i64);
-            }
+            },
         }
     }
 
@@ -451,14 +448,10 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         debug!("SEARCH QUERY: {}", &query.sql());
         let start_time = chrono::Utc::now();
         let result = query.fetch_all(&self.pool).await.inspect_err(|_e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, SELECT_ACTION, "assets_v3");
+            self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "assets_v3");
         })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, SELECT_ACTION, "assets_v3", start_time);
-        let r = result
-            .into_iter()
-            .map(|r| AssetSortedIndex::from((&r, &order.sort_by)));
+        self.metrics.observe_request(SQL_COMPONENT, SELECT_ACTION, "assets_v3", start_time);
+        let r = result.into_iter().map(|r| AssetSortedIndex::from((&r, &order.sort_by)));
         if order_reversed {
             Ok(r.rev().collect())
         } else {
@@ -475,11 +468,9 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         let query = query_builder.build();
         let start_time = chrono::Utc::now();
         let result = query.fetch_one(&self.pool).await.inspect_err(|_e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, COUNT_ACTION, "assets_v3");
+            self.metrics.observe_error(SQL_COMPONENT, COUNT_ACTION, "assets_v3");
         })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, COUNT_ACTION, "assets_v3", start_time);
+        self.metrics.observe_request(SQL_COMPONENT, COUNT_ACTION, "assets_v3", start_time);
         let count: i64 = result.get(0);
 
         Ok(count as u32)
@@ -493,12 +484,12 @@ impl AssetRawResponse {
                 let mut key = self.slot_created.to_be_bytes().to_vec();
                 key.extend_from_slice(&self.pubkey);
                 general_purpose::STANDARD_NO_PAD.encode(key)
-            }
+            },
             AssetSortBy::SlotUpdated => {
                 let mut key = self.slot_updated.to_be_bytes().to_vec();
                 key.extend_from_slice(&self.pubkey);
                 general_purpose::STANDARD_NO_PAD.encode(key)
-            }
+            },
             AssetSortBy::Key => bs58::encode(&self.pubkey).into_string(),
         }
     }

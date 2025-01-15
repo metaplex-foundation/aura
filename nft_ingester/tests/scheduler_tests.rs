@@ -1,10 +1,7 @@
-use assertables::assert_contains;
-use assertables::assert_contains_as_result;
+use assertables::{assert_contains, assert_contains_as_result};
 use nft_ingester::scheduler::Scheduler;
-use rocks_db::columns::asset_previews::UrlToDownload;
-use rocks_db::columns::offchain_data::OffChainData;
-use setup::await_async_for;
-use setup::rocks::RocksTestEnvironment;
+use rocks_db::columns::{asset_previews::UrlToDownload, offchain_data::OffChainData};
+use setup::{await_async_for, rocks::RocksTestEnvironment};
 
 const NFT_1: (&str, &str) = (
     "https://yra5lrhegorsgx7upcyi5trrfiktyczlq5g3jst3yvgaefab36vq.arweave.net/xEHVxOQzoyNf9Hiwjs4xKhU8CyuHTbTKe8VMAhQB36s",
@@ -68,11 +65,7 @@ async fn test_collect_urls_to_download() {
             last_read_at: 0,
         })
         .for_each(|entity| {
-            rocks_env
-                .storage
-                .asset_offchain_data
-                .put(entity.url.clone().unwrap(), entity)
-                .unwrap()
+            rocks_env.storage.asset_offchain_data.put(entity.url.clone().unwrap(), entity).unwrap()
         });
 
     let sut = Scheduler::new(rocks_env.storage.clone());
@@ -89,18 +82,10 @@ async fn test_collect_urls_to_download() {
         "https://888jup.com/img/888jup.png".to_string(),
     ];
     let res = rocks_env.storage.urls_to_download.get_from_start(10);
-    res.iter().for_each(
-        |(
-            url,
-            UrlToDownload {
-                timestamp,
-                download_attempts,
-            },
-        )| {
-            assert_contains!(expected_urls, url);
-            println!("URL: {}", url);
-            assert_eq!(*timestamp, 0);
-            assert_eq!(*download_attempts, 0);
-        },
-    );
+    res.iter().for_each(|(url, UrlToDownload { timestamp, download_attempts })| {
+        assert_contains!(expected_urls, url);
+        println!("URL: {}", url);
+        assert_eq!(*timestamp, 0);
+        assert_eq!(*download_attempts, 0);
+    });
 }

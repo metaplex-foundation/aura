@@ -68,10 +68,10 @@ pub async fn main() {
                             .unwrap();
                     }
                 }
-            }
+            },
             Err(e) => {
                 println!("Could not start iterator over cl_leafs: {}", e);
-            }
+            },
         }
     }
 
@@ -82,18 +82,11 @@ pub async fn main() {
     if !delete_batch.is_empty() {
         assets_with_missed_cl_items += delete_batch.len();
 
-        source_db
-            .tree_seq_idx
-            .delete_batch(std::mem::take(&mut delete_batch))
-            .await
-            .unwrap();
+        source_db.tree_seq_idx.delete_batch(std::mem::take(&mut delete_batch)).await.unwrap();
     }
 
     println!("Done for {:?}", start.elapsed());
-    println!(
-        "Found {} assets with missed CL items.",
-        assets_with_missed_cl_items
-    );
+    println!("Found {} assets with missed CL items.", assets_with_missed_cl_items);
 }
 
 async fn process_batch(
@@ -113,15 +106,15 @@ async fn process_batch(
                 if let Some(key) = key {
                     delete_batch.push(key);
                 }
-            }
+            },
             Err(err) if err.is_panic() => {
                 let err = err.into_panic();
                 println!("Task panic: {:?}", err);
-            }
+            },
             Err(err) => {
                 let err = err.to_string();
                 println!("Task error: {}", err);
-            }
+            },
         }
     }
 

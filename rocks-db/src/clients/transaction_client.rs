@@ -3,15 +3,14 @@ use entities::models::SignatureWithSlot;
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::asset::{AssetCompleteDetails, SourcedAssetLeaf};
-use crate::column::TypedColumn;
-use crate::parameters::Parameter;
-use crate::ToFlatbuffersConverter;
 use crate::{
+    asset::{AssetCompleteDetails, SourcedAssetLeaf},
+    column::TypedColumn,
     parameters,
+    parameters::Parameter,
     signature_client::SignatureIdx,
     transaction::{InstructionResult, TransactionResult, TransactionResultPersister},
-    Storage,
+    Storage, ToFlatbuffersConverter,
 };
 
 #[async_trait]
@@ -19,14 +18,11 @@ impl TransactionResultPersister for Storage {
     async fn store_block(&self, slot: u64, txs: &[TransactionResult]) -> Result<(), StorageError> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for tx in txs {
-            self.store_transaction_result_with_batch(&mut batch, tx, false, true)
-                .await?;
+            self.store_transaction_result_with_batch(&mut batch, tx, false, true).await?;
         }
         self.merge_top_parameter_with_batch(&mut batch, Parameter::LastBackfilledSlot, slot)
             .map_err(|e| StorageError::Common(e.to_string()))?;
-        self.write_batch(batch)
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?;
+        self.write_batch(batch).await.map_err(|e| StorageError::Common(e.to_string()))?;
         Ok(())
     }
 }
@@ -46,9 +42,7 @@ impl Storage {
             is_from_finalized_source,
         )
         .await?;
-        self.write_batch(batch)
-            .await
-            .map_err(|e| StorageError::Common(e.to_string()))?;
+        self.write_batch(batch).await.map_err(|e| StorageError::Common(e.to_string()))?;
         Ok(())
     }
 
@@ -69,9 +63,8 @@ impl Storage {
             }
         }
         if let Some((pk, signature)) = tx.transaction_signature {
-            if let Err(e) = self
-                .merge_top_parameter(parameters::Parameter::TopSeenSlot, signature.slot)
-                .await
+            if let Err(e) =
+                self.merge_top_parameter(parameters::Parameter::TopSeenSlot, signature.slot).await
             {
                 tracing::error!("Failed to store the ingested slot: {}", e);
             }
@@ -115,10 +108,7 @@ impl Storage {
                     builder.finished_data(),
                 );
                 if let Some(leaf) = update.update.as_ref().and_then(|u| u.leaf.as_ref()) {
-                    let leaf = SourcedAssetLeaf {
-                        leaf: leaf.clone(),
-                        is_from_finalized_source,
-                    };
+                    let leaf = SourcedAssetLeaf { leaf: leaf.clone(), is_from_finalized_source };
                     self.asset_leaf_data.merge_with_batch_raw(
                         batch,
                         pk,
@@ -153,8 +143,7 @@ impl Storage {
         }
         //todo: this doesn't seem to be a correct way to handle this, as delete will have no effect after any "late" tx ingestion
         if let Some(ref decompressed) = ix.decompressed {
-            self.asset_leaf_data
-                .delete_with_batch(batch, decompressed.pk);
+            self.asset_leaf_data.delete_with_batch(batch, decompressed.pk);
             let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(2500);
             let acd = decompressed.details.convert_to_fb(&mut builder);
             builder.finish_minimal(acd);

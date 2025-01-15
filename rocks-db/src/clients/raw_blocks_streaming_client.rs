@@ -1,6 +1,5 @@
-use crate::errors::StorageError;
-use crate::Storage;
-use crate::{column::TypedColumn, SlotStorage};
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use entities::models::RawBlock;
 use interface::asset_streaming_and_discovery::{
@@ -8,8 +7,9 @@ use interface::asset_streaming_and_discovery::{
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::DB;
-use std::sync::Arc;
 use tokio_stream::wrappers::ReceiverStream;
+
+use crate::{column::TypedColumn, errors::StorageError, SlotStorage, Storage};
 
 #[async_trait]
 impl RawBlocksStreamer for SlotStorage {
@@ -66,10 +66,7 @@ async fn process_raw_blocks_range(
 impl RawBlockGetter for Storage {
     fn get_raw_block(&self, slot: u64) -> Result<RawBlock, AsyncError> {
         self.db
-            .get_cf(
-                &self.db.cf_handle(RawBlock::NAME).unwrap(),
-                RawBlock::encode_key(slot),
-            )
+            .get_cf(&self.db.cf_handle(RawBlock::NAME).unwrap(), RawBlock::encode_key(slot))
             .map_err(|e| Box::new(e) as AsyncError)
             .and_then(|res| {
                 let err_msg = format!("Cannot get raw block with slot: '{slot}'!");

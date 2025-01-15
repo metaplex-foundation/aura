@@ -3,17 +3,14 @@ use std::sync::Arc;
 use borsh::BorshSerialize;
 use entities::api_req_params::{GetAsset, Options};
 use function_name::named;
-
 use plerkle_serialization::{
     root_as_account_info, serializer::serialize_account,
     solana_geyser_plugin_interface_shims::ReplicaAccountInfoV2,
 };
 use serial_test::serial;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::{program_option::COption, program_pack::Pack};
+use solana_sdk::{program_option::COption, program_pack::Pack, pubkey::Pubkey};
 use spl_token::state::{Account as TokenAccount, AccountState, Mint};
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+use tokio::{sync::Mutex, task::JoinSet};
 
 use super::common::*;
 
@@ -59,11 +56,7 @@ async fn index_account_update(setup: &TestSetup, pubkey: Pubkey, update: Account
     let account_data = account_info.data().unwrap().iter().collect::<Vec<_>>();
 
     let modified_account_data = match update {
-        AccountUpdate::TokenAccount(TokenAccountUpdate {
-            owner,
-            delegate,
-            state,
-        }) => {
+        AccountUpdate::TokenAccount(TokenAccountUpdate { owner, delegate, state }) => {
             let mut account = TokenAccount::unpack(&account_data).unwrap();
 
             update_field!(account.owner, owner);
@@ -73,7 +66,7 @@ async fn index_account_update(setup: &TestSetup, pubkey: Pubkey, update: Account
             let mut data = vec![0; TokenAccount::LEN];
             TokenAccount::pack(account, data.as_mut_slice()).unwrap();
             data
-        }
+        },
         AccountUpdate::MintAccount(MintAccountUpdate { supply }) => {
             let mut account = Mint::unpack(&account_data).unwrap();
 
@@ -82,7 +75,7 @@ async fn index_account_update(setup: &TestSetup, pubkey: Pubkey, update: Account
             let mut data = vec![0; Mint::LEN];
             Mint::pack(account, data.as_mut_slice()).unwrap();
             data
-        }
+        },
         AccountUpdate::MetadataAccount(MetadataAccountUpdate {
             primary_sale_happened,
             is_mutable,
@@ -94,7 +87,7 @@ async fn index_account_update(setup: &TestSetup, pubkey: Pubkey, update: Account
             update_field!(account.is_mutable, is_mutable);
 
             account.try_to_vec().unwrap()
-        }
+        },
         AccountUpdate::None => account_data,
     };
 
@@ -123,20 +116,14 @@ async fn test_account_updates() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
     let mint = Pubkey::try_from("843gdpsTE4DoJz3ZoBsEjAqT8UgAcyF5YojygGgGZE1f").unwrap();
 
     let nft_accounts = get_nft_accounts(&setup, mint).await;
 
-    let request = GetAsset {
-        id: mint.to_string(),
-        options: Options::default(),
-    };
+    let request = GetAsset { id: mint.to_string(), options: Options::default() };
 
     let random_pub_key = Pubkey::try_from("1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM").unwrap();
     let random_pub_key2 = Pubkey::try_from("1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh").unwrap();
@@ -187,11 +174,8 @@ async fn test_account_updates() {
 
         index_nft(&setup, mint).await;
 
-        let response = setup
-            .das_api
-            .get_asset(request.clone(), mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let response =
+            setup.das_api.get_asset(request.clone(), mutexed_tasks.clone()).await.unwrap();
         insta::assert_json_snapshot!(name.clone(), response);
 
         index_account_update(
@@ -202,11 +186,8 @@ async fn test_account_updates() {
         )
         .await;
 
-        let response_stale_lot = setup
-            .das_api
-            .get_asset(request.clone(), mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let response_stale_lot =
+            setup.das_api.get_asset(request.clone(), mutexed_tasks.clone()).await.unwrap();
         assert_eq!(
             response, response_stale_lot,
             "Update for {} account was not rejected",
@@ -221,11 +202,8 @@ async fn test_account_updates() {
         )
         .await;
 
-        let response_new_slot = setup
-            .das_api
-            .get_asset(request.clone(), mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let response_new_slot =
+            setup.das_api.get_asset(request.clone(), mutexed_tasks.clone()).await.unwrap();
 
         assert_ne!(response, response_new_slot);
         insta::assert_json_snapshot!(
@@ -247,10 +225,8 @@ async fn test_account_updates() {
             .filter(|u| u.name != named_update.name)
             .collect::<Vec<_>>();
 
-        let ordered_name_updates = other_named_updates
-            .into_iter()
-            .chain(vec![named_update])
-            .collect::<Vec<_>>();
+        let ordered_name_updates =
+            other_named_updates.into_iter().chain(vec![named_update]).collect::<Vec<_>>();
 
         for (i, named_update) in ordered_name_updates.into_iter().enumerate() {
             index_account_update(
@@ -263,11 +239,7 @@ async fn test_account_updates() {
         }
         insta::assert_json_snapshot!(
             format!("{}-with-all-updates", name),
-            setup
-                .das_api
-                .get_asset(request.clone(), mutexed_tasks.clone())
-                .await
-                .unwrap()
+            setup.das_api.get_asset(request.clone(), mutexed_tasks.clone()).await.unwrap()
         );
     }
 }

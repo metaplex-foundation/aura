@@ -1,10 +1,9 @@
+use std::{sync::Arc, time::Instant};
+
 use entities::models::{InscriptionDataInfo, InscriptionInfo};
 use metrics_utils::IngesterMetricsConfig;
-use rocks_db::batch_savers::BatchSaveStorage;
-use rocks_db::errors::StorageError;
+use rocks_db::{batch_savers::BatchSaveStorage, errors::StorageError};
 use solana_program::pubkey::Pubkey;
-use std::sync::Arc;
-use std::time::Instant;
 use usecase::save_metrics::result_to_metrics;
 
 pub struct InscriptionsProcessor {
@@ -41,11 +40,7 @@ impl InscriptionsProcessor {
         let begin_processing = Instant::now();
         let res = storage.store_inscription_data(key, inscription_data);
 
-        result_to_metrics(
-            self.metrics.clone(),
-            &res,
-            "inscriptions_data_merge_with_batch",
-        );
+        result_to_metrics(self.metrics.clone(), &res, "inscriptions_data_merge_with_batch");
         self.metrics.set_latency(
             "inscriptions_data_merge_with_batch",
             begin_processing.elapsed().as_millis() as f64,

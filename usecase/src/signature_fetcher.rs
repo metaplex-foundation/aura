@@ -38,12 +38,7 @@ where
         ingester: Arc<TI>,
         metrics: Arc<RpcBackfillerMetricsConfig>,
     ) -> Self {
-        Self {
-            data_layer,
-            rpc,
-            ingester,
-            metrics,
-        }
+        Self { data_layer, rpc, ingester, metrics }
     }
 
     pub async fn fetch_signatures(
@@ -51,10 +46,7 @@ where
         program_id: Pubkey,
         rpc_retry_interval_millis: u64,
     ) -> Result<(), StorageError> {
-        let signature = self
-            .data_layer
-            .first_persisted_signature_for(program_id)
-            .await?;
+        let signature = self.data_layer.first_persisted_signature_for(program_id).await?;
         if signature.is_none() {
             return Ok(());
         }
@@ -70,12 +62,12 @@ where
                 self.metrics
                     .inc_fetch_signatures("get_signatures_by_address", MetricStatus::SUCCESS);
                 all_signatures
-            }
+            },
             Err(e) => {
                 self.metrics
                     .inc_fetch_signatures("get_signatures_by_address", MetricStatus::FAILURE);
                 return Err(e);
-            }
+            },
         };
 
         if all_signatures.is_empty() {
@@ -98,10 +90,8 @@ where
         while batch_start < all_signatures.len() {
             let batch_end = std::cmp::min(batch_start + BATCH_SIZE, all_signatures.len());
             let batch = &all_signatures[batch_start..batch_end];
-            let missing_signatures = self
-                .data_layer
-                .missing_signatures(program_id, batch.to_vec())
-                .await?;
+            let missing_signatures =
+                self.data_layer.missing_signatures(program_id, batch.to_vec()).await?;
             batch_start = batch_end;
             if missing_signatures.is_empty() {
                 continue;
@@ -141,9 +131,7 @@ where
                 "Ingested {} transactions. Dropping signatures for program {} before slot {}.",
                 tx_cnt, program_id, fake_key.slot
             );
-            self.data_layer
-                .drop_signatures_before(program_id, fake_key)
-                .await?;
+            self.data_layer.drop_signatures_before(program_id, fake_key).await?;
         }
         let fake_key = SignatureWithSlot {
             signature: Default::default(),
@@ -154,9 +142,7 @@ where
             "Finished fetching signatures for program {}. Dropping signatures before slot {}.",
             program_id, fake_key.slot
         );
-        self.data_layer
-            .drop_signatures_before(program_id, fake_key)
-            .await?;
+        self.data_layer.drop_signatures_before(program_id, fake_key).await?;
         Ok(())
     }
 
@@ -184,11 +170,11 @@ where
             Ok(transactions) => {
                 metrics.inc_fetch_transactions("get_txs_by_signatures", MetricStatus::SUCCESS);
                 transactions
-            }
+            },
             Err(e) => {
                 metrics.inc_fetch_transactions("get_txs_by_signatures", MetricStatus::FAILURE);
                 return Err(e);
-            }
+            },
         };
 
         let mut failed_tx_signatures = vec![];
@@ -197,7 +183,7 @@ where
             match ingester.ingest_transaction(transaction.clone()).await {
                 Ok(_) => {
                     metrics.inc_transactions_processed("ingest_transaction", MetricStatus::SUCCESS);
-                }
+                },
                 Err(_) => {
                     metrics.inc_transactions_processed("ingest_transaction", MetricStatus::FAILURE);
 
@@ -213,7 +199,7 @@ where
                     .map_err(|e| StorageError::Common(e.to_string()))?;
 
                     failed_tx_signatures.push(signature);
-                }
+                },
             };
         }
 

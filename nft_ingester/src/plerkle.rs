@@ -1,6 +1,5 @@
 use plerkle_serialization::deserializer::*;
-use solana_program::instruction::CompiledInstruction;
-use solana_program::pubkey::Pubkey;
+use solana_program::{instruction::CompiledInstruction, pubkey::Pubkey};
 use solana_sdk::signature::Signature;
 use solana_transaction_status::InnerInstructions;
 
@@ -43,14 +42,8 @@ impl TryFrom<PlerkleAccountInfo<'_>> for AccountInfo {
 
         Ok(Self {
             slot: account_info.slot(),
-            pubkey: account_info
-                .pubkey()
-                .ok_or(PlerkleDeserializerError::NotFound)?
-                .try_into()?,
-            owner: account_info
-                .owner()
-                .ok_or(PlerkleDeserializerError::NotFound)?
-                .try_into()?,
+            pubkey: account_info.pubkey().ok_or(PlerkleDeserializerError::NotFound)?.try_into()?,
+            owner: account_info.owner().ok_or(PlerkleDeserializerError::NotFound)?.try_into()?,
             lamports: account_info.lamports(),
             rent_epoch: account_info.rent_epoch(),
             executable: account_info.executable(),
@@ -72,9 +65,7 @@ impl<'a> TryFrom<PlerkleTransactionInfo<'a>> for TransactionInfo {
         let signature = PlerkleOptionalStr(tx_info.signature()).try_into()?;
         let account_keys = PlerkleOptionalPubkeyVector(tx_info.account_keys()).try_into()?;
         let message_instructions = PlerkleCompiledInstructionVector(
-            tx_info
-                .outer_instructions()
-                .ok_or(PlerkleDeserializerError::NotFound)?,
+            tx_info.outer_instructions().ok_or(PlerkleDeserializerError::NotFound)?,
         )
         .try_into()?;
         let compiled = tx_info.compiled_inner_instructions();
@@ -86,12 +77,6 @@ impl<'a> TryFrom<PlerkleTransactionInfo<'a>> for TransactionInfo {
                 .try_into()
         }?;
 
-        Ok(Self {
-            slot,
-            signature,
-            account_keys,
-            message_instructions,
-            meta_inner_instructions,
-        })
+        Ok(Self { slot, signature, account_keys, message_instructions, meta_inner_instructions })
     }
 }

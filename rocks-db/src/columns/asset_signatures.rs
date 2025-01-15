@@ -1,10 +1,15 @@
-use crate::column::TypedColumn;
-use crate::key_encoders::{decode_asset_signature_key, encode_asset_signature_key};
-use crate::{Result, Storage};
-use entities::api_req_params::AssetSortDirection;
-use entities::models::{AssetSignature, AssetSignatureKey, AssetSignatureWithPagination};
+use entities::{
+    api_req_params::AssetSortDirection,
+    models::{AssetSignature, AssetSignatureKey, AssetSignatureWithPagination},
+};
 use interface::asset_sigratures::AssetSignaturesGetter;
 use solana_sdk::pubkey::Pubkey;
+
+use crate::{
+    column::TypedColumn,
+    key_encoders::{decode_asset_signature_key, encode_asset_signature_key},
+    Result, Storage,
+};
 
 impl TypedColumn for AssetSignature {
     type KeyType = AssetSignatureKey;
@@ -37,23 +42,19 @@ impl AssetSignaturesGetter for Storage {
                 tree,
                 leaf_idx,
                 // Skip first elem if after is_some
-                seq: after_sequence
-                    .map(|seq| seq.saturating_add(1))
-                    .unwrap_or_default(),
+                seq: after_sequence.map(|seq| seq.saturating_add(1)).unwrap_or_default(),
             }),
             AssetSortDirection::Desc => self.asset_signature.iter_reverse(AssetSignatureKey {
                 tree,
                 leaf_idx,
                 // Skip first elem if after is_some
-                seq: after_sequence
-                    .map(|seq| seq.saturating_sub(1))
-                    .unwrap_or(u64::MAX),
+                seq: after_sequence.map(|seq| seq.saturating_sub(1)).unwrap_or(u64::MAX),
             }),
         };
 
         iter.skip(
-            page.and_then(|page| page.saturating_sub(1).checked_mul(limit))
-                .unwrap_or_default() as usize,
+            page.and_then(|page| page.saturating_sub(1).checked_mul(limit)).unwrap_or_default()
+                as usize,
         )
         .filter_map(std::result::Result::ok)
         .map_while(move |(key, value)| {

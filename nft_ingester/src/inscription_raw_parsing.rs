@@ -1,8 +1,9 @@
-use crate::error::IngesterError;
 use anchor_lang::{AccountDeserialize, Discriminator};
 use libreplex_inscriptions::{
     Inscription, InscriptionRankPage, InscriptionSummary, InscriptionV3, Migrator,
 };
+
+use crate::error::IngesterError;
 
 pub enum ParsedInscription {
     Inscription(Inscription),
@@ -26,7 +27,7 @@ pub fn handle_inscription_account(
         Inscription::DISCRIMINATOR => {
             let inscription = Inscription::try_deserialize(&mut account_data)?;
             ParsedInscription::Inscription(inscription)
-        }
+        },
         // no need for indexing such accounts
         InscriptionRankPage::DISCRIMINATOR
         | InscriptionSummary::DISCRIMINATOR

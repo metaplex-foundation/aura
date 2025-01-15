@@ -1,31 +1,33 @@
-use crate::error::IngesterError;
-use crate::error::IngesterError::MissingFlatbuffersFieldError;
-use crate::inscription_raw_parsing::ParsedInscription;
-use crate::plerkle;
-use crate::plerkle::PlerkleAccountInfo;
-use blockbuster::error::BlockbusterError;
-use blockbuster::program_handler::ProgramParser;
-use blockbuster::programs::mpl_core_program::{
-    MplCoreAccountData, MplCoreAccountState, MplCoreParser,
+use std::{fmt::Debug, str::FromStr, sync::Arc};
+
+use blockbuster::{
+    error::BlockbusterError,
+    program_handler::ProgramParser,
+    programs::{
+        mpl_core_program::{MplCoreAccountData, MplCoreAccountState, MplCoreParser},
+        token_account::{TokenAccountParser, TokenProgramAccount},
+        token_extensions::{Token2022AccountParser, TokenExtensionsProgramAccount},
+        token_metadata::{TokenMetadataAccountData, TokenMetadataParser},
+        ProgramParseResult,
+    },
 };
-use blockbuster::programs::token_account::{TokenAccountParser, TokenProgramAccount};
-use blockbuster::programs::token_extensions::{
-    Token2022AccountParser, TokenExtensionsProgramAccount,
-};
-use blockbuster::programs::token_metadata::{TokenMetadataAccountData, TokenMetadataParser};
-use blockbuster::programs::ProgramParseResult;
 use chrono::Utc;
-use entities::enums::UnprocessedAccount;
-use entities::models::{BufferedTransaction, EditionV1, MasterEdition};
+use entities::{
+    enums::UnprocessedAccount,
+    models::{BufferedTransaction, EditionV1, MasterEdition},
+};
 use flatbuffers::FlatBufferBuilder;
 use itertools::Itertools;
-use solana_program::program_pack::Pack;
-use solana_program::pubkey::Pubkey;
-use std::fmt::Debug;
-use std::str::FromStr;
-use std::sync::Arc;
+use solana_program::{program_pack::Pack, pubkey::Pubkey};
 use tracing::log::{debug, warn};
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
+
+use crate::{
+    error::{IngesterError, IngesterError::MissingFlatbuffersFieldError},
+    inscription_raw_parsing::ParsedInscription,
+    plerkle,
+    plerkle::PlerkleAccountInfo,
+};
 
 pub struct MessageParser {
     token_acc_parser: Arc<TokenAccountParser>,
@@ -53,12 +55,7 @@ impl MessageParser {
         let mpl_core_parser = Arc::new(MplCoreParser {});
         let token_2022_parser = Arc::new(Token2022AccountParser {});
 
-        Self {
-            token_acc_parser,
-            mplx_acc_parser,
-            mpl_core_parser,
-            token_2022_parser,
-        }
+        Self { token_acc_parser, mplx_acc_parser, mpl_core_parser, token_2022_parser }
     }
 
     pub fn parse_transaction(
@@ -78,10 +75,7 @@ impl MessageParser {
             }
         }
 
-        Some(BufferedTransaction {
-            transaction: data,
-            map_flatbuffer,
-        })
+        Some(BufferedTransaction { transaction: data, map_flatbuffer })
     }
 
     pub fn parse_account(
@@ -109,23 +103,15 @@ impl MessageParser {
         // do not use match expression
         // because match cases cannot contain function calls like spl_token::id()
         let accounts = if account_owner == spl_token::id() {
-            self.handle_spl_token_account(&account_info)
-                .into_iter()
-                .collect_vec()
+            self.handle_spl_token_account(&account_info).into_iter().collect_vec()
         } else if account_owner == blockbuster::programs::token_metadata::token_metadata_id() {
-            self.handle_token_metadata_account(&account_info)
-                .into_iter()
-                .collect_vec()
+            self.handle_token_metadata_account(&account_info).into_iter().collect_vec()
         } else if account_owner == self.mpl_core_parser.key() {
             self.handle_mpl_core_account(&account_info)
         } else if account_owner == libreplex_inscriptions::id() {
-            self.handle_inscription_account(&account_info)
-                .into_iter()
-                .collect_vec()
+            self.handle_inscription_account(&account_info).into_iter().collect_vec()
         } else if account_owner == spl_token_2022::id() {
-            self.parse_spl_2022_accounts(&account_info)
-                .into_iter()
-                .collect_vec()
+            self.parse_spl_2022_accounts(&account_info).into_iter().collect_vec()
         } else {
             Vec::new()
         };
@@ -151,9 +137,7 @@ impl MessageParser {
         {
             return None;
         }
-        let acc_parse_result = self
-            .token_acc_parser
-            .handle_account(account_info.data.as_slice());
+        let acc_parse_result = self.token_acc_parser.handle_account(account_info.data.as_slice());
 
         match acc_parse_result {
             Ok(acc_parsed) => {
@@ -161,13 +145,13 @@ impl MessageParser {
                 match concrete {
                     ProgramParseResult::TokenProgramAccount(parsing_result) => {
                         return Some(self.parse_spl_accounts(account_info, parsing_result))
-                    }
+                    },
                     _ => debug!("\nUnexpected message\n"),
                 };
-            }
+            },
             Err(e) => {
                 account_parsing_error(e, account_info);
-            }
+            },
         }
 
         None
@@ -194,7 +178,7 @@ impl MessageParser {
                     amount: ta.amount as i64,
                     write_version: account_update.write_version,
                 })
-            }
+            },
             TokenProgramAccount::Mint(m) => {
                 UnprocessedAccount::Mint(Box::new(entities::models::Mint {
                     pubkey: key,
@@ -207,7 +191,7 @@ impl MessageParser {
                     extensions: None,
                     write_version: account_update.write_version,
                 }))
-            }
+            },
         }
     }
 
@@ -215,9 +199,8 @@ impl MessageParser {
         &self,
         account_update: &plerkle::AccountInfo,
     ) -> Option<UnprocessedAccount> {
-        let acc_parse_result = self
-            .token_2022_parser
-            .handle_account(account_update.data.as_slice());
+        let acc_parse_result =
+            self.token_2022_parser.handle_account(account_update.data.as_slice());
 
         let key = account_update.pubkey;
         match acc_parse_result {
@@ -245,7 +228,7 @@ impl MessageParser {
                                     amount: ta.account.amount as i64,
                                     write_version: account_update.write_version,
                                 }))
-                            }
+                            },
                             TokenExtensionsProgramAccount::MintAccount(m) => {
                                 Some(UnprocessedAccount::Mint(Box::new(entities::models::Mint {
                                     pubkey: key,
@@ -258,16 +241,16 @@ impl MessageParser {
                                     extensions: Some(m.extensions.clone()),
                                     write_version: account_update.write_version,
                                 })))
-                            }
+                            },
                             _ => None,
                         }
-                    }
+                    },
                     _ => debug!("\nUnexpected message\n"),
                 };
-            }
+            },
             Err(e) => {
                 account_parsing_error(e, account_update);
-            }
+            },
         }
 
         None
@@ -277,9 +260,7 @@ impl MessageParser {
         &self,
         account_info: &plerkle::AccountInfo,
     ) -> Option<UnprocessedAccount> {
-        let acc_parse_result = self
-            .mplx_acc_parser
-            .handle_account(account_info.data.as_slice());
+        let acc_parse_result = self.mplx_acc_parser.handle_account(account_info.data.as_slice());
         match acc_parse_result {
             Ok(acc_parsed) => {
                 let concrete = acc_parsed.result_type();
@@ -295,7 +276,7 @@ impl MessageParser {
                                         write_version: account_info.write_version,
                                     },
                                 ))
-                            }
+                            },
                             TokenMetadataAccountData::MetadataV1(m) => {
                                 return Some(UnprocessedAccount::MetadataInfo(
                                     entities::models::MetadataInfo {
@@ -308,7 +289,7 @@ impl MessageParser {
                                         metadata_owner: Some(account_info.owner.to_string()),
                                     },
                                 ))
-                            }
+                            },
                             TokenMetadataAccountData::MasterEditionV1(m) => {
                                 return Some(UnprocessedAccount::Edition(
                                     entities::models::EditionMetadata {
@@ -325,7 +306,7 @@ impl MessageParser {
                                         slot_updated: account_info.slot,
                                     },
                                 ))
-                            }
+                            },
                             TokenMetadataAccountData::MasterEditionV2(m) => {
                                 return Some(UnprocessedAccount::Edition(
                                     entities::models::EditionMetadata {
@@ -342,7 +323,7 @@ impl MessageParser {
                                         slot_updated: account_info.slot,
                                     },
                                 ))
-                            }
+                            },
                             TokenMetadataAccountData::EditionV1(e) => {
                                 return Some(UnprocessedAccount::Edition(
                                     entities::models::EditionMetadata {
@@ -358,16 +339,16 @@ impl MessageParser {
                                         slot_updated: account_info.slot,
                                     },
                                 ))
-                            }
+                            },
                             _ => debug!("Not implemented"),
                         };
-                    }
+                    },
                     _ => debug!("\nUnexpected message\n"),
                 };
-            }
+            },
             Err(e) => match e {
                 BlockbusterError::AccountTypeNotImplemented
-                | BlockbusterError::UninitializedAccount => {}
+                | BlockbusterError::UninitializedAccount => {},
                 _ => account_parsing_error(e, account_info),
             },
         }
@@ -379,22 +360,20 @@ impl MessageParser {
         &self,
         account_info: &plerkle::AccountInfo,
     ) -> Vec<UnprocessedAccount> {
-        let acc_parse_result = self
-            .mpl_core_parser
-            .handle_account(account_info.data.as_slice());
+        let acc_parse_result = self.mpl_core_parser.handle_account(account_info.data.as_slice());
         match acc_parse_result {
             Ok(acc_parsed) => {
                 let concrete = acc_parsed.result_type();
                 match concrete {
                     ProgramParseResult::MplCore(parsing_result) => {
                         return self.parse_mpl_core_accounts(account_info, parsing_result)
-                    }
+                    },
                     _ => debug!("\nUnexpected message\n"),
                 };
-            }
+            },
             Err(e) => {
                 account_parsing_error(e, account_info);
-            }
+            },
         }
 
         Vec::new()
@@ -417,7 +396,7 @@ impl MessageParser {
                             slot_updated: account_info.slot,
                         },
                     ))
-                }
+                },
                 ParsedInscription::InscriptionData(inscription_data) => {
                     return Some(UnprocessedAccount::InscriptionData(
                         entities::models::InscriptionDataInfo {
@@ -426,12 +405,12 @@ impl MessageParser {
                             slot_updated: account_info.slot,
                         },
                     ))
-                }
-                ParsedInscription::UnhandledAccount => {}
+                },
+                ParsedInscription::UnhandledAccount => {},
             },
             Err(e) => {
                 account_parsing_error(e, account_info);
-            }
+            },
         }
 
         None
@@ -465,17 +444,17 @@ impl MessageParser {
         match &parsing_result.data {
             MplCoreAccountData::Asset(_)
             | MplCoreAccountData::EmptyAccount
-            | MplCoreAccountData::HashedAsset => response.push(UnprocessedAccount::MplCoreFee(
-                entities::models::CoreAssetFee {
+            | MplCoreAccountData::HashedAsset => {
+                response.push(UnprocessedAccount::MplCoreFee(entities::models::CoreAssetFee {
                     indexable_asset: parsing_result.data.clone(),
                     data: account_update.data.clone(),
                     slot_updated: account_update.slot,
                     write_version: account_update.write_version,
                     lamports: account_update.lamports,
                     rent_epoch: account_update.rent_epoch,
-                },
-            )),
-            _ => {}
+                }))
+            },
+            _ => {},
         };
 
         response
@@ -494,17 +473,13 @@ fn map_account_info_fb_bytes(
 
     let pubkey = plerkle_serialization::Pubkey::new(
         &Pubkey::from_str(
-            account_update
-                .pubkey()
-                .ok_or(MissingFlatbuffersFieldError("pubkey".to_string()))?,
+            account_update.pubkey().ok_or(MissingFlatbuffersFieldError("pubkey".to_string()))?,
         )?
         .to_bytes(),
     );
     let owner = plerkle_serialization::Pubkey::new(
         &Pubkey::from_str(
-            account_update
-                .owner()
-                .ok_or(MissingFlatbuffersFieldError("owner".to_string()))?,
+            account_update.owner().ok_or(MissingFlatbuffersFieldError("owner".to_string()))?,
         )?
         .to_bytes(),
     );
@@ -512,10 +487,7 @@ fn map_account_info_fb_bytes(
     let mut builder = FlatBufferBuilder::new();
 
     let data = builder.create_vector(
-        account_data
-            .data()
-            .ok_or(MissingFlatbuffersFieldError("data".to_string()))?
-            .bytes(),
+        account_data.data().ok_or(MissingFlatbuffersFieldError("data".to_string()))?.bytes(),
     );
 
     let args = plerkle_serialization::AccountInfoArgs {
@@ -538,8 +510,5 @@ fn map_account_info_fb_bytes(
 }
 
 fn account_parsing_error(err: impl Debug, account_info: &plerkle::AccountInfo) {
-    warn!(
-        "Error while parsing account: {:?} {}",
-        err, account_info.pubkey
-    );
+    warn!("Error while parsing account: {:?} {}", err, account_info.pubkey);
 }

@@ -1,21 +1,24 @@
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
+};
 
 use clap::Parser;
 use entities::models::RawBlock;
 use indicatif::{ProgressBar, ProgressStyle};
 use interface::signature_persistence::BlockConsumer;
-use metrics_utils::BackfillerMetricsConfig;
-use metrics_utils::{red::RequestErrorDurationMetrics, IngesterMetricsConfig};
+use metrics_utils::{
+    red::RequestErrorDurationMetrics, BackfillerMetricsConfig, IngesterMetricsConfig,
+};
 use nft_ingester::{
     backfiller::DirectBlockParser,
     processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
     transaction_ingester,
 };
-use rocks_db::migrator::MigrationState;
-use rocks_db::SlotStorage;
-use rocks_db::{column::TypedColumn, Storage};
+use rocks_db::{column::TypedColumn, migrator::MigrationState, SlotStorage, Storage};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -70,20 +73,15 @@ async fn main() {
     // Initialize the DirectBlockParser
     let ingester_metrics = Arc::new(IngesterMetricsConfig::new());
     let metrics = Arc::new(BackfillerMetricsConfig::new());
-    let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
-        target_db.clone(),
-        ingester_metrics.clone(),
-    ));
+    let bubblegum_updates_processor =
+        Arc::new(BubblegumTxProcessor::new(target_db.clone(), ingester_metrics.clone()));
 
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(
         bubblegum_updates_processor.clone(),
     ));
 
-    let consumer = Arc::new(DirectBlockParser::new(
-        tx_ingester.clone(),
-        target_db.clone(),
-        metrics.clone(),
-    ));
+    let consumer =
+        Arc::new(DirectBlockParser::new(tx_ingester.clone(), target_db.clone(), metrics.clone()));
 
     // Concurrency setup
     let num_workers = args.workers;
@@ -104,10 +102,10 @@ async fn main() {
                 shutdown_token_clone.cancel();
                 // Close the channel to signal workers to stop
                 slot_sender_clone.close();
-            }
+            },
             Err(err) => {
                 error!("Unable to listen for shutdown signal: {}", err);
-            }
+            },
         }
     });
 
@@ -203,7 +201,7 @@ async fn main() {
                     Err(e) => {
                         error!("Failed to decode the value for slot {}: {}", slot, e);
                         continue;
-                    }
+                    },
                 };
 
                 if let Err(e) = consumer.consume_block(slot, raw_block.block).await {
@@ -252,11 +250,7 @@ async fn main() {
             let elapsed = current_time.duration_since(last_time).as_secs_f64();
             let count = current_count - last_count;
 
-            let current_rate = if elapsed > 0.0 {
-                (count as f64) / elapsed
-            } else {
-                0.0
-            };
+            let current_rate = if elapsed > 0.0 { (count as f64) / elapsed } else { 0.0 };
 
             // Update rate
             {
@@ -325,13 +319,13 @@ async fn send_slots_to_workers(
                     error!("Failed to send slot {} to workers", slot);
                     break;
                 }
-            }
+            },
             Ok(None) => {
                 warn!("Slot {} not found in source database", slot);
-            }
+            },
             Err(e) => {
                 error!("Error fetching slot {}: {}", slot, e);
-            }
+            },
         }
     }
 }

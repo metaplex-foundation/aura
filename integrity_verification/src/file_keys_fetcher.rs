@@ -1,14 +1,17 @@
+use std::collections::HashMap;
+
+use async_trait::async_trait;
+use interface::error::IntegrityVerificationError;
+use postgre_client::{error::IndexDbError, storage_traits::IntegrityVerificationKeysFetcher};
+use tokio::{
+    fs::File,
+    io::{AsyncBufReadExt, BufReader},
+};
+
 use crate::diff_checker::{
     GET_ASSET_BY_AUTHORITY_METHOD, GET_ASSET_BY_CREATOR_METHOD, GET_ASSET_BY_GROUP_METHOD,
     GET_ASSET_BY_OWNER_METHOD, GET_ASSET_METHOD, GET_ASSET_PROOF_METHOD,
 };
-use async_trait::async_trait;
-use interface::error::IntegrityVerificationError;
-use postgre_client::error::IndexDbError;
-use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
-use std::collections::HashMap;
-use tokio::fs::File;
-use tokio::io::{AsyncBufReadExt, BufReader};
 
 /// This is used in tests only.
 pub struct FileKeysFetcher {

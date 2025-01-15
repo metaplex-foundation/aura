@@ -1,31 +1,38 @@
-use crate::config::{BackfillerSourceMode, BigTableConfig};
-use crate::error::IngesterError;
+use std::{collections::HashMap, sync::Arc, time};
+
 use async_trait::async_trait;
 use backfill_rpc::rpc::BackfillRPC;
 use entities::models::{BufferedTransaction, RawBlock};
 use flatbuffers::FlatBufferBuilder;
-use interface::error::{BlockConsumeError, StorageError, UsecaseError};
-use interface::signature_persistence::{BlockConsumer, BlockProducer};
-use interface::slots_dumper::{SlotGetter, SlotsDumper};
+use interface::{
+    error::{BlockConsumeError, StorageError, UsecaseError},
+    signature_persistence::{BlockConsumer, BlockProducer},
+    slots_dumper::{SlotGetter, SlotsDumper},
+};
 use metrics_utils::BackfillerMetricsConfig;
 use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
-use rocks_db::column::TypedColumn;
-use rocks_db::columns::bubblegum_slots::ForceReingestableSlots;
-use rocks_db::transaction::{TransactionProcessor, TransactionResultPersister};
-use rocks_db::{SlotStorage, Storage};
+use rocks_db::{
+    column::TypedColumn,
+    columns::bubblegum_slots::ForceReingestableSlots,
+    transaction::{TransactionProcessor, TransactionResultPersister},
+    SlotStorage, Storage,
+};
 use solana_program::pubkey::Pubkey;
 use solana_transaction_status::{
     EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta, UiConfirmedBlock,
 };
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time;
-
 use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use usecase::bigtable::{is_bubblegum_transaction_encoded, BigTableClient};
-use usecase::slots_collector::SlotsGetter;
+use usecase::{
+    bigtable::{is_bubblegum_transaction_encoded, BigTableClient},
+    slots_collector::SlotsGetter,
+};
+
+use crate::{
+    config::{BackfillerSourceMode, BigTableConfig},
+    error::IngesterError,
+};
 
 pub const GET_SIGNATURES_LIMIT: usize = 2000;
 pub const GET_SLOT_RETRIES: u32 = 3;
@@ -74,11 +81,10 @@ impl SlotsGetter for BackfillSource {
                     .big_table_inner_client
                     .get_slots_sorted_desc(collected_key, start_at, rows_limit)
                     .await
-            }
+            },
             BackfillSource::Rpc(rpc) => {
-                rpc.get_slots_sorted_desc(collected_key, start_at, rows_limit)
-                    .await
-            }
+                rpc.get_slots_sorted_desc(collected_key, start_at, rows_limit).await
+            },
         }
     }
 }
@@ -118,11 +124,7 @@ where
         persister: Arc<P>,
         metrics: Arc<BackfillerMetricsConfig>,
     ) -> DirectBlockParser<T, P> {
-        DirectBlockParser {
-            ingester,
-            persister,
-            metrics,
-        }
+        DirectBlockParser { ingester, persister, metrics }
     }
 }
 pub async fn run_backfill_slots<C>(
@@ -178,9 +180,7 @@ where
         .db
         .try_catch_up_with_primary()
         .map_err(|e| IngesterError::DatabaseError(e.to_string()))?;
-    let mut it = slot_db
-        .db
-        .raw_iterator_cf(&slot_db.db.cf_handle(RawBlock::NAME).unwrap());
+    let mut it = slot_db.db.raw_iterator_cf(&slot_db.db.cf_handle(RawBlock::NAME).unwrap());
     if let Some(start_slot) = start_slot {
         it.seek(RawBlock::encode_key(start_slot));
     } else {
@@ -199,7 +199,7 @@ where
                 Err(e) => {
                     error!("Failed to decode the value for slot {}: {}", slot, e);
                     continue;
-                }
+                },
             };
             let block_time = raw_block.block.block_time;
             if let Err(e) = consumer.consume_block(slot, raw_block.block).await {
@@ -252,14 +252,11 @@ where
                 Err(err) => {
                     error!("Error serializing transaction with plerkle: {}", err);
                     continue;
-                }
+                },
             };
 
             let tx = builder.finished_data().to_vec();
-            let tx = BufferedTransaction {
-                transaction: tx,
-                map_flatbuffer: false,
-            };
+            let tx = BufferedTransaction { transaction: tx, map_flatbuffer: false };
             match self
                 .ingester
                 .get_ingest_transaction_results(tx.clone())
@@ -268,32 +265,26 @@ where
                 Ok(r) => {
                     results.push(r);
                     self.metrics.inc_data_processed("backfiller_tx_processed");
-                }
+                },
                 Err(e) => {
                     let signature =
                         plerkle_serialization::root_as_transaction_info(tx.transaction.as_slice())
                             .map(|parsed_tx| parsed_tx.signature().unwrap_or_default())
                             .unwrap_or_default();
                     error!("Failed to ingest transaction {}: {}", signature, e);
-                    self.metrics
-                        .inc_data_processed("backfiller_tx_processed_failed");
-                }
+                    self.metrics.inc_data_processed("backfiller_tx_processed_failed");
+                },
             };
         }
-        match self
-            .persister
-            .store_block(slot, results.as_slice())
-            .await
-            .map_err(|e| e.to_string())
+        match self.persister.store_block(slot, results.as_slice()).await.map_err(|e| e.to_string())
         {
             Ok(_) => {
                 self.metrics.inc_data_processed("backfiller_slot_processed");
-            }
+            },
             Err(e) => {
                 error!("Failed to persist block {}: {}", slot, e);
-                self.metrics
-                    .inc_data_processed("backfiller_slot_processed_failed");
-            }
+                self.metrics.inc_data_processed("backfiller_slot_processed_failed");
+            },
         };
 
         Ok(())
@@ -309,9 +300,7 @@ pub async fn connect_new_bigtable_from_config(
 ) -> Result<BigTableClient, IngesterError> {
     let big_table_creds = config.get_big_table_creds_key()?;
     let big_table_timeout = config.get_big_table_timeout_key()?;
-    BigTableClient::connect_new_with(big_table_creds, big_table_timeout)
-        .await
-        .map_err(Into::into)
+    BigTableClient::connect_new_with(big_table_creds, big_table_timeout).await.map_err(Into::into)
 }
 
 pub struct ForceReingestableSlotGetter<T, P>
@@ -332,10 +321,7 @@ where
         rocks_client: Arc<Storage>,
         direct_block_parser: Arc<DirectBlockParser<T, P>>,
     ) -> ForceReingestableSlotGetter<T, P> {
-        ForceReingestableSlotGetter {
-            rocks_client,
-            direct_block_parser,
-        }
+        ForceReingestableSlotGetter { rocks_client, direct_block_parser }
     }
 }
 
@@ -358,10 +344,7 @@ where
         &self,
         slots: Vec<u64>,
     ) -> core::result::Result<(), interface::error::StorageError> {
-        self.rocks_client
-            .force_reingestable_slots
-            .delete_batch(slots.clone())
-            .await?;
+        self.rocks_client.force_reingestable_slots.delete_batch(slots.clone()).await?;
         Ok(())
     }
 }

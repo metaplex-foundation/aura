@@ -1,41 +1,38 @@
-use crate::{
-    cl_items::ClItemKey, column::TypedColumn, columns::leaf_signatures::LeafSignature, SlotStorage,
-    Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT,
-    ROCKS_COMPONENT,
-};
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 use entities::models::{ClItem, ForkedItem, LeafSignatureAllData, RawBlock};
 use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
 use rocksdb::IteratorMode;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
-use std::collections::HashSet;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
+
+use crate::{
+    cl_items::ClItemKey, column::TypedColumn, columns::leaf_signatures::LeafSignature, SlotStorage,
+    Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT,
+    ROCKS_COMPONENT,
+};
 
 #[async_trait]
 impl CompressedTreeChangesManager for Storage {
     fn tree_seq_idx_iter(&self) -> impl Iterator<Item = LeafSignatureAllData> {
-        self.leaf_signature
-            .iter_start()
-            .filter_map(Result::ok)
-            .flat_map(
-                |(key, value)| match LeafSignature::decode_key(key.to_vec()) {
-                    Ok((signature, tree, leaf_idx)) => {
-                        match bincode::deserialize::<LeafSignature>(value.as_ref()) {
-                            Ok(slot_sequences) => Ok(LeafSignatureAllData {
-                                tree,
-                                signature,
-                                leaf_idx,
-                                slot_sequences: slot_sequences.data,
-                            }),
-                            Err(e) => {
-                                Err(format!("Value deserialization error: {:?}", e.to_string()))
-                            }
-                        }
+        self.leaf_signature.iter_start().filter_map(Result::ok).flat_map(|(key, value)| {
+            match LeafSignature::decode_key(key.to_vec()) {
+                Ok((signature, tree, leaf_idx)) => {
+                    match bincode::deserialize::<LeafSignature>(value.as_ref()) {
+                        Ok(slot_sequences) => Ok(LeafSignatureAllData {
+                            tree,
+                            signature,
+                            leaf_idx,
+                            slot_sequences: slot_sequences.data,
+                        }),
+                        Err(e) => Err(format!("Value deserialization error: {:?}", e.to_string())),
                     }
-                    Err(e) => Err(format!("Key deserialization error: {:?}", e.to_string())),
                 },
-            )
+                Err(e) => Err(format!("Key deserialization error: {:?}", e.to_string())),
+            }
+        })
     }
 
     fn cl_items_iter(&self) -> impl Iterator<Item = ClItem> {
@@ -56,8 +53,7 @@ impl CompressedTreeChangesManager for Storage {
             error!("Tree sequence delete: {}", e.to_string());
         }
 
-        self.red_metrics
-            .observe_request(ROCKS_COMPONENT, DROP_ACTION, "tree_seq_idx", start_time);
+        self.red_metrics.observe_request(ROCKS_COMPONENT, DROP_ACTION, "tree_seq_idx", start_time);
     }
 
     async fn delete_cl_items(&self, keys: Vec<ForkedItem>) {
@@ -65,18 +61,13 @@ impl CompressedTreeChangesManager for Storage {
 
         if let Err(e) = self
             .cl_items
-            .delete_batch(
-                keys.iter()
-                    .map(|key| ClItemKey::new(key.node_idx, key.tree))
-                    .collect(),
-            )
+            .delete_batch(keys.iter().map(|key| ClItemKey::new(key.node_idx, key.tree)).collect())
             .await
         {
             error!("Cl items delete: {}", e.to_string());
         }
 
-        self.red_metrics
-            .observe_request(ROCKS_COMPONENT, DROP_ACTION, "cl_items", start_time);
+        self.red_metrics.observe_request(ROCKS_COMPONENT, DROP_ACTION, "cl_items", start_time);
     }
 
     async fn delete_signatures(&self, keys: Vec<(Signature, Pubkey, u64)>) {
@@ -102,10 +93,7 @@ impl ForkChecker for SlotStorage {
         let mut all_keys = HashSet::new();
         for (key, _) in self
             .db
-            .full_iterator_cf(
-                &self.db.cf_handle(RawBlock::NAME).unwrap(),
-                IteratorMode::Start,
-            )
+            .full_iterator_cf(&self.db.cf_handle(RawBlock::NAME).unwrap(), IteratorMode::Start)
             .filter_map(Result::ok)
         {
             if !rx.is_empty() {
@@ -117,7 +105,7 @@ impl ForkChecker for SlotStorage {
                 Err(e) => {
                     error!("Decode raw block key: {}", e);
                     continue;
-                }
+                },
             };
         }
         self.red_metrics.observe_request(
@@ -132,9 +120,7 @@ impl ForkChecker for SlotStorage {
 
     fn last_slot_for_check(&self) -> u64 {
         let start_time = chrono::Utc::now();
-        let mut it = self
-            .db
-            .raw_iterator_cf(&self.db.cf_handle(RawBlock::NAME).unwrap());
+        let mut it = self.db.raw_iterator_cf(&self.db.cf_handle(RawBlock::NAME).unwrap());
         it.seek_to_last();
         if !it.valid() {
             self.red_metrics.observe_request(
@@ -152,8 +138,6 @@ impl ForkChecker for SlotStorage {
             RAW_BLOCKS_CBOR_ENDPOINT,
             start_time,
         );
-        it.key()
-            .and_then(|b| RawBlock::decode_key(b.to_vec()).ok())
-            .unwrap_or_default()
+        it.key().and_then(|b| RawBlock::decode_key(b.to_vec()).ok()).unwrap_or_default()
     }
 }

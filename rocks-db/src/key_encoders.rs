@@ -1,8 +1,7 @@
 use entities::{enums::FailedBatchMintState, models::AssetSignatureKey};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::batch_mint::FailedBatchMintKey;
-use crate::{storage_traits::AssetUpdatedKey, Result};
+use crate::{batch_mint::FailedBatchMintKey, storage_traits::AssetUpdatedKey, Result};
 
 pub fn encode_u64x2_pubkey(seq: u64, slot: u64, pubkey: Pubkey) -> Vec<u8> {
     // create a key that is a concatenation of the seq, slot and the pubkey allocating memory immediately
@@ -104,11 +103,7 @@ pub fn decode_asset_signature_key(bytes: Vec<u8>) -> Result<AssetSignatureKey> {
     let tree = Pubkey::try_from(&bytes[..pubkey_size])?;
     let leaf = u64::from_be_bytes(bytes[pubkey_size..pubkey_size + u64_size].try_into()?);
     let seq = u64::from_be_bytes(bytes[pubkey_size + u64_size..].try_into()?);
-    Ok(AssetSignatureKey {
-        tree,
-        leaf_idx: leaf,
-        seq,
-    })
+    Ok(AssetSignatureKey { tree, leaf_idx: leaf, seq })
 }
 
 pub fn encode_asset_signature_key(ask: AssetSignatureKey) -> Vec<u8> {
@@ -177,11 +172,11 @@ pub fn decode_failed_batch_mint_key(key: Vec<u8>) -> Result<FailedBatchMintKey> 
 
 #[cfg(test)]
 mod tests {
-    use crate::errors::StorageError;
     use solana_sdk::pubkey::Pubkey;
 
     // Import functions from the parent module
     use super::*;
+    use crate::errors::StorageError;
 
     #[test]
     fn test_encode_decode_u64_pubkey() {
@@ -263,11 +258,7 @@ mod tests {
         let leaf = 12345u64;
         let tree = Pubkey::new_unique(); // or some other way to create a Pubkey
 
-        let encoded = encode_asset_signature_key(AssetSignatureKey {
-            tree,
-            leaf_idx: leaf,
-            seq,
-        });
+        let encoded = encode_asset_signature_key(AssetSignatureKey { tree, leaf_idx: leaf, seq });
         let decoded = decode_asset_signature_key(encoded).unwrap();
 
         assert_eq!(decoded.tree, tree);
@@ -303,10 +294,7 @@ mod tests {
     #[test]
     fn test_invalid_encode_decode_failed_batch_mint_key() {
         assert_eq!(
-            matches!(
-                decode_failed_batch_mint_key(vec![]),
-                Err(StorageError::InvalidKeyLength)
-            ),
+            matches!(decode_failed_batch_mint_key(vec![]), Err(StorageError::InvalidKeyLength)),
             true
         )
     }

@@ -1,38 +1,50 @@
-use dapi::{get_asset, get_asset_batch, get_proof_for_assets, search_assets};
-use interface::error::UsecaseError;
-use interface::json::{JsonDownloader, JsonPersister};
-use interface::processing_possibility::ProcessingPossibilityChecker;
-use interface::proofs::ProofChecker;
-use postgre_client::PgClient;
 use std::{sync::Arc, time::Instant};
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
 
-use self::util::ApiRequest;
-use crate::api::dapi::converters::SearchAssetsQuery;
-use crate::api::dapi::response::{
-    AssetList, GetGroupingResponse, TransactionSignatureListDeprecated,
+use dapi::{
+    get_asset, get_asset_batch, get_asset_signatures::get_asset_signatures,
+    get_core_fees::get_core_fees, get_proof_for_assets, get_token_accounts::get_token_accounts,
+    search_assets,
 };
-use crate::api::dapi::rpc_asset_models::Asset;
-use crate::api::error::DasApiError;
-use crate::api::*;
-use crate::config::JsonMiddlewareConfig;
-use dapi::get_asset_signatures::get_asset_signatures;
-use dapi::get_core_fees::get_core_fees;
-use dapi::get_token_accounts::get_token_accounts;
-use entities::api_req_params::{
-    GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
-    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
-    GetByMethodsOptions, GetCoreFees, GetGrouping, GetTokenAccounts, Pagination, SearchAssets,
+use entities::{
+    api_req_params::{
+        GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
+        GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
+        GetByMethodsOptions, GetCoreFees, GetGrouping, GetTokenAccounts, Pagination, SearchAssets,
+    },
+    enums::TokenType,
 };
-use entities::enums::TokenType;
-use interface::account_balance::AccountBalanceGetter;
-use interface::price_fetcher::TokenPriceFetcher;
+use interface::{
+    account_balance::AccountBalanceGetter,
+    error::UsecaseError,
+    json::{JsonDownloader, JsonPersister},
+    price_fetcher::TokenPriceFetcher,
+    processing_possibility::ProcessingPossibilityChecker,
+    proofs::ProofChecker,
+};
 use metrics_utils::ApiMetricsConfig;
+use postgre_client::PgClient;
 use rocks_db::Storage;
 use serde_json::{json, Value};
 use solana_sdk::pubkey::Pubkey;
+use tokio::{
+    sync::Mutex,
+    task::{JoinError, JoinSet},
+};
 use usecase::validation::{validate_opt_pubkey, validate_pubkey};
+
+use self::util::ApiRequest;
+use crate::{
+    api::{
+        dapi::{
+            converters::SearchAssetsQuery,
+            response::{AssetList, GetGroupingResponse, TransactionSignatureListDeprecated},
+            rpc_asset_models::Asset,
+        },
+        error::DasApiError,
+        *,
+    },
+    config::JsonMiddlewareConfig,
+};
 
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
 const DEFAULT_LIMIT: usize = MAX_ITEMS_IN_BATCH_REQ;
@@ -113,13 +125,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        self.pg_client
-            .check_health()
-            .await
-            .map_err(|_| DasApiError::InternalDdError)?;
+        self.pg_client.check_health().await.map_err(|_| DasApiError::InternalDdError)?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!("ok"))
     }
@@ -255,8 +263,7 @@ where
         )
         .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         let res = assets
             .get(&id.to_string())
@@ -280,11 +287,8 @@ where
             return Err(DasApiError::BatchSizeError(MAX_ITEMS_IN_BATCH_REQ));
         }
 
-        let ids: Vec<Pubkey> = payload
-            .ids
-            .into_iter()
-            .map(validate_pubkey)
-            .collect::<Result<Vec<_>, _>>()?;
+        let ids: Vec<Pubkey> =
+            payload.ids.into_iter().map(validate_pubkey).collect::<Result<Vec<_>, _>>()?;
 
         let res = get_proof_for_assets(
             self.rocks_db.clone(),
@@ -295,8 +299,7 @@ where
         )
         .await;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res?))
     }
@@ -328,8 +331,7 @@ where
         )
         .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         if res.is_none() {
             return Err(not_found());
@@ -354,11 +356,8 @@ where
             return Ok(json!(Vec::<Option<Asset>>::new()));
         }
 
-        let ids: Vec<Pubkey> = payload
-            .ids
-            .into_iter()
-            .map(validate_pubkey)
-            .collect::<Result<Vec<_>, _>>()?;
+        let ids: Vec<Pubkey> =
+            payload.ids.into_iter().map(validate_pubkey).collect::<Result<Vec<_>, _>>()?;
         let options = payload.options;
 
         let res = get_asset_batch(
@@ -376,8 +375,7 @@ where
         )
         .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -392,16 +390,10 @@ where
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(
-                self.pg_client.clone(),
-                self.rocks_db.clone(),
-                payload,
-                tasks,
-            )
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload, tasks)
             .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -416,16 +408,10 @@ where
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(
-                self.pg_client.clone(),
-                self.rocks_db.clone(),
-                payload,
-                tasks,
-            )
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload, tasks)
             .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -440,16 +426,10 @@ where
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(
-                self.pg_client.clone(),
-                self.rocks_db.clone(),
-                payload,
-                tasks,
-            )
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload, tasks)
             .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -464,16 +444,10 @@ where
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(
-                self.pg_client.clone(),
-                self.rocks_db.clone(),
-                payload,
-                tasks,
-            )
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload, tasks)
             .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -486,24 +460,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let GetTokenAccounts {
-            limit,
-            page,
-            owner,
-            mint,
-            options,
-            before,
-            after,
-            cursor,
-        } = payload;
+        let GetTokenAccounts { limit, page, owner, mint, options, before, after, cursor } = payload;
 
-        let pagination = Pagination {
-            limit,
-            page,
-            before,
-            after,
-            cursor,
-        };
+        let pagination = Pagination { limit, page, before, after, cursor };
 
         let owner = validate_opt_pubkey(&owner)?;
         let mint = validate_opt_pubkey(&mint)?;
@@ -529,8 +488,7 @@ where
         )
         .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -540,21 +498,9 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let GetCoreFees {
-            limit,
-            page,
-            before,
-            after,
-            cursor,
-        } = payload;
+        let GetCoreFees { limit, page, before, after, cursor } = payload;
 
-        let pagination = Pagination {
-            limit,
-            page,
-            before,
-            after,
-            cursor,
-        };
+        let pagination = Pagination { limit, page, before, after, cursor };
 
         Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
         let res = get_core_fees(
@@ -567,8 +513,7 @@ where
         )
         .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -584,18 +529,11 @@ where
         let latency_timer = Instant::now();
 
         let res = self
-            .process_request(
-                self.pg_client.clone(),
-                self.rocks_db.clone(),
-                payload,
-                tasks,
-            )
+            .process_request(self.pg_client.clone(), self.rocks_db.clone(), payload, tasks)
             .await?;
 
-        self.metrics
-            .set_search_asset_latency(&label, latency_timer.elapsed().as_millis() as f64);
-        self.metrics
-            .set_latency("search_asset", latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_search_asset_latency(&label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency("search_asset", latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -654,8 +592,7 @@ where
         )
         .await?;
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         if is_deprecated {
             return Ok(json!(TransactionSignatureListDeprecated::from(res)));
@@ -668,25 +605,15 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let GetGrouping {
-            group_key,
-            group_value,
-        } = payload;
+        let GetGrouping { group_key, group_value } = payload;
         let group_value_pubkey = validate_pubkey(group_value.clone())?;
 
-        let gs = self
-            .pg_client
-            .get_collection_size(group_value_pubkey.to_bytes().as_slice())
-            .await?;
+        let gs =
+            self.pg_client.get_collection_size(group_value_pubkey.to_bytes().as_slice()).await?;
 
-        let res = GetGroupingResponse {
-            group_key,
-            group_name: group_value,
-            group_size: gs,
-        };
+        let res = GetGroupingResponse { group_key, group_name: group_value, group_size: gs };
 
-        self.metrics
-            .set_latency(label, latency_timer.elapsed().as_millis() as f64);
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
     }
@@ -707,9 +634,8 @@ where
         let sort_by = payload.get_sort_parameter().unwrap_or_default();
         let options = payload.get_options();
 
-        let query: SearchAssetsQuery = payload
-            .try_into()
-            .map_err(|e| DasApiError::from(e.into()))?;
+        let query: SearchAssetsQuery =
+            payload.try_into().map_err(|e| DasApiError::from(e.into()))?;
 
         Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
         Self::validate_options(&options, &query)?;

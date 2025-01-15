@@ -1,15 +1,16 @@
+use std::{sync::Arc, time::Duration};
+
 use async_trait::async_trait;
-use interface::error::{StorageError, UsecaseError};
-use interface::signature_persistence::BlockProducer;
-use solana_bigtable_connection::bigtable::BigTableConnection;
-use solana_bigtable_connection::CredentialType;
+use interface::{
+    error::{StorageError, UsecaseError},
+    signature_persistence::BlockProducer,
+};
+use solana_bigtable_connection::{bigtable::BigTableConnection, CredentialType};
 use solana_storage_bigtable::{LedgerStorage, DEFAULT_APP_PROFILE_ID, DEFAULT_INSTANCE_NAME};
 use solana_transaction_status::{
     BlockEncodingOptions, EncodedTransactionWithStatusMeta, TransactionDetails,
     TransactionWithStatusMeta,
 };
-use std::sync::Arc;
-use std::time::Duration;
 use tracing::{error, warn};
 
 pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
@@ -25,10 +26,7 @@ impl BigTableClient {
         big_table_client: Arc<LedgerStorage>,
         big_table_inner_client: Arc<BigTableConnection>,
     ) -> Self {
-        Self {
-            big_table_client,
-            big_table_inner_client,
-        }
+        Self { big_table_client, big_table_inner_client }
     }
 
     pub async fn connect_new_with(
@@ -52,10 +50,7 @@ impl BigTableClient {
         .await
         .unwrap();
 
-        Ok(Self::new(
-            Arc::new(big_table_client),
-            Arc::new(big_table_inner_client),
-        ))
+        Ok(Self::new(Arc::new(big_table_client), Arc::new(big_table_inner_client)))
     }
 }
 
@@ -76,15 +71,12 @@ impl BlockProducer for BigTableClient {
                     warn!("Error getting block: {}, retrying", err);
                     counter -= 1;
                     if counter == 0 {
-                        return Err(StorageError::Common(format!(
-                            "Error getting block: {}",
-                            err
-                        )));
+                        return Err(StorageError::Common(format!("Error getting block: {}", err)));
                     }
                     tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_DATA_FROM_BG))
                         .await;
                     continue;
-                }
+                },
             };
             block.transactions.retain(is_bubblegum_transaction);
 

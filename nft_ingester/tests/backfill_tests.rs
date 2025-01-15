@@ -2,9 +2,7 @@
 #[cfg(test)]
 #[cfg(feature = "big_table_tests")]
 mod tests {
-    use solana_program::pubkey::Pubkey;
-    use std::str::FromStr;
-    use std::sync::Arc;
+    use std::{str::FromStr, sync::Arc};
 
     use interface::{
         signature_persistence::{BlockConsumer, BlockProducer},
@@ -14,6 +12,7 @@ mod tests {
     use nft_ingester::backfiller::TransactionsParser;
     use rocks_db::bubblegum_slots::BubblegumSlotGetter;
     use setup::rocks::RocksTestEnvironment;
+    use solana_program::pubkey::Pubkey;
     use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
 
     #[tokio::test]
@@ -22,9 +21,7 @@ mod tests {
         let (_tx, rx) = tokio::sync::broadcast::channel(1);
         let storage = RocksTestEnvironment::new(&[]).storage;
         let big_table_client = Arc::new(
-            BigTableClient::connect_new_with("../../creds.json".to_string(), 1000)
-                .await
-                .unwrap(),
+            BigTableClient::connect_new_with("../../creds.json".to_string(), 1000).await.unwrap(),
         );
 
         let metrics = Arc::new(BackfillerMetricsConfig::new());
@@ -55,9 +52,7 @@ mod tests {
 
         let storage = RocksTestEnvironment::new(&[]).storage;
         let big_table_client = Arc::new(
-            BigTableClient::connect_new_with("../../creds.json".to_string(), 1000)
-                .await
-                .unwrap(),
+            BigTableClient::connect_new_with("../../creds.json".to_string(), 1000).await.unwrap(),
         );
         let metrics = Arc::new(BackfillerMetricsConfig::new());
 
@@ -67,12 +62,7 @@ mod tests {
             metrics.clone(),
         );
         slots_collector
-            .collect_slots(
-                &blockbuster::programs::bubblegum::ID,
-                160_000_000,
-                130_000_000,
-                &mut rx,
-            )
+            .collect_slots(&blockbuster::programs::bubblegum::ID, 160_000_000, 130_000_000, &mut rx)
             .await;
     }
 
@@ -82,9 +72,7 @@ mod tests {
         let (_tx, mut rx) = tokio::sync::broadcast::channel(1);
         let storage = RocksTestEnvironment::new(&[]).storage;
         let big_table_client = Arc::new(
-            BigTableClient::connect_new_with("../../creds.json".to_string(), 1000)
-                .await
-                .unwrap(),
+            BigTableClient::connect_new_with("../../creds.json".to_string(), 1000).await.unwrap(),
         );
         let metrics = Arc::new(BackfillerMetricsConfig::new());
         let slots_collector = SlotsCollector::new(

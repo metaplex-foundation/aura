@@ -1,15 +1,13 @@
-use async_trait::async_trait;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
+use async_trait::async_trait;
 use entities::enums::UnprocessedAccount;
+use interface::message_handler::MessageHandler;
 use solana_sdk::pubkey::Pubkey;
 use tokio::sync::Mutex;
 use tracing::error;
 
-use crate::buffer::Buffer;
-use crate::message_parser::MessageParser;
-use interface::message_handler::MessageHandler;
+use crate::{buffer::Buffer, message_parser::MessageParser};
 
 const BYTE_PREFIX_TX_SIMPLE_FINALIZED: u8 = 22;
 const BYTE_PREFIX_TX_FINALIZED: u8 = 12;
@@ -31,56 +29,56 @@ async fn update_or_insert_account(
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
             UnprocessedAccount::Token(entity) => {
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
             UnprocessedAccount::Mint(entity) => {
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
             UnprocessedAccount::Edition(entity) => {
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
             UnprocessedAccount::BurnMetadata(entity) => {
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
             UnprocessedAccount::BurnMplCore(entity) => {
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
             UnprocessedAccount::MplCore(entity) => {
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
             UnprocessedAccount::Inscription(entity) => {
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
             UnprocessedAccount::InscriptionData(entity) => {
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
             UnprocessedAccount::MplCoreFee(entity) => {
                 if entity.write_version < write_version {
                     o.insert(account);
                 }
-            }
+            },
         },
         std::collections::hash_map::Entry::Vacant(v) => {
             v.insert(account);
-        }
+        },
     }
 }
 
@@ -108,12 +106,12 @@ impl MessageHandler for MessageHandlerIngester {
                             )
                             .await;
                         }
-                    }
+                    },
                     Err(err) => {
                         error!("parse_account: {:?}", err)
-                    }
+                    },
                 }
-            }
+            },
             BYTE_PREFIX_TX_SIMPLE_FINALIZED
             | BYTE_PREFIX_TX_FINALIZED
             | BYTE_PREFIX_TX_PROCESSED => {
@@ -122,8 +120,8 @@ impl MessageHandler for MessageHandlerIngester {
                 };
                 let mut res = self.buffer.transactions.lock().await;
                 res.push_back(tx);
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 }
@@ -132,10 +130,7 @@ impl MessageHandlerIngester {
     pub fn new(buffer: Arc<Buffer>) -> Self {
         let message_parser = Arc::new(MessageParser::new());
 
-        Self {
-            buffer,
-            message_parser,
-        }
+        Self { buffer, message_parser }
     }
 }
 
@@ -143,20 +138,14 @@ impl MessageHandlerIngester {
 fn test_mint_uninitialized() {
     use solana_sdk::program_pack::Pack;
     let unpack_res = spl_token::state::Mint::unpack(&[0; 82]);
-    assert_eq!(
-        Err(solana_program::program_error::ProgramError::UninitializedAccount),
-        unpack_res
-    )
+    assert_eq!(Err(solana_program::program_error::ProgramError::UninitializedAccount), unpack_res)
 }
 
 #[test]
 fn test_token_account_uninitialized() {
     use solana_sdk::program_pack::Pack;
     let unpack_res = spl_token::state::Account::unpack(&[0; 165]);
-    assert_eq!(
-        Err(solana_program::program_error::ProgramError::UninitializedAccount),
-        unpack_res
-    )
+    assert_eq!(Err(solana_program::program_error::ProgramError::UninitializedAccount), unpack_res)
 }
 
 // Test proofs that EditionV1 && MasterEditionV1 accounts addresses
@@ -166,13 +155,19 @@ fn test_token_account_uninitialized() {
 async fn test_edition_pda() {
     use std::str::FromStr;
 
-    use blockbuster::program_handler::ProgramParser;
-    use blockbuster::programs::token_metadata::{TokenMetadataAccountData, TokenMetadataParser};
-    use blockbuster::programs::ProgramParseResult;
+    use blockbuster::{
+        program_handler::ProgramParser,
+        programs::{
+            token_metadata::{TokenMetadataAccountData, TokenMetadataParser},
+            ProgramParseResult,
+        },
+    };
     use flatbuffers::FlatBufferBuilder;
     use mpl_token_metadata::accounts::MasterEdition;
-    use plerkle_serialization::deserializer::PlerkleOptionalU8Vector;
-    use plerkle_serialization::solana_geyser_plugin_interface_shims::ReplicaAccountInfoV2;
+    use plerkle_serialization::{
+        deserializer::PlerkleOptionalU8Vector,
+        solana_geyser_plugin_interface_shims::ReplicaAccountInfoV2,
+    };
     use solana_client::nonblocking::rpc_client::RpcClient;
 
     let master_edition_pubkey =
@@ -207,7 +202,7 @@ async fn test_edition_pda() {
         ProgramParseResult::TokenMetadata(c) => c,
         _ => {
             panic!()
-        }
+        },
     };
     let edition = if let TokenMetadataAccountData::EditionV1(account) = &binding.data {
         Some(account)
@@ -241,7 +236,7 @@ async fn test_edition_pda() {
         ProgramParseResult::TokenMetadata(c) => c,
         _ => {
             panic!()
-        }
+        },
     };
 
     let master_edition = if let TokenMetadataAccountData::MasterEditionV2(account) = &binding.data {

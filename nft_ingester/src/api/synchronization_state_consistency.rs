@@ -1,16 +1,22 @@
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+
 use entities::enums::{AssetType, ASSET_TYPES};
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::Call;
-use postgre_client::storage_traits::AssetIndexStorage;
-use postgre_client::PgClient;
-use rocks_db::key_encoders::decode_u64x2_pubkey;
-use rocks_db::storage_traits::AssetUpdateIndexStorage;
-use rocks_db::Storage;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::Mutex;
-use tokio::task::{JoinError, JoinSet};
+use postgre_client::{storage_traits::AssetIndexStorage, PgClient};
+use rocks_db::{
+    key_encoders::decode_u64x2_pubkey, storage_traits::AssetUpdateIndexStorage, Storage,
+};
+use tokio::{
+    sync::Mutex,
+    task::{JoinError, JoinSet},
+};
 use tracing::info;
 
 pub(crate) const CATCH_UP_SEQUENCES_TIMEOUT_SEC: u64 = 30;
@@ -107,10 +113,10 @@ impl ConsistencyChecker for SynchronizationStateConsistencyChecker {
         match call {
             Call::MethodCall(method_call) => {
                 INDEX_STORAGE_DEPENDS_METHODS.contains(&method_call.method.as_str())
-            }
+            },
             Call::Notification(notification) => {
                 INDEX_STORAGE_DEPENDS_METHODS.contains(&notification.method.as_str())
-            }
+            },
             _ => false,
         }
     }

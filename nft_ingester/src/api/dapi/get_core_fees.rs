@@ -1,9 +1,11 @@
-use crate::api::dapi::rpc_asset_convertors::build_core_fees_response;
-use postgre_client::PgClient;
-use rocks_db::errors::StorageError;
 use std::sync::Arc;
 
-use crate::api::dapi::response::CoreFeesAccountsList;
+use postgre_client::PgClient;
+use rocks_db::errors::StorageError;
+
+use crate::api::dapi::{
+    response::CoreFeesAccountsList, rpc_asset_convertors::build_core_fees_response,
+};
 
 pub async fn get_core_fees(
     pg_client: Arc<PgClient>,
@@ -29,12 +31,7 @@ pub async fn get_core_fees(
         .map_err(|e| StorageError::Common(e.to_string()))?;
 
     let (before, after, cursor, page) = if cursor_enabled {
-        (
-            None,
-            None,
-            accounts.last().map(|k| k.sorting_id.clone()),
-            None,
-        )
+        (None, None, accounts.last().map(|k| k.sorting_id.clone()), None)
     } else if let Some(page) = page {
         (None, None, None, Some(page))
     } else {

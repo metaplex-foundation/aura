@@ -1,24 +1,22 @@
-use clap::Parser;
-
-use nft_ingester::api::service::start_api;
-use nft_ingester::config::{init_logger, ApiClapArgs};
-use nft_ingester::error::IngesterError;
-use nft_ingester::init::graceful_stop;
-use nft_ingester::json_worker::JsonWorker;
-use prometheus_client::registry::Registry;
-
 use std::sync::Arc;
-use tracing::{error, info};
 
-use metrics_utils::utils::setup_metrics;
-use metrics_utils::{ApiMetricsConfig, JsonDownloaderMetricsConfig};
-use nft_ingester::api::account_balance::AccountBalanceGetterImpl;
-use rocks_db::migrator::MigrationState;
-use rocks_db::Storage;
+use clap::Parser;
+use metrics_utils::{utils::setup_metrics, ApiMetricsConfig, JsonDownloaderMetricsConfig};
+use nft_ingester::{
+    api::{account_balance::AccountBalanceGetterImpl, service::start_api},
+    config::{init_logger, ApiClapArgs},
+    error::IngesterError,
+    init::graceful_stop,
+    json_worker::JsonWorker,
+};
+use prometheus_client::registry::Registry;
+use rocks_db::{migrator::MigrationState, Storage};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use tokio::sync::{broadcast, Mutex};
-use tokio::task::JoinSet;
-
+use tokio::{
+    sync::{broadcast, Mutex},
+    task::JoinSet,
+};
+use tracing::{error, info};
 use usecase::proofs::MaybeProofChecker;
 
 #[cfg(feature = "profiling")]
@@ -33,12 +31,7 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Starting API server...");
 
     let guard = if args.is_run_profiling {
-        Some(
-            pprof::ProfilerGuardBuilder::default()
-                .frequency(100)
-                .build()
-                .unwrap(),
-        )
+        Some(pprof::ProfilerGuardBuilder::default().frequency(100).build().unwrap())
     } else {
         None
     };
@@ -55,10 +48,10 @@ pub async fn main() -> Result<(), IngesterError> {
         match setup_metrics(registry, args.metrics_port).await {
             Ok(_) => {
                 info!("Setup metrics successfully")
-            }
+            },
             Err(e) => {
                 error!("Setup metrics failed: {:?}", e)
-            }
+            },
         }
     });
 
@@ -163,7 +156,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 error!("Start API: {}", e);
                 // cannot return JointError here
                 Ok(())
-            }
+            },
         }
     });
 

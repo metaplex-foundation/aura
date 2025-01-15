@@ -1,6 +1,7 @@
+use std::str::FromStr;
+
 use interface::error::UsecaseError;
 use solana_sdk::pubkey::Pubkey;
-use std::str::FromStr;
 
 pub fn validate_pubkey(str_pubkey: String) -> Result<Pubkey, UsecaseError> {
     Pubkey::from_str(&str_pubkey).map_err(|_| UsecaseError::PubkeyValidationError(str_pubkey))

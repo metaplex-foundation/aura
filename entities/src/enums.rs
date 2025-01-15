@@ -1,10 +1,11 @@
+use num_derive::FromPrimitive;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
 use crate::models::{
     BurntMetadataSlot, CoreAssetFee, EditionMetadata, EditionV1, IndexableAssetWithAccountInfo,
     InscriptionDataInfo, InscriptionInfo, MasterEdition, MetadataInfo, Mint, TokenAccount,
 };
-use num_derive::FromPrimitive;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Default)]
 pub enum RoyaltyTargetType {
@@ -68,20 +69,20 @@ impl From<blockbuster::token_metadata::types::TokenStandard> for TokenStandard {
         match value {
             blockbuster::token_metadata::types::TokenStandard::NonFungible => {
                 TokenStandard::NonFungible
-            }
+            },
             blockbuster::token_metadata::types::TokenStandard::FungibleAsset => {
                 TokenStandard::FungibleAsset
-            }
+            },
             blockbuster::token_metadata::types::TokenStandard::Fungible => TokenStandard::Fungible,
             blockbuster::token_metadata::types::TokenStandard::NonFungibleEdition => {
                 TokenStandard::NonFungibleEdition
-            }
+            },
             blockbuster::token_metadata::types::TokenStandard::ProgrammableNonFungible => {
                 TokenStandard::ProgrammableNonFungible
-            }
+            },
             blockbuster::token_metadata::types::TokenStandard::ProgrammableNonFungibleEdition => {
                 TokenStandard::ProgrammableNonFungibleEdition
-            }
+            },
         }
     }
 }
@@ -179,7 +180,7 @@ impl From<(&SpecificationVersions, &SpecificationAssetClass)> for Interface {
             (SpecificationVersions::V0, SpecificationAssetClass::Nft) => Interface::LegacyNft,
             (SpecificationVersions::V1, SpecificationAssetClass::ProgrammableNft) => {
                 Interface::ProgrammableNFT
-            }
+            },
             (_, SpecificationAssetClass::FungibleAsset) => Interface::FungibleAsset,
             (_, SpecificationAssetClass::FungibleToken) => Interface::FungibleToken,
             (_, SpecificationAssetClass::MplCoreAsset) => Interface::MplCoreAsset,
@@ -194,23 +195,19 @@ impl From<Interface> for (SpecificationVersions, SpecificationAssetClass) {
         match val {
             Interface::V1NFT => (SpecificationVersions::V1, SpecificationAssetClass::Nft),
             Interface::LegacyNft => (SpecificationVersions::V0, SpecificationAssetClass::Nft),
-            Interface::ProgrammableNFT => (
-                SpecificationVersions::V1,
-                SpecificationAssetClass::ProgrammableNft,
-            ),
+            Interface::ProgrammableNFT => {
+                (SpecificationVersions::V1, SpecificationAssetClass::ProgrammableNft)
+            },
             Interface::V1PRINT => (SpecificationVersions::V1, SpecificationAssetClass::Print),
-            Interface::FungibleAsset => (
-                SpecificationVersions::V1,
-                SpecificationAssetClass::FungibleAsset,
-            ),
-            Interface::MplCoreAsset => (
-                SpecificationVersions::V1,
-                SpecificationAssetClass::MplCoreAsset,
-            ),
-            Interface::MplCoreCollection => (
-                SpecificationVersions::V1,
-                SpecificationAssetClass::MplCoreCollection,
-            ),
+            Interface::FungibleAsset => {
+                (SpecificationVersions::V1, SpecificationAssetClass::FungibleAsset)
+            },
+            Interface::MplCoreAsset => {
+                (SpecificationVersions::V1, SpecificationAssetClass::MplCoreAsset)
+            },
+            Interface::MplCoreCollection => {
+                (SpecificationVersions::V1, SpecificationAssetClass::MplCoreCollection)
+            },
             _ => (SpecificationVersions::V1, SpecificationAssetClass::Unknown),
         }
     }
@@ -389,7 +386,7 @@ impl std::fmt::Debug for UnprocessedAccount {
             UnprocessedAccount::Inscription(_) => write!(f, "UnprocessedAccount::Inscription"),
             UnprocessedAccount::InscriptionData(_) => {
                 write!(f, "UnprocessedAccount::InscriptionData")
-            }
+            },
             UnprocessedAccount::MplCoreFee(_) => write!(f, "UnprocessedAccount::MplCoreFee"),
         }
     }

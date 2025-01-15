@@ -1,16 +1,15 @@
-use crate::bigtable::SECONDS_TO_RETRY_GET_DATA_FROM_BG;
+use std::{num::ParseIntError, sync::Arc, time::Duration};
+
 use async_trait::async_trait;
-use interface::error::UsecaseError;
-use interface::slots_dumper::SlotsDumper;
+use interface::{error::UsecaseError, slots_dumper::SlotsDumper};
 use metrics_utils::{BackfillerMetricsConfig, MetricStatus};
 use mockall::automock;
 use solana_bigtable_connection::bigtable::BigTableConnection;
 use solana_sdk::clock::Slot;
-use std::num::ParseIntError;
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
+
+use crate::bigtable::SECONDS_TO_RETRY_GET_DATA_FROM_BG;
 
 pub const GET_SIGNATURES_LIMIT: i64 = 2000;
 
@@ -83,11 +82,7 @@ where
         row_keys_getter: Arc<R>,
         metrics: Arc<BackfillerMetricsConfig>,
     ) -> Self {
-        SlotsCollector {
-            slots_dumper,
-            row_keys_getter,
-            metrics,
-        }
+        SlotsCollector { slots_dumper, row_keys_getter, metrics }
     }
 
     pub async fn collect_slots(
@@ -134,8 +129,7 @@ where
                         let last_slot = *slots.last().unwrap();
                         self.slots_dumper.dump_slots(&slots).await;
 
-                        self.metrics
-                            .set_last_processed_slot("collected_slot", last_slot as i64);
+                        self.metrics.set_last_processed_slot("collected_slot", last_slot as i64);
 
                         if (slots.len() == 1 && slots[0] == start_at_slot)
                             || (last_slot <= slot_parse_until)
@@ -148,7 +142,7 @@ where
                         info!("All the slots are collected");
                         break;
                     }
-                }
+                },
                 Err(err) => {
                     self.metrics
                         .inc_slots_collected("backfiller_slots_collected", MetricStatus::FAILURE);
@@ -156,7 +150,7 @@ where
                     tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_DATA_FROM_BG))
                         .await;
                     continue;
-                }
+                },
             }
         }
         top_slot_collected

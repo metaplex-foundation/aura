@@ -6,11 +6,13 @@ use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use tracing::{debug, error};
 
-use crate::column::TypedColumn;
-use crate::key_encoders::{decode_u64_pubkey, encode_u64_pubkey};
-use crate::transaction::{CopyableChangeLogEventV1, TreeUpdate};
-use crate::tree_seq::TreeSeqIdx;
-use crate::{Result, Storage};
+use crate::{
+    column::TypedColumn,
+    key_encoders::{decode_u64_pubkey, encode_u64_pubkey},
+    transaction::{CopyableChangeLogEventV1, TreeUpdate},
+    tree_seq::TreeSeqIdx,
+    Result, Storage,
+};
 
 /// This column family stores change log items for asset proof construction.
 /// Basically, it stores all nodes of the tree.
@@ -73,10 +75,10 @@ impl ClItem {
                     cli_seq = value.cli_seq as i64;
                     slot = value.slot_updated;
                     result = existing_val.to_vec();
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: ClItem deserialize existing_val: {}", e);
-                }
+                },
             }
         }
 
@@ -89,10 +91,7 @@ impl ClItem {
                 Err(_e_sourced) => {
                     // If fails, try decoding as ClItem
                     match bincode::deserialize::<ClItem>(op) {
-                        Ok(ci) => SourcedClItem {
-                            item: ci,
-                            is_from_finalized_source: false,
-                        },
+                        Ok(ci) => SourcedClItem { item: ci, is_from_finalized_source: false },
                         Err(e_clitem) => {
                             // If last operand and still no result chosen, store empty if needed
                             if i == len - 1 && result.is_empty() {
@@ -103,9 +102,9 @@ impl ClItem {
                                 debug!("RocksDB: ClItem deserialize new_val failed: {}", e_clitem);
                             }
                             continue;
-                        }
+                        },
                     }
-                }
+                },
             };
 
             let new_slot = new_val.item.slot_updated;
@@ -123,13 +122,10 @@ impl ClItem {
                         result = serialized;
                         cli_seq = new_seq;
                         slot = new_slot;
-                    }
+                    },
                     Err(e) => {
-                        error!(
-                            "RocksDB: Failed to serialize ClItem from SourcedClItem: {}",
-                            e
-                        );
-                    }
+                        error!("RocksDB: Failed to serialize ClItem from SourcedClItem: {}", e);
+                    },
                 }
             }
         }
@@ -197,11 +193,8 @@ impl Storage {
         for p in change_log_event.path.iter() {
             let node_idx = p.index as u64;
 
-            let leaf_idx = if i == 0 {
-                Some(node_idx_to_leaf_idx(node_idx, depth as u32))
-            } else {
-                None
-            };
+            let leaf_idx =
+                if i == 0 { Some(node_idx_to_leaf_idx(node_idx, depth as u32)) } else { None };
 
             i += 1;
 
@@ -226,10 +219,10 @@ impl Storage {
                     ) {
                         error!("Error while saving change log for cNFT: {}", e);
                     };
-                }
+                },
                 Err(e) => {
                     error!("Error while serializing change log for cNFT: {}", e);
-                }
+                },
             }
             // save leaf's node id
             if i == 1 {

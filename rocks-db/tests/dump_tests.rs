@@ -50,18 +50,12 @@ async fn test_scv_export_from_rocks() {
             Arc::new(SynchronizerMetricsConfig::new()),
         )
         .unwrap();
-    let mut metadata_reader = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .from_path(metadata_path)
-        .unwrap();
-    let mut assets_reader = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .from_path(assets_path)
-        .unwrap();
-    let mut creators_reader = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .from_path(creators_path)
-        .unwrap();
+    let mut metadata_reader =
+        csv::ReaderBuilder::new().has_headers(false).from_path(metadata_path).unwrap();
+    let mut assets_reader =
+        csv::ReaderBuilder::new().has_headers(false).from_path(assets_path).unwrap();
+    let mut creators_reader =
+        csv::ReaderBuilder::new().has_headers(false).from_path(creators_path).unwrap();
     assert_eq!(metadata_reader.records().count(), 1);
     assert_eq!(assets_reader.records().count(), number_of_assets);
     assert_eq!(creators_reader.records().count(), number_of_assets);

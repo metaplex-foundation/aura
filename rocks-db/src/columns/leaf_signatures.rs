@@ -1,16 +1,15 @@
-use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
-use crate::column::TypedColumn;
-use crate::errors::StorageError;
-use crate::transaction::TreeUpdate;
-use crate::{Result, Storage};
 use bincode::{deserialize, serialize};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use tracing::error;
+
+use crate::{column::TypedColumn, errors::StorageError, transaction::TreeUpdate, Result, Storage};
 
 /// This column family contains sequence updates for each leaf in the tree.
 /// Key is a set of `Signature+TreeId+leafId`.
@@ -69,10 +68,10 @@ impl LeafSignature {
             match deserialize::<LeafSignature>(existing_val) {
                 Ok(value) => {
                     final_map = value.data;
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: LeafSignature deserialize existing_val: {}", e)
-                }
+                },
             }
         }
 
@@ -86,22 +85,19 @@ impl LeafSignature {
                             final_map.insert(slot, sequences);
                         }
                     }
-                }
+                },
                 Err(e) => {
                     error!("RocksDB: LeafSignature deserialize new_val: {}", e);
-                }
+                },
             }
         }
 
         match serialize(&LeafSignature { data: final_map }) {
             Ok(serialized_data) => Some(serialized_data),
             Err(e) => {
-                error!(
-                    "RocksDB: error serializing final merge result for LeafSignature: {:?}",
-                    e
-                );
+                error!("RocksDB: error serializing final merge result for LeafSignature: {:?}", e);
                 Some(vec![])
-            }
+            },
         }
     }
 }
@@ -127,9 +123,7 @@ impl Storage {
         if let Err(e) = self.leaf_signature.merge_with_batch(
             batch,
             (signature, tree.tree, tree.event.leaf_id as u64),
-            &LeafSignature {
-                data: slot_sequence_map,
-            },
+            &LeafSignature { data: slot_sequence_map },
         ) {
             error!("Error while saving tree update: {}", e);
         };

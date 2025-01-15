@@ -1,26 +1,21 @@
-use crate::error::IngesterError;
-use arweave_rs::consts::ARWEAVE_BASE_URL;
-use arweave_rs::crypto::base64::Base64;
-use arweave_rs::Arweave;
+use std::{path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+
+use arweave_rs::{consts::ARWEAVE_BASE_URL, crypto::base64::Base64, Arweave};
 use async_trait::async_trait;
 use bubblegum_batch_sdk::model::{BatchMint, BatchMintInstruction};
 use entities::models::BatchMintWithState;
-use interface::batch_mint::{BatchMintDownloader, BatchMintTxSender};
-use interface::error::UsecaseError;
+use interface::{
+    batch_mint::{BatchMintDownloader, BatchMintTxSender},
+    error::UsecaseError,
+};
 use metrics_utils::BatchMintProcessorMetricsConfig;
-use postgre_client::model::BatchMintState;
-use postgre_client::PgClient;
-use rocks_db::columns::batch_mint::BatchMintWithStaker;
-use rocks_db::Storage;
+use postgre_client::{model::BatchMintState, PgClient};
+use rocks_db::{columns::batch_mint::BatchMintWithStaker, Storage};
 use solana_program::pubkey::Pubkey;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast::Receiver;
-use tokio::task::JoinError;
-use tokio::time::Instant;
+use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
 use tracing::{error, info};
+
+use crate::error::IngesterError;
 
 pub const MAX_BATCH_MINT_RETRIES: usize = 5;
 const SUCCESS_METRICS_LABEL: &str = "success";
@@ -48,22 +43,14 @@ pub struct BatchMintDownloaderImpl {
 }
 impl BatchMintDownloaderImpl {
     pub fn new(pg_client: Arc<PgClient>, file_storage_path: String) -> Self {
-        Self {
-            pg_client,
-            file_storage_path,
-        }
+        Self { pg_client, file_storage_path }
     }
 }
 #[async_trait]
 impl BatchMintDownloader for BatchMintDownloaderImpl {
     async fn download_batch_mint(&self, url: &str) -> Result<Box<BatchMint>, UsecaseError> {
         // TODO: normalize url
-        let batch_mint_to_process = self
-            .pg_client
-            .get_batch_mint_by_url(url)
-            .await
-            .ok()
-            .flatten();
+        let batch_mint_to_process = self.pg_client.get_batch_mint_by_url(url).await.ok().flatten();
         if let Some(batch_mint_to_process) = batch_mint_to_process {
             if let Ok(Ok(batch_mint)) = tokio::fs::read_to_string(format!(
                 "{}/{}",
@@ -84,12 +71,7 @@ impl BatchMintDownloader for BatchMintDownloaderImpl {
         url: &str,
         checksum: &str,
     ) -> Result<Box<BatchMint>, UsecaseError> {
-        let batch_mint_to_process = self
-            .pg_client
-            .get_batch_mint_by_url(url)
-            .await
-            .ok()
-            .flatten();
+        let batch_mint_to_process = self.pg_client.get_batch_mint_by_url(url).await.ok().flatten();
         if let Some(batch_mint_to_process) = batch_mint_to_process {
             if let Ok(Ok(batch_mint)) = tokio::fs::read(format!(
                 "{}/{}",
@@ -114,9 +96,7 @@ impl BatchMintDownloader for BatchMintDownloaderImpl {
         let file_hash = xxhash_rust::xxh3::xxh3_128(&response);
         let hash_hex = hex::encode(file_hash.to_be_bytes());
         if hash_hex != checksum {
-            return Err(UsecaseError::InvalidParameters(
-                "File checksum mismatch".to_string(),
-            ));
+            return Err(UsecaseError::InvalidParameters("File checksum mismatch".to_string()));
         }
         Ok(Box::new(serde_json::from_slice(&response)?))
     }
@@ -142,9 +122,7 @@ impl PermanentStorageClient for Arweave {
     ) -> Result<(String, u64), IngesterError> {
         let file_path = PathBuf::from_str(file_path)?;
         let fee = self.get_fee(Base64::empty(), data_size).await?;
-        self.upload_file_from_path(file_path, vec![], fee)
-            .await
-            .map_err(Into::into)
+        self.upload_file_from_path(file_path, vec![], fee).await.map_err(Into::into)
     }
     fn get_metadata_url(&self, transaction_id: &str) -> String {
         format!("{}{}", ARWEAVE_BASE_URL, transaction_id)
@@ -197,16 +175,13 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
                 Ok(Some(batch_mint)) => batch_mint,
                 Ok(None) => {
                     continue;
-                }
+                },
                 Err(e) => {
                     error!("Failed to fetch batch_mint for processing: {}", e);
                     continue;
-                }
+                },
             };
-            if let Err(e) = self
-                .process_batch_mint(rx.resubscribe(), batch_mint_to_process)
-                .await
-            {
+            if let Err(e) = self.process_batch_mint(rx.resubscribe(), batch_mint_to_process).await {
                 error!("process_batch_mint: {}", e);
             }
             tokio::select! {
@@ -224,10 +199,7 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
         rx: Receiver<()>,
         mut batch_mint_to_process: BatchMintWithState,
     ) -> Result<(), IngesterError> {
-        info!(
-            "Processing {} batch_mint file",
-            &batch_mint_to_process.file_name
-        );
+        info!("Processing {} batch_mint file", &batch_mint_to_process.file_name);
         let start_time = Instant::now();
         let (batch_mint, file_size, file_checksum) =
             self.read_batch_mint_file(&batch_mint_to_process).await?;
@@ -237,13 +209,13 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
                 entities::enums::BatchMintState::Uploaded => {
                     self.process_batch_mint_validation(&batch_mint, &mut batch_mint_to_process)
                         .await?;
-                }
+                },
                 entities::enums::BatchMintState::ValidationComplete
                 | entities::enums::BatchMintState::FailUploadToArweave => {
                     metadata_url = self
                         .process_batch_mint_upload_to_arweave(&mut batch_mint_to_process, file_size)
                         .await?;
-                }
+                },
                 entities::enums::BatchMintState::UploadedToArweave
                 | entities::enums::BatchMintState::FailSendingTransaction => {
                     self.process_batch_mint_send_solana_tx(
@@ -253,7 +225,7 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
                         &file_checksum,
                     )
                     .await?;
-                }
+                },
                 _ => {
                     info!(
                         "Finish processing {} batch_mint file with {:?} state",
@@ -265,7 +237,7 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
                         start_time.elapsed().as_millis() as f64,
                     );
                     return Ok(());
-                }
+                },
             }
         }
         Ok(())
@@ -294,8 +266,7 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
                     &batch_mint_to_process.file_name, err
                 );
             }
-            self.metrics
-                .inc_total_batch_mints(VALIDATION_FAIL_METRICS_LABEL);
+            self.metrics.inc_total_batch_mints(VALIDATION_FAIL_METRICS_LABEL);
             return Err(e.into());
         }
         if let Err(err) = self
@@ -320,21 +291,18 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
         batch_mint_to_process: &mut BatchMintWithState,
         file_size: usize,
     ) -> Result<String, IngesterError> {
-        let (tx_id, reward) = match self
-            .upload_file_with_retry(&batch_mint_to_process.file_name, file_size)
-            .await
-        {
-            Ok(response) => response,
-            Err(e) => {
-                self.metrics
-                    .inc_total_batch_mints(ARWEAVE_UPLOAD_FAIL_METRICS_LABEL);
-                error!(
-                    "Failed upload file to arweave: file_path: {}, error: {}",
-                    &batch_mint_to_process.file_name, e
-                );
-                return Err(e);
-            }
-        };
+        let (tx_id, reward) =
+            match self.upload_file_with_retry(&batch_mint_to_process.file_name, file_size).await {
+                Ok(response) => response,
+                Err(e) => {
+                    self.metrics.inc_total_batch_mints(ARWEAVE_UPLOAD_FAIL_METRICS_LABEL);
+                    error!(
+                        "Failed upload file to arweave: file_path: {}, error: {}",
+                        &batch_mint_to_process.file_name, e
+                    );
+                    return Err(e);
+                },
+            };
         let metadata_url = self.permanent_storage_client.get_metadata_url(&tx_id);
         if let Err(e) = self
             .pg_client
@@ -370,8 +338,7 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
             )
             .await
         {
-            self.metrics
-                .inc_total_batch_mints(TRANSACTION_FAIL_METRICS_LABEL);
+            self.metrics.inc_total_batch_mints(TRANSACTION_FAIL_METRICS_LABEL);
             error!(
                 "Failed send solana transaction: file_path: {}, error: {}",
                 &batch_mint_to_process.file_name, e
@@ -425,10 +392,9 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
                     "Failed to read file to string: file_path: {}, error: {}",
                     &batch_mint_to_process.file_name, e
                 );
-                self.metrics
-                    .inc_total_batch_mints(FAIL_READ_FILE_METRICS_LABEL);
+                self.metrics.inc_total_batch_mints(FAIL_READ_FILE_METRICS_LABEL);
                 return Err(e.into());
-            }
+            },
         };
         let batch_mint = match serde_json::from_slice::<BatchMint>(&json_file) {
             Ok(batch_mint) => batch_mint,
@@ -447,10 +413,9 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
                         &batch_mint_to_process.file_name, e
                     );
                 }
-                self.metrics
-                    .inc_total_batch_mints(FAIL_BUILD_JSON_FROM_FILE_METRICS_LABEL);
+                self.metrics.inc_total_batch_mints(FAIL_BUILD_JSON_FROM_FILE_METRICS_LABEL);
                 return Err(e.into());
-            }
+            },
         };
         let file_hash = xxhash_rust::xxh3::xxh3_128(&json_file);
         let hash_hex = hex::encode(file_hash.to_be_bytes());
@@ -466,16 +431,12 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
         let file_path = &format!("{}/{}", self.file_storage_path, file_name);
         let mut last_error = IngesterError::Arweave("".to_string());
         for _ in 0..MAX_BATCH_MINT_RETRIES {
-            match self
-                .permanent_storage_client
-                .upload_file(file_path, file_size)
-                .await
-            {
+            match self.permanent_storage_client.upload_file(file_path, file_size).await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     last_error = e;
                     tokio::time::sleep(Duration::from_millis(500)).await;
-                }
+                },
             };
         }
         if let Err(err) = self

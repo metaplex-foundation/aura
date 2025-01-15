@@ -1,10 +1,11 @@
-use crate::error::IndexDbError;
-use crate::storage_traits::IntegrityVerificationKeysFetcher;
-use crate::{model::VerificationRequiredField, SQL_COMPONENT};
-use crate::{PgClient, SELECT_ACTION};
 use async_trait::async_trait;
 use solana_sdk::bs58;
 use sqlx::{QueryBuilder, Row};
+
+use crate::{
+    error::IndexDbError, model::VerificationRequiredField,
+    storage_traits::IntegrityVerificationKeysFetcher, PgClient, SELECT_ACTION, SQL_COMPONENT,
+};
 
 impl PgClient {
     async fn get_verification_required_keys_by_field(
@@ -34,8 +35,7 @@ impl PgClient {
         let query = query_builder.build();
         let start_time = chrono::Utc::now();
         let rows = query.fetch_all(&self.pool).await.inspect_err(|_e| {
-            self.metrics
-                .observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset_by_field");
+            self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset_by_field");
         })?;
         self.metrics.observe_request(
             SQL_COMPONENT,
@@ -70,16 +70,10 @@ impl PgClient {
         query_builder.push(" ast_pubkey NOT IN (SELECT ast_pubkey FROM sorted) ORDER BY RANDOM() LIMIT 50) SELECT ast_pubkey FROM sorted UNION ALL SELECT ast_pubkey FROM random");
 
         let start_time = chrono::Utc::now();
-        let rows = query_builder
-            .build()
-            .fetch_all(&self.pool)
-            .await
-            .inspect_err(|_e| {
-                self.metrics
-                    .observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset");
-            })?;
-        self.metrics
-            .observe_request(SQL_COMPONENT, SELECT_ACTION, "integrity_asset", start_time);
+        let rows = query_builder.build().fetch_all(&self.pool).await.inspect_err(|_e| {
+            self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset");
+        })?;
+        self.metrics.observe_request(SQL_COMPONENT, SELECT_ACTION, "integrity_asset", start_time);
 
         Ok(rows
             .into_iter()
@@ -94,8 +88,7 @@ impl PgClient {
 #[async_trait]
 impl IntegrityVerificationKeysFetcher for PgClient {
     async fn get_verification_required_owners_keys(&self) -> Result<Vec<String>, IndexDbError> {
-        self.get_verification_required_keys_by_field(VerificationRequiredField::Owner)
-            .await
+        self.get_verification_required_keys_by_field(VerificationRequiredField::Owner).await
     }
 
     async fn get_verification_required_creators_keys(&self) -> Result<Vec<String>, IndexDbError> {
@@ -123,16 +116,9 @@ impl IntegrityVerificationKeysFetcher for PgClient {
             SELECT asc_creator FROM random";
 
         let start_time = chrono::Utc::now();
-        let rows = sqlx::query(query)
-            .fetch_all(&self.pool)
-            .await
-            .inspect_err(|_e| {
-                self.metrics.observe_error(
-                    SQL_COMPONENT,
-                    SELECT_ACTION,
-                    "integrity_asset_creators",
-                );
-            })?;
+        let rows = sqlx::query(query).fetch_all(&self.pool).await.inspect_err(|_e| {
+            self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "integrity_asset_creators");
+        })?;
         self.metrics.observe_request(
             SQL_COMPONENT,
             SELECT_ACTION,
@@ -152,13 +138,11 @@ impl IntegrityVerificationKeysFetcher for PgClient {
     async fn get_verification_required_authorities_keys(
         &self,
     ) -> Result<Vec<String>, IndexDbError> {
-        self.get_verification_required_keys_by_field(VerificationRequiredField::Authority)
-            .await
+        self.get_verification_required_keys_by_field(VerificationRequiredField::Authority).await
     }
 
     async fn get_verification_required_groups_keys(&self) -> Result<Vec<String>, IndexDbError> {
-        self.get_verification_required_keys_by_field(VerificationRequiredField::Group)
-            .await
+        self.get_verification_required_keys_by_field(VerificationRequiredField::Group).await
     }
 
     async fn get_verification_required_assets_keys(&self) -> Result<Vec<String>, IndexDbError> {

@@ -1,16 +1,14 @@
+use std::{future::Future, io, net::SocketAddr, pin::Pin, sync::Arc};
+
 use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server,
 };
-
-use std::{future::Future, io, net::SocketAddr, pin::Pin, sync::Arc};
-
+use prometheus_client::{encoding::text::encode, registry::Registry};
+use tokio::signal::unix::{signal, SignalKind};
 use tracing::{error, info, warn};
 
 use crate::errors::MetricsError;
-use prometheus_client::encoding::text::encode;
-use prometheus_client::registry::Registry;
-use tokio::signal::unix::{signal, SignalKind};
 
 pub async fn setup_metrics(registry: Registry, port: Option<u16>) -> Result<(), MetricsError> {
     if let Some(port) = port {
@@ -83,10 +81,10 @@ pub async fn start_metrics(register: Registry, port: Option<u16>) {
         match setup_metrics(register, port).await {
             Ok(_) => {
                 info!("Metrics server stopped successfully");
-            }
+            },
             Err(e) => {
                 error!("Metrics server stopped with an error: {:?}", e)
-            }
+            },
         }
     });
 }

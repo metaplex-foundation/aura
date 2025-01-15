@@ -1,17 +1,22 @@
-use crate::column::TypedColumn;
-use crate::errors::StorageError;
-use crate::key_encoders::{
-    decode_failed_batch_mint_key, decode_string, encode_failed_batch_mint_key, encode_string,
-};
-use crate::{Result, Storage};
 use bincode::deserialize;
 use bubblegum_batch_sdk::model::BatchMint;
-use entities::enums::{FailedBatchMintState, PersistingBatchMintState};
-use entities::models::{BatchMintToVerify, FailedBatchMint};
+use entities::{
+    enums::{FailedBatchMintState, PersistingBatchMintState},
+    models::{BatchMintToVerify, FailedBatchMint},
+};
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
 use tracing::error;
+
+use crate::{
+    column::TypedColumn,
+    errors::StorageError,
+    key_encoders::{
+        decode_failed_batch_mint_key, decode_string, encode_failed_batch_mint_key, encode_string,
+    },
+    Result, Storage,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FailedBatchMintKey {
@@ -46,10 +51,10 @@ pub fn merge_batch_mint_to_verify(
             Ok(value) => {
                 slot = value.created_at_slot;
                 result = existing_val.to_vec();
-            }
+            },
             Err(e) => {
                 error!("RocksDB: BatchMintToVerify deserialize existing_val: {}", e)
-            }
+            },
         }
     }
 
@@ -60,10 +65,10 @@ pub fn merge_batch_mint_to_verify(
                     slot = new_val.created_at_slot;
                     result = op.to_vec();
                 }
-            }
+            },
             Err(e) => {
                 error!("RocksDB: BatchMintToVerify deserialize new_val: {}", e)
-            }
+            },
         }
     }
 
@@ -96,10 +101,10 @@ pub fn merge_failed_batch_mint(
             Ok(value) => {
                 slot = value.created_at_slot;
                 result = existing_val.to_vec();
-            }
+            },
             Err(e) => {
                 error!("RocksDB: FailedBatchMint deserialize existing_val: {}", e)
-            }
+            },
         }
     }
 
@@ -110,10 +115,10 @@ pub fn merge_failed_batch_mint(
                     slot = new_val.created_at_slot;
                     result = op.to_vec();
                 }
-            }
+            },
             Err(e) => {
                 error!("RocksDB: FailedBatchMint deserialize new_val: {}", e)
-            }
+            },
         }
     }
 
@@ -169,10 +174,7 @@ impl Storage {
         status: FailedBatchMintState,
         batch_mint: &BatchMintToVerify,
     ) -> Result<()> {
-        let key = FailedBatchMintKey {
-            status: status.clone(),
-            hash: batch_mint.file_hash.clone(),
-        };
+        let key = FailedBatchMintKey { status: status.clone(), hash: batch_mint.file_hash.clone() };
         let value = FailedBatchMint {
             status,
             file_hash: batch_mint.file_hash.clone(),

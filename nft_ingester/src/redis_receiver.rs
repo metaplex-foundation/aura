@@ -1,20 +1,20 @@
-use crate::error::IngesterError;
-use crate::message_parser::MessageParser;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use entities::models::{BufferedTxWithID, UnprocessedAccountMessage};
-use interface::error::UsecaseError;
-use interface::signature_persistence::UnprocessedTransactionsGetter;
-use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
-use num_traits::Zero;
-use plerkle_messenger::redis_messenger::RedisMessenger;
-use plerkle_messenger::{
-    ConsumptionType, Messenger, MessengerConfig, ACCOUNT_STREAM, TRANSACTION_STREAM,
+use interface::{
+    error::UsecaseError, signature_persistence::UnprocessedTransactionsGetter,
+    unprocessed_data_getter::UnprocessedAccountsGetter,
 };
-use std::sync::Arc;
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::Mutex;
-use tracing::info;
-use tracing::log::error;
+use num_traits::Zero;
+use plerkle_messenger::{
+    redis_messenger::RedisMessenger, ConsumptionType, Messenger, MessengerConfig, ACCOUNT_STREAM,
+    TRANSACTION_STREAM,
+};
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
+use tracing::{info, log::error};
+
+use crate::{error::IngesterError, message_parser::MessageParser};
 
 pub struct RedisReceiver {
     consumption_type: ConsumptionType,
@@ -32,12 +32,7 @@ impl RedisReceiver {
         info!("Initializing RedisReceiver...");
         let message_parser = Arc::new(MessageParser::new());
         let messanger = Mutex::new(RedisMessenger::new(config).await?);
-        Ok(Self {
-            messanger,
-            consumption_type,
-            message_parser,
-            ack_channel,
-        })
+        Ok(Self { messanger, consumption_type, message_parser, ack_channel })
     }
 }
 
@@ -95,11 +90,7 @@ impl UnprocessedAccountsGetter for RedisReceiver {
                     }
                     for (i, account) in accounts.into_iter().enumerate() {
                         // no need to ack same element twice
-                        let id = if i.is_zero() {
-                            item.id.clone()
-                        } else {
-                            String::new()
-                        };
+                        let id = if i.is_zero() { item.id.clone() } else { String::new() };
 
                         result.push(UnprocessedAccountMessage {
                             account: account.unprocessed_account,
@@ -107,10 +98,10 @@ impl UnprocessedAccountsGetter for RedisReceiver {
                             id,
                         });
                     }
-                }
+                },
                 Err(err) => {
                     error!("Parsing account: {}", err)
-                }
+                },
             }
         }
 

@@ -1,69 +1,63 @@
-use std::collections::HashMap;
-#[allow(unused_imports)]
-use std::fs::File;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{collections::HashMap, fs::File, str::FromStr, sync::Arc, time::Duration};
 
 use anchor_lang::prelude::*;
 #[cfg(feature = "batch_mint_tests")]
 use async_trait::async_trait;
-use mockall::predicate;
-use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
-
-use bubblegum_batch_sdk::batch_mint_client::BatchMintClient;
-use bubblegum_batch_sdk::batch_mint_validations::generate_batch_mint;
-use bubblegum_batch_sdk::model::BatchMint;
-use entities::api_req_params::{GetAssetProof, GetAssetProofBatch};
-use entities::enums::{BatchMintState, FailedBatchMintState, PersistingBatchMintState};
-use entities::models::BufferedTransaction;
-use entities::models::{BatchMintToVerify, BatchMintWithState};
+use bubblegum_batch_sdk::{
+    batch_mint_client::BatchMintClient, batch_mint_validations::generate_batch_mint,
+    model::BatchMint,
+};
+use entities::{
+    api_req_params::{GetAssetProof, GetAssetProofBatch},
+    enums::{BatchMintState, FailedBatchMintState, PersistingBatchMintState},
+    models::{BatchMintToVerify, BatchMintWithState, BufferedTransaction},
+};
 use flatbuffers::FlatBufferBuilder;
-use interface::account_balance::MockAccountBalanceGetter;
 #[cfg(feature = "batch_mint_tests")]
 use interface::batch_mint::BatchMintDownloader;
-use interface::batch_mint::MockBatchMintDownloader;
-use interface::error::UsecaseError;
-use metrics_utils::ApiMetricsConfig;
-use metrics_utils::BatchMintPersisterMetricsConfig;
-use metrics_utils::BatchMintProcessorMetricsConfig;
-use metrics_utils::IngesterMetricsConfig;
-use nft_ingester::api::dapi::rpc_asset_models::AssetProof;
-use nft_ingester::api::error::DasApiError;
-use nft_ingester::batch_mint::batch_mint_persister::{
-    BatchMintPersister, MAX_BATCH_MINT_DOWNLOAD_ATTEMPTS,
+use interface::{
+    account_balance::MockAccountBalanceGetter, batch_mint::MockBatchMintDownloader,
+    error::UsecaseError,
 };
-use nft_ingester::batch_mint::batch_mint_processor::{
-    BatchMintProcessor, MockPermanentStorageClient,
+use metrics_utils::{
+    ApiMetricsConfig, BatchMintPersisterMetricsConfig, BatchMintProcessorMetricsConfig,
+    IngesterMetricsConfig,
 };
-use nft_ingester::config::JsonMiddlewareConfig;
-use nft_ingester::error::IngesterError;
-use nft_ingester::json_worker::JsonWorker;
-use nft_ingester::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
-use nft_ingester::raydium_price_fetcher::RaydiumTokenPriceFetcher;
+use mockall::predicate;
+use mpl_bubblegum::types::{Creator, LeafSchema, MetadataArgs};
+use nft_ingester::{
+    api::{dapi::rpc_asset_models::AssetProof, error::DasApiError},
+    batch_mint::{
+        batch_mint_persister::{BatchMintPersister, MAX_BATCH_MINT_DOWNLOAD_ATTEMPTS},
+        batch_mint_processor::{BatchMintProcessor, MockPermanentStorageClient},
+    },
+    config::JsonMiddlewareConfig,
+    error::IngesterError,
+    json_worker::JsonWorker,
+    processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
+    raydium_price_fetcher::RaydiumTokenPriceFetcher,
+};
 use plerkle_serialization::serializer::serialize_transaction;
 use postgre_client::PgClient;
-use rocks_db::columns::batch_mint::FailedBatchMintKey;
-use rocks_db::Storage;
+use rocks_db::{columns::batch_mint::FailedBatchMintKey, Storage};
 use serde_json::json;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::instruction::CompiledInstruction;
-use solana_program::message::Message;
-use solana_program::message::MessageHeader;
-use solana_sdk::keccak;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use solana_sdk::signature::Signer;
-use solana_sdk::signer::keypair::Keypair;
-use solana_sdk::transaction::SanitizedTransaction;
-use solana_sdk::transaction::Transaction;
-use solana_transaction_status::TransactionStatusMeta;
-use solana_transaction_status::{InnerInstruction, InnerInstructions};
+use solana_program::{
+    instruction::CompiledInstruction,
+    message::{Message, MessageHeader},
+};
+use solana_sdk::{
+    keccak,
+    pubkey::Pubkey,
+    signature::{Signature, Signer},
+    signer::keypair::Keypair,
+    transaction::{SanitizedTransaction, Transaction},
+};
+use solana_transaction_status::{InnerInstruction, InnerInstructions, TransactionStatusMeta};
 use spl_account_compression::ConcurrentMerkleTree;
 use tempfile::TempDir;
 use testcontainers::clients::Cli;
-use tokio::io::AsyncWriteExt;
-use tokio::sync::broadcast;
+use tokio::{io::AsyncWriteExt, sync::broadcast};
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
@@ -81,10 +75,7 @@ fn test_generate_1_000_batch_mint() {
 fn test_generate_10_000_batch_mint() {
     let batch_mint = generate_batch_mint(10_000);
     assert_eq!(batch_mint.batch_mints.len(), 10_000);
-    println!(
-        "batch_mint of {:?} assets created",
-        batch_mint.batch_mints.len()
-    );
+    println!("batch_mint of {:?} assets created", batch_mint.batch_mints.len());
     let file = File::create("batch_mint-10_000.json").unwrap();
     serde_json::to_writer(file, &batch_mint).unwrap()
 }
@@ -94,10 +85,7 @@ fn test_generate_10_000_batch_mint() {
 fn test_generate_100_000_batch_mint() {
     let batch_mint = generate_batch_mint(100_000);
     assert_eq!(batch_mint.batch_mints.len(), 100_000);
-    println!(
-        "batch_mint of {:?} assets created",
-        batch_mint.batch_mints.len()
-    );
+    println!("batch_mint of {:?} assets created", batch_mint.batch_mints.len());
     let file = File::create("batch_mint-100_000.json").unwrap();
     serde_json::to_writer(file, &batch_mint).unwrap()
 }
@@ -167,11 +155,7 @@ fn generate_merkle_tree_from_batch_mint(batch_mint: &BatchMint) -> ConcurrentMer
             .collect::<Vec<_>>();
 
         let creator_hash = keccak::hashv(
-            creator_data
-                .iter()
-                .map(|c| c.as_slice())
-                .collect::<Vec<&[u8]>>()
-                .as_ref(),
+            creator_data.iter().map(|c| c.as_slice()).collect::<Vec<&[u8]>>().as_ref(),
         );
 
         let id = mpl_bubblegum::utils::get_asset_id(&batch_mint.tree_id, nonce as u64);
@@ -277,18 +261,9 @@ async fn save_batch_mint_to_queue_test() {
         map_flatbuffer: false,
     };
 
-    bubblegum_updates_processor
-        .process_transaction(buffered_transaction, true)
-        .await
-        .unwrap();
+    bubblegum_updates_processor.process_transaction(buffered_transaction, true).await.unwrap();
 
-    let r = env
-        .rocks_env
-        .storage
-        .batch_mint_to_verify
-        .get(metadata_hash.clone())
-        .unwrap()
-        .unwrap();
+    let r = env.rocks_env.storage.batch_mint_to_verify.get(metadata_hash.clone()).unwrap().unwrap();
 
     assert_eq!(r.file_hash, metadata_hash);
     assert_eq!(r.url, metadata_url);
@@ -305,10 +280,8 @@ async fn batch_mint_with_verified_creators_test() {
     // First we have to create offchain Merkle tree with SDK
 
     let batch_mint_client = BatchMintClient::new(solana_client);
-    let mut batch_mint_builder = batch_mint_client
-        .create_batch_mint_builder(&tree_key)
-        .await
-        .unwrap();
+    let mut batch_mint_builder =
+        batch_mint_client.create_batch_mint_builder(&tree_key).await.unwrap();
 
     let asset_creator = Keypair::new();
     let owner = Keypair::new();
@@ -326,16 +299,11 @@ async fn batch_mint_with_verified_creators_test() {
         collection: None,
         uses: None,
         token_program_version: mpl_bubblegum::types::TokenProgramVersion::Original,
-        creators: vec![Creator {
-            address: asset_creator.pubkey(),
-            verified: true,
-            share: 100,
-        }],
+        creators: vec![Creator { address: asset_creator.pubkey(), verified: true, share: 100 }],
     };
 
-    let metadata_hash_arg = batch_mint_builder
-        .add_asset(&owner.pubkey(), &delegate.pubkey(), &asset)
-        .unwrap();
+    let metadata_hash_arg =
+        batch_mint_builder.add_asset(&owner.pubkey(), &delegate.pubkey(), &asset).unwrap();
 
     let signature = asset_creator.sign_message(&metadata_hash_arg.get_message());
 
@@ -345,9 +313,7 @@ async fn batch_mint_with_verified_creators_test() {
     let mut message_and_signatures = HashMap::new();
     message_and_signatures.insert(metadata_hash_arg.get_nonce(), creators_signatures);
 
-    batch_mint_builder
-        .add_signatures_for_verified_creators(message_and_signatures)
-        .unwrap();
+    batch_mint_builder.add_signatures_for_verified_creators(message_and_signatures).unwrap();
 
     let finalized_batch_mint = batch_mint_builder.build_batch_mint().unwrap();
 
@@ -386,10 +352,7 @@ async fn batch_mint_with_verified_creators_test() {
     let mut mocked_downloader = MockBatchMintDownloader::new();
     mocked_downloader
         .expect_download_batch_mint_and_check_checksum()
-        .with(
-            predicate::eq("url".to_string()),
-            predicate::eq("hash".to_string()),
-        )
+        .with(predicate::eq("url".to_string()), predicate::eq("hash".to_string()))
         .returning(move |_, _| {
             let json_file =
                 std::fs::read_to_string(tmp_dir.path().join("batch_mint-1.json")).unwrap();
@@ -402,17 +365,11 @@ async fn batch_mint_with_verified_creators_test() {
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (batch_mint_to_verify, _) = env
-        .rocks_env
-        .storage
-        .fetch_batch_mint_for_verifying()
-        .await
-        .unwrap();
+    let (batch_mint_to_verify, _) =
+        env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister
-        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
-        .await;
+    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
 
     let api = nft_ingester::api::api_impl::DasApi::<
         MaybeProofChecker,
@@ -437,9 +394,7 @@ async fn batch_mint_with_verified_creators_test() {
         "".to_string(),
     );
 
-    let payload = GetAssetProof {
-        id: metadata_hash_arg.get_asset_id().to_string(),
-    };
+    let payload = GetAssetProof { id: metadata_hash_arg.get_asset_id().to_string() };
     let proof_result = api.get_asset_proof(payload).await.unwrap();
     let asset_proof: AssetProof = serde_json::from_value(proof_result).unwrap();
 
@@ -457,10 +412,8 @@ async fn batch_mint_with_unverified_creators_test() {
     // First we have to create offchain Merkle tree with SDK
 
     let batch_mint_client = BatchMintClient::new(solana_client);
-    let mut batch_mint_builder = batch_mint_client
-        .create_batch_mint_builder(&tree_key)
-        .await
-        .unwrap();
+    let mut batch_mint_builder =
+        batch_mint_client.create_batch_mint_builder(&tree_key).await.unwrap();
 
     let asset_creator = Keypair::new();
     let owner = Keypair::new();
@@ -478,16 +431,11 @@ async fn batch_mint_with_unverified_creators_test() {
         collection: None,
         uses: None,
         token_program_version: mpl_bubblegum::types::TokenProgramVersion::Original,
-        creators: vec![Creator {
-            address: asset_creator.pubkey(),
-            verified: true,
-            share: 100,
-        }],
+        creators: vec![Creator { address: asset_creator.pubkey(), verified: true, share: 100 }],
     };
 
-    let metadata_hash_arg = batch_mint_builder
-        .add_asset(&owner.pubkey(), &delegate.pubkey(), &asset)
-        .unwrap();
+    let metadata_hash_arg =
+        batch_mint_builder.add_asset(&owner.pubkey(), &delegate.pubkey(), &asset).unwrap();
 
     let signature = asset_creator.sign_message(&metadata_hash_arg.get_message());
 
@@ -497,9 +445,7 @@ async fn batch_mint_with_unverified_creators_test() {
     let mut message_and_signatures = HashMap::new();
     message_and_signatures.insert(metadata_hash_arg.get_nonce(), creators_signatures);
 
-    batch_mint_builder
-        .add_signatures_for_verified_creators(message_and_signatures)
-        .unwrap();
+    batch_mint_builder.add_signatures_for_verified_creators(message_and_signatures).unwrap();
 
     let mut finalized_batch_mint = batch_mint_builder.build_batch_mint().unwrap();
     // drop signature from the batch_mint to test if verification on indexer side will catch it
@@ -542,10 +488,7 @@ async fn batch_mint_with_unverified_creators_test() {
     let mut mocked_downloader = MockBatchMintDownloader::new();
     mocked_downloader
         .expect_download_batch_mint_and_check_checksum()
-        .with(
-            predicate::eq("url".to_string()),
-            predicate::eq("hash".to_string()),
-        )
+        .with(predicate::eq("url".to_string()), predicate::eq("hash".to_string()))
         .returning(move |_, _| {
             let json_file =
                 std::fs::read_to_string(tmp_dir.path().join("batch_mint-1.json")).unwrap();
@@ -558,17 +501,11 @@ async fn batch_mint_with_unverified_creators_test() {
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (batch_mint_to_verify, _) = env
-        .rocks_env
-        .storage
-        .fetch_batch_mint_for_verifying()
-        .await
-        .unwrap();
+    let (batch_mint_to_verify, _) =
+        env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister
-        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
-        .await;
+    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
 
     let api = nft_ingester::api::api_impl::DasApi::<
         MaybeProofChecker,
@@ -593,16 +530,14 @@ async fn batch_mint_with_unverified_creators_test() {
         "".to_string(),
     );
 
-    let payload = GetAssetProof {
-        id: metadata_hash_arg.get_asset_id().to_string(),
-    };
+    let payload = GetAssetProof { id: metadata_hash_arg.get_asset_id().to_string() };
 
     // batch_mint update should not be processed
     // and as a result proof for asset cannot be extracted
     match api.get_asset_proof(payload).await {
         Ok(_) => panic!("Request should fail"),
         Err(err) => match err {
-            DasApiError::ProofNotFound => {}
+            DasApiError::ProofNotFound => {},
             _ => panic!("API returned wrong error"),
         },
     }
@@ -641,13 +576,10 @@ async fn batch_mint_persister_test() {
         .unwrap();
 
     let mut mocked_downloader = MockBatchMintDownloader::new();
-    mocked_downloader
-        .expect_download_batch_mint_and_check_checksum()
-        .returning(move |_, _| {
-            let json_file =
-                std::fs::read_to_string(tmp_dir.path().join("batch_mint-10.json")).unwrap();
-            Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
-        });
+    mocked_downloader.expect_download_batch_mint_and_check_checksum().returning(move |_, _| {
+        let json_file = std::fs::read_to_string(tmp_dir.path().join("batch_mint-10.json")).unwrap();
+        Ok(Box::new(serde_json::from_str(&json_file).unwrap()))
+    });
 
     let batch_mint_persister = BatchMintPersister::new(
         env.rocks_env.storage.clone(),
@@ -655,17 +587,11 @@ async fn batch_mint_persister_test() {
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (batch_mint_to_verify, _) = env
-        .rocks_env
-        .storage
-        .fetch_batch_mint_for_verifying()
-        .await
-        .unwrap();
+    let (batch_mint_to_verify, _) =
+        env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister
-        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
-        .await;
+    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
 
     let merkle_tree = generate_merkle_tree_from_batch_mint(&test_batch_mint);
 
@@ -714,9 +640,7 @@ async fn batch_mint_persister_test() {
 
     assert_eq!(
         merkle_tree.check_valid_proof(
-            Pubkey::from_str(asset_proof.leaf.as_str())
-                .unwrap()
-                .to_bytes(),
+            Pubkey::from_str(asset_proof.leaf.as_str()).unwrap().to_bytes(),
             &proofs,
             leaf_index
         ),
@@ -724,9 +648,7 @@ async fn batch_mint_persister_test() {
     );
     assert_eq!(
         merkle_tree.check_valid_proof(
-            Pubkey::from_str(asset_proof.leaf.as_str())
-                .unwrap()
-                .to_bytes(),
+            Pubkey::from_str(asset_proof.leaf.as_str()).unwrap().to_bytes(),
             &proofs,
             leaf_index + 1
         ),
@@ -734,22 +656,12 @@ async fn batch_mint_persister_test() {
     );
 
     assert_eq!(
-        env.rocks_env
-            .storage
-            .batch_mint_to_verify
-            .get(metadata_hash.clone())
-            .unwrap()
-            .is_none(),
+        env.rocks_env.storage.batch_mint_to_verify.get(metadata_hash.clone()).unwrap().is_none(),
         true
     );
 
     assert_eq!(
-        env.rocks_env
-            .storage
-            .batch_mints
-            .get(metadata_hash.clone())
-            .unwrap()
-            .is_some(),
+        env.rocks_env.storage.batch_mints.get(metadata_hash.clone()).unwrap().is_some(),
         true
     );
     // Test get asset proof batch
@@ -814,24 +726,13 @@ async fn batch_mint_persister_download_fail_test() {
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (batch_mint_to_verify, _) = env
-        .rocks_env
-        .storage
-        .fetch_batch_mint_for_verifying()
-        .await
-        .unwrap();
+    let (batch_mint_to_verify, _) =
+        env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister
-        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
-        .await;
+    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
 
-    let r = env
-        .rocks_env
-        .storage
-        .batch_mint_to_verify
-        .get(metadata_hash.clone())
-        .unwrap();
+    let r = env.rocks_env.storage.batch_mint_to_verify.get(metadata_hash.clone()).unwrap();
 
     assert_eq!(r.is_none(), true);
 }
@@ -881,24 +782,13 @@ async fn batch_mint_persister_drop_from_queue_after_download_fail_test() {
         Arc::new(BatchMintPersisterMetricsConfig::new()),
     );
 
-    let (batch_mint_to_verify, _) = env
-        .rocks_env
-        .storage
-        .fetch_batch_mint_for_verifying()
-        .await
-        .unwrap();
+    let (batch_mint_to_verify, _) =
+        env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
     let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister
-        .persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None)
-        .await;
+    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
 
-    let r = env
-        .rocks_env
-        .storage
-        .batch_mint_to_verify
-        .get(metadata_hash.clone())
-        .unwrap();
+    let r = env.rocks_env.storage.batch_mint_to_verify.get(metadata_hash.clone()).unwrap();
 
     assert_eq!(r.is_none(), true);
 
@@ -906,13 +796,7 @@ async fn batch_mint_persister_drop_from_queue_after_download_fail_test() {
         status: FailedBatchMintState::DownloadFailed,
         hash: metadata_hash.clone(),
     };
-    let failed_batch_mint = env
-        .rocks_env
-        .storage
-        .failed_batch_mints
-        .get(key)
-        .unwrap()
-        .unwrap();
+    let failed_batch_mint = env.rocks_env.storage.failed_batch_mints.get(key).unwrap().unwrap();
 
     assert_eq!(failed_batch_mint.file_hash, metadata_hash.clone());
     assert_eq!(failed_batch_mint.download_attempts, download_attempts + 1);
@@ -937,9 +821,7 @@ async fn save_temp_batch_mint(
     let file_name = format!("{}.json", Uuid::new_v4());
     let full_file_path = format!("{}/{}", dir.path().to_str().unwrap(), &file_name);
     let mut file = tokio::fs::File::create(full_file_path).await.unwrap();
-    file.write_all(json!(batch_mint).to_string().as_bytes())
-        .await
-        .unwrap();
+    file.write_all(json!(batch_mint).to_string().as_bytes()).await.unwrap();
     client.insert_new_batch_mint(&file_name).await.unwrap();
     file_name
 }
@@ -961,9 +843,7 @@ async fn batch_mint_upload_test() {
         .expect_upload_file()
         .times(1)
         .returning(|_, _| Box::pin(async { Ok(("tx_id".to_string(), 100u64)) }));
-    permanent_storage_client
-        .expect_get_metadata_url()
-        .returning(|_| "".to_string());
+    permanent_storage_client.expect_get_metadata_url().returning(|_| "".to_string());
     let dir = TempDir::new().unwrap();
     let file_name = save_temp_batch_mint(&dir, env.pg_env.client.clone(), &batch_mint).await;
     let batch_mint_processor = BatchMintProcessor::new(
@@ -997,9 +877,7 @@ async fn batch_mint_upload_test() {
         .returning(|_, _| {
             Box::pin(async { Err(IngesterError::Arweave("test error".to_string())) })
         });
-    permanent_storage_client
-        .expect_get_metadata_url()
-        .returning(|_| "".to_string());
+    permanent_storage_client.expect_get_metadata_url().returning(|_| "".to_string());
     let batch_mint_processor = BatchMintProcessor::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
@@ -1023,8 +901,5 @@ async fn batch_mint_upload_test() {
         )
         .await;
     // Retries are exhausted
-    assert_eq!(
-        processing_result,
-        Err(IngesterError::Arweave("Arweave: test error".to_string()))
-    );
+    assert_eq!(processing_result, Err(IngesterError::Arweave("Arweave: test error".to_string())));
 }

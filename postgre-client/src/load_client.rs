@@ -31,11 +31,7 @@ impl PgClient {
         temp_table: &str,
         on_conflict_do_nothing: bool,
     ) -> Result<(), IndexDbError> {
-        let conflict_clause = if on_conflict_do_nothing {
-            " ON CONFLICT DO NOTHING"
-        } else {
-            ""
-        };
+        let conflict_clause = if on_conflict_do_nothing { " ON CONFLICT DO NOTHING" } else { "" };
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
             "INSERT INTO {} SELECT * FROM {} {};",
             table, temp_table, conflict_clause
@@ -64,8 +60,7 @@ impl PgClient {
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new(format!("ALTER TABLE {} SET LOGGED;", table));
-        self.execute_query_with_metrics(transaction, &mut query_builder, "set_logged", table)
-            .await
+        self.execute_query_with_metrics(transaction, &mut query_builder, "set_logged", table).await
     }
 
     pub(crate) async fn set_autovacuum_off_on(
@@ -73,12 +68,9 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
-            "ALTER TABLE {} SET (autovacuum_enabled = false);",
-            table
-        ));
-        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
-            .await
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new(format!("ALTER TABLE {} SET (autovacuum_enabled = false);", table));
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table).await
     }
 
     pub(crate) async fn reset_autovacuum_on(
@@ -86,12 +78,9 @@ impl PgClient {
         transaction: &mut Transaction<'_, Postgres>,
         table: &str,
     ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(format!(
-            "ALTER TABLE {} RESET (autovacuum_enabled); ",
-            table
-        ));
-        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table)
-            .await
+        let mut query_builder: QueryBuilder<'_, Postgres> =
+            QueryBuilder::new(format!("ALTER TABLE {} RESET (autovacuum_enabled); ", table));
+        self.execute_query_with_metrics(transaction, &mut query_builder, ALTER_ACTION, table).await
     }
 
     pub(crate) async fn truncate_table(
@@ -117,14 +106,13 @@ impl PgClient {
         let start_time = chrono::Utc::now();
         match query.execute(transaction).await {
             Ok(_) => {
-                self.metrics
-                    .observe_request(SQL_COMPONENT, action, endpoint, start_time);
+                self.metrics.observe_request(SQL_COMPONENT, action, endpoint, start_time);
                 Ok(())
-            }
+            },
             Err(err) => {
                 self.metrics.observe_error(SQL_COMPONENT, action, endpoint);
                 Err(err.into())
-            }
+            },
         }
     }
 
@@ -135,8 +123,7 @@ impl PgClient {
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new(format!("DROP INDEX IF EXISTS {};", index));
-        self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, index)
-            .await
+        self.execute_query_with_metrics(transaction, &mut query_builder, DROP_ACTION, index).await
     }
 
     pub async fn drop_fungible_indexes(
@@ -153,10 +140,7 @@ impl PgClient {
         )
         .await?;
 
-        for index in [
-            "fungible_tokens_fbt_asset_idx",
-            "fungible_tokens_fbt_owner_balance_idx",
-        ] {
+        for index in ["fungible_tokens_fbt_asset_idx", "fungible_tokens_fbt_owner_balance_idx"] {
             self.drop_index(transaction, index).await?;
         }
         Ok(())
@@ -391,8 +375,7 @@ impl PgClient {
         query_builder.push(" ON ");
         query_builder.push(on_query_string);
         query_builder.push(";");
-        self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, name)
-            .await
+        self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, name).await
     }
 
     pub async fn recreate_fungible_indexes(
@@ -410,17 +393,10 @@ impl PgClient {
         .await?;
 
         for (index, on_query_string) in [
-            (
-                "fungible_tokens_fbt_owner_balance_idx",
-                "fungible_tokens(fbt_owner, fbt_balance)",
-            ),
-            (
-                "fungible_tokens_fbt_asset_idx",
-                "fungible_tokens(fbt_asset)",
-            ),
+            ("fungible_tokens_fbt_owner_balance_idx", "fungible_tokens(fbt_owner, fbt_balance)"),
+            ("fungible_tokens_fbt_asset_idx", "fungible_tokens(fbt_asset)"),
         ] {
-            self.create_index(transaction, index, on_query_string)
-                .await?;
+            self.create_index(transaction, index, on_query_string).await?;
         }
         Ok(())
     }
@@ -458,20 +434,17 @@ impl PgClient {
             IndexDbError::BadArgument(format!("Failed to acquire semaphore: {}", e))
         })?;
         let mut transaction = self.start_transaction().await?;
-        match self
-            .copy_table_from(&mut transaction, file_path, table, columns)
-            .await
-        {
+        match self.copy_table_from(&mut transaction, file_path, table, columns).await {
             Ok(_) => {
                 transaction.commit().await?;
                 drop(guard);
                 Ok(())
-            }
+            },
             Err(e) => {
                 transaction.rollback().await?;
                 drop(guard);
                 Err(e)
-            }
+            },
         }
     }
     pub(crate) async fn load_through_temp_table(
@@ -509,14 +482,14 @@ impl PgClient {
                     drop(g);
                 }
                 Ok(())
-            }
+            },
             Err(e) => {
                 transaction.rollback().await?;
                 if let Some(g) = guard {
                     drop(g);
                 }
                 Err(e)
-            }
+            },
         }
     }
 
@@ -529,12 +502,9 @@ impl PgClient {
         columns: &str,
         on_conflict_do_nothing: bool,
     ) -> Result<(), IndexDbError> {
-        self.create_temp_tables(table, temp_table, transaction, true)
-            .await?;
-        self.copy_table_from(transaction, file_path, temp_table, columns)
-            .await?;
-        self.insert_from_temp_table(transaction, table, temp_table, on_conflict_do_nothing)
-            .await
+        self.create_temp_tables(table, temp_table, transaction, true).await?;
+        self.copy_table_from(transaction, file_path, temp_table, columns).await?;
+        self.insert_from_temp_table(transaction, table, temp_table, on_conflict_do_nothing).await
     }
 
     pub(crate) async fn destructive_prep_to_batch_nft_load_tx(
@@ -558,11 +528,11 @@ impl PgClient {
             Ok(_) => {
                 transaction.commit().await?;
                 Ok(())
-            }
+            },
             Err(e) => {
                 transaction.rollback().await?;
                 Err(e)
-            }
+            },
         }
     }
 
@@ -572,11 +542,11 @@ impl PgClient {
             Ok(_) => {
                 transaction.commit().await?;
                 Ok(())
-            }
+            },
             Err(e) => {
                 transaction.rollback().await?;
                 Err(e)
-            }
+            },
         }
     }
 
@@ -586,11 +556,11 @@ impl PgClient {
             Ok(_) => {
                 transaction.commit().await?;
                 Ok(())
-            }
+            },
             Err(e) => {
                 transaction.rollback().await?;
                 Err(e)
-            }
+            },
         }
     }
 
@@ -609,11 +579,9 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        self.recreate_asset_creators_constraints(transaction)
-            .await?;
+        self.recreate_asset_creators_constraints(transaction).await?;
         self.recreate_creators_indexes(transaction).await?;
-        self.reset_autovacuum_on(transaction, "asset_creators_v3")
-            .await?;
+        self.reset_autovacuum_on(transaction, "asset_creators_v3").await?;
         // self.set_logged_on(transaction, "asset_creators_v3").await?;
         Ok(())
     }
@@ -622,11 +590,9 @@ impl PgClient {
         &self,
         transaction: &mut Transaction<'_, Postgres>,
     ) -> Result<(), IndexDbError> {
-        self.recreate_asset_authorities_constraints(transaction)
-            .await?;
+        self.recreate_asset_authorities_constraints(transaction).await?;
         self.recreate_authorities_indexes(transaction).await?;
-        self.reset_autovacuum_on(transaction, "assets_authorities")
-            .await?;
+        self.reset_autovacuum_on(transaction, "assets_authorities").await?;
         // self.set_logged_on(transaction, "assets_authorities").await?;
         Ok(())
     }

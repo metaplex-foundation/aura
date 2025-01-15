@@ -1,44 +1,3 @@
-use clients::signature_client;
-use columns::asset::{
-    self, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
-};
-use columns::asset_previews::{AssetPreviews, UrlToDownload};
-use columns::batch_mint::{self, BatchMintWithStaker};
-use columns::inscriptions::{Inscription, InscriptionData};
-use columns::leaf_signatures::LeafSignature;
-use columns::offchain_data::{OffChainData, OffChainDataDeprecated};
-use columns::parameters::ParameterColumn;
-use columns::token_accounts::{self, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx};
-use columns::token_prices::TokenPrice;
-use columns::{bubblegum_slots, cl_items, parameters};
-use entities::schedule::ScheduledJob;
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use inflector::Inflector;
-use std::path::Path;
-use std::sync::atomic::AtomicU64;
-use std::{marker::PhantomData, sync::Arc};
-
-use asset::{
-    AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetCompleteDetails,
-    AssetDynamicDetailsDeprecated, AssetOwnerDeprecated, AssetStaticDetailsDeprecated,
-    FungibleAssetsUpdateIdx, MetadataMintMap, MplCoreCollectionAuthority, SlotAssetIdx,
-};
-use rocksdb::{ColumnFamilyDescriptor, Options, DB};
-
-use crate::migrator::{MigrationState, MigrationVersions};
-
-use column::{Column, TypedColumn};
-use entities::enums::TokenMetadataEdition;
-use entities::models::{
-    AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount,
-};
-use metrics_utils::red::RequestErrorDurationMetrics;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
-
-use crate::errors::StorageError;
-use crate::tree_seq::{TreeSeqIdx, TreesGaps};
-
 pub mod backup_service;
 pub mod batch_savers;
 pub mod clients;
@@ -46,7 +5,9 @@ pub mod column;
 pub mod columns;
 pub mod errors;
 pub mod fork_cleaner;
+pub mod generated;
 pub mod key_encoders;
+pub mod mappers;
 pub mod migrations;
 pub mod migrator;
 pub mod processing_possibility;
@@ -55,10 +16,51 @@ pub mod sequence_consistent;
 pub mod storage_traits;
 pub mod transaction;
 pub mod tree_seq;
-// import the flatbuffers runtime library
-extern crate flatbuffers;
-pub mod generated;
-pub mod mappers;
+
+use std::{
+    marker::PhantomData,
+    path::Path,
+    sync::{atomic::AtomicU64, Arc},
+};
+
+use asset::{
+    AssetAuthorityDeprecated, AssetCollectionDeprecated, AssetCompleteDetails,
+    AssetDynamicDetailsDeprecated, AssetOwnerDeprecated, AssetStaticDetailsDeprecated,
+    FungibleAssetsUpdateIdx, MetadataMintMap, MplCoreCollectionAuthority, SlotAssetIdx,
+};
+use clients::signature_client;
+use column::{Column, TypedColumn};
+use columns::{
+    asset::{
+        self, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
+    },
+    asset_previews::{AssetPreviews, UrlToDownload},
+    batch_mint::{self, BatchMintWithStaker},
+    bubblegum_slots, cl_items,
+    inscriptions::{Inscription, InscriptionData},
+    leaf_signatures::LeafSignature,
+    offchain_data::{OffChainData, OffChainDataDeprecated},
+    parameters,
+    parameters::ParameterColumn,
+    token_accounts::{self, TokenAccountMintOwnerIdx, TokenAccountOwnerIdx},
+    token_prices::TokenPrice,
+};
+use entities::{
+    enums::TokenMetadataEdition,
+    models::{AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount},
+    schedule::ScheduledJob,
+};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use inflector::Inflector;
+use metrics_utils::red::RequestErrorDurationMetrics;
+use rocksdb::{ColumnFamilyDescriptor, Options, DB};
+use tokio::{sync::Mutex, task::JoinSet};
+
+use crate::{
+    errors::StorageError,
+    migrator::{MigrationState, MigrationVersions},
+    tree_seq::{TreeSeqIdx, TreesGaps},
+};
 
 pub type Result<T> = std::result::Result<T, StorageError>;
 
@@ -84,20 +86,11 @@ impl SlotStorage {
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Self {
         let raw_blocks_cbor = Storage::column(db.clone(), red_metrics.clone());
-        Self {
-            db,
-            raw_blocks_cbor,
-            red_metrics,
-            join_set,
-        }
+        Self { db, raw_blocks_cbor, red_metrics, join_set }
     }
 
     pub fn cf_names() -> Vec<&'static str> {
-        vec![
-            RawBlock::NAME,
-            MigrationVersions::NAME,
-            OffChainDataDeprecated::NAME,
-        ]
+        vec![RawBlock::NAME, MigrationVersions::NAME, OffChainDataDeprecated::NAME]
     }
 
     pub fn open<P>(
@@ -109,11 +102,8 @@ impl SlotStorage {
         P: AsRef<Path>,
     {
         let cf_descriptors = Storage::cfs_to_column_families(Self::cf_names());
-        let db = Arc::new(DB::open_cf_descriptors(
-            &Storage::get_db_options(),
-            db_path,
-            cf_descriptors,
-        )?);
+        let db =
+            Arc::new(DB::open_cf_descriptors(&Storage::get_db_options(), db_path, cf_descriptors)?);
         Ok(Self::new(db, join_set, red_metrics))
     }
 
@@ -143,10 +133,7 @@ impl SlotStorage {
     where
         P: AsRef<Path>,
     {
-        let db = Arc::new(Storage::open_readonly_with_cfs_only_db(
-            db_path,
-            Self::cf_names(),
-        )?);
+        let db = Arc::new(Storage::open_readonly_with_cfs_only_db(db_path, Self::cf_names())?);
 
         Ok(Self::new(db, join_set, red_metrics))
     }
@@ -315,11 +302,8 @@ impl Storage {
         P: AsRef<Path>,
     {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
-        let db = Arc::new(DB::open_cf_descriptors(
-            &Self::get_db_options(),
-            db_path,
-            cf_descriptors,
-        )?);
+        let db =
+            Arc::new(DB::open_cf_descriptors(&Self::get_db_options(), db_path, cf_descriptors)?);
         Ok(Self::new(db, join_set, red_metrics))
     }
 
@@ -353,11 +337,8 @@ impl Storage {
         P: AsRef<Path>,
     {
         let cf_descriptors = Self::cfs_to_column_families(c_names);
-        let db = Arc::new(DB::open_cf_descriptors(
-            &Self::get_db_options(),
-            db_path,
-            cf_descriptors,
-        )?);
+        let db =
+            Arc::new(DB::open_cf_descriptors(&Self::get_db_options(), db_path, cf_descriptors)?);
         Ok(Self::new(db, join_set, red_metrics))
     }
 
@@ -440,11 +421,7 @@ impl Storage {
         <C as TypedColumn>::ValueType: Clone,
         <C as TypedColumn>::KeyType: 'static,
     {
-        Column {
-            backend,
-            column: PhantomData,
-            red_metrics,
-        }
+        Column { backend, column: PhantomData, red_metrics }
     }
 
     fn get_db_options() -> Options {
@@ -512,96 +489,96 @@ impl Storage {
                     "merge_fn_merge_complete_details",
                     asset::merge_complete_details_fb_simplified,
                 );
-            }
+            },
             MplCoreCollectionAuthority::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_mpl_core_collection_authority",
                     asset::MplCoreCollectionAuthority::merge,
                 );
-            }
+            },
             AssetStaticDetails::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_static_details",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             asset::AssetDynamicDetails::NAME => {
                 let mf = match migration_state {
                     MigrationState::Last | MigrationState::Version(_) => {
                         asset::AssetDynamicDetails::merge_dynamic_details
-                    }
+                    },
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
-                    }
+                    },
                 };
                 cf_options.set_merge_operator_associative("merge_fn_merge_dynamic_details", mf);
-            }
+            },
             asset::AssetDynamicDetailsDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_dynamic_details_deprecated",
                     AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             asset::AssetAuthorityDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_asset_authority_deprecated",
                     AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             asset::AssetCollectionDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_asset_collection_deprecated",
                     AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             asset::AssetAuthority::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_asset_authorities",
                     asset::AssetAuthority::merge_asset_authorities,
                 );
-            }
+            },
             asset::AssetOwner::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_asset_owner",
                     asset::AssetOwner::merge_asset_owner,
                 );
-            }
+            },
             asset::AssetLeaf::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_asset_leaf",
                     asset::AssetLeaf::merge_asset_leaf,
                 );
-            }
+            },
             asset::AssetCollection::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_collection",
                     asset::AssetCollection::merge_asset_collection,
                 );
-            }
+            },
             cl_items::ClItem::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_cl_item",
                     cl_items::ClItem::merge_cl_items,
                 );
-            }
+            },
             ParameterColumn::<u64>::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_top_parameter_column",
                     parameters::merge_top_parameter,
                 );
-            }
+            },
             AssetOwnerDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_owner_deprecated_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             MetadataMintMap::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_metadata_mint_map_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             OffChainDataDeprecated::NAME => cf_options.set_merge_operator_associative(
                 "merge_fn_off_chain_data_keep_existing_deprecated",
                 asset::AssetStaticDetails::merge_keep_existing,
@@ -611,145 +588,145 @@ impl Storage {
                     "merge_fn_off_chain_data_keep_existing",
                     OffChainData::merge_off_chain_data,
                 );
-            }
+            },
             cl_items::ClLeaf::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_cl_leaf_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             bubblegum_slots::ForceReingestableSlots::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_force_reingestable_slots_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             AssetsUpdateIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_assets_update_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             FungibleAssetsUpdateIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_fungible_assets_update_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             SlotAssetIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_slot_asset_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             TreeSeqIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_tree_seq_idx_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             TreesGaps::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_trees_gaps_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             TokenMetadataEdition::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_metadata_edition_keep_existing",
                     crate::columns::editions::merge_token_metadata_edition,
                 );
-            }
+            },
             AssetStaticDetailsDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_static_deprecated_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             AssetSignature::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_signature_keep_existing",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             TokenAccount::NAME => {
                 let mf = match migration_state {
                     MigrationState::Last | MigrationState::Version(_) => {
                         token_accounts::merge_token_accounts
-                    }
+                    },
                     MigrationState::CreateColumnFamilies => {
                         asset::AssetStaticDetails::merge_keep_existing
-                    }
+                    },
                 };
                 cf_options.set_merge_operator_associative("merge_fn_token_accounts", mf);
-            }
+            },
             TokenAccountOwnerIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_accounts_owner_idx",
                     TokenAccountOwnerIdx::merge_values,
                 );
-            }
+            },
             TokenAccountMintOwnerIdx::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_accounts_mint_owner_idx",
                     TokenAccountMintOwnerIdx::merge_values,
                 );
-            }
+            },
             BatchMintToVerify::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_batch_mint_to_verify",
                     batch_mint::merge_batch_mint_to_verify,
                 );
-            }
+            },
             FailedBatchMint::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_failed_batch_mint",
                     batch_mint::merge_failed_batch_mint,
                 );
-            }
+            },
             BatchMintWithStaker::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_downloaded_batch_mint",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             MigrationVersions::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_migration_versions",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             TokenPrice::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_prices",
                     asset::AssetStaticDetails::merge_keep_existing,
                 );
-            }
+            },
             Inscription::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_inscriptions",
                     Inscription::merge_values,
                 );
-            }
+            },
             InscriptionData::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_inscription_data",
                     InscriptionData::merge_values,
                 );
-            }
+            },
             LeafSignature::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_leaf_signature",
                     LeafSignature::merge_leaf_signatures,
                 );
-            }
+            },
             SplMint::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_spl_mint",
                     token_accounts::merge_mints,
                 );
-            }
-            _ => {}
+            },
+            _ => {},
         }
         cf_options
     }
@@ -791,10 +768,8 @@ impl Storage {
 
         for cf in column_families_to_remove {
             let cf_handler = self.db.cf_handle(cf).unwrap();
-            for (key, _) in self
-                .db
-                .full_iterator_cf(&cf_handler, rocksdb::IteratorMode::Start)
-                .flatten()
+            for (key, _) in
+                self.db.full_iterator_cf(&cf_handler, rocksdb::IteratorMode::Start).flatten()
             {
                 self.db.delete_cf(&cf_handler, key).unwrap();
             }

@@ -1,9 +1,11 @@
-use crate::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
+use std::sync::Arc;
+
 use entities::models::BufferedTransaction;
 use interface::{error::StorageError, signature_persistence::TransactionIngester};
 use rocks_db::transaction::{TransactionProcessor, TransactionResult};
-use std::sync::Arc;
 use tonic::async_trait;
+
+use crate::processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
 
 pub struct BackfillTransactionIngester {
     pub tx_processor: Arc<BubblegumTxProcessor>,

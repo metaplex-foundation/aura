@@ -41,13 +41,12 @@ impl Storage {
         let db = self.db.clone();
         let prameter_cloned = parameter.clone();
         let serialized_data = tokio::task::spawn_blocking(move || {
-            db.get_cf(&db.cf_handle(ParameterColumn::<T>::NAME).unwrap(), key)
-                .map_err(|e| {
-                    StorageError::Common(format!(
-                        "Failed to get parameter {:?} from db, error: {}",
-                        prameter_cloned, e
-                    ))
-                })
+            db.get_cf(&db.cf_handle(ParameterColumn::<T>::NAME).unwrap(), key).map_err(|e| {
+                StorageError::Common(format!(
+                    "Failed to get parameter {:?} from db, error: {}",
+                    prameter_cloned, e
+                ))
+            })
         })
         .await
         .map_err(|e| {
@@ -71,12 +70,8 @@ impl Storage {
         let key = ParameterColumn::<T>::encode_key(parameter);
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            db.put_cf(
-                &db.cf_handle(ParameterColumn::<T>::NAME).unwrap(),
-                key,
-                serialized_data,
-            )
-            .map_err(|e| StorageError::Common(format!("Failed to put parameter: {}", e)))
+            db.put_cf(&db.cf_handle(ParameterColumn::<T>::NAME).unwrap(), key, serialized_data)
+                .map_err(|e| StorageError::Common(format!("Failed to put parameter: {}", e)))
         })
         .await
         .map_err(|e| StorageError::Common(format!("Failed to put parameter: {}", e)))??;
@@ -92,12 +87,8 @@ impl Storage {
         let key = ParameterColumn::<T>::encode_key(parameter);
         let db = self.db.clone();
         tokio::task::spawn_blocking(move || {
-            db.merge_cf(
-                &db.cf_handle(ParameterColumn::<T>::NAME).unwrap(),
-                key,
-                serialized_data,
-            )
-            .map_err(|e| StorageError::Common(format!("Failed to merge top parameter: {}", e)))
+            db.merge_cf(&db.cf_handle(ParameterColumn::<T>::NAME).unwrap(), key, serialized_data)
+                .map_err(|e| StorageError::Common(format!("Failed to merge top parameter: {}", e)))
         })
         .await
         .map_err(|e| StorageError::Common(format!("Failed to merge top parameter: {}", e)))??;
@@ -150,10 +141,10 @@ pub fn merge_top_parameter(
         match serde_cbor::from_slice::<u64>(existing_val) {
             Ok(value) => {
                 result = Some(value);
-            }
+            },
             Err(e) => {
                 tracing::error!("RocksDB: u64 parameter deserialize existing_val: {}", e)
-            }
+            },
         }
     }
 
@@ -166,10 +157,10 @@ pub fn merge_top_parameter(
                 } else {
                     new_val
                 });
-            }
+            },
             Err(e) => {
                 tracing::error!("RocksDB: u64 parameter deserialize new_val: {}", e)
-            }
+            },
         }
     }
 

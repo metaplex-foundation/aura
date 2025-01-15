@@ -2,19 +2,14 @@
 use std::sync::Arc;
 
 use clap::{arg, Parser};
-
 use metrics_utils::red::RequestErrorDurationMetrics;
-use nft_ingester::config::init_logger;
-use rocks_db::column::TypedColumn;
-use rocks_db::columns::offchain_data::OffChainData;
+use nft_ingester::{config::init_logger, error::IngesterError};
+use rocks_db::{
+    column::TypedColumn, columns::offchain_data::OffChainData, migrator::MigrationState, Storage,
+};
 use tempfile::TempDir;
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
+use tokio::{sync::Mutex, task::JoinSet};
 use tracing::info;
-
-use nft_ingester::error::IngesterError;
-use rocks_db::migrator::MigrationState;
-use rocks_db::Storage;
 
 #[derive(Parser, Debug)]
 struct Args {

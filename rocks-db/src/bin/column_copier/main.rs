@@ -1,16 +1,16 @@
+use std::{
+    env,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
 use entities::models::RawBlock;
-use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::column::TypedColumn;
-use rocks_db::columns::offchain_data::OffChainData;
-use rocks_db::migrator::MigrationState;
-use rocks_db::Storage;
-
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use std::env;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use metrics_utils::red::RequestErrorDurationMetrics;
+use rocks_db::{
+    column::TypedColumn, columns::offchain_data::OffChainData, migrator::MigrationState, Storage,
+};
 use tempfile::TempDir;
-
 use tokio::{sync::Mutex, task::JoinSet};
 
 const BATCH_SIZE: usize = 10_000;
@@ -91,9 +91,7 @@ async fn copy_column_families(
             // Create a progress bar for this column
             let pb = progress_manager.add(ProgressBar::new_spinner());
             pb.set_style(
-                ProgressStyle::default_spinner()
-                    .template("{spinner:.green} {msg}")
-                    .unwrap(),
+                ProgressStyle::default_spinner().template("{spinner:.green} {msg}").unwrap(),
             );
             pb.set_message(format!("Copying column {}", cf_name));
             pb.enable_steady_tick(Duration::from_millis(100));
@@ -139,10 +137,7 @@ async fn copy_column_families(
         }
     }
 
-    println!(
-        "Migrated all columns in {} seconds",
-        start.elapsed().as_secs()
-    );
+    println!("Migrated all columns in {} seconds", start.elapsed().as_secs());
 
     Ok(())
 }

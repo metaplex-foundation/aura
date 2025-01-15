@@ -1,3 +1,5 @@
+use std::{net::SocketAddr, sync::Arc};
+
 use axum::{
     extract::{Extension, Query},
     http::StatusCode,
@@ -7,12 +9,9 @@ use axum::{
 use clap::Parser;
 use metrics_utils::ApiMetricsConfig;
 use prometheus_client::registry::Registry;
-
 use rocks_db::columns::asset;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 use serde::Deserialize;
-use std::net::SocketAddr;
-use std::sync::Arc;
 use tempfile::TempDir;
 
 #[derive(Parser)]
@@ -114,10 +113,7 @@ async fn main() {
     // Run our app with hyper
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     println!("Listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    axum::Server::bind(&addr).serve(app.into_make_service()).await.unwrap();
 }
 
 async fn iterate_keys(
@@ -135,11 +131,8 @@ async fn iterate_keys(
         match bs58::decode(s).into_vec() {
             Ok(bytes) => Some(bytes),
             Err(_) => {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    "Invalid Base58 start_key".to_string(),
-                ))
-            }
+                return Err((StatusCode::BAD_REQUEST, "Invalid Base58 start_key".to_string()))
+            },
         }
     } else {
         None
@@ -165,12 +158,7 @@ async fn iterate_keys_with_pattern(
     // Decode the pattern from Base58
     let pattern_bytes = match bs58::decode(&params.pattern).into_vec() {
         Ok(bytes) => bytes,
-        Err(_) => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                "Invalid Base58 pattern".to_string(),
-            ))
-        }
+        Err(_) => return Err((StatusCode::BAD_REQUEST, "Invalid Base58 pattern".to_string())),
     };
 
     // Call the iterate_keys_with_pattern function
@@ -223,9 +211,7 @@ fn iterate_keys_function(
     limit: usize,
 ) -> Result<Vec<String>, String> {
     // Get the column family handle
-    let cf_handle = db
-        .cf_handle(cf_name)
-        .ok_or_else(|| "Column family not found".to_string())?;
+    let cf_handle = db.cf_handle(cf_name).ok_or_else(|| "Column family not found".to_string())?;
 
     // Create an iterator with the specified starting point
     let iter_mode = match start_key {
@@ -260,9 +246,7 @@ fn iterate_keys_function(
 /// or an error message.
 fn get_value_function(db: &DB, cf_name: &str, key: &[u8]) -> Result<Option<String>, String> {
     // Get the column family handle
-    let cf_handle = db
-        .cf_handle(cf_name)
-        .ok_or_else(|| "Column family not found".to_string())?;
+    let cf_handle = db.cf_handle(cf_name).ok_or_else(|| "Column family not found".to_string())?;
 
     // Retrieve the value for the key
     match db.get_cf(&cf_handle, key) {
@@ -293,9 +277,7 @@ fn iterate_keys_with_pattern_function(
     limit: usize,
 ) -> Result<Vec<String>, String> {
     // Get the column family handle
-    let cf_handle = &db
-        .cf_handle(cf_name)
-        .ok_or_else(|| "Column family not found".to_string())?;
+    let cf_handle = &db.cf_handle(cf_name).ok_or_else(|| "Column family not found".to_string())?;
 
     // Create an iterator starting from the beginning
     let iter_mode = rocksdb::IteratorMode::Start;

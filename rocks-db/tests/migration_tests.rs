@@ -1,14 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use metrics_utils::red::RequestErrorDurationMetrics;
-    use rocks_db::column::TypedColumn;
-    use rocks_db::columns::offchain_data::{OffChainData, OffChainDataDeprecated};
-    use rocks_db::migrator::MigrationState;
-    use rocks_db::Storage;
     use std::sync::Arc;
+
+    use metrics_utils::red::RequestErrorDurationMetrics;
+    use rocks_db::{
+        column::TypedColumn,
+        columns::offchain_data::{OffChainData, OffChainDataDeprecated},
+        migrator::MigrationState,
+        Storage,
+    };
     use tempfile::TempDir;
-    use tokio::sync::Mutex;
-    use tokio::task::JoinSet;
+    use tokio::{sync::Mutex, task::JoinSet};
 
     #[tokio::test]
     async fn test_migration() {
@@ -66,9 +68,8 @@ mod tests {
             MigrationState::Version(4),
         )
         .unwrap();
-        let mut it = new_storage
-            .db
-            .raw_iterator_cf(&new_storage.db.cf_handle(OffChainData::NAME).unwrap());
+        let mut it =
+            new_storage.db.raw_iterator_cf(&new_storage.db.cf_handle(OffChainData::NAME).unwrap());
         it.seek_to_first();
         assert!(it.valid(), "iterator should be valid on start");
         while it.valid() {

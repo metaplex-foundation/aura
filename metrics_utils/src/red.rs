@@ -1,9 +1,13 @@
 use chrono::{DateTime, Utc};
-use prometheus_client::encoding::EncodeLabelSet;
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
-use prometheus_client::registry::Registry;
+use prometheus_client::{
+    encoding::EncodeLabelSet,
+    metrics::{
+        counter::Counter,
+        family::Family,
+        histogram::{exponential_buckets, Histogram},
+    },
+    registry::Registry,
+};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ExtendedLabel {
@@ -50,9 +54,7 @@ impl RequestErrorDurationMetrics {
             endpoint: endpoint.to_string(),
         };
         self.requests.get_or_create(&label).inc();
-        self.durations
-            .get_or_create(&label)
-            .observe(duration.num_milliseconds() as f64);
+        self.durations.get_or_create(&label).observe(duration.num_milliseconds() as f64);
     }
 
     pub fn observe_error(&self, component: &str, action: &str, endpoint: &str) {

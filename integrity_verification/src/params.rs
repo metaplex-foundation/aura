@@ -22,11 +22,7 @@ fn get_random_asset_sorting_arg() -> Option<AssetSorting> {
             _ => AssetSortBy::None,
         },
         sort_direction: if rng.gen() {
-            Some(if rng.gen() {
-                AssetSortDirection::Asc
-            } else {
-                AssetSortDirection::Desc
-            })
+            Some(if rng.gen() { AssetSortDirection::Asc } else { AssetSortDirection::Desc })
         } else {
             None
         },
@@ -52,11 +48,7 @@ pub fn generate_get_assets_by_group_params(
     before: Option<String>,
     after: Option<String>,
 ) -> GetAssetsByGroup {
-    let page = if after.is_none() && before.is_none() {
-        Some(get_random_page_arg())
-    } else {
-        None
-    };
+    let page = if after.is_none() && before.is_none() { Some(get_random_page_arg()) } else { None };
     GetAssetsByGroup {
         group_key: GROUP_KEY.to_string(),
         group_value,
@@ -75,11 +67,7 @@ pub fn generate_get_assets_by_owner_params(
     before: Option<String>,
     after: Option<String>,
 ) -> GetAssetsByOwner {
-    let page = if after.is_none() && before.is_none() {
-        Some(get_random_page_arg())
-    } else {
-        None
-    };
+    let page = if after.is_none() && before.is_none() { Some(get_random_page_arg()) } else { None };
     GetAssetsByOwner {
         owner_address,
         sort_by: get_random_asset_sorting_arg(),
@@ -98,11 +86,7 @@ pub fn generate_get_assets_by_creator_params(
     after: Option<String>,
 ) -> GetAssetsByCreator {
     let mut rng = rand::thread_rng();
-    let page = if after.is_none() && before.is_none() {
-        Some(get_random_page_arg())
-    } else {
-        None
-    };
+    let page = if after.is_none() && before.is_none() { Some(get_random_page_arg()) } else { None };
     GetAssetsByCreator {
         creator_address,
         only_verified: if rng.gen() { Some(rng.gen()) } else { None },
@@ -121,11 +105,7 @@ pub fn generate_get_assets_by_authority_params(
     before: Option<String>,
     after: Option<String>,
 ) -> GetAssetsByAuthority {
-    let page = if after.is_none() && before.is_none() {
-        Some(get_random_page_arg())
-    } else {
-        None
-    };
+    let page = if after.is_none() && before.is_none() { Some(get_random_page_arg()) } else { None };
     GetAssetsByAuthority {
         authority_address,
         sort_by: get_random_asset_sorting_arg(),
@@ -139,10 +119,7 @@ pub fn generate_get_assets_by_authority_params(
 }
 
 pub fn generate_get_asset_params(id: String) -> GetAsset {
-    GetAsset {
-        id,
-        options: Default::default(),
-    }
+    GetAsset { id, options: Default::default() }
 }
 
 pub fn generate_get_asset_proof_params(id: String) -> GetAssetProof {

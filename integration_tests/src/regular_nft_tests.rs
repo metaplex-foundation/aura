@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use entities::api_req_params::{GetAsset, GetAssetBatch, GetAssetsByGroup, SearchAssets};
 use function_name::named;
-
 use itertools::Itertools;
-
 use serial_test::serial;
 use tokio::{sync::Mutex, task::JoinSet};
 
@@ -17,10 +15,7 @@ async fn test_reg_get_asset() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
 
@@ -37,11 +32,7 @@ async fn test_reg_get_asset() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_asset(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -52,10 +43,7 @@ async fn test_reg_get_asset_batch() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
 
@@ -100,11 +88,7 @@ async fn test_reg_get_asset_batch() {
         let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
         let request: GetAssetBatch = serde_json::from_str(request).unwrap();
-        let response = setup
-            .das_api
-            .get_asset_batch(request, mutexed_tasks.clone())
-            .await
-            .unwrap();
+        let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
         insta::assert_json_snapshot!(format!("{}-{}", name, individual_test_name), response);
     }
 }
@@ -116,10 +100,7 @@ async fn test_reg_get_asset_by_group() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
 
@@ -147,11 +128,7 @@ async fn test_reg_get_asset_by_group() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: GetAssetsByGroup = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .get_assets_by_group(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.get_assets_by_group(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
@@ -162,10 +139,7 @@ async fn test_reg_search_assets() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: None,
-            clear_db: true,
-        },
+        TestSetupOptions { network: None, clear_db: true },
     )
     .await;
 
@@ -187,10 +161,6 @@ async fn test_reg_search_assets() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .search_assets(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }

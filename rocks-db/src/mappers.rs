@@ -1,10 +1,9 @@
 use std::cmp::Ordering;
 
+use entities::{enums::*, models::*};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::generated::asset_generated::asset as fb;
-use entities::enums::*;
-use entities::models::*;
 
 macro_rules! impl_from_enum {
     ($src:ty, $dst:ty, $($variant:ident),*) => {
@@ -48,14 +47,7 @@ impl_from_enum!(
     MplCoreCollection
 );
 
-impl_from_enum!(
-    RoyaltyTargetType,
-    fb::RoyaltyTargetType,
-    Unknown,
-    Creators,
-    Fanout,
-    Single
-);
+impl_from_enum!(RoyaltyTargetType, fb::RoyaltyTargetType, Unknown, Creators, Fanout, Single);
 impl_from_enum!(OwnerType, fb::OwnerType, Unknown, Token, Single);
 
 impl From<ChainMutability> for fb::ChainMutability {
@@ -81,103 +73,45 @@ impl<'a> fb::AssetCompleteDetails<'a> {
     pub fn get_slot_updated(&'a self) -> u64 {
         // Collect the slot_updated values from all available fields
         let slots = [
-            self.dynamic_details()
-                .and_then(|d| d.is_compressible())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.is_compressed())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.is_frozen())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.supply())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.seq())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.is_burnt())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.was_decompressed())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.onchain_data())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.creators())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.royalty_amount())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.url())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.chain_mutability())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.lamports())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.executable())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.metadata_owner())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.raw_name())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.mpl_core_plugins())
-                .map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.is_compressible()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.is_compressed()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.is_frozen()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.supply()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.seq()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.is_burnt()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.was_decompressed()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.onchain_data()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.creators()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.royalty_amount()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.url()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.chain_mutability()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.lamports()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.executable()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.metadata_owner()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.raw_name()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.mpl_core_plugins()).map(|c| c.slot_updated()),
             self.dynamic_details()
                 .and_then(|d| d.mpl_core_unknown_plugins())
                 .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.rent_epoch())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.num_minted())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.current_size())
-                .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.plugins_json_version())
-                .map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.rent_epoch()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.num_minted()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.current_size()).map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.plugins_json_version()).map(|c| c.slot_updated()),
             self.dynamic_details()
                 .and_then(|d| d.mpl_core_external_plugins())
                 .map(|c| c.slot_updated()),
             self.dynamic_details()
                 .and_then(|d| d.mpl_core_unknown_external_plugins())
                 .map(|c| c.slot_updated()),
-            self.dynamic_details()
-                .and_then(|d| d.mint_extensions())
-                .map(|c| c.slot_updated()),
+            self.dynamic_details().and_then(|d| d.mint_extensions()).map(|c| c.slot_updated()),
             self.authority().map(|a| a.slot_updated()),
-            self.owner()
-                .and_then(|o| o.owner())
-                .map(|o| o.slot_updated()),
-            self.owner()
-                .and_then(|o| o.delegate())
-                .map(|o| o.slot_updated()),
-            self.owner()
-                .and_then(|o| o.owner_type())
-                .map(|o| o.slot_updated()),
-            self.owner()
-                .and_then(|o| o.owner_delegate_seq())
-                .map(|o| o.slot_updated()),
-            self.collection()
-                .and_then(|c| c.collection())
-                .map(|o| o.slot_updated()),
-            self.collection()
-                .and_then(|c| c.is_collection_verified())
-                .map(|o| o.slot_updated()),
-            self.collection()
-                .and_then(|c| c.authority())
-                .map(|o| o.slot_updated()),
+            self.owner().and_then(|o| o.owner()).map(|o| o.slot_updated()),
+            self.owner().and_then(|o| o.delegate()).map(|o| o.slot_updated()),
+            self.owner().and_then(|o| o.owner_type()).map(|o| o.slot_updated()),
+            self.owner().and_then(|o| o.owner_delegate_seq()).map(|o| o.slot_updated()),
+            self.collection().and_then(|c| c.collection()).map(|o| o.slot_updated()),
+            self.collection().and_then(|c| c.is_collection_verified()).map(|o| o.slot_updated()),
+            self.collection().and_then(|c| c.authority()).map(|o| o.slot_updated()),
         ];
         // Filter out None values and find the maximum slot_updated
         slots.iter().filter_map(|&slot| slot).max().unwrap_or(0)
@@ -208,14 +142,8 @@ impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetIndex {
                 .static_details()
                 .map(|a| a.royalty_target_type().into())
                 .unwrap_or_default(),
-            slot_created: value
-                .static_details()
-                .map(|a| a.created_at())
-                .unwrap_or_default(),
-            owner_type: value
-                .owner()
-                .and_then(|o| o.owner_type())
-                .map(|u| u.value().into()),
+            slot_created: value.static_details().map(|a| a.created_at()).unwrap_or_default(),
+            owner_type: value.owner().and_then(|o| o.owner_type()).map(|u| u.value().into()),
             owner: value
                 .owner()
                 .and_then(|o| o.owner())
@@ -270,10 +198,7 @@ impl<'a> From<fb::AssetCompleteDetails<'a>> for AssetIndex {
                 .and_then(|d| d.is_frozen())
                 .map(|u| u.value())
                 .unwrap_or_default(),
-            supply: value
-                .dynamic_details()
-                .and_then(|d| d.supply())
-                .map(|u| u.value() as i64),
+            supply: value.dynamic_details().and_then(|d| d.supply()).map(|u| u.value() as i64),
             update_authority: None, // requires mpl core collections
             metadata_url: value
                 .dynamic_details()
@@ -294,11 +219,11 @@ impl PartialOrd for fb::UpdateVersion<'_> {
             (fb::UpdateVersionType::Sequence, fb::UpdateVersionType::Sequence)
             | (fb::UpdateVersionType::WriteVersion, fb::UpdateVersionType::WriteVersion) => {
                 self.version_value().partial_cmp(&other.version_value())
-            }
+            },
             // this is asset decompress case. Update with write version field is always most recent
             (fb::UpdateVersionType::Sequence, fb::UpdateVersionType::WriteVersion) => {
                 Some(Ordering::Less)
-            }
+            },
             (fb::UpdateVersionType::WriteVersion, fb::UpdateVersionType::Sequence) => None,
             _ => None,
         }
@@ -308,15 +233,13 @@ macro_rules! impl_partial_ord_for_updated {
     ($name:ident) => {
         impl PartialOrd for fb::$name<'_> {
             fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                Some(
-                    match self.update_version().partial_cmp(&other.update_version()) {
-                        Some(std::cmp::Ordering::Equal) => {
-                            self.slot_updated().cmp(&other.slot_updated())
-                        }
-                        Some(ord) => ord,
-                        None => self.slot_updated().cmp(&other.slot_updated()),
+                Some(match self.update_version().partial_cmp(&other.update_version()) {
+                    Some(std::cmp::Ordering::Equal) => {
+                        self.slot_updated().cmp(&other.slot_updated())
                     },
-                )
+                    Some(ord) => ord,
+                    None => self.slot_updated().cmp(&other.slot_updated()),
+                })
             }
         }
     };
@@ -336,11 +259,8 @@ impl fb::AssetAuthority<'_> {
     pub fn compare(&self, other: &Self) -> Ordering {
         if let (Some(self_write_version), Some(other_write_version)) = unsafe {
             (
-                self._tab
-                    .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
-                other
-                    ._tab
-                    .get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
+                self._tab.get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
+                other._tab.get::<u64>(fb::AssetAuthority::VT_WRITE_VERSION, None),
             )
         } {
             self_write_version.cmp(&other_write_version)

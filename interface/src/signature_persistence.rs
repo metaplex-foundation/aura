@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use crate::error::{BlockConsumeError, StorageError, UsecaseError};
 use async_trait::async_trait;
 use entities::models::{BufferedTransaction, BufferedTxWithID, SignatureWithSlot};
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
+
+use crate::error::{BlockConsumeError, StorageError, UsecaseError};
 
 #[automock]
 #[async_trait]

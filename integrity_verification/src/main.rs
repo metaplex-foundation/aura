@@ -1,21 +1,24 @@
-use crate::config::{setup_config, TestSourceMode};
-use crate::diff_checker::{
-    DiffChecker, GET_ASSET_BY_AUTHORITY_METHOD, GET_ASSET_BY_CREATOR_METHOD,
-    GET_ASSET_BY_GROUP_METHOD, GET_ASSET_BY_OWNER_METHOD, GET_ASSET_METHOD, GET_ASSET_PROOF_METHOD,
-};
-use crate::file_keys_fetcher::FileKeysFetcher;
+use std::{sync::Arc, time::Duration};
+
 use clap::Parser;
-use metrics_utils::utils::start_metrics;
 use metrics_utils::{
-    IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig, MetricsTrait,
+    utils::start_metrics, IntegrityVerificationMetrics, IntegrityVerificationMetricsConfig,
+    MetricsTrait,
 };
-use postgre_client::storage_traits::IntegrityVerificationKeysFetcher;
-use postgre_client::PgClient;
-use std::sync::Arc;
-use std::time::Duration;
+use postgre_client::{storage_traits::IntegrityVerificationKeysFetcher, PgClient};
 use tokio::task::{JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
+
+use crate::{
+    config::{setup_config, TestSourceMode},
+    diff_checker::{
+        DiffChecker, GET_ASSET_BY_AUTHORITY_METHOD, GET_ASSET_BY_CREATOR_METHOD,
+        GET_ASSET_BY_GROUP_METHOD, GET_ASSET_BY_OWNER_METHOD, GET_ASSET_METHOD,
+        GET_ASSET_PROOF_METHOD,
+    },
+    file_keys_fetcher::FileKeysFetcher,
+};
 
 mod api;
 mod config;
@@ -73,7 +76,7 @@ async fn main() {
                 cancel_token.clone(),
             )
             .await;
-        }
+        },
         TestSourceMode::Database => {
             let diff_checker = DiffChecker::new(
                 config.reference_host.clone(),
@@ -106,7 +109,7 @@ async fn main() {
                 cancel_token.clone(),
             )
             .await;
-        }
+        },
     };
 
     usecase::graceful_stop::listen_shutdown().await;
@@ -152,14 +155,7 @@ async fn run_tests<T>(
 {
     let diff_checker = Arc::new(diff_checker);
     if run_assets_tests {
-        spawn_test!(
-            tasks,
-            diff_checker,
-            metrics,
-            check_get_asset,
-            GET_ASSET_METHOD,
-            cancel_token
-        );
+        spawn_test!(tasks, diff_checker, metrics, check_get_asset, GET_ASSET_METHOD, cancel_token);
     }
     if run_proofs_tests {
         spawn_test!(

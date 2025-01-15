@@ -1,21 +1,21 @@
-use std::sync::Arc;
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
-use interface::proofs::ProofChecker;
+use interface::{processing_possibility::ProcessingPossibilityChecker, proofs::ProofChecker};
 use metrics_utils::ApiMetricsConfig;
-use rocks_db::columns::cl_items::{ClItemKey, ClLeafKey};
-use rocks_db::errors::StorageError;
+use rocks_db::{
+    clients::asset_streaming_client::get_required_nodes_for_proof,
+    columns::cl_items::{ClItemKey, ClLeafKey},
+    errors::StorageError,
+    Storage,
+};
 use solana_sdk::pubkey::Pubkey;
+use spl_concurrent_merkle_tree::node::empty_node;
 use tracing::{debug, warn};
 
-use crate::api::dapi::model;
-use crate::api::dapi::rpc_asset_models::AssetProof;
-use interface::processing_possibility::ProcessingPossibilityChecker;
-use rocks_db::clients::asset_streaming_client::get_required_nodes_for_proof;
-use rocks_db::Storage;
-use spl_concurrent_merkle_tree::node::empty_node;
-
-use crate::fetch_asset_data;
+use crate::{
+    api::dapi::{model, rpc_asset_models::AssetProof},
+    fetch_asset_data,
+};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct SimpleChangeLog {
@@ -37,10 +37,7 @@ pub async fn get_proof_for_assets<
     metrics: Arc<ApiMetricsConfig>,
 ) -> Result<HashMap<String, Option<AssetProof>>, StorageError> {
     if let Some(tree_gaps_checker) = tree_gaps_checker {
-        if !tree_gaps_checker
-            .can_process_assets(asset_ids.as_slice())
-            .await
-        {
+        if !tree_gaps_checker.can_process_assets(asset_ids.as_slice()).await {
             return Err(StorageError::CannotServiceRequest);
         }
     }
@@ -135,13 +132,8 @@ pub async fn get_proof_for_assets<
 
     // Compute proofs for each asset
     for asset_id in asset_ids.clone().iter() {
-        let proof = get_asset_proof(
-            asset_id,
-            &all_nodes,
-            &leaves,
-            proof_checker.clone(),
-            metrics.clone(),
-        );
+        let proof =
+            get_asset_proof(asset_id, &all_nodes, &leaves, proof_checker.clone(), metrics.clone());
         results.insert(asset_id.to_string(), proof);
     }
 
@@ -198,20 +190,14 @@ fn get_asset_proof(
     }
 
     let root = bs58::encode(final_node_list.pop().unwrap().cli_hash).into_string();
-    let proof: Vec<Vec<u8>> = final_node_list
-        .iter()
-        .map(|model| model.cli_hash.clone())
-        .collect();
+    let proof: Vec<Vec<u8>> = final_node_list.iter().map(|model| model.cli_hash.clone()).collect();
 
     if proof.is_empty() {
         return None;
     }
 
     let tree_id = Pubkey::try_from(leaf.tree.clone()).unwrap_or_default();
-    let initial_proofs = proof
-        .iter()
-        .filter_map(|k| Pubkey::try_from(k.clone()).ok())
-        .collect();
+    let initial_proofs = proof.iter().filter_map(|k| Pubkey::try_from(k.clone()).ok()).collect();
     let leaf_b58 = bs58::encode(&leaf.hash).into_string();
     if let Some(proof_checker) = proof_checker {
         let lf = Pubkey::from_str(leaf_b58.as_str()).unwrap_or_default();
@@ -225,26 +211,20 @@ fn get_asset_proof(
             {
                 Ok(true) => metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::SUCCESS),
                 Ok(false) => {
-                    warn!(
-                        "Proof for asset {:?} of tree {:?} is invalid",
-                        asset_id, tree_id
-                    );
+                    warn!("Proof for asset {:?} of tree {:?} is invalid", asset_id, tree_id);
                     metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::FAILURE)
-                }
+                },
                 Err(e) => {
                     warn!(
                         "Proof check for asset {:?} of tree {:?} failed: {}",
                         asset_id, tree_id, e
                     );
                     metrics.inc_proof_checks("proof", metrics_utils::MetricStatus::FAILURE)
-                }
+                },
             }
         });
     }
-    let proof = proof
-        .iter()
-        .map(|model| bs58::encode(model).into_string())
-        .collect();
+    let proof = proof.iter().map(|model| bs58::encode(model).into_string()).collect();
 
     Some(AssetProof {
         root,

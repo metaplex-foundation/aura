@@ -1,5 +1,7 @@
-use entities::api_req_params::AssetSortDirection;
-use entities::models::{AssetSignature, AssetSignatureKey, AssetSignatureWithPagination};
+use entities::{
+    api_req_params::AssetSortDirection,
+    models::{AssetSignature, AssetSignatureKey, AssetSignatureWithPagination},
+};
 use solana_program::pubkey::Pubkey;
 
 pub trait AssetSignaturesGetter {

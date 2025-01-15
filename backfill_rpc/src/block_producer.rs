@@ -1,13 +1,14 @@
-use crate::rpc::{BackfillRPC, GET_TX_RETRIES};
+use std::{sync::Arc, time::Duration};
+
 use async_trait::async_trait;
-use interface::error::StorageError;
-use interface::signature_persistence::BlockProducer;
+use interface::{error::StorageError, signature_persistence::BlockProducer};
 use solana_client::rpc_config::RpcBlockConfig;
 use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 use solana_transaction_status::{TransactionDetails, UiConfirmedBlock};
-use std::{sync::Arc, time::Duration};
 use tracing::error;
 use usecase::bigtable::is_bubblegum_transaction_encoded;
+
+use crate::rpc::{BackfillRPC, GET_TX_RETRIES};
 
 const SECONDS_TO_RETRY_GET_BLOCK: u64 = 5;
 
@@ -42,14 +43,11 @@ impl BlockProducer for BackfillRPC {
                     error!("Error getting block: {}", err);
                     counter -= 1;
                     if counter == 0 {
-                        return Err(StorageError::Common(format!(
-                            "Error getting block: {}",
-                            err
-                        )));
+                        return Err(StorageError::Common(format!("Error getting block: {}", err)));
                     }
                     tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_BLOCK)).await;
                     continue;
-                }
+                },
             };
             if let Some(ref mut txs) = encoded_block.transactions {
                 txs.retain(is_bubblegum_transaction_encoded);

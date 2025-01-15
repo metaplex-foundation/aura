@@ -44,7 +44,7 @@ impl SchedulesStore for Storage {
             Err(e) => {
                 warn!("{}", e);
                 None
-            }
+            },
         }
     }
 

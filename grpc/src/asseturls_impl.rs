@@ -1,12 +1,13 @@
-use crate::asseturls::asset_url_service_server::AssetUrlService;
-use crate::asseturls::url_download_details::DlResult;
+use std::sync::Arc;
+
+use interface::assert_urls::{DownloadOutcome, UrlDownloadNotification, UrlsToDownloadStore};
+use tonic::{async_trait, Status};
+
 use crate::asseturls::{
-    AssetsToDownload, DownloadError, DownloadResultsRequest, DownloadSuccess, GetAssetUrlsRequest,
+    asset_url_service_server::AssetUrlService, url_download_details::DlResult, AssetsToDownload,
+    DownloadError, DownloadResultsRequest, DownloadSuccess, GetAssetUrlsRequest,
     UrlDownloadDetails,
 };
-use interface::assert_urls::{DownloadOutcome, UrlDownloadNotification, UrlsToDownloadStore};
-use std::sync::Arc;
-use tonic::{async_trait, Status};
 
 pub struct AssetUrlServiceImpl {
     asset_url_store: Arc<dyn UrlsToDownloadStore>,
@@ -26,10 +27,7 @@ impl AssetUrlService for AssetUrlServiceImpl {
         &self,
         request: tonic::Request<GetAssetUrlsRequest>,
     ) -> std::result::Result<tonic::Response<AssetsToDownload>, tonic::Status> {
-        match self
-            .asset_url_store
-            .get_urls_to_download(request.get_ref().count)
-        {
+        match self.asset_url_store.get_urls_to_download(request.get_ref().count) {
             Ok(urls) => Ok(tonic::Response::new(AssetsToDownload { urls })),
             Err(e) => Err(Status::internal(format!("Internal error: {}", e))),
         }
@@ -57,9 +55,7 @@ impl AssetUrlService for AssetUrlServiceImpl {
 
 impl From<UrlDownloadDetails> for UrlDownloadNotification {
     fn from(UrlDownloadDetails { url, dl_result }: UrlDownloadDetails) -> Self {
-        let outcome = dl_result
-            .map(|dl_res| dl_res.into())
-            .unwrap_or(DownloadOutcome::Nothing);
+        let outcome = dl_result.map(|dl_res| dl_res.into()).unwrap_or(DownloadOutcome::Nothing);
 
         UrlDownloadNotification { url, outcome }
     }
@@ -70,7 +66,7 @@ impl From<DlResult> for DownloadOutcome {
         match value {
             DlResult::Success(DownloadSuccess { mime, size }) => {
                 DownloadOutcome::Success { mime, size }
-            }
+            },
             DlResult::Fail(fail) => match DownloadError::try_from(fail) {
                 Ok(download_error) => match download_error {
                     DownloadError::NotFound => DownloadOutcome::NotFound,

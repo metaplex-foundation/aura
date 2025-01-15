@@ -1,5 +1,6 @@
-use mockall::automock;
 use std::collections::HashSet;
+
+use mockall::automock;
 
 #[automock]
 pub trait PrimaryStorageMigrationVersionManager {

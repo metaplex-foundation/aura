@@ -1,10 +1,11 @@
-use std::fmt::Debug;
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData, sync::Arc};
 
-use crate::{Result, StorageError, BATCH_GET_ACTION, ROCKS_COMPONENT};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{BoundColumnFamily, DBIteratorWithThreadMode, DB};
 use serde::{de::DeserializeOwned, Serialize};
+
+use crate::{Result, StorageError, BATCH_GET_ACTION, ROCKS_COMPONENT};
+
 pub trait TypedColumn {
     type KeyType: Sync + Clone + Send + Debug;
     type ValueType: Sync + Serialize + DeserializeOwned + Send;
@@ -215,12 +216,11 @@ where
                     start_time,
                 );
                 res
-            }
+            },
             Err(e) => {
-                self.red_metrics
-                    .observe_error(ROCKS_COMPONENT, BATCH_GET_ACTION, C::NAME);
+                self.red_metrics.observe_error(ROCKS_COMPONENT, BATCH_GET_ACTION, C::NAME);
                 Err(StorageError::Common(e.to_string()))
-            }
+            },
         }
     }
 
@@ -264,12 +264,11 @@ where
         &self,
         it: impl Iterator<Item = std::result::Result<(Box<[u8]>, Box<[u8]>), rocksdb::Error>> + 'a,
     ) -> impl Iterator<Item = (C::KeyType, C::ValueType)> + 'a {
-        it.filter_map(|r| r.ok())
-            .filter_map(|(key_bytes, val_bytes)| {
-                let k_op = C::decode_key(key_bytes.to_vec()).ok();
-                let v_op = C::decode(&val_bytes).ok();
-                k_op.zip(v_op)
-            })
+        it.filter_map(|r| r.ok()).filter_map(|(key_bytes, val_bytes)| {
+            let k_op = C::decode_key(key_bytes.to_vec()).ok();
+            let v_op = C::decode(&val_bytes).ok();
+            k_op.zip(v_op)
+        })
     }
 
     /// Fetches maximum given amount of records from the beginning of the column family.
@@ -314,14 +313,12 @@ where
     }
     // Method to get an iterator starting from the beginning of the column
     pub fn iter_start(&self) -> DBIteratorWithThreadMode<'_, DB> {
-        self.backend
-            .iterator_cf(&self.handle(), rocksdb::IteratorMode::Start)
+        self.backend.iterator_cf(&self.handle(), rocksdb::IteratorMode::Start)
     }
 
     // Method to get an iterator starting from the end of the column
     pub fn iter_end(&self) -> DBIteratorWithThreadMode<'_, DB> {
-        self.backend
-            .iterator_cf(&self.handle(), rocksdb::IteratorMode::End)
+        self.backend.iterator_cf(&self.handle(), rocksdb::IteratorMode::End)
     }
 
     #[inline]

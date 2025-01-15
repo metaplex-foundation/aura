@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use crate::errors::StorageError;
-use crate::SlotStorage;
-use crate::{column::TypedColumn, key_encoders};
 use async_trait::async_trait;
 use entities::models::RawBlock;
-use interface::error::StorageError as InterfaceStorageError;
-use interface::signature_persistence::BlockProducer;
+use interface::{
+    error::StorageError as InterfaceStorageError, signature_persistence::BlockProducer,
+};
+
+use crate::{column::TypedColumn, errors::StorageError, key_encoders, SlotStorage};
 
 impl TypedColumn for RawBlock {
     type KeyType = u64;

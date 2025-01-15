@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use flatbuffers::FlatBufferBuilder;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::{error::IngesterError, error::IngesterError::MissingFlatbuffersFieldError};
+use crate::error::{IngesterError, IngesterError::MissingFlatbuffersFieldError};
 
 #[derive(Clone)]
 pub struct FlatbufferMapper {}
@@ -18,9 +18,8 @@ impl FlatbufferMapper {
         let mut builder = FlatBufferBuilder::new();
 
         let slot_idx = format!("{}-{}", tx.slot(), tx.index().unwrap_or_default());
-        let signature = tx
-            .signature_string()
-            .ok_or(MissingFlatbuffersFieldError("signature".to_string()))?;
+        let signature =
+            tx.signature_string().ok_or(MissingFlatbuffersFieldError("signature".to_string()))?;
 
         let versioned_tx = bincode::deserialize::<solana_sdk::transaction::VersionedTransaction>(
             tx.transaction()
@@ -30,19 +29,17 @@ impl FlatbufferMapper {
         let version = match versioned_tx.message {
             solana_sdk::message::VersionedMessage::Legacy(_) => {
                 plerkle_serialization::TransactionVersion::Legacy
-            }
+            },
             solana_sdk::message::VersionedMessage::V0(_) => {
                 plerkle_serialization::TransactionVersion::V0
-            }
+            },
         };
 
         let mut all_tx_keys = Vec::new();
         for keys in &[
             tx.account_keys_string(),
-            tx.loaded_addresses_string()
-                .and_then(|loaded_addresses| loaded_addresses.writable()),
-            tx.loaded_addresses_string()
-                .and_then(|loaded_addresses| loaded_addresses.readonly()),
+            tx.loaded_addresses_string().and_then(|loaded_addresses| loaded_addresses.writable()),
+            tx.loaded_addresses_string().and_then(|loaded_addresses| loaded_addresses.readonly()),
         ] {
             let account_keys = keys
                 .map(|keys| {
@@ -66,16 +63,10 @@ impl FlatbufferMapper {
             Some(builder.create_vector(all_tx_keys.as_slice()))
         };
 
-        let log_messages = tx
-            .transaction_meta()
-            .and_then(|meta| meta.log_messages())
-            .map(|msgs| {
-                let mapped = msgs
-                    .iter()
-                    .map(|msg| builder.create_string(msg))
-                    .collect::<Vec<_>>();
-                builder.create_vector(&mapped)
-            });
+        let log_messages = tx.transaction_meta().and_then(|meta| meta.log_messages()).map(|msgs| {
+            let mapped = msgs.iter().map(|msg| builder.create_string(msg)).collect::<Vec<_>>();
+            builder.create_vector(&mapped)
+        });
 
         let outer_instructions = versioned_tx.message.instructions();
         let outer_instructions = if !outer_instructions.is_empty() {
