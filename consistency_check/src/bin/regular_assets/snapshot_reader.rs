@@ -18,42 +18,45 @@
 
 // This file contains code vendored from https://github.com/solana-labs/solana
 
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+    fs::OpenOptions,
+    io,
+    io::{BufReader, Read},
+    mem,
+    path::{Component, Path},
+    pin::Pin,
+    rc::Rc,
+    str::FromStr,
+    time::Instant,
+};
+
 use bincode::Options;
 use memmap2::{Mmap, MmapMut};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use solana_accounts_db::account_storage::meta::StoredMetaWriteVersion;
-use solana_accounts_db::accounts_db::BankHashStats;
-use solana_accounts_db::ancestors::AncestorsForSerialization;
-use solana_accounts_db::blockhash_queue::BlockhashQueue;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use solana_accounts_db::{
+    account_storage::meta::StoredMetaWriteVersion, accounts_db::BankHashStats,
+    ancestors::AncestorsForSerialization, blockhash_queue::BlockhashQueue,
+};
 use solana_frozen_abi_macro::AbiExample;
-use solana_runtime::epoch_stakes::EpochStakes;
-use solana_runtime::stakes::Stakes;
-use solana_sdk::account::{Account, AccountSharedData, ReadableAccount};
-use solana_sdk::clock::{Epoch, UnixTimestamp};
-use solana_sdk::deserialize_utils::default_on_eof;
-use solana_sdk::epoch_schedule::EpochSchedule;
-use solana_sdk::fee_calculator::{FeeCalculator, FeeRateGovernor};
-use solana_sdk::hard_forks::HardForks;
-use solana_sdk::hash::Hash;
-use solana_sdk::inflation::Inflation;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::slot_history::Slot;
-use solana_sdk::stake::state::Delegation;
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
-use std::str::FromStr;
-use std::{io, mem};
+use solana_runtime::{epoch_stakes::EpochStakes, stakes::Stakes};
+use solana_sdk::{
+    account::{Account, AccountSharedData, ReadableAccount},
+    clock::{Epoch, UnixTimestamp},
+    deserialize_utils::default_on_eof,
+    epoch_schedule::EpochSchedule,
+    fee_calculator::{FeeCalculator, FeeRateGovernor},
+    hard_forks::HardForks,
+    hash::Hash,
+    inflation::Inflation,
+    pubkey::Pubkey,
+    slot_history::Slot,
+    stake::state::Delegation,
+};
+use tar::{Archive, Entries, Entry};
 use thiserror::Error;
 use tracing::info;
-
-use std::ffi::OsStr;
-use std::fs::OpenOptions;
-use std::io::{BufReader, Read};
-use std::path::{Component, Path};
-use std::pin::Pin;
-use std::time::Instant;
-use tar::{Archive, Entries, Entry};
 
 #[derive(Deserialize)]
 pub struct RentCollector {
