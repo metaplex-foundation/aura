@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc};
 
 use entities::{
     enums::*,
-    models::{AssetIndex, Creator, UrlWithStatus},
+    models::{AssetIndex, Creator, FungibleAssetIndex, UrlWithStatus},
 };
 use metrics_utils::red::RequestErrorDurationMetrics;
 use postgre_client::{storage_traits::AssetIndexStorage, PgClient};
@@ -187,24 +187,20 @@ pub fn generate_random_vec(n: usize) -> Vec<u8> {
     random_vector
 }
 
-pub fn generate_random_pubkey() -> Pubkey {
-    Pubkey::new_unique()
-}
-
 pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
     let mut asset_indexes = Vec::new();
     for i in 0..n {
         let asset_index = AssetIndex {
-            pubkey: generate_random_pubkey(),
+            pubkey: Pubkey::new_unique(),
             specification_version: SpecificationVersions::V1,
             specification_asset_class: SpecificationAssetClass::Nft,
             royalty_target_type: RoyaltyTargetType::Creators,
             royalty_amount: 1,
             slot_created: (n - i) as i64,
-            owner: Some(generate_random_pubkey()),
-            delegate: Some(generate_random_pubkey()),
-            authority: Some(generate_random_pubkey()),
-            collection: Some(generate_random_pubkey()),
+            owner: Some(Pubkey::new_unique()),
+            delegate: Some(Pubkey::new_unique()),
+            authority: Some(Pubkey::new_unique()),
+            collection: Some(Pubkey::new_unique()),
             is_collection_verified: Some(rand::thread_rng().gen_bool(0.5)),
             is_burnt: false,
             is_compressible: false,
@@ -218,13 +214,28 @@ pub fn generate_asset_index_records(n: usize) -> Vec<AssetIndex> {
             update_authority: None,
             slot_updated: (n + 10 + i) as i64,
             creators: vec![Creator {
-                creator: generate_random_pubkey(),
+                creator: Pubkey::new_unique(),
                 creator_verified: rand::thread_rng().gen_bool(0.5),
                 creator_share: 100,
             }],
             owner_type: Some(OwnerType::Single),
             fungible_asset_mint: None,
             fungible_asset_balance: None,
+        };
+        asset_indexes.push(asset_index);
+    }
+    asset_indexes
+}
+
+pub fn generate_fungible_asset_index_records(n: usize) -> Vec<FungibleAssetIndex> {
+    let mut asset_indexes = Vec::new();
+    for i in 0..n {
+        let asset_index = FungibleAssetIndex {
+            pubkey: Pubkey::new_unique(),
+            owner: Some(Pubkey::new_unique()),
+            slot_updated: (n + 10 + i) as i64,
+            fungible_asset_mint: None,
+            fungible_asset_balance: Some(1),
         };
         asset_indexes.push(asset_index);
     }

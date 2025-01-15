@@ -8,6 +8,7 @@ mod tests {
     use postgre_client::storage_traits::AssetIndexStorage;
     use rand::Rng;
     use setup::pg::*;
+    use solana_sdk::pubkey::Pubkey;
     use testcontainers::clients::Cli;
 
     #[tokio::test]
@@ -86,12 +87,12 @@ mod tests {
         // every asset_index will have 3 creators
         for asset_index in asset_indexes.iter_mut() {
             asset_index.creators.push(Creator {
-                creator: generate_random_pubkey(),
+                creator: Pubkey::new_unique(),
                 creator_verified: rand::thread_rng().gen_bool(0.5),
                 creator_share: 30,
             });
             asset_index.creators.push(Creator {
-                creator: generate_random_pubkey(),
+                creator: Pubkey::new_unique(),
                 creator_verified: rand::thread_rng().gen_bool(0.5),
                 creator_share: 30,
             });
@@ -119,7 +120,7 @@ mod tests {
             .map(|asset_index| {
                 let mut ai = asset_index.clone();
                 ai.creators.pop();
-                ai.creators[1].creator = generate_random_pubkey();
+                ai.creators[1].creator = Pubkey::new_unique();
                 ai.creators[0].creator_verified = !ai.creators[0].creator_verified;
                 ai
             })
