@@ -90,7 +90,8 @@ impl DownloadError {
 /// Generated client implementations.
 pub mod asset_url_service_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
-    use tonic::codegen::{http::Uri, *};
+    use tonic::codegen::http::Uri;
+    use tonic::codegen::*;
     #[derive(Debug, Clone)]
     pub struct AssetUrlServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -134,8 +135,9 @@ pub mod asset_url_service_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
-                Into<StdError> + Send + Sync,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + Send + Sync,
         {
             AssetUrlServiceClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -174,20 +176,31 @@ pub mod asset_url_service_client {
         pub async fn get_asset_urls_to_download(
             &mut self,
             request: impl tonic::IntoRequest<super::GetAssetUrlsRequest>,
-        ) -> std::result::Result<tonic::Response<super::AssetsToDownload>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
+        ) -> std::result::Result<
+            tonic::Response<super::AssetsToDownload>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/asseturls.AssetUrlService/GetAssetUrlsToDownload",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("asseturls.AssetUrlService", "GetAssetUrlsToDownload"));
+                .insert(
+                    GrpcMethod::new(
+                        "asseturls.AssetUrlService",
+                        "GetAssetUrlsToDownload",
+                    ),
+                );
             self.inner.unary(req, path, codec).await
         }
         /// Used to notify about asset download results
@@ -195,19 +208,24 @@ pub mod asset_url_service_client {
             &mut self,
             request: impl tonic::IntoRequest<super::DownloadResultsRequest>,
         ) -> std::result::Result<tonic::Response<()>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/asseturls.AssetUrlService/SubmitDownloadResult",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("asseturls.AssetUrlService", "SubmitDownloadResult"));
+                .insert(
+                    GrpcMethod::new("asseturls.AssetUrlService", "SubmitDownloadResult"),
+                );
             self.inner.unary(req, path, codec).await
         }
     }
@@ -223,7 +241,10 @@ pub mod asset_url_service_server {
         async fn get_asset_urls_to_download(
             &self,
             request: tonic::Request<super::GetAssetUrlsRequest>,
-        ) -> std::result::Result<tonic::Response<super::AssetsToDownload>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::AssetsToDownload>,
+            tonic::Status,
+        >;
         /// Used to notify about asset download results
         async fn submit_download_result(
             &self,
@@ -253,7 +274,10 @@ pub mod asset_url_service_server {
                 max_encoding_message_size: None,
             }
         }
-        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> InterceptedService<Self, F>
         where
             F: tonic::service::Interceptor,
         {
@@ -309,18 +333,25 @@ pub mod asset_url_service_server {
                 "/asseturls.AssetUrlService/GetAssetUrlsToDownload" => {
                     #[allow(non_camel_case_types)]
                     struct GetAssetUrlsToDownloadSvc<T: AssetUrlService>(pub Arc<T>);
-                    impl<T: AssetUrlService> tonic::server::UnaryService<super::GetAssetUrlsRequest>
-                        for GetAssetUrlsToDownloadSvc<T>
-                    {
+                    impl<
+                        T: AssetUrlService,
+                    > tonic::server::UnaryService<super::GetAssetUrlsRequest>
+                    for GetAssetUrlsToDownloadSvc<T> {
                         type Response = super::AssetsToDownload;
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GetAssetUrlsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as AssetUrlService>::get_asset_urls_to_download(&inner, request)
+                                <T as AssetUrlService>::get_asset_urls_to_download(
+                                        &inner,
+                                        request,
+                                    )
                                     .await
                             };
                             Box::pin(fut)
@@ -348,23 +379,29 @@ pub mod asset_url_service_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                },
+                }
                 "/asseturls.AssetUrlService/SubmitDownloadResult" => {
                     #[allow(non_camel_case_types)]
                     struct SubmitDownloadResultSvc<T: AssetUrlService>(pub Arc<T>);
-                    impl<T: AssetUrlService>
-                        tonic::server::UnaryService<super::DownloadResultsRequest>
-                        for SubmitDownloadResultSvc<T>
-                    {
+                    impl<
+                        T: AssetUrlService,
+                    > tonic::server::UnaryService<super::DownloadResultsRequest>
+                    for SubmitDownloadResultSvc<T> {
                         type Response = ();
-                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::DownloadResultsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as AssetUrlService>::submit_download_result(&inner, request)
+                                <T as AssetUrlService>::submit_download_result(
+                                        &inner,
+                                        request,
+                                    )
                                     .await
                             };
                             Box::pin(fut)
@@ -392,15 +429,19 @@ pub mod asset_url_service_server {
                         Ok(res)
                     };
                     Box::pin(fut)
-                },
-                _ => Box::pin(async move {
-                    Ok(http::Response::builder()
-                        .status(200)
-                        .header("grpc-status", "12")
-                        .header("content-type", "application/grpc")
-                        .body(empty_body())
-                        .unwrap())
-                }),
+                }
+                _ => {
+                    Box::pin(async move {
+                        Ok(
+                            http::Response::builder()
+                                .status(200)
+                                .header("grpc-status", "12")
+                                .header("content-type", "application/grpc")
+                                .body(empty_body())
+                                .unwrap(),
+                        )
+                    })
+                }
             }
         }
     }

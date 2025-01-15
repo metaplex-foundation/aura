@@ -8,10 +8,10 @@ enum SpecificationAssetClass : byte {
   Nft,
   PrintableNft,
   ProgrammableNft,
-  Print,
-  TransferRestrictedNft,
-  NonTransferableNft,
-  IdentityNft,
+  Print (deprecated),
+  TransferRestrictedNft (deprecated),
+  NonTransferableNft (deprecated),
+  IdentityNft (deprecated),
   MplCoreAsset,
   MplCoreCollection
 }
