@@ -1,0 +1,45 @@
+[package]
+name = "consistency_check"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { workspace = true, features = ["env"] }
+tokio = { workspace = true, features = ["sync"] }
+tokio-util = { workspace = true }
+solana-sdk = { workspace = true }
+solana-client = { workspace = true }
+solana-accounts-db = { workspace = true }
+solana-runtime = { workspace = true }
+solana-frozen-abi-macro = { workspace = true }
+mpl-bubblegum = { workspace = true }
+csv = { workspace = true}
+tempfile = { workspace = true }
+rocks-db = { path = "../rocks-db" }
+metrics-utils = { path = "../metrics_utils" }
+nft_ingester = { path = "../nft_ingester" }
+spl-concurrent-merkle-tree = { workspace = true }
+usecase = { path = "../usecase" }
+indicatif = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }
+tar = { workspace = true }
+thiserror = { workspace = true }
+lazy_static = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+entities = { path = "../entities" }
+zstd = "0.12.4"
+memmap2 = "0.9.0"
+
+[[bin]]
+name = "compressed_assets"
+
+[[bin]]
+name = "regular_assets"
+
+[[bin]]
+name = "jsons"
