@@ -661,6 +661,165 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
+    async fn test_metadata_sanitizer() {
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, 0, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+            Storage,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+            NATIVE_MINT_PUBKEY.to_string(),
+        );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+
+        let whitespace_options = " \t\n\r\x0B\x0C\u{00A0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\
+        \u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200A}\u{2028}\
+        \u{2029}\u{202F}\u{205F}\u{3000}";
+
+        for whitespace in whitespace_options.chars() {
+            let pb = Pubkey::new_unique();
+            let authority = Pubkey::new_unique();
+
+            let mut chain_data = ChainDataV1 {
+                name: format!("{} name {}", whitespace, whitespace).to_string(),
+                symbol: format!("{} symbol {}", whitespace, whitespace).to_string(),
+                edition_nonce: Some(1),
+                primary_sale_happened: false,
+                token_standard: Some(TokenStandard::NonFungible),
+                uses: None,
+            };
+            chain_data.sanitize();
+
+            let chain_data = json!(chain_data);
+            let asset_static_details = AssetStaticDetails {
+                pubkey: pb,
+                specification_asset_class: SpecificationAssetClass::Nft,
+                royalty_target_type: RoyaltyTargetType::Creators,
+                created_at: 12 as i64,
+                edition_address: Some(MasterEdition::find_pda(&pb).0),
+            };
+
+            let dynamic_details = AssetDynamicDetails {
+                pubkey: pb,
+                is_compressed: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+                is_compressible: Updated::new(12, Some(UpdateVersion::Sequence(12)), false),
+                supply: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 1)),
+                seq: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 12)),
+                onchain_data: Some(Updated::new(
+                    12,
+                    Some(UpdateVersion::Sequence(12)),
+                    chain_data.to_string(),
+                )),
+                creators: Updated::new(12, Some(UpdateVersion::Sequence(12)), vec![]),
+                royalty_amount: Updated::new(12, Some(UpdateVersion::Sequence(12)), 5),
+                url: Updated::new(
+                    12,
+                    Some(UpdateVersion::Sequence(12)),
+                    "https://ping-pong".to_string(),
+                ),
+                chain_mutability: Some(Updated::new(
+                    12,
+                    Some(UpdateVersion::Sequence(12)),
+                    ChainMutability::Mutable,
+                )),
+                lamports: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), 1)),
+                executable: Some(Updated::new(12, Some(UpdateVersion::Sequence(12)), false)),
+                metadata_owner: Some(Updated::new(
+                    12,
+                    Some(UpdateVersion::Sequence(12)),
+                    "ff".to_string(),
+                )),
+                ..Default::default()
+            };
+
+            let asset_authority = AssetAuthority {
+                pubkey: pb,
+                authority,
+                slot_updated: 12,
+                write_version: Some(1),
+            };
+
+            let owner = AssetOwner {
+                pubkey: pb,
+                owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(authority)),
+                delegate: Updated::new(12, Some(UpdateVersion::Sequence(12)), None),
+                owner_type: Updated::new(12, Some(UpdateVersion::Sequence(12)), OwnerType::Single),
+                owner_delegate_seq: Updated::new(12, Some(UpdateVersion::Sequence(12)), Some(12)),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            };
+
+            let metadata = OffChainData {
+                url: Some("https://ping-pong".to_string()),
+                metadata: Some("{\"msg\": \"hallo\"}".to_string()),
+                storage_mutability: StorageMutability::Immutable,
+                last_read_at: 0,
+            };
+            env.rocks_env
+                .storage
+                .asset_offchain_data
+                .put(metadata.url.clone().unwrap(), metadata)
+                .unwrap();
+
+            let asset_complete_details = AssetCompleteDetails {
+                pubkey: pb,
+                static_details: Some(asset_static_details),
+                dynamic_details: Some(dynamic_details),
+                authority: Some(asset_authority),
+                owner: Some(owner),
+                ..Default::default()
+            };
+            env.rocks_env
+                .storage
+                .db
+                .put_cf(
+                    &env.rocks_env
+                        .storage
+                        .db
+                        .cf_handle(AssetCompleteDetails::NAME)
+                        .unwrap(),
+                    pb,
+                    asset_complete_details.convert_to_fb_bytes(),
+                )
+                .unwrap();
+
+            let payload = GetAsset {
+                id: pb.to_string(),
+                options: Options {
+                    show_unverified_collections: true,
+                    ..Default::default()
+                },
+            };
+            let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+            assert_eq!(
+                response["content"]["metadata"]["name"],
+                format!("{} name {}", whitespace, whitespace)
+            );
+            assert_eq!(
+                response["content"]["metadata"]["symbol"],
+                format!("{} symbol {}", whitespace, whitespace)
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_asset_without_offchain_data() {
         let cnt = 20;
         let cli = Cli::default();
