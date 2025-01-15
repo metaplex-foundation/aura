@@ -62,7 +62,7 @@ The Missed asset data file contains NFTs for which we missed asset data. Asset d
 
 The Missed mint info file contains mint addresses that we missed.
 
-Missed token acc file contains token accounts addresses which we missed.
+The Missed token acc file contains token accounts addresses which we missed.
 
 ## JSONs
 
