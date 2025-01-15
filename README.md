@@ -64,16 +64,14 @@ The API specification is compatible with the standard DAS specification here htt
 ### Developing and running
 
 #### PR/Code requirements 
-1) CI/CD has code formating checker so use FTM before code commit: `cargo fmt`
-2) 
+1) CI/CD has code formating checker so use fmt before code commit: `cargo fmt`
 
 #### Run Integration tests
-Integration tests require Postgres db url, devnet and mainnet rpc  
+Integration tests require Postgres db url, solana devnet and solana mainnet rpc urls.
 
 How to run with CLI:
-```cml
-DATABASE_TEST_URL='postgres://solana:solana@localhost:5432/aura_db' DEVNET_RPC_URL='https://devnet-aura.metaplex.com/{YOUR_TOKEN_ACCESS}' MAINNET_RPC_URL='https://mainnet-aura.metaplex.com/{YOUR_TOKEN_ACCESS}' cargo test --features integration_tests
-```
+```shell
+DATABASE_TEST_URL='postgres://solana:solana@localhost:5432/aura_db' DEVNET_RPC_URL='https://api.devnet.solana.com' MAINNET_RPC_URL='https://api.mainnet-beta.solana.com' cargo test --features integration_tests
 
 
 
