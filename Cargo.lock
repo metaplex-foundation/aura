@@ -2084,6 +2084,7 @@ dependencies = [
  "bincode",
  "clap 4.5.4",
  "csv",
+ "entities",
  "indicatif",
  "lazy_static",
  "memmap2 0.9.4",
