@@ -70,7 +70,7 @@ Binary `jsons` has two commands: check-consistency and change-status.
 
 ### Check consistency
 
-This command will select all the JSON links from the Postgre with status success and check if that files really are in RocksDB. Links of all the missed files will be dumped into csv file.
+This command will select all the JSON links from PostgreSQL with a status of success and check if those files are really in RocksDB. Links to all the missed files will be dumped into a CSV file.
 
 Launch command:
 
