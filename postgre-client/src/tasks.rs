@@ -201,13 +201,18 @@ impl PgClient {
 
     pub async fn get_tasks_count(&self) -> Result<i64, IndexDbError> {
         let resp = sqlx::query("SELECT COUNT(*) FROM tasks")
-            .fetch_one(&self.pool).await?;
+            .fetch_one(&self.pool)
+            .await?;
         let count: i64 = resp.get(0);
 
         Ok(count)
     }
 
-    pub async fn get_tasks(&self, limit: i64, after: Option<Vec<u8>>) -> Result<Vec<JsonTask>, IndexDbError> {
+    pub async fn get_tasks(
+        &self,
+        limit: i64,
+        after: Option<Vec<u8>>,
+    ) -> Result<Vec<JsonTask>, IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("select tsk_id, tsk_metadata_url, tsk_status from tasks");
 
@@ -221,7 +226,7 @@ impl PgClient {
         query_builder.push(" limit ");
 
         query_builder.push_bind(limit);
-        
+
         let query = query_builder.build();
         let rows = query.fetch_all(&self.pool).await?;
 
@@ -242,7 +247,11 @@ impl PgClient {
         Ok(tasks)
     }
 
-    pub async fn change_task_status(&self, tasks_urls: Vec<String>, status_to_set: TaskStatus) -> Result<(), IndexDbError> {
+    pub async fn change_task_status(
+        &self,
+        tasks_urls: Vec<String>,
+        status_to_set: TaskStatus,
+    ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
             QueryBuilder::new("update tasks SET tsk_status = ");
         query_builder.push_bind(status_to_set);

@@ -19,8 +19,7 @@ pub async fn update_rate(
 
         tokio::select! {
             _ = sleep => {}
-            _ = shutdown_token.cancelled() => {
-            break;
+            _ = shutdown_token.cancelled() => {break;}
         }
 
         let current_time = std::time::Instant::now();

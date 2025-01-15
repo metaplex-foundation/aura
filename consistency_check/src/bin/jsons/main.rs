@@ -122,7 +122,7 @@ async fn change_jsons_status(postgre_creds: String, file_path: String) {
         if batch.len() >= LINKS_BATCH {
             let links_num = batch.len() as u64;
             if let Err(e) = index_pg_storage
-                .change_task_status(std::mem::replace(&mut batch, vec![]), TaskStatus::Pending)
+                .change_task_status(std::mem::take(&mut batch), TaskStatus::Pending)
                 .await
             {
                 error!("Could not change statuses for batch: {}", e.to_string());
@@ -202,7 +202,7 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
         loop {
             let mut f_ch = missed_jsons_cloned.lock().await;
             for t in f_ch.iter() {
-                missed_jsons_wrt.write_record(&[t]).unwrap();
+                missed_jsons_wrt.write_record([t]).unwrap();
             }
             missed_jsons_wrt.flush().unwrap();
             f_ch.clear();
@@ -266,8 +266,13 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
 
                         for (i, json) in jsons.iter().enumerate() {
                             if let Some(j) = json {
-                                if j.metadata.is_empty() {
-                                    ms_jn.insert(j.url.clone());
+                                if let Some(m) = &j.metadata {
+                                    if m.is_empty() {
+                                        ms_jn.insert(keys_to_check.get(i).unwrap().clone());
+                                        count_of_missed_jsons.fetch_add(1, Ordering::Relaxed);
+                                    }
+                                } else {
+                                    ms_jn.insert(keys_to_check.get(i).unwrap().clone());
                                     count_of_missed_jsons.fetch_add(1, Ordering::Relaxed);
                                 }
                             } else {
