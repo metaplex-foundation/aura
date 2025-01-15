@@ -7,10 +7,8 @@ use std::{
     time::Duration,
 };
 
-use metrics_utils::IngesterMetricsConfig;
 use rocks_db::{
-    backup_service, backup_service::BackupService, errors::BackupServiceError,
-    storage_traits::AssetSlotStorage, Storage,
+    backup_service, errors::RocksDbBackupServiceError, storage_traits::AssetSlotStorage, Storage,
 };
 use tokio::{
     sync::broadcast::{Receiver, Sender},
@@ -20,15 +18,6 @@ use tokio::{
 use tracing::{error, info};
 
 use crate::config::INGESTER_BACKUP_NAME;
-
-pub async fn perform_backup(
-    mut backup_service: BackupService,
-    cloned_rx: Receiver<()>,
-    cloned_metrics: Arc<IngesterMetricsConfig>,
-) -> Result<(), JoinError> {
-    backup_service.perform_backup(cloned_metrics, cloned_rx).await;
-    Ok(())
-}
 
 pub async fn receive_last_saved_slot(
     cloned_rx: Receiver<()>,
@@ -61,7 +50,7 @@ pub async fn restore_rocksdb(
     rocks_backup_url: &str,
     rocks_backup_archives_dir: &str,
     rocks_db_path_container: &str,
-) -> Result<(), BackupServiceError> {
+) -> Result<(), RocksDbBackupServiceError> {
     create_dir_all(rocks_backup_archives_dir)?;
 
     let backup_path = format!("{}/{}", rocks_backup_archives_dir, INGESTER_BACKUP_NAME);
