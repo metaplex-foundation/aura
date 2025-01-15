@@ -15,9 +15,11 @@ pub async fn update_rate(
     let mut last_count = assets_processed.load(Ordering::Relaxed);
 
     loop {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let sleep = tokio::time::sleep(std::time::Duration::from_secs(1));
 
-        if shutdown_token.is_cancelled() {
+        tokio::select! {
+            _ = sleep => {}
+            _ = shutdown_token.cancelled() => {
             break;
         }
 
