@@ -96,11 +96,8 @@ pub async fn main() {
     let spinner_style =
         ProgressStyle::with_template("{prefix:>10.bold.dim} {spinner} total={human_pos} {msg}")
             .unwrap();
-    let accounts_spinner = Arc::new(
-        ProgressBar::new_spinner()
-            .with_style(spinner_style)
-            .with_prefix("accs"),
-    );
+    let accounts_spinner =
+        Arc::new(ProgressBar::new_spinner().with_style(spinner_style).with_prefix("accs"));
     let assets_processed = Arc::new(AtomicU64::new(0));
     let rate = Arc::new(Mutex::new(0.0));
 
@@ -156,11 +153,7 @@ pub async fn main() {
     let assets_processed_clone = assets_processed.clone();
     let shutdown_token_clone = shutdown_token.clone();
     let rate_clone = rate.clone();
-    tokio::spawn(update_rate(
-        shutdown_token_clone,
-        assets_processed_clone,
-        rate_clone,
-    ));
+    tokio::spawn(update_rate(shutdown_token_clone, assets_processed_clone, rate_clone));
 
     'outer: for append_vec in snapshot_loader.iter() {
         match append_vec {
@@ -173,9 +166,8 @@ pub async fn main() {
                     let account = account.access().unwrap();
 
                     if account.account_meta.owner == *CORE_KEY {
-                        if let Err(e) = nfts_channel_tx
-                            .send((AccountType::Core, account.meta.pubkey))
-                            .await
+                        if let Err(e) =
+                            nfts_channel_tx.send((AccountType::Core, account.meta.pubkey)).await
                         {
                             error!("Could not send core key to the channel: {}", e.to_string());
                         }
@@ -184,9 +176,8 @@ pub async fn main() {
                     {
                         // there only 2 types of accounts for that programs, so if it's not mint it's token account
                         if account.data.len() == MINT_ACC_DATA_SIZE {
-                            if let Err(e) = nfts_channel_tx
-                                .send((AccountType::Mint, account.meta.pubkey))
-                                .await
+                            if let Err(e) =
+                                nfts_channel_tx.send((AccountType::Mint, account.meta.pubkey)).await
                             {
                                 error!("Could not send mint key to the channel: {}", e.to_string());
                             }
@@ -199,7 +190,7 @@ pub async fn main() {
                         }
                     }
                 }
-            }
+            },
             Err(error) => error!("append_vec: {:?}", error),
         };
     }
@@ -270,16 +261,16 @@ async fn process_nfts(
                                 m_d.insert(key.to_string());
                                 drop(m_d);
                             }
-                        }
+                        },
                         Err(e) => {
                             error!(
                                 "Error during checking asset data key existence: {}",
                                 e.to_string()
                             );
-                        }
+                        },
                     }
                     match acc_type {
-                        AccountType::Core => {} // already checked above
+                        AccountType::Core => {}, // already checked above
                         // if we've got mint account we also should check spl_mints column
                         AccountType::Mint => match rocks_db_cloned.spl_mints.has_key(key).await {
                             Ok(exist) => {
@@ -290,13 +281,13 @@ async fn process_nfts(
                                     m_d.insert(key.to_string());
                                     drop(m_d);
                                 }
-                            }
+                            },
                             Err(e) => {
                                 error!(
                                     "Error during checking mint key existence: {}",
                                     e.to_string()
                                 );
-                            }
+                            },
                         },
                     }
 
@@ -322,11 +313,11 @@ async fn process_nfts(
 
                     drop(permit);
                 });
-            }
+            },
             None => {
                 // if None is received - channel was closed
                 break;
-            }
+            },
         }
     }
     Ok(())
@@ -377,13 +368,13 @@ async fn process_fungibles(
                                 m_d.insert(key.to_string());
                                 drop(m_d);
                             }
-                        }
+                        },
                         Err(e) => {
                             error!(
                                 "Error during checking token accounts key existence: {}",
                                 e.to_string()
                             );
-                        }
+                        },
                     }
 
                     let current_assets_processed =
@@ -408,11 +399,11 @@ async fn process_fungibles(
 
                     drop(permit);
                 });
-            }
+            },
             None => {
                 // if None is received - channel was closed
                 break;
-            }
+            },
         }
     }
     Ok(())
