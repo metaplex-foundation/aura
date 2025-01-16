@@ -169,10 +169,6 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                             }
                         };
 
-                        if unprocessed_accounts.is_empty() {
-                            tokio::time::sleep(Duration::from_millis(1000)).await;
-                        }
-
                         debug!("Processor {}, Unprocessed_accounts: {}  {:?}", self.processor_name, unprocessed_accounts.len(), unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", "));
 
                         self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_instant).await;

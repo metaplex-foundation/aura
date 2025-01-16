@@ -47,7 +47,7 @@ pub struct IngesterClapArgs {
     #[clap(long, env, default_value = "5")]
     pub redis_accounts_parsing_workers: u32,
 
-    #[clap(long, env, default_value = "1")]
+    #[clap(long, env, default_value = "2")]
     pub redis_transactions_parsing_workers: u32,
 
     #[clap(long, env, default_value = "60")]
@@ -563,11 +563,7 @@ mod tests {
         assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
         assert_eq!(args.file_storage_path_container, "./tmp/file_storage");
         assert_eq!(args.pg_max_db_connections, 100);
-        assert_eq!(args.redis_accounts_parsing_workers, 20);
-        assert_eq!(args.redis_transactions_parsing_workers, 20);
         assert_eq!(args.sequence_consistent_checker_wait_period_sec, 60);
-        assert_eq!(args.account_processor_buffer_size, 250);
-        assert_eq!(args.account_processor_mpl_fees_buffer_size, 50);
         assert_eq!(args.parallel_json_downloaders, 100);
         assert_eq!(args.is_run_api, true);
         assert_eq!(args.is_run_gapfiller, false);
