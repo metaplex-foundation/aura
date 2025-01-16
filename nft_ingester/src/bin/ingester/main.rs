@@ -173,6 +173,9 @@ pub async fn main() -> Result<(), IngesterError> {
                     .entry("batch_size".to_string())
                     .or_insert_with(|| args.account_processor_buffer_size.into());
                 config
+                    .entry("retries".to_string())
+                    .or_insert_with(|| (args.redis_accounts_parsing_workers + 1).into());
+                config
             },
         };
         let redis_receiver = Arc::new(
@@ -205,6 +208,9 @@ pub async fn main() -> Result<(), IngesterError> {
                 config
                     .entry("batch_size".to_string())
                     .or_insert_with(|| args.tx_processor_buffer_size.into());
+                config
+                    .entry("retries".to_string())
+                    .or_insert_with(|| (args.redis_transactions_parsing_workers + 1).into());
                 config
             },
         };
