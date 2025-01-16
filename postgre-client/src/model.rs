@@ -23,17 +23,7 @@ pub enum SpecificationAssetClass {
     FungibleToken,
     FungibleAsset,
     Nft,
-    // legacy code, never ever existed in the first place
-    PrintableNft,
     ProgrammableNft,
-    // legacy code, never ever existed in the first place
-    Print,
-    // legacy code, never ever existed in the first place
-    TransferRestrictedNft,
-    // legacy code, never ever existed in the first place
-    NonTransferableNft,
-    // legacy code, never ever existed in the first place
-    IdentityNft,
     MplCoreAsset,
     MplCoreCollection,
 }

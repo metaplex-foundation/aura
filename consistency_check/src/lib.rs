@@ -28,11 +28,7 @@ pub async fn update_rate(
         let elapsed = current_time.duration_since(last_time).as_secs_f64();
         let count = current_count - last_count;
 
-        let current_rate = if elapsed > 0.0 {
-            (count as f64) / elapsed
-        } else {
-            0.0
-        };
+        let current_rate = if elapsed > 0.0 { (count as f64) / elapsed } else { 0.0 };
 
         // Update rate
         {

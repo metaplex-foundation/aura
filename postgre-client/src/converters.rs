@@ -33,21 +33,8 @@ impl From<entities::enums::SpecificationAssetClass> for SpecificationAssetClass 
                 SpecificationAssetClass::FungibleAsset
             },
             entities::enums::SpecificationAssetClass::Nft => SpecificationAssetClass::Nft,
-            entities::enums::SpecificationAssetClass::PrintableNft => {
-                SpecificationAssetClass::PrintableNft
-            },
             entities::enums::SpecificationAssetClass::ProgrammableNft => {
                 SpecificationAssetClass::ProgrammableNft
-            },
-            entities::enums::SpecificationAssetClass::Print => SpecificationAssetClass::Print,
-            entities::enums::SpecificationAssetClass::TransferRestrictedNft => {
-                SpecificationAssetClass::TransferRestrictedNft
-            },
-            entities::enums::SpecificationAssetClass::NonTransferableNft => {
-                SpecificationAssetClass::NonTransferableNft
-            },
-            entities::enums::SpecificationAssetClass::IdentityNft => {
-                SpecificationAssetClass::IdentityNft
             },
             entities::enums::SpecificationAssetClass::MplCoreAsset => {
                 SpecificationAssetClass::MplCoreAsset

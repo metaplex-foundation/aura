@@ -693,12 +693,8 @@ mod tests {
                 ..Default::default()
             };
 
-            let asset_authority = AssetAuthority {
-                pubkey: pb,
-                authority,
-                slot_updated: 12,
-                write_version: Some(1),
-            };
+            let asset_authority =
+                AssetAuthority { pubkey: pb, authority, slot_updated: 12, write_version: Some(1) };
 
             let owner = AssetOwner {
                 pubkey: pb,
@@ -733,11 +729,7 @@ mod tests {
                 .storage
                 .db
                 .put_cf(
-                    &env.rocks_env
-                        .storage
-                        .db
-                        .cf_handle(AssetCompleteDetails::NAME)
-                        .unwrap(),
+                    &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
                     pb,
                     asset_complete_details.convert_to_fb_bytes(),
                 )
@@ -745,10 +737,7 @@ mod tests {
 
             let payload = GetAsset {
                 id: pb.to_string(),
-                options: Options {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                options: Options { show_unverified_collections: true, ..Default::default() },
             };
             let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
             assert_eq!(

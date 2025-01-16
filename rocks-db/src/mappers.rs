@@ -37,12 +37,7 @@ impl_from_enum!(
     FungibleToken,
     FungibleAsset,
     Nft,
-    PrintableNft,
     ProgrammableNft,
-    Print,
-    TransferRestrictedNft,
-    NonTransferableNft,
-    IdentityNft,
     MplCoreAsset,
     MplCoreCollection
 );

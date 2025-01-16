@@ -434,10 +434,6 @@ pub enum SpecificationAssetClass {
     Nft = 3,
     PrintableNft = 4,
     ProgrammableNft = 5,
-    Print = 6,
-    TransferRestrictedNft = 7,
-    NonTransferableNft = 8,
-    IdentityNft = 9,
     MplCoreAsset = 10,
     MplCoreCollection = 11,
 }
@@ -456,14 +452,6 @@ impl SpecificationAssetClass {
             SpecificationAssetClass::ProgrammableNft => {
                 "SPECIFICATION_ASSET_CLASS_PROGRAMMABLE_NFT"
             },
-            SpecificationAssetClass::Print => "SPECIFICATION_ASSET_CLASS_PRINT",
-            SpecificationAssetClass::TransferRestrictedNft => {
-                "SPECIFICATION_ASSET_CLASS_TRANSFER_RESTRICTED_NFT"
-            },
-            SpecificationAssetClass::NonTransferableNft => {
-                "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT"
-            },
-            SpecificationAssetClass::IdentityNft => "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT",
             SpecificationAssetClass::MplCoreAsset => "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET",
             SpecificationAssetClass::MplCoreCollection => {
                 "SPECIFICATION_ASSET_CLASS_MPL_CORE_COLLECTION"
@@ -479,12 +467,6 @@ impl SpecificationAssetClass {
             "SPECIFICATION_ASSET_CLASS_NFT" => Some(Self::Nft),
             "SPECIFICATION_ASSET_CLASS_PRINTABLE_NFT" => Some(Self::PrintableNft),
             "SPECIFICATION_ASSET_CLASS_PROGRAMMABLE_NFT" => Some(Self::ProgrammableNft),
-            "SPECIFICATION_ASSET_CLASS_PRINT" => Some(Self::Print),
-            "SPECIFICATION_ASSET_CLASS_TRANSFER_RESTRICTED_NFT" => {
-                Some(Self::TransferRestrictedNft)
-            },
-            "SPECIFICATION_ASSET_CLASS_NON_TRANSFERABLE_NFT" => Some(Self::NonTransferableNft),
-            "SPECIFICATION_ASSET_CLASS_IDENTITY_NFT" => Some(Self::IdentityNft),
             "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET" => Some(Self::MplCoreAsset),
             "SPECIFICATION_ASSET_CLASS_MPL_CORE_COLLECTION" => Some(Self::MplCoreCollection),
             _ => None,
