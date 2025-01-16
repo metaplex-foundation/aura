@@ -432,10 +432,9 @@ pub enum SpecificationAssetClass {
     FungibleToken = 1,
     FungibleAsset = 2,
     Nft = 3,
-    PrintableNft = 4,
-    ProgrammableNft = 5,
-    MplCoreAsset = 10,
-    MplCoreCollection = 11,
+    ProgrammableNft = 4,
+    MplCoreAsset = 5,
+    MplCoreCollection = 6,
 }
 impl SpecificationAssetClass {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -448,7 +447,6 @@ impl SpecificationAssetClass {
             SpecificationAssetClass::FungibleToken => "SPECIFICATION_ASSET_CLASS_FUNGIBLE_TOKEN",
             SpecificationAssetClass::FungibleAsset => "SPECIFICATION_ASSET_CLASS_FUNGIBLE_ASSET",
             SpecificationAssetClass::Nft => "SPECIFICATION_ASSET_CLASS_NFT",
-            SpecificationAssetClass::PrintableNft => "SPECIFICATION_ASSET_CLASS_PRINTABLE_NFT",
             SpecificationAssetClass::ProgrammableNft => {
                 "SPECIFICATION_ASSET_CLASS_PROGRAMMABLE_NFT"
             },
@@ -465,7 +463,6 @@ impl SpecificationAssetClass {
             "SPECIFICATION_ASSET_CLASS_FUNGIBLE_TOKEN" => Some(Self::FungibleToken),
             "SPECIFICATION_ASSET_CLASS_FUNGIBLE_ASSET" => Some(Self::FungibleAsset),
             "SPECIFICATION_ASSET_CLASS_NFT" => Some(Self::Nft),
-            "SPECIFICATION_ASSET_CLASS_PRINTABLE_NFT" => Some(Self::PrintableNft),
             "SPECIFICATION_ASSET_CLASS_PROGRAMMABLE_NFT" => Some(Self::ProgrammableNft),
             "SPECIFICATION_ASSET_CLASS_MPL_CORE_ASSET" => Some(Self::MplCoreAsset),
             "SPECIFICATION_ASSET_CLASS_MPL_CORE_COLLECTION" => Some(Self::MplCoreCollection),
