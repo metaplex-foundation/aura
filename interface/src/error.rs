@@ -89,6 +89,8 @@ pub enum StorageError {
     CannotServiceRequest,
     #[error("Unknown error: {0}")]
     Unknown(String),
+    #[error("Request execution time exceeded the limit.")]
+    QueryTimedOut,
 }
 
 impl From<Error> for UsecaseError {

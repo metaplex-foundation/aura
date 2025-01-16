@@ -106,6 +106,7 @@ impl TestSetup {
                 MIN_PG_CONNECTIONS,
                 POSTGRE_MIGRATIONS_PATH,
                 Some(PathBuf::from_str("./dump").unwrap()),
+                None,
             )
             .await
             .unwrap(),

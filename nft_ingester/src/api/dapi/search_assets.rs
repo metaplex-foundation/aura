@@ -148,7 +148,14 @@ async fn fetch_assets<
     let keys = index_client
         .get_asset_pubkeys_filtered(filter, &sort_by.into(), limit, page, before, after, &options)
         .await
-        .map_err(|e| StorageError::Common(e.to_string()))?;
+        .map_err(|e| {
+            if e.to_string().contains("statement timeout") {
+                StorageError::QueryTimedOut
+            } else {
+                StorageError::Common(e.to_string())
+            }
+        })?;
+
     let asset_ids = keys
         .iter()
         .filter_map(|k| Pubkey::try_from(k.pubkey.clone()).ok())
@@ -199,12 +206,13 @@ async fn fetch_assets<
     };
     let mut grand_total = None;
     if options.show_grand_total {
-        grand_total = Some(
-            index_client
-                .get_grand_total(filter, &options)
-                .await
-                .map_err(|e| StorageError::Common(e.to_string()))?,
-        )
+        grand_total = Some(index_client.get_grand_total(filter, &options).await.map_err(|e| {
+            if e.to_string().contains("statement timeout") {
+                StorageError::QueryTimedOut
+            } else {
+                StorageError::Common(e.to_string())
+            }
+        })?)
     }
 
     let resp = AssetList {

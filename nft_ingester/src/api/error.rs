@@ -38,11 +38,13 @@ pub enum DasApiError {
     #[error("Page number is too big. Up to {0} pages are supported with this kind of pagination. Please use a different pagination(before/after/cursor).")]
     PageTooBig(usize),
     #[error("Internal DB error")]
-    InternalDdError,
+    InternalDbError,
     #[error("CannotServiceRequest")]
     CannotServiceRequest,
     #[error("MissingOwnerAddress")]
     MissingOwnerAddress,
+    #[error("Request execution time exceeded the limit.")]
+    QueryTimedOut,
 }
 
 impl From<DasApiError> for jsonrpc_core::Error {
@@ -95,6 +97,11 @@ impl From<DasApiError> for jsonrpc_core::Error {
                     .to_string(),
                 data: None,
             },
+            DasApiError::QueryTimedOut => jsonrpc_core::Error {
+                code: ErrorCode::InvalidRequest,
+                message: "Request execution time exceeded the limit.".to_string(),
+                data: None,
+            },
             DasApiError::CannotServiceRequest => cannot_service_request_error(),
             _ => jsonrpc_core::Error::new(ErrorCode::InternalError),
         }
@@ -115,6 +122,7 @@ impl From<StorageError> for DasApiError {
     fn from(value: StorageError) -> Self {
         match value {
             StorageError::CannotServiceRequest => Self::CannotServiceRequest,
+            StorageError::QueryTimedOut => Self::QueryTimedOut,
             e => Self::RocksError(e.to_string()),
         }
     }
