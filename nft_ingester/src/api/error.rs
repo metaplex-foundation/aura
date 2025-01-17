@@ -5,6 +5,7 @@ use thiserror::Error;
 use tracing::error;
 
 const STANDARD_ERROR_CODE: i64 = -32000;
+const QUERY_TIME_OUT_CODE: i64 = -32800;
 pub const CANNOT_SERVICE_REQUEST_ERROR_CODE: i64 = -32050;
 
 #[derive(Error, Debug)]
@@ -98,7 +99,7 @@ impl From<DasApiError> for jsonrpc_core::Error {
                 data: None,
             },
             DasApiError::QueryTimedOut => jsonrpc_core::Error {
-                code: ErrorCode::InvalidRequest,
+                code: ErrorCode::ServerError(QUERY_TIME_OUT_CODE),
                 message: "Request execution time exceeded the limit.".to_string(),
                 data: None,
             },
