@@ -81,6 +81,9 @@ impl Storage {
         migration_applier
             .apply_migration(crate::migrations::offchain_data::OffChainDataMigration)
             .await?;
+        migration_applier
+            .apply_migration(crate::migrations::clitems_v2::ClItemsV2Migration)
+            .await?;
 
         Ok(())
     }
