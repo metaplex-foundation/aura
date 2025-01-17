@@ -16,6 +16,7 @@ figment = { workspace = true }
 lz4 = { workspace = true }
 tar = { workspace = true }
 reqwest = { workspace = true }
+futures = { workspace = true }
 futures-util = { workspace = true }
 metrics-utils = { path = "../metrics_utils" }
 tokio = { workspace = true }

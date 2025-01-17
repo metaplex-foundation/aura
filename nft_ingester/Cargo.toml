@@ -90,18 +90,20 @@ zip-extract = { workspace = true }
 assertables = "7"
 base64 = { workspace = true }
 spl-pod = { workspace = true }
+# TODO: remove
+csv = { workspace = true }
 
 [[bench]]
 name = "integrated_benchmark"
 harness = false
 
-[[bench]]
-name = "ingester_benchmark"
-harness = false
-
-[[bench]]
-name = "synchronizer_benchmark"
-harness = false
+# [[bench]]
+# name = "ingester_benchmark"
+# harness = false
+#
+# [[bench]]
+# name = "synchronizer_benchmark"
+# harness = false
 
 [features]
 rpc_tests = []

@@ -204,6 +204,9 @@ where
     }
 
     pub async fn batch_get(&self, keys: Vec<C::KeyType>) -> Result<Vec<Option<C::ValueType>>> {
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
         let start_time = chrono::Utc::now();
         let db = self.backend.clone();
         let keys = keys.clone();
