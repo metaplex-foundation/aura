@@ -1958,7 +1958,7 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
             }
             // Merge authority
             if let Some(new_authority) = new_val.authority() {
-                if authority.map_or(true, |current_authority| {
+                if authority.is_none_or(|current_authority| {
                     new_authority.compare(&current_authority) == Ordering::Greater
                 }) {
                     authority = Some(new_authority);

@@ -35,7 +35,7 @@ impl PgClient {
         options: &'a GetByMethodsOptions,
     ) -> Result<(QueryBuilder<'a, Postgres>, bool), IndexDbError> {
         let mut query_builder = QueryBuilder::new(
-            "SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
+            "(SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
         );
         let group_clause_required = add_filter_clause(&mut query_builder, filter, options);
 
@@ -102,8 +102,47 @@ impl PgClient {
         }
         // Add GROUP BY clause if necessary
         if group_clause_required {
-            query_builder.push(" GROUP BY assets_v3.ast_pubkey, assets_v3.ast_slot_created, assets_v3.ast_slot_updated ");
+            query_builder.push(" GROUP BY ast_pubkey, ast_slot_created, ast_slot_updated ");
         }
+        query_builder.push(") ");
+
+        // the function with a side-effect that mutates the query_builder
+        if let Some(owner_address) = &filter.owner_address {
+            if let Some(ref token_type) = filter.token_type {
+                match *token_type {
+                    TokenType::Fungible
+                    | TokenType::NonFungible
+                    | TokenType::RegularNFT
+                    | TokenType::CompressedNFT => {},
+                    TokenType::All => {
+                        query_builder.push("  UNION ");
+                        query_builder.push("  ( ");
+                        query_builder.push(
+                            "SELECT
+                    ast_pubkey,
+                    ast_slot_created,
+                    ast_slot_updated
+                    FROM assets_v3
+                    JOIN fungible_tokens ON ast_pubkey = fungible_tokens.fbt_asset
+                    WHERE ast_supply > 0 AND fbt_owner = ",
+                        );
+                        query_builder.push_bind(owner_address);
+                        if !options.show_zero_balance {
+                            query_builder.push(" AND fbt_balance > ");
+                            query_builder.push_bind(0i64);
+                        }
+                        if !options.show_unverified_collections {
+                            // if there is no collection for asset it doesn't mean that it's unverified
+                            query_builder.push(
+                                " AND assets_v3.ast_is_collection_verified IS DISTINCT FROM FALSE",
+                            );
+                        }
+                        query_builder.push(")");
+                    },
+                }
+            }
+        }
+
         // Add ORDER BY clause
         let direction = match (&order.sort_direction, order_reversed) {
             (AssetSortDirection::Asc, true) | (AssetSortDirection::Desc, false) => " DESC ",
@@ -111,10 +150,11 @@ impl PgClient {
         };
 
         query_builder.push(" ORDER BY ");
-        query_builder.push(order.sort_by.to_string());
+        query_builder.push(order.sort_by.to_string().replace("ast_", ""));
         query_builder.push(direction);
-        query_builder.push(", ast_pubkey ");
+        query_builder.push(", pubkey ");
         query_builder.push(direction);
+
         // Add LIMIT clause
         query_builder.push(" LIMIT ");
         query_builder.push_bind(limit as i64);
@@ -167,20 +207,6 @@ fn add_filter_clause<'a>(
     if filter.authority_address.is_some() {
         query_builder.push(" INNER JOIN assets_authorities ON assets_v3.ast_authority_fk = assets_authorities.auth_pubkey ");
         group_clause_required = true;
-    }
-    if let Some(ref token_type) = filter.token_type {
-        if token_type == &TokenType::All && filter.owner_address.is_some() {
-            query_builder.push(
-                " LEFT JOIN fungible_tokens ON assets_v3.ast_pubkey = fungible_tokens.fbt_asset ",
-            );
-            group_clause_required = true;
-        }
-        if token_type == &TokenType::Fungible && filter.owner_address.is_some() {
-            query_builder.push(
-                " INNER JOIN fungible_tokens ON assets_v3.ast_pubkey = fungible_tokens.fbt_asset ",
-            );
-            group_clause_required = true;
-        }
     }
 
     // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
@@ -259,14 +285,7 @@ fn add_filter_clause<'a>(
                 TokenType::All => {
                     query_builder.push(" AND (assets_v3.ast_owner = ");
                     query_builder.push_bind(owner_address);
-                    query_builder.push(" OR (fungible_tokens.fbt_owner = ");
-                    query_builder.push_bind(owner_address);
-                    if !options.show_zero_balance {
-                        query_builder.push(" AND fungible_tokens.fbt_balance > ");
-                        query_builder.push_bind(0i64);
-                    }
-                    query_builder.push(" ) ");
-                    query_builder.push(" ) ");
+                    query_builder.push(")");
                 },
             }
         } else {

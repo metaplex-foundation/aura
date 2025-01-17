@@ -30,7 +30,7 @@ impl SequenceConsistentManager for Storage {
         let result = if gap_found {
             self.trees_gaps.put_async(tree, TreesGaps {}).await
         } else {
-            self.trees_gaps.delete(tree).map_err(Into::into)
+            self.trees_gaps.delete(tree)
         };
         if let Err(e) = result {
             error!("{} tree gap: {}", if gap_found { "Put" } else { "Delete" }, e);
