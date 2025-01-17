@@ -148,33 +148,29 @@ impl Storage {
         owner_address: &Option<Pubkey>,
         options: &Options,
     ) -> Result<AssetSelectedMaps> {
-        let token_accounts_fut = if let Some(owner_address) = owner_address {
-            Either::Left(self.get_raw_token_accounts(
-                Some(*owner_address),
+        let token_accounts = 
+            self.get_raw_token_accounts(
+                Some(*owner_address.as_ref().unwrap()),
                 None,
                 None,
                 None,
                 None,
                 None,
                 true,
-            ))
+            ).await;
+
+        let inscriptions = if options.show_inscription {
+            self.inscriptions.batch_get(asset_ids.clone()).await
         } else {
-            Either::Right(async { Ok(Vec::new()) })
+            Ok(Vec::new())
         };
 
-        let inscriptions_fut = if options.show_inscription {
-            Either::Left(self.inscriptions.batch_get(asset_ids.clone()))
-        } else {
-            Either::Right(async { Ok(Vec::new()) })
-        };
-
-        let (assets_leaf, assets_with_collectios_and_urls, token_accounts, spl_mints, inscriptions) = tokio::join!(
-            self.asset_leaf_data.batch_get(asset_ids.clone()),
-            self.get_assets_with_collections_and_urls(asset_ids.clone()),
-            token_accounts_fut,
-            self.spl_mints.batch_get(asset_ids.clone()),
-            inscriptions_fut,
-        );
+        let assets_leaf = 
+            self.asset_leaf_data.batch_get(asset_ids.clone()).await;
+        let assets_with_collectios_and_urls = 
+            self.get_assets_with_collections_and_urls(asset_ids.clone()).await;
+        let spl_mints = 
+            self.spl_mints.batch_get(asset_ids.clone()).await;
 
         let (mut assets_data, assets_collection_pks, mut urls) = assets_with_collectios_and_urls?;
 
