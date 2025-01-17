@@ -4777,6 +4777,7 @@ dependencies = [
  "clap 4.5.4",
  "coingecko",
  "criterion",
+ "csv",
  "entities",
  "figment",
  "flatbuffers 23.5.26",
