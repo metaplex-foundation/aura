@@ -1,0 +1,3 @@
+ALTER TABLE assets_v3 SET UNLOGGED;
+ALTER TABLE asset_creators_v3 SET UNLOGGED;
+ALTER TABLE asset_authorities SET UNLOGGED;
