@@ -6,7 +6,11 @@
 - Unique consumer ID for each worker. [MTG-1155]
 - Unique worker name to simplify debugging. [MTG-1155]
 - Ability to configure workers batch size via env variables. (account_processor_buffer_size tx_processor_buffer_size) [MTG-1155]
+- Configurable timeout for the PG database queries [MTG-1110](https://github.com/metaplex-foundation/aura/pull/371)
 - 
+
+
+
 
 
 
@@ -30,5 +34,9 @@
   * tx_processor_buffer_size
   * redis_accounts_parsing_workers
   * redis_transactions_parsing_workers
-- 
+- [MTG-1110] Configur PG max query statement timeout or test default configuration.
+  * INGESTER_PG_MAX_QUERY_TIMEOUT_SECS (default: 120sec)
+  * SYNCHRONIZER_PG_MAX_QUERY_TIMEOUT_SECS (default: 24h)
+  * MIGRATOR_PG_MAX_QUERY_TIMEOUT_SECS (default: 24h)
+  * API_PG_MAX_QUERY_TIMEOUT_SECS (default: 120sec)
 
