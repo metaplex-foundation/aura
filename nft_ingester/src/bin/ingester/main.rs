@@ -143,6 +143,7 @@ pub async fn main() -> Result<(), IngesterError> {
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
             None,
+            Some(args.pg_max_query_statement_timeout_secs),
         )
         .await?,
     );

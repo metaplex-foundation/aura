@@ -40,6 +40,8 @@ pub struct IngesterClapArgs {
 
     #[clap(long, env, default_value = "100")]
     pub pg_max_db_connections: u32,
+    #[clap(long, env = "INGESTER_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "120")]
+    pub pg_max_query_statement_timeout_secs: u32,
 
     #[clap(short('r'), long, env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
     pub redis_connection_config: Dict,
@@ -254,6 +256,9 @@ pub struct SynchronizerClapArgs {
     pub pg_database_url: String,
     #[clap(long, env, default_value = "100")]
     pub pg_max_db_connections: u32,
+    // 24 hour = 86400 secs
+    #[clap(long, env = "SYNCHRONIZER_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "86400")]
+    pub pg_max_query_statement_timeout_secs: u32,
 
     #[clap(
         short('m'),
@@ -333,6 +338,9 @@ pub struct MigratorClapArgs {
     pub pg_min_db_connections: u32,
     #[clap(long, env, default_value = "250")]
     pub pg_max_db_connections: u32,
+    // 24 hour = 86400 secs
+    #[clap(long, env = "MIGRATOR_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "86400")]
+    pub pg_max_query_statement_timeout_secs: u32,
 
     #[clap(
         long,
@@ -362,6 +370,8 @@ pub struct ApiClapArgs {
     pub pg_min_db_connections: u32,
     #[clap(long, env, default_value = "250")]
     pub pg_max_db_connections: u32,
+    #[clap(long, env = "API_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "120")]
+    pub pg_max_query_statement_timeout_secs: u32,
 
     #[clap(
         short('m'),

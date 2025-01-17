@@ -87,6 +87,7 @@ async fn main() {
                     500,
                     config.base_dump_path.clone(),
                     metrics.red_metrics,
+                    None,
                 )
                 .await
                 .unwrap(),
