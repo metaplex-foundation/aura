@@ -68,6 +68,7 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
     postgre_client: Arc<PgClient>,
     rpc_client: Arc<RpcClient>,
     join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    processor_name: Option<String>,
 ) {
     mutexed_tasks.lock().await.spawn(async move {
         let account_processor = AccountsProcessor::build(
@@ -79,9 +80,10 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
             postgre_client,
             rpc_client,
             join_set,
+            processor_name.clone(),
         )
         .await
-        .expect("Failed to build 'AccountsProcessor'!");
+        .expect(&format!("Failed to build 'AccountsProcessor' {:?}", processor_name.clone()));
 
         account_processor.process_accounts(rx, rocks_storage, account_buffer_size).await;
 
@@ -118,6 +120,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         postgre_client: Arc<PgClient>,
         rpc_client: Arc<RpcClient>,
         join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+        processor_name: Option<String>,
     ) -> Result<Self, IngesterError> {
         let mplx_accounts_processor = MplxAccountsProcessor::new(metrics.clone());
         let token_accounts_processor = TokenAccountsProcessor::new(metrics.clone());
@@ -127,7 +130,6 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             MplCoreFeeProcessor::build(postgre_client, metrics.clone(), rpc_client, join_set)
                 .await?;
         core_fees_processor.update_rent(rx).await;
-        let processor_name = Uuid::new_v4().to_string();
 
         Ok(Self {
             fees_batch_size,
@@ -139,7 +141,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             core_fees_processor,
             metrics,
             message_process_metrics,
-            processor_name,
+            processor_name: processor_name.unwrap_or_else(|| Uuid::new_v4().to_string()),
         })
     }
 
@@ -169,7 +171,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                             }
                         };
 
-                        debug!("Processor {}, Unprocessed_accounts: {}  {:?}", self.processor_name, unprocessed_accounts.len(), unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", "));
+                        debug!(processor = %self.processor_name, unprocessed_accounts_len = %unprocessed_accounts.len(), unprocessed_accounts = ?unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", "), "Processor {}, Unprocessed_accounts: {}  {:?}", self.processor_name, unprocessed_accounts.len(), unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", "));
 
                         self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_instant).await;
                     },

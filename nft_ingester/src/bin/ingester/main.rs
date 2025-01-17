@@ -164,11 +164,14 @@ pub async fn main() -> Result<(), IngesterError> {
         create_ack_channel(cloned_rx, message_config.clone(), mutexed_tasks.clone()).await;
 
     for _ in 0..args.redis_accounts_parsing_workers {
+        let account_consumer_worker_name = Uuid::new_v4().to_string();
+
         let personal_message_config = MessengerConfig {
             messenger_type: MessengerType::Redis,
             connection_config: {
                 let mut config = args.redis_connection_config.clone();
-                config.insert("consumer_id".to_string(), Uuid::new_v4().to_string().into());
+                config
+                    .insert("consumer_id".to_string(), account_consumer_worker_name.clone().into());
                 config
                     .entry("batch_size".to_string())
                     .or_insert_with(|| args.account_processor_buffer_size.into());
@@ -195,6 +198,7 @@ pub async fn main() -> Result<(), IngesterError> {
             index_pg_storage.clone(),
             rpc_client.clone(),
             mutexed_tasks.clone(),
+            Some(account_consumer_worker_name.clone()),
         )
         .await;
     }
