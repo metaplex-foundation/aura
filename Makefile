@@ -1,4 +1,4 @@
-.PHONY: build start build-integrity-verification start-integrity-verification start-core-indexing dev stop clippy test start-backfiller
+.PHONY: build start build-integrity-verification start-integrity-verification dev stop clippy test start-backfiller
 SHELL := /bin/bash
 
 build:
