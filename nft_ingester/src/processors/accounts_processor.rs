@@ -180,7 +180,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                             }
                         };
 
-                        debug!(processor = %self.processor_name, unprocessed_accounts_len = %unprocessed_accounts.len(), unprocessed_accounts = ?unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", "), "Processor {}, Unprocessed_accounts: {}  {:?}", self.processor_name, unprocessed_accounts.len(), unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", "));
+                        debug!(processor = %self.processor_name, unprocessed_accounts_len = %unprocessed_accounts.len(), "Processor {}, Unprocessed_accounts: {}  {:?}", self.processor_name, unprocessed_accounts.len(), unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", "));
 
                         self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_instant).await;
                     },
