@@ -30,7 +30,7 @@ def transfer_messages(stream_name):
             destination_redis.xadd(stream_name, message_body)
             last_id = message_id
 
-        time.sleep(1)
+        time.sleep(0.1)
 
 
 if __name__ == '__main__':
