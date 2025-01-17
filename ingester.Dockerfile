@@ -19,6 +19,7 @@ COPY tests/setup ./tests/setup
 COPY usecase ./usecase
 COPY integrity_verification ./integrity_verification
 COPY integration_tests ./integration_tests
+COPY consistency_check ./consistency_check
 
 RUN cargo chef prepare --recipe-path recipe.json
 
