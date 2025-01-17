@@ -170,7 +170,7 @@ services:
       - .env
     network_mode: host
     volumes:
-      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH_CONTAINER}:ro
       - ${ROCKS_BACKUP_DIR}:${ROCKS_BACKUP_DIR}:rw
       - ${ROCKS_BACKUP_ARCHIVES_DIR}:${ROCKS_BACKUP_ARCHIVES_DIR}:rw
       - ${PROFILING_FILE_PATH}:${PROFILING_FILE_PATH_CONTAINER}:rw
