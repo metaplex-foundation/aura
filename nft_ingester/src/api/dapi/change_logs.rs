@@ -20,7 +20,7 @@ use crate::{
     fetch_asset_data,
 };
 
-const OFFSET_SLOTS: u64 = 300; // Roughly 2 minutes in Solana time. After this time we consider peding/non-finalized data as invalid and use finalized version instead.
+const OFFSET_SLOTS: u64 = 300; // Roughly 2 minutes in Solana time. After this time we consider pending/non-finalized data as invalid and use finalized version instead.
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 struct SimpleChangeLog {
@@ -107,11 +107,8 @@ pub async fn get_proof_for_assets<
                             node_idx: leaf.node_idx as i64,
                             leaf_idx: leaf.leaf_idx.map(|idx| idx as i64),
                             level: leaf.level as i64,
-                            seq: hash
-                                .update_version
-                                .map(|v| v.get_seq())
-                                .flatten()
-                                .unwrap_or_default() as i64,
+                            seq: hash.update_version.and_then(|v| v.get_seq()).unwrap_or_default()
+                                as i64,
                             hash: hash.value,
                         },
                         nonce,
@@ -143,8 +140,7 @@ pub async fn get_proof_for_assets<
                 cli_hash: hash.value,
                 cli_level: node.level as i64,
                 cli_node_idx: node.node_idx as i64,
-                cli_seq: hash.update_version.map(|v| v.get_seq()).flatten().unwrap_or_default()
-                    as i64,
+                cli_seq: hash.update_version.and_then(|v| v.get_seq()).unwrap_or_default() as i64,
                 cli_tree: node.tree_key.to_bytes().to_vec(),
             }
         })

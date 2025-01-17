@@ -27,6 +27,8 @@ use crate::{
     Storage,
 };
 
+const OFFSET_SLOTS: u64 = 300;
+
 #[async_trait]
 impl AssetDetailsStreamer for Storage {
     async fn get_asset_details_stream_in_range(
@@ -202,7 +204,7 @@ async fn get_complete_asset_details(
         .get(Parameter::TopSeenSlot)?
         .flatten()
         .unwrap_or_default()
-        .wrapping_sub(300);
+        .wrapping_sub(OFFSET_SLOTS);
 
     Ok(AssetCompleteDetailsGrpc {
         pubkey: static_data.pubkey,
