@@ -35,8 +35,7 @@ pub async fn init_index_storage_with_migration(
         pg_max_query_statement_timeout_secs,
     )
     .await
-    .map_err(|e| e.to_string())
-    .map_err(IngesterError::SqlxError)?;
+    .map_err(|e| IngesterError::SqlxError(e.to_string()))?;
 
     pg_client.run_migration(pg_migrations_path).await.map_err(IngesterError::SqlxError)?;
 
