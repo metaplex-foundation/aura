@@ -1,7 +1,10 @@
 #[cfg(feature = "integration_tests")]
 #[cfg(test)]
 mod tests {
-    use entities::{api_req_params::GetByMethodsOptions, enums::AssetType};
+    use entities::{
+        api_req_params::GetByMethodsOptions,
+        enums::{AssetType, TokenType},
+    };
     use postgre_client::{
         model::*,
         storage_traits::{AssetIndexStorage, AssetPubkeyFilteredFetcher},
@@ -312,6 +315,72 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.len(), 101);
+        env.teardown().await;
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_search_for_fungible_asset() {
+        let cli = Cli::default();
+        let env = TestEnvironment::new(&cli).await;
+        let storage = &env.client;
+
+        // Generate nft asset
+        let asset_indexes = generate_asset_index_records(1);
+        let asset_index = &asset_indexes[0];
+        let common_owner = asset_index.owner;
+
+        // Generate fungible asset and make it part of the nft asset
+        let mut fungible_asset_indexes = generate_fungible_asset_index_records(1);
+        let fungible_asset_index = &mut fungible_asset_indexes[0];
+        fungible_asset_index.pubkey = asset_index.pubkey;
+        fungible_asset_index.owner = common_owner;
+
+        let last_known_key = generate_random_vec(8 + 8 + 32);
+
+        // Insert assets and last key
+        storage.update_nft_asset_indexes_batch(asset_indexes.as_slice()).await.unwrap();
+        storage.update_last_synced_key(&last_known_key, AssetType::NonFungible).await.unwrap();
+
+        // Insert fungible assets and last key
+        storage
+            .update_fungible_asset_indexes_batch(fungible_asset_indexes.as_slice())
+            .await
+            .unwrap();
+        storage.update_last_synced_key(&last_known_key, AssetType::Fungible).await.unwrap();
+
+        let cnt = env.count_rows_in_assets().await.unwrap();
+        assert_eq!(cnt, 1);
+        let cnt = env.count_rows_in_fungible_tokens().await.unwrap();
+        assert_eq!(cnt, 1);
+
+        let order = AssetSorting {
+            sort_by: AssetSortBy::SlotCreated,
+            sort_direction: AssetSortDirection::Asc,
+        };
+
+        let res = storage
+            .get_asset_pubkeys_filtered(
+                &SearchAssetsFilter {
+                    owner_address: Some(common_owner.unwrap().to_bytes().to_vec()),
+                    token_type: Some(TokenType::All),
+                    ..Default::default()
+                },
+                &order,
+                1,
+                None,
+                None,
+                None,
+                &GetByMethodsOptions {
+                    show_zero_balance: true,
+                    show_unverified_collections: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.len(), 1);
+
         env.teardown().await;
     }
 }

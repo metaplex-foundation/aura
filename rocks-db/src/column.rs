@@ -236,10 +236,8 @@ where
             )
             .into_iter()
             .map(|res| {
-                res.map_err(StorageError::from).and_then(|opt| {
-                    opt.map(|pinned| C::decode(pinned.as_ref()).map_err(StorageError::from))
-                        .transpose()
-                })
+                res.map_err(StorageError::from)
+                    .and_then(|opt| opt.map(|pinned| C::decode(pinned.as_ref())).transpose())
             })
             .collect()
     }

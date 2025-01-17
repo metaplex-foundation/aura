@@ -134,6 +134,7 @@ impl TestSetup {
             index_storage.clone(),
             client.clone(),
             mutexed_tasks.clone(),
+            None
         )
         .await
         .unwrap();
