@@ -16,6 +16,9 @@ start-synchronizer:
 start-api:
 	@docker compose -f docker-compose.yaml up -d das-api
 
+start-rocksdb-backup:
+	@docker compose -f docker-compose.yaml up -d rocksdb-backup
+
 stop-api:
 	@docker stop --time 20 das-api
 
