@@ -84,21 +84,26 @@ pub async fn main() -> Result<(), IngesterError> {
 
     info!("Starting Ingester...");
     info!("___________________________________",);
-    info!("API: {}", args.is_run_api);
-    if args.is_run_api {
+    info!("API: {}", args.run_api);
+    if args.run_api {
         info!("API port: localhost:{}", args.server_port);
     }
-    info!("Back Filler: {}", args.is_run_backfiller);
-    info!("Bubblegum BackFiller: {}", args.is_run_bubblegum_backfiller);
-    info!("Gap Filler: {}", args.is_run_gapfiller);
-    info!("Run Profiling: {}", args.is_run_profiling);
+    info!("Back Filler: {}", args.run_backfiller);
+    info!("Bubblegum BackFiller: {}", args.run_bubblegum_backfiller);
+    info!("Gap Filler: {}", args.run_gapfiller);
+    info!("Run Profiling: {}", args.run_profiling);
     info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker);
+    info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker);
+    info!("Account redis parsing workers: {}", args.redis_accounts_parsing_workers);
+    info!("Account processor buffer size: {}", args.account_processor_buffer_size);
+    info!("Tx redis parsing workers: {}", args.redis_transactions_parsing_workers);
+    info!("Tx processor buffer size: {}", args.tx_processor_buffer_size);
     info!("___________________________________",);
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
 
-    let guard = args.is_run_profiling.then(|| {
+    let guard = args.run_profiling.then(|| {
         ProfilerGuardBuilder::default()
             .frequency(100)
             .build()
@@ -126,7 +131,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let primary_rocks_storage = Arc::new(
         init_primary_storage(
             &args.rocks_db_path_container,
-            args.rocks_enable_migration,
+            args.enable_rocks_migration,
             &args.rocks_migration_storage_path,
             &metrics_state,
             mutexed_tasks.clone(),
@@ -164,8 +169,9 @@ pub async fn main() -> Result<(), IngesterError> {
     let ack_channel =
         create_ack_channel(cloned_rx, message_config.clone(), mutexed_tasks.clone()).await;
 
-    for _ in 0..args.redis_accounts_parsing_workers {
+    for index in 0..args.redis_accounts_parsing_workers {
         let account_consumer_worker_name = Uuid::new_v4().to_string();
+        info!("New Redis account worker {}: {}", index, account_consumer_worker_name);
 
         let personal_message_config = MessengerConfig {
             messenger_type: MessengerType::Redis,
@@ -204,12 +210,15 @@ pub async fn main() -> Result<(), IngesterError> {
         .await;
     }
 
-    for _ in 0..args.redis_transactions_parsing_workers {
+    for index in 0..args.redis_transactions_parsing_workers {
+        let tx_consumer_worker_name = Uuid::new_v4().to_string();
+        info!("New Redis tx worker {} : {}", index, tx_consumer_worker_name);
+
         let personal_message_config = MessengerConfig {
             messenger_type: MessengerType::Redis,
             connection_config: {
                 let mut config = args.redis_connection_config.clone();
-                config.insert("consumer_id".to_string(), Uuid::new_v4().to_string().into());
+                config.insert("consumer_id".to_string(), tx_consumer_worker_name.into());
                 config
                     .entry("batch_size".to_string())
                     .or_insert_with(|| args.tx_processor_buffer_size.into());
@@ -267,7 +276,7 @@ pub async fn main() -> Result<(), IngesterError> {
         .await,
     );
 
-    if args.is_run_gapfiller {
+    if args.run_gapfiller {
         info!("Start gapfiller...");
         let gaped_data_client =
             Client::connect(&args.gapfiller_peer_addr.expect("gapfiller peer address is expected"))
@@ -319,7 +328,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rx = shutdown_rx.resubscribe();
     let file_storage_path = args.file_storage_path_container.clone();
 
-    if args.is_run_api {
+    if args.run_api {
         info!("Starting API (Ingester)...");
         let middleware_json_downloader = args
             .json_middleware_config
@@ -382,7 +391,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let shutdown_token = CancellationToken::new();
 
     // Backfiller
-    if args.is_run_backfiller {
+    if args.run_backfiller {
         info!("Start backfiller...");
 
         let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
@@ -417,7 +426,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .await,
         );
 
-        if args.is_run_bubblegum_backfiller {
+        if args.run_bubblegum_backfiller {
             info!("Runing Bubblegum backfiller (ingester)...");
 
             if args.should_reingest {
