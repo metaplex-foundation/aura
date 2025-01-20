@@ -1,4 +1,4 @@
-use clap::{Parser, ValueEnum};
+use clap::{ArgAction, Parser, ValueEnum};
 use figment::value::Dict;
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
@@ -6,7 +6,7 @@ use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;
 
-#[derive(Parser, Debug)]
+#[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct IngesterClapArgs {
     #[clap(
@@ -68,43 +68,44 @@ pub struct IngesterClapArgs {
     pub parallel_json_downloaders: i32,
 
     #[clap(
-        long("run_api"),
+        long("disable-api"),
         default_value_t = true,
-        env = "IS_RUN_API",
-        help = "Run API (default: false)"
+        action = ArgAction::SetFalse,
+        env = "RUN_API",
+        help = "Disable API (default: true)"
     )]
-    pub is_run_api: bool,
+    pub run_api: bool,
 
     #[clap(
-        long("run_gapfiller"),
+        long("run-gapfiller"),
         default_value_t = false,
-        env = "IS_RUN_GAPFILLER",
-        help = "Start gapfiller",
+        env = "RUN_GAPFILLER",
+        help = "Start gapfiller.  (default: false)",
         requires = "gapfiller_peer_addr"
     )]
-    pub is_run_gapfiller: bool,
+    pub run_gapfiller: bool,
 
     #[clap(long, env, default_value = "0.0.0.0", help = "Gapfiller peer address")]
     pub gapfiller_peer_addr: Option<String>,
 
     #[clap(
-        long("run_profiling"),
+        long("run-profiling"),
         default_value_t = false,
-        env = "IS_RUN_PROFILING",
+        env = "INGESTER_RUN_PROFILING",
         help = "Start profiling (default: false)"
     )]
-    pub is_run_profiling: bool,
+    pub run_profiling: bool,
 
     #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
 
     // Group: Rocks DB Configuration
     #[clap(
-        long("restore_rocks_db"),
+        long("restore-rocks-db"),
         default_value_t = false,
-        env = "IS_RESTORE_ROCKS_DB",
+        env = "RESTORE_ROCKS_DB",
         help = "Try restore rocks (default: false)",
-        requires = "rocks_backup_url", //todo: if true
+        requires = "rocks_backup_url",
         requires = "rocks_backup_archives_dir"
     )]
     pub is_restore_rocks_db: bool,
@@ -112,17 +113,20 @@ pub struct IngesterClapArgs {
     pub rocks_backup_url: Option<String>,
     #[clap(long, env, help = "Rocks backup archives dir")]
     pub rocks_backup_archives_dir: Option<String>,
+
+    // requires = "rocks_migration_storage_path" is not working because default value is true. (clap issue)
     #[clap(
-        long,
-        env = "IS_ENABLE_ROCKS_MIGRATION",
+        long("disable-rocks-migration"),
+        env = "ENABLE_ROCKS_MIGRATION",
+        action = ArgAction::SetFalse,
         default_value_t = true,
-        help = "Enable migration for rocksdb (default: true)"
+        help = "Disable migration for rocksdb (default: true) requires: rocks_migration_storage_path"
     )]
-    pub rocks_enable_migration: bool,
+    pub enable_rocks_migration: bool,
     #[clap(long, env, help = "Migration storage path dir")]
     pub rocks_migration_storage_path: Option<String>,
 
-    #[clap(long, env, default_value_t = false, help = "Start consistent checker (default: false)")]
+    #[clap(long, env, help = "Start consistent checker (default: false)")]
     pub run_sequence_consistent_checker: bool,
 
     #[clap(
@@ -177,14 +181,15 @@ pub struct IngesterClapArgs {
     #[clap(long, env, help = "#api Storage service base url")]
     pub storage_service_base_url: Option<String>,
 
+    // requires = "rocks_slots_db_path" is not working because default value is true.
     #[clap(
-        long,
-        env = "IS_RUN_BACKFILLER",
+        long("disable-backfiller"),
+        action = ArgAction::SetFalse,
+        env = "RUN_BACKFILLER",
         default_value_t = true,
-        help = "Start backfiller (default: true)",
-        requires = "rocks_slots_db_path"
+        help = "Disable backfiller. (default: true) requires: rocks_slots_db_path",
     )]
-    pub is_run_backfiller: bool,
+    pub run_backfiller: bool,
     #[clap(
         long,
         env,
@@ -208,12 +213,13 @@ pub struct IngesterClapArgs {
     pub big_table_config: Option<BigTableConfig>,
 
     #[clap(
-        long,
-        env = "IS_RUN_BUBBLEGUM_BACKFILLER",
+        long("disable-bubblegum-backfiller"),
+        action = ArgAction::SetFalse,
+        env = "RUN_BUBBLEGUM_BACKFILLER",
         default_value_t = true,
-        help = "#bubbl Start bubblegum backfiller (default: true)"
+        help = "#bubbl Disable bubblegum backfiller (default: true)"
     )]
-    pub is_run_bubblegum_backfiller: bool,
+    pub run_bubblegum_backfiller: bool,
     #[clap(
         long,
         env = "SHOULD_REINGEST",
@@ -279,12 +285,12 @@ pub struct SynchronizerClapArgs {
     pub rocks_dump_path: String,
 
     #[clap(
-        long("run_profiling"),
-        env = "IS_RUN_PROFILING",
+        long("run-profiling"),
+        env = "SYNCHRONIZER_RUN_PROFILING",
         default_value_t = false,
         help = "Start profiling (default: false)"
     )]
-    pub is_run_profiling: bool,
+    pub run_profiling: bool,
     #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
 
@@ -411,12 +417,12 @@ pub struct ApiClapArgs {
     )]
     pub skip_check_tree_gaps: bool,
     #[clap(
-        env = "IS_RUN_PROFILING",
-        long("run_profiling"),
+        env = "API_RUN_PROFILING",
+        long("run-profiling"),
         default_value_t = false,
-        help = "Start profiling (default: false)"
+        help = "Start profiling. (default: false)"
     )]
-    pub is_run_profiling: bool,
+    pub run_profiling: bool,
 
     #[clap(
         long,
@@ -575,18 +581,18 @@ mod tests {
         assert_eq!(args.pg_max_db_connections, 100);
         assert_eq!(args.sequence_consistent_checker_wait_period_sec, 60);
         assert_eq!(args.parallel_json_downloaders, 100);
-        assert_eq!(args.is_run_api, true);
-        assert_eq!(args.is_run_gapfiller, false);
-        assert_eq!(args.is_run_profiling, false);
+        assert_eq!(args.run_api, true);
+        assert_eq!(args.run_gapfiller, false);
+        assert_eq!(args.run_profiling, false);
         assert_eq!(args.is_restore_rocks_db, false);
-        assert_eq!(args.is_run_bubblegum_backfiller, true);
+        assert_eq!(args.run_bubblegum_backfiller, true);
         assert_eq!(args.run_sequence_consistent_checker, false);
         assert_eq!(args.should_reingest, false);
         assert_eq!(args.check_proofs, false);
         assert_eq!(args.check_proofs_commitment, CommitmentLevel::Finalized);
         assert_eq!(args.archives_dir, "/rocksdb/_rocks_backup_archives");
         assert_eq!(args.skip_check_tree_gaps, false);
-        assert_eq!(args.is_run_backfiller, true);
+        assert_eq!(args.run_backfiller, true);
         assert_eq!(args.backfiller_source_mode, BackfillerSourceMode::RPC);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.log_level, "info");
@@ -604,7 +610,7 @@ mod tests {
         assert_eq!(args.pg_max_db_connections, 100);
         assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
         assert_eq!(args.rocks_db_secondary_path, "./my_rocksdb_secondary");
-        assert_eq!(args.is_run_profiling, false);
+        assert_eq!(args.run_profiling, false);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.dump_synchronizer_batch_size, 200000);
         assert_eq!(args.dump_sync_threshold, 150000000);
@@ -628,7 +634,7 @@ mod tests {
         assert_eq!(args.rocks_sync_interval_seconds, 2);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.skip_check_tree_gaps, false);
-        assert_eq!(args.is_run_profiling, false);
+        assert_eq!(args.run_profiling, false);
         assert_eq!(args.check_proofs, false);
         assert_eq!(args.check_proofs_probability, 0.1);
         assert_eq!(args.check_proofs_commitment, CommitmentLevel::Finalized);
