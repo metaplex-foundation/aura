@@ -1,5 +1,6 @@
 use std::{
     fs::{create_dir_all, remove_dir_all},
+    path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -48,20 +49,20 @@ pub async fn receive_last_saved_slot(
 
 pub async fn restore_rocksdb(
     rocks_backup_url: &str,
-    rocks_backup_archives_dir: &str,
-    rocks_db_path_container: &str,
+    rocks_backup_archives_dir: &PathBuf,
+    rocks_db_path_container: &PathBuf,
 ) -> Result<(), RocksDbBackupServiceError> {
     create_dir_all(rocks_backup_archives_dir)?;
 
-    let backup_path = format!("{}/{}", rocks_backup_archives_dir, INGESTER_BACKUP_NAME);
+    let backup_path = rocks_backup_archives_dir.join(INGESTER_BACKUP_NAME);
 
     backup_service::download_backup_archive(rocks_backup_url, &backup_path).await?;
     backup_service::unpack_backup_archive(&backup_path, rocks_backup_archives_dir)?;
 
-    let unpacked_archive = format!(
-        "{}/{}",
-        &rocks_backup_archives_dir,
+    let unpacked_archive = rocks_backup_archives_dir.join(
         backup_service::get_backup_dir_name(rocks_backup_url)
+            .parse::<PathBuf>()
+            .expect("invalid backup dir name"),
     );
 
     backup_service::restore_external_backup(&unpacked_archive, rocks_db_path_container)?;

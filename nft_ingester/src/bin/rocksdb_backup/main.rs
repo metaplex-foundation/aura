@@ -36,8 +36,8 @@ async fn main() -> Result<(), RocksDbBackupServiceError> {
     .unwrap();
 
     debug!(
-        rocks_db_path_container = %args.rocks_db_path_container,
-        rocks_db_secondary_path = %args.rocks_db_secondary_path,
+        rocks_db_path_container = ?args.rocks_db_path_container,
+        rocks_db_secondary_path = ?args.rocks_db_secondary_path,
         "Opened RocksDb in secondary mode"
     );
 
@@ -53,7 +53,7 @@ async fn main() -> Result<(), RocksDbBackupServiceError> {
         },
     )?;
 
-    mutexed_tasks.lock().await.spawn(async move { backup_service.perform_backup().await });
+    backup_service.perform_backup().await?;
 
     Ok(())
 }
