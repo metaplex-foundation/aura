@@ -30,7 +30,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     info!("Starting API server...");
 
-    let guard = if args.is_run_profiling {
+    let guard = if args.run_profiling {
         Some(pprof::ProfilerGuardBuilder::default().frequency(100).build().unwrap())
     } else {
         None
