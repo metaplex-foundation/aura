@@ -172,15 +172,12 @@ async fn test_search_by_owner_with_show_zero_balance() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Mainnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
     )
     .await;
 
     let seeds: Vec<SeedEvent> = seed_token_mints([
-        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK" // mint for fungible acc
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // mint for fungible acc
     ]);
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
@@ -193,7 +190,7 @@ async fn test_search_by_owner_with_show_zero_balance() {
 
     let seeds: Vec<SeedEvent> = seed_nfts([
         "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", // NFT wallet has
-        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG" // NFT wallet used to have
+        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG", // NFT wallet used to have
     ]);
 
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
@@ -213,10 +210,6 @@ async fn test_search_by_owner_with_show_zero_balance() {
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .search_assets(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
