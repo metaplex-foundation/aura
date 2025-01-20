@@ -4,17 +4,16 @@ use std::{
     io::{BufReader, Write},
     path::Path,
     sync::Arc,
-    time::Duration,
 };
 
 use futures_util::StreamExt;
-use metrics_utils::RocksDbMetricsConfig;
+use indicatif::{ProgressBar, ProgressStyle};
 use rocksdb::{
     backup::{BackupEngine, BackupEngineOptions, RestoreOptions},
     Env, DB,
 };
 use serde::{Deserialize, Serialize};
-use tokio::{sync::broadcast::Receiver, task::JoinError};
+use tokio::task::JoinError;
 use tracing::{error, info};
 
 use crate::errors::RocksDbBackupServiceError;
@@ -24,13 +23,13 @@ const BACKUP_POSTFIX: &str = ".tar.lz4";
 const ROCKS_NUM_BACKUPS_TO_KEEP: usize = 1;
 const NUMBER_ARCHIVES_TO_STORE: usize = 2;
 const DEFAULT_BACKUP_DIR_NAME: &str = "_rocksdb_backup";
+const BASE_BACKUP_ID: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RocksDbBackupServiceConfig {
     pub rocks_backup_dir: String,
     pub rocks_backup_archives_dir: String,
     pub rocks_flush_before_backup: bool,
-    pub rocks_interval_in_seconds: i64,
 }
 
 pub struct RocksDbBackupService {
@@ -62,52 +61,47 @@ impl RocksDbBackupService {
         self.verify_backup_single(backup_id)
     }
 
-    pub async fn perform_backup(
-        &mut self,
-        metrics: Arc<RocksDbMetricsConfig>,
-        mut rx: Receiver<()>,
-    ) -> Result<(), JoinError> {
-        let mut last_backup_id = 1;
-        while rx.is_empty() {
-            let start_time = chrono::Utc::now();
-            last_backup_id = match self.backup_engine.get_backup_info().last() {
-                None => last_backup_id,
-                Some(backup_info) => {
-                    if (backup_info.timestamp + self.backup_config.rocks_interval_in_seconds)
-                        >= start_time.timestamp()
-                    {
-                        continue;
-                    }
-                    backup_info.backup_id + 1
-                },
-            };
+    pub async fn perform_backup(&mut self) -> Result<(), JoinError> {
+        let start_time = chrono::Utc::now();
+        let last_backup_id = match self.backup_engine.get_backup_info().last() {
+            None => BASE_BACKUP_ID,
+            Some(backup_info) => backup_info.backup_id + 1,
+        };
 
-            if let Err(err) = self.create_backup(last_backup_id) {
-                error!("create_backup: {}", err);
-            }
-            if let Err(err) = self.delete_old_backups() {
-                error!("delete_old_backups: {}", err);
-            }
-            if let Err(err) = self.build_backup_archive(start_time.timestamp()) {
-                error!("build_backup_archive: {}", err);
-            }
-            if let Err(err) = self.delete_old_archives() {
-                error!("delete_old_archives: {}", err);
-            }
+        let progress_bar = Arc::new(ProgressBar::new(4)); // four steps:
+                                                          // create backup, delete the old one, build archive, delete old archives
+        progress_bar.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "[{bar:40.cyan/blue}] {percent}% \
+                    ({pos}/{len}) {msg}",
+                )
+                .expect("Failed to set progress bar style")
+                .progress_chars("#>-"),
+        );
 
-            let duration = chrono::Utc::now().signed_duration_since(start_time);
-            metrics.set_rocksdb_backup_latency(duration.num_milliseconds() as f64);
-
-            info!("perform_backup {}", duration.num_seconds());
-
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(self.backup_config.rocks_interval_in_seconds as u64)) => {},
-                _ = rx.recv() => {
-                    info!("Received stop signal, stopping performing backup");
-                    break;
-                }
-            };
+        if let Err(err) = self.create_backup(last_backup_id) {
+            error!(error = %err, "create_backup: {:?}", err);
         }
+
+        progress_bar.inc(1);
+        if let Err(err) = self.delete_old_backups() {
+            error!(error = %err, "delete_old_backups: {:?}", err);
+        }
+        progress_bar.inc(1);
+        if let Err(err) = self.build_backup_archive(start_time.timestamp()) {
+            error!(error = %err, "build_backup_archive: {:?}", err);
+        }
+        progress_bar.inc(1);
+        if let Err(err) = self.delete_old_archives() {
+            error!(error = %err, "delete_old_archives: {:?}", err);
+        }
+        progress_bar.inc(1);
+        progress_bar.finish_with_message("Backup completed!");
+
+        let duration = chrono::Utc::now().signed_duration_since(start_time);
+
+        info!(duration = %duration.num_milliseconds(), "Performed backup in {}ms", duration.num_milliseconds());
 
         Ok(())
     }
@@ -129,8 +123,7 @@ impl RocksDbBackupService {
         let backup_dir_name = get_backup_dir_name(self.backup_config.rocks_backup_dir.as_str());
         tar.append_dir_all(backup_dir_name, self.backup_config.rocks_backup_dir.clone())?;
         tar.into_inner()?;
-        let (_output, result) = enc.finish();
-        result?;
+        enc.finish().1?;
 
         Ok(())
     }
