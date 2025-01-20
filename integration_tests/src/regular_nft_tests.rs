@@ -169,54 +169,53 @@ async fn test_reg_search_assets() {
 #[serial]
 #[named]
 async fn test_search_by_owner_with_show_zero_balance() {
+    use solana_sdk::pubkey::Pubkey;
+    use std::str::FromStr;
+
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions {
-            network: Some(Network::Mainnet),
-            clear_db: true,
-        },
+        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
     )
     .await;
 
-    let seeds: Vec<SeedEvent> = seed_token_mints([
-        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK" // mint for fungible acc
+    let nft_seeds: Vec<SeedEvent> = seed_nfts([
+        "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", // NFT wallet has
+        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG", // NFT wallet used to have
     ]);
-    index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
-    let seeds: Vec<SeedEvent> = seed_accounts([
+    let account_seeds: Vec<SeedEvent> = seed_accounts([
         "3rzjtWZcZyvADaT5rrkRwGKWjnuzvK3PDedGMUwpnrrP", // empty token acc from NFT (3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG)
         "94eSnb5qBWTvxj3gqP6Ukq8bPhRTNNVZrE7zR5yTZd9E", // fungible token with zero balance
     ]);
 
-    index_seed_events(&setup, seeds.iter().collect_vec()).await;
-
-    let seeds: Vec<SeedEvent> = seed_nfts([
-        "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", // NFT wallet has
-        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG" // NFT wallet used to have
+    let mint_seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // mint for fungible acc
     ]);
 
-    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+    let all_seeds = [nft_seeds, account_seeds, mint_seeds].concat();
+    let all_permutations = all_seeds.iter().permutations(all_seeds.len()).collect::<Vec<_>>();
 
     let request = r#"
-    {
-        "page": 1,
-        "limit": 500,
-        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
-        "tokenType": "all",
-        "options": {
-            "showNativeBalance": true, "showZeroBalance": true
+        {
+            "page": 1,
+            "limit": 500,
+            "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+            "tokenType": "all",
+            "options": {
+                "showNativeBalance": true, "showZeroBalance": true
+            }
         }
-    }
-    "#;
+        "#;
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
-    let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup
-        .das_api
-        .search_assets(request, mutexed_tasks.clone())
-        .await
-        .unwrap();
-    insta::assert_json_snapshot!(name, response);
+    // make sure that sequence of updates is not affecting result anyhow
+    for events in all_permutations {
+        index_seed_events(&setup, events).await;
+
+        let request: SearchAssets = serde_json::from_str(request).unwrap();
+        let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+        insta::assert_json_snapshot!(name.clone(), response);
+    }
 }
