@@ -123,7 +123,7 @@ impl PgClient {
                     ast_slot_created,
                     ast_slot_updated
                     FROM assets_v3
-                    JOIN fungible_tokens ON ast_pubkey = fungible_tokens.fbt_asset
+                    JOIN fungible_tokens ON ast_pubkey = fungible_tokens.fbt_asset AND ast_owner_type = 'token'
                     WHERE ast_supply > 0 AND fbt_owner = ",
                         );
                         query_builder.push_bind(owner_address);
