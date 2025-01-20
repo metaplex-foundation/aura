@@ -125,7 +125,7 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        self.pg_client.check_health().await.map_err(|_| DasApiError::InternalDdError)?;
+        self.pg_client.check_health().await.map_err(|_| DasApiError::InternalDbError)?;
 
         self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 

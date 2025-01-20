@@ -12,7 +12,7 @@ use nft_ingester::{
 };
 use rocks_db::{
     column::TypedColumn,
-    columns::cl_items::ClItem,
+    columns::cl_items::ClItemV2,
     transaction::{InstructionResult, TransactionResult, TreeUpdate},
     tree_seq::TreeSeqIdx,
 };
@@ -31,6 +31,7 @@ async fn test_clean_forks() {
         str::FromStr,
     };
 
+    use entities::models::{UpdateVersion, Updated};
     use metrics_utils::{utils::start_metrics, MetricsTrait};
     use rocks_db::columns::{cl_items::ClItemKey, leaf_signatures::LeafSignature};
     use solana_transaction_status::UiConfirmedBlock;
@@ -50,14 +51,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(100, first_tree_key),
-            ClItem {
-                cli_node_idx: 100,
-                cli_tree_key: first_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10000,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10000,
+            ClItemV2 {
+                node_idx: 100,
+                tree_key: first_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10000,
+                    update_version: Some(UpdateVersion::Sequence(10000)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -66,14 +70,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(101, first_tree_key),
-            ClItem {
-                cli_node_idx: 101,
-                cli_tree_key: first_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10001,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10001,
+            ClItemV2 {
+                node_idx: 101,
+                tree_key: first_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10001,
+                    update_version: Some(UpdateVersion::Sequence(10001)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -82,14 +89,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(102, first_tree_key),
-            ClItem {
-                cli_node_idx: 102,
-                cli_tree_key: first_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10002,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10002,
+            ClItemV2 {
+                node_idx: 102,
+                tree_key: first_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10002,
+                    update_version: Some(UpdateVersion::Sequence(10002)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -98,14 +108,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(103, first_tree_key),
-            ClItem {
-                cli_node_idx: 103,
-                cli_tree_key: first_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10003,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10003,
+            ClItemV2 {
+                node_idx: 103,
+                tree_key: first_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10003,
+                    update_version: Some(UpdateVersion::Sequence(10003)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -114,14 +127,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(104, first_tree_key),
-            ClItem {
-                cli_node_idx: 104,
-                cli_tree_key: first_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10004,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10004,
+            ClItemV2 {
+                node_idx: 104,
+                tree_key: first_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10004,
+                    update_version: Some(UpdateVersion::Sequence(10004)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -130,14 +146,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(105, first_tree_key),
-            ClItem {
-                cli_node_idx: 105,
-                cli_tree_key: first_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10005,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10005,
+            ClItemV2 {
+                node_idx: 105,
+                tree_key: first_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10005,
+                    update_version: Some(UpdateVersion::Sequence(10005)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -146,14 +165,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(106, first_tree_key),
-            ClItem {
-                cli_node_idx: 106,
-                cli_tree_key: first_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10006,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10006,
+            ClItemV2 {
+                node_idx: 106,
+                tree_key: first_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10006,
+                    update_version: Some(UpdateVersion::Sequence(10006)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -162,14 +184,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(100, second_tree_key),
-            ClItem {
-                cli_node_idx: 100,
-                cli_tree_key: second_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10000,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10000,
+            ClItemV2 {
+                node_idx: 100,
+                tree_key: second_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10000,
+                    update_version: Some(UpdateVersion::Sequence(10000)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -178,14 +203,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(101, second_tree_key),
-            ClItem {
-                cli_node_idx: 101,
-                cli_tree_key: second_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10001,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10001,
+            ClItemV2 {
+                node_idx: 101,
+                tree_key: second_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10001,
+                    update_version: Some(UpdateVersion::Sequence(10001)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -194,14 +222,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(104, second_tree_key),
-            ClItem {
-                cli_node_idx: 104,
-                cli_tree_key: second_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10002,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10004,
+            ClItemV2 {
+                node_idx: 104,
+                tree_key: second_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10004,
+                    update_version: Some(UpdateVersion::Sequence(10002)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -210,14 +241,17 @@ async fn test_clean_forks() {
         .cl_items
         .put_async(
             ClItemKey::new(106, second_tree_key),
-            ClItem {
-                cli_node_idx: 106,
-                cli_tree_key: second_tree_key,
-                cli_leaf_idx: None,
-                cli_seq: 10003,
-                cli_level: 1,
-                cli_hash: Vec::new(),
-                slot_updated: 10006,
+            ClItemV2 {
+                node_idx: 106,
+                tree_key: second_tree_key,
+                leaf_idx: None,
+                level: 1,
+                finalized_hash: None,
+                pending_hash: Some(Updated {
+                    slot_updated: 10006,
+                    update_version: Some(UpdateVersion::Sequence(10003)),
+                    value: Vec::new(),
+                }),
             },
         )
         .await
@@ -604,14 +638,17 @@ async fn test_clean_forks() {
     let non_forked_first_key_seq = storage.tree_seq_idx.get((first_tree_key, 10006)).unwrap();
     assert_eq!(
         non_forked_first_key_item,
-        Some(ClItem {
-            cli_node_idx: 106,
-            cli_tree_key: first_tree_key,
-            cli_leaf_idx: None,
-            cli_seq: 10006,
-            cli_level: 1,
-            cli_hash: Vec::new(),
-            slot_updated: 10006,
+        Some(ClItemV2 {
+            node_idx: 106,
+            tree_key: first_tree_key,
+            leaf_idx: None,
+            level: 1,
+            finalized_hash: None,
+            pending_hash: Some(Updated {
+                slot_updated: 10006,
+                update_version: Some(UpdateVersion::Sequence(10006)),
+                value: Vec::new()
+            }),
         })
     );
     assert_eq!(non_forked_first_key_seq, Some(TreeSeqIdx { slot: 10006 }));
@@ -621,14 +658,17 @@ async fn test_clean_forks() {
     let non_forked_second_key_seq = storage.tree_seq_idx.get((second_tree_key, 10003)).unwrap();
     assert_eq!(
         non_forked_second_key_item,
-        Some(ClItem {
-            cli_node_idx: 106,
-            cli_tree_key: second_tree_key,
-            cli_leaf_idx: None,
-            cli_seq: 10003,
-            cli_level: 1,
-            cli_hash: Vec::new(),
-            slot_updated: 10006,
+        Some(ClItemV2 {
+            node_idx: 106,
+            tree_key: second_tree_key,
+            leaf_idx: None,
+            level: 1,
+            finalized_hash: None,
+            pending_hash: Some(Updated {
+                slot_updated: 10006,
+                update_version: Some(UpdateVersion::Sequence(10003)),
+                value: Vec::new()
+            }),
         })
     );
     assert_eq!(non_forked_second_key_seq, Some(TreeSeqIdx { slot: 10006 }));
@@ -838,11 +878,12 @@ async fn test_process_forked_transaction() {
     for cl_item in storage.cl_items.iter_start() {
         let (_, value) = cl_item.unwrap();
 
-        let value = deserialize::<ClItem>(&value).unwrap();
+        let value = deserialize::<ClItemV2>(&value).unwrap();
 
         // make sure that there should not be either of slots because normal slot is overwritten with forked one such as
         // in forked slot sequence is higher. Merge function for CLItems checks only sequence numbers
-        let n = value.slot_updated != slot_normal_tx && value.slot_updated != slot_forked_tx;
+        let n = value.get_updated_hash(0).slot_updated != slot_normal_tx
+            && value.get_updated_hash(0).slot_updated != slot_forked_tx;
 
         assert!(n);
     }
