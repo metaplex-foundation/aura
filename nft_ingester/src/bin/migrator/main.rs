@@ -45,9 +45,9 @@ pub async fn main() -> Result<(), IngesterError> {
             args.pg_max_db_connections,
             None,
             metrics_state.red_metrics.clone(),
+            Some(args.pg_max_query_statement_timeout_secs),
         )
-        .await
-        .unwrap(),
+        .await?,
     );
 
     start_metrics(metrics_state.registry, args.metrics_port).await;
@@ -60,8 +60,7 @@ pub async fn main() -> Result<(), IngesterError> {
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
-    )
-    .unwrap();
+    )?;
 
     let target_storage = Arc::new(storage);
     let source_storage = Storage::open(
@@ -69,8 +68,7 @@ pub async fn main() -> Result<(), IngesterError> {
         mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
-    )
-    .unwrap();
+    )?;
     let source_storage = Arc::new(source_storage);
 
     let json_migrator = JsonMigrator::new(

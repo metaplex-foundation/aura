@@ -9,9 +9,11 @@ use tokio::sync::broadcast::Receiver;
 use tracing::{error, info};
 
 use crate::{
-    cl_items::ClItemKey, column::TypedColumn, columns::leaf_signatures::LeafSignature, SlotStorage,
-    Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION, RAW_BLOCKS_CBOR_ENDPOINT,
-    ROCKS_COMPONENT,
+    cl_items::ClItemKey,
+    column::TypedColumn,
+    columns::{cl_items::ClItemV2, leaf_signatures::LeafSignature},
+    SlotStorage, Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION,
+    RAW_BLOCKS_CBOR_ENDPOINT, ROCKS_COMPONENT,
 };
 
 #[async_trait]
@@ -39,7 +41,20 @@ impl CompressedTreeChangesManager for Storage {
         self.cl_items
             .iter_start()
             .filter_map(Result::ok)
-            .flat_map(|(_, value)| bincode::deserialize::<ClItem>(value.as_ref()))
+            .flat_map(|(_, value)| bincode::deserialize::<ClItemV2>(value.as_ref()))
+            .map(|cl_item_v2| {
+                // TODO: using pending always if the fork cleaner is ever used, this should be revised
+                let hash = cl_item_v2.get_updated_hash(0);
+                ClItem {
+                    cli_node_idx: cl_item_v2.node_idx,
+                    cli_tree_key: cl_item_v2.tree_key,
+                    cli_leaf_idx: cl_item_v2.leaf_idx,
+                    cli_seq: hash.get_upd_ver_seq().unwrap_or_default(),
+                    cli_level: cl_item_v2.level,
+                    cli_hash: hash.value,
+                    slot_updated: hash.slot_updated,
+                }
+            })
     }
 
     async fn delete_tree_seq_idx(&self, keys: Vec<ForkedItem>) {

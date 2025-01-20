@@ -51,6 +51,7 @@ pub async fn main() -> Result<(), IngesterError> {
             DEFAULT_MIN_POSTGRES_CONNECTIONS,
             PG_MIGRATIONS_PATH,
             Some(PathBuf::from(args.rocks_dump_path.clone())),
+            Some(args.pg_max_query_statement_timeout_secs),
         )
         .await?,
     );

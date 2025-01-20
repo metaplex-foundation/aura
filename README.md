@@ -61,4 +61,14 @@ The project's structure is a reflection of the following clean architecture prin
 The API specification is compatible with the standard DAS specification here https://github.com/metaplex-foundation/api-specifications
 
 ### Developing and running
+
+
+#### Run Integration Tests
+
+```bash
+cargo t -F integration_tests
+```
+
+
+
 Full documentation and contribution guidelines coming soon…

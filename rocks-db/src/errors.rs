@@ -51,6 +51,7 @@ pub enum StorageError {
     NotFound(String),
     CannotServiceRequest,
     InvalidMigrationVersion(u64),
+    QueryTimedOut,
 }
 
 impl std::fmt::Display for StorageError {
@@ -77,6 +78,7 @@ impl From<StorageError> for interface::error::StorageError {
                 InterfaceStorageError::Common(format!("InvalidMigrationVersion: {v}"))
             },
             StorageError::NotFound(s) => InterfaceStorageError::NotFound(s),
+            StorageError::QueryTimedOut => InterfaceStorageError::QueryTimedOut,
         }
     }
 }

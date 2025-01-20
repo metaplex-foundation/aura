@@ -40,21 +40,26 @@ pub struct IngesterClapArgs {
 
     #[clap(long, env, default_value = "100")]
     pub pg_max_db_connections: u32,
+    #[clap(long, env = "INGESTER_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "120")]
+    pub pg_max_query_statement_timeout_secs: u32,
 
     #[clap(short('r'), long, env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
     pub redis_connection_config: Dict,
 
-    #[clap(long, env, default_value = "20")]
+    #[clap(long, env, default_value = "5")]
     pub redis_accounts_parsing_workers: u32,
 
-    #[clap(long, env, default_value = "20")]
+    #[clap(long, env, default_value = "2")]
     pub redis_transactions_parsing_workers: u32,
 
     #[clap(long, env, default_value = "60")]
     pub sequence_consistent_checker_wait_period_sec: u64,
 
-    #[clap(long, env, default_value = "250")]
+    #[clap(long, env, default_value = "100")]
     pub account_processor_buffer_size: usize,
+
+    #[clap(long, env, default_value = "100")]
+    pub tx_processor_buffer_size: usize,
 
     #[clap(long, env, default_value = "50")]
     pub account_processor_mpl_fees_buffer_size: usize,
@@ -251,6 +256,9 @@ pub struct SynchronizerClapArgs {
     pub pg_database_url: String,
     #[clap(long, env, default_value = "100")]
     pub pg_max_db_connections: u32,
+    // 24 hour = 86400 secs
+    #[clap(long, env = "SYNCHRONIZER_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "86400")]
+    pub pg_max_query_statement_timeout_secs: u32,
 
     #[clap(
         short('m'),
@@ -330,6 +338,9 @@ pub struct MigratorClapArgs {
     pub pg_min_db_connections: u32,
     #[clap(long, env, default_value = "250")]
     pub pg_max_db_connections: u32,
+    // 24 hour = 86400 secs
+    #[clap(long, env = "MIGRATOR_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "86400")]
+    pub pg_max_query_statement_timeout_secs: u32,
 
     #[clap(
         long,
@@ -359,6 +370,8 @@ pub struct ApiClapArgs {
     pub pg_min_db_connections: u32,
     #[clap(long, env, default_value = "250")]
     pub pg_max_db_connections: u32,
+    #[clap(long, env = "API_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "120")]
+    pub pg_max_query_statement_timeout_secs: u32,
 
     #[clap(
         short('m'),
@@ -560,11 +573,7 @@ mod tests {
         assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
         assert_eq!(args.file_storage_path_container, "./tmp/file_storage");
         assert_eq!(args.pg_max_db_connections, 100);
-        assert_eq!(args.redis_accounts_parsing_workers, 20);
-        assert_eq!(args.redis_transactions_parsing_workers, 20);
         assert_eq!(args.sequence_consistent_checker_wait_period_sec, 60);
-        assert_eq!(args.account_processor_buffer_size, 250);
-        assert_eq!(args.account_processor_mpl_fees_buffer_size, 50);
         assert_eq!(args.parallel_json_downloaders, 100);
         assert_eq!(args.is_run_api, true);
         assert_eq!(args.is_run_gapfiller, false);

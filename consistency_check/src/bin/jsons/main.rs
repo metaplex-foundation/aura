@@ -86,6 +86,7 @@ async fn change_jsons_status(postgre_creds: String, file_path: String) {
             PG_MIN_CONNECTIONS,
             PG_MIGRATIONS_PATH,
             None,
+            None,
         )
         .await
         .unwrap(),
@@ -151,6 +152,7 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
             red_metrics.clone(),
             PG_MIN_CONNECTIONS,
             PG_MIGRATIONS_PATH,
+            None,
             None,
         )
         .await

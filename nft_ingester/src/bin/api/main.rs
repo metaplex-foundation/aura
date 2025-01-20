@@ -61,6 +61,7 @@ pub async fn main() -> Result<(), IngesterError> {
         args.pg_max_db_connections,
         None,
         red_metrics.clone(),
+        Some(args.pg_max_query_statement_timeout_secs),
     )
     .await?;
     let pg_client = Arc::new(pg_client);

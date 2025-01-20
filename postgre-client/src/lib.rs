@@ -50,14 +50,23 @@ pub struct PgClient {
 }
 
 impl PgClient {
+    /// If `max_query_statement_timeout_secs` is `None`, the PostgresSQL database does not have any limitation on the query statement timeout. (if this was not specified via the db URL parameter)
     pub async fn new(
         url: &str,
         min_connections: u32,
         max_connections: u32,
         base_dump_path: Option<PathBuf>,
         metrics: Arc<RequestErrorDurationMetrics>,
+        max_query_statement_timeout_secs: Option<u32>,
     ) -> Result<Self, Error> {
-        let mut options: PgConnectOptions = url.parse().unwrap();
+        let mut options: PgConnectOptions = url.parse::<PgConnectOptions>()?;
+        if !url.contains("statement_timeout") && max_query_statement_timeout_secs.is_some() {
+            options = options.options([(
+                "statement_timeout",
+                &format!("{}s", max_query_statement_timeout_secs.unwrap()),
+            )]);
+        }
+
         options.log_statements(LevelFilter::Off);
         options.log_slow_statements(LevelFilter::Off, Duration::from_secs(100));
 
@@ -214,7 +223,7 @@ impl PgClient {
         self.recreate_asset_constraints(&mut transaction).await?;
 
         transaction.commit().await?;
-        // those await above will not always rollback the tx
+        // those await above will not always roll back the tx
         // take this into account if we use this function somewhere else except the tests
 
         Ok(())
