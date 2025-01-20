@@ -9,12 +9,15 @@ use rocks_db::{storage_traits::AssetIndexReader, Storage};
 use setup::TestEnvironment;
 use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
-use tokio::task::JoinError;
-use tokio::task::JoinSet;
+use tokio::task::{JoinError, JoinSet};
 
 const SLOT_UPDATED: u64 = 100;
 
-async fn benchmark_search_assets(storage: Arc<Storage>, asset_ids: &[Pubkey], owner_address: Pubkey) {
+async fn benchmark_search_assets(
+    storage: Arc<Storage>,
+    asset_ids: &[Pubkey],
+    owner_address: Pubkey,
+) {
     let _res = storage
         .get_asset_selected_maps_async(
             asset_ids.to_vec(),
@@ -81,13 +84,16 @@ fn search_assets_benchmark(c: &mut Criterion) {
         .into_records()
         .map(|r| Pubkey::from_str(&r.unwrap().into_iter().next().unwrap()).unwrap())
         .collect::<Vec<_>>();
-    let storage = Arc::new(Storage::open_secondary(
-        PathBuf::from_str(&primary_path).expect("primary path to be valid"),
-        PathBuf::from_str(&secondary_path).expect("secondary path to be valid"),
-        Arc::new(tokio::sync::Mutex::new(JoinSet::<Result<(), JoinError>>::new())),
-        Arc::new(red_metrics),
-        rocks_db::migrator::MigrationState::Last,
-    ).expect("open secondary storage"));
+    let storage = Arc::new(
+        Storage::open_secondary(
+            PathBuf::from_str(&primary_path).expect("primary path to be valid"),
+            PathBuf::from_str(&secondary_path).expect("secondary path to be valid"),
+            Arc::new(tokio::sync::Mutex::new(JoinSet::<Result<(), JoinError>>::new())),
+            Arc::new(red_metrics),
+            rocks_db::migrator::MigrationState::Last,
+        )
+        .expect("open secondary storage"),
+    );
 
     group.bench_function("search_assets", |b| {
         b.iter(|| rt.block_on(benchmark_search_assets(storage.clone(), &asset_ids, owner_address)))
