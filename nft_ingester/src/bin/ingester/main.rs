@@ -93,7 +93,6 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Gap Filler: {}", args.run_gapfiller);
     info!("Run Profiling: {}", args.run_profiling);
     info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker);
-    info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker);
     info!("Account redis parsing workers: {}", args.redis_accounts_parsing_workers);
     info!("Account processor buffer size: {}", args.account_processor_buffer_size);
     info!("Tx redis parsing workers: {}", args.redis_transactions_parsing_workers);
