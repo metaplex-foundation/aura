@@ -196,6 +196,10 @@ impl RocksTestEnvironmentSetup {
         Self::generate_static_data(pubkeys, slot, SpecificationAssetClass::Nft)
     }
 
+    pub fn static_data_for_fungible(pubkeys: &[Pubkey], slot: u64) -> Vec<AssetStaticDetails> {
+        Self::generate_static_data(pubkeys, slot, SpecificationAssetClass::FungibleToken)
+    }
+
     fn generate_static_data(
         pubkeys: &[Pubkey],
         slot: u64,

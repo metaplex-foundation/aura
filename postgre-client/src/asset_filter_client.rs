@@ -209,6 +209,21 @@ fn add_filter_clause<'a>(
         group_clause_required = true;
     }
 
+    if let Some(ref token_type) = filter.token_type {
+        if token_type == &TokenType::All && filter.owner_address.is_some() {
+            query_builder.push(
+                " LEFT JOIN fungible_tokens ON assets_v3.ast_pubkey = fungible_tokens.fbt_asset ",
+            );
+            group_clause_required = true;
+        }
+        if token_type == &TokenType::Fungible && filter.owner_address.is_some() {
+            query_builder.push(
+                " INNER JOIN fungible_tokens ON assets_v3.ast_pubkey = fungible_tokens.fbt_asset ",
+            );
+            group_clause_required = true;
+        }
+    }
+
     // todo: if we implement the additional params like negata and all/any switch, the true part and the AND prefix should be refactored
     query_builder.push(" WHERE TRUE ");
     if let Some(spec_version) = &filter.specification_version {
@@ -463,6 +478,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
     ) -> Result<Vec<AssetSortedIndex>, IndexDbError> {
         let (mut query_builder, order_reversed) =
             Self::build_search_query(filter, order, limit, page, before, after, options)?;
+
         let query = query_builder.build_query_as::<AssetRawResponse>();
         debug!("SEARCH QUERY: {}", &query.sql());
         let start_time = chrono::Utc::now();

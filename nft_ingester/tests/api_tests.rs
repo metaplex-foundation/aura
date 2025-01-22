@@ -72,6 +72,7 @@ mod tests {
         Storage, ToFlatbuffersConverter,
     };
     use serde_json::{json, Value};
+    use setup::rocks::RocksTestEnvironmentSetup;
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
     use spl_pod::{
@@ -90,6 +91,7 @@ mod tests {
         6, 155, 136, 87, 254, 171, 129, 132, 251, 104, 127, 99, 70, 24, 192, 53, 218, 196, 57, 220,
         26, 235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
     ]);
+
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_search_assets() {
@@ -3434,11 +3436,22 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "FIXME: search_assets result returns 0 items"]
     async fn test_writing_fungible_into_dedicated_table() {
         let cnt = 100;
         let cli = Cli::default();
-        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+
+        let (env, generated_assets) = setup::TestEnvironment::create_and_setup_from_closures(
+            &cli,
+            cnt,
+            100,
+            RocksTestEnvironmentSetup::static_data_for_fungible,
+            RocksTestEnvironmentSetup::with_authority,
+            RocksTestEnvironmentSetup::test_owner,
+            RocksTestEnvironmentSetup::dynamic_data,
+            RocksTestEnvironmentSetup::collection_without_authority,
+        )
+        .await;
+
         let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),

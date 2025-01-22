@@ -43,7 +43,7 @@ pub async fn main() -> Result<(), IngesterError> {
     red_metrics.register(&mut registry);
     metrics_utils::utils::start_metrics(registry, args.metrics_port).await;
 
-    let index_storage = Arc::new(
+    let pg_index_storage = Arc::new(
         init_index_storage_with_migration(
             &args.pg_database_url,
             args.pg_max_db_connections,
@@ -91,7 +91,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let synchronizer = Arc::new(Synchronizer::new(
         rocks_storage.clone(),
-        index_storage.clone(),
+        pg_index_storage.clone(),
         args.dump_synchronizer_batch_size,
         args.rocks_dump_path.clone(),
         metrics.clone(),

@@ -143,6 +143,7 @@ impl TokenAccountsProcessor {
                     .map_err(|e| StorageError::Common(e.to_string()))
             })
             .transpose()?;
+
         let asset_dynamic_details = AssetDynamicDetails {
             pubkey: mint.pubkey,
             supply: Some(Updated::new(
