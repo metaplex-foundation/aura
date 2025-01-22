@@ -2050,14 +2050,14 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                             // now the merged owner holds the merged data. We need to check if it's marked as the current owner and if it's newer than the current owner
                             // if it doesn't have the is current owner set to true we don't need to do anything
                             if merged_owner.is_current_owner.map(|u| u.value()).unwrap_or(false)
-                                && !owner_is_current_owner.map(|u| u.value()).unwrap_or(false)
-                                || merged_owner
-                                    .is_current_owner
-                                    .map(|u| u.slot_updated())
-                                    .unwrap_or_default()
-                                    > owner_is_current_owner
+                                && (!owner_is_current_owner.map(|u| u.value()).unwrap_or(false)
+                                    || merged_owner
+                                        .is_current_owner
                                         .map(|u| u.slot_updated())
                                         .unwrap_or_default()
+                                        > owner_is_current_owner
+                                            .map(|u| u.slot_updated())
+                                            .unwrap_or_default())
                             {
                                 // if the merged owner is newer we set it as the owner and move the old owner into the other known owners
                                 let previous_owner = FbOwnerContainer {
@@ -3812,5 +3812,56 @@ mod tests {
                 perm_name,
             );
         }
+    }
+
+    #[test]
+    fn test_merge_with_different_pubkeys_different_slots_owner_not_changed() {
+        // The asset recieves some stale update with is_owner set to false. No change of ownership is expected
+        // The example is taken from Eclipse asset F9fyHSja6zTiXjgMPQXpZJuJ4GW97Mpc6UrSX21CBBJ2 that had issues.
+        let original_data_bytes = solana_sdk::bs58::decode("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").into_vec().unwrap();
+        let existing_owner =
+            Pubkey::from_str("6wcxtwMH4ZTDFNDyVwgWUvMnTqW1v8gyNULDzDFtFEoA").unwrap();
+
+        let updated_owner =
+            Pubkey::from_str("3GTaP1A8qdNGGMme8mcvmRZURQYeFHaWS3tM9UhTH5V9").unwrap();
+        let updated_owner_pubkey =
+            Pubkey::from_str("DspBshRwNY1bJ9HCyWpgeNQZzv7BnAoPs4bzHZ82muPk").unwrap();
+
+        let slot = 42751100;
+        let wv = 9580929183;
+
+        let mut builder = FlatBufferBuilder::new();
+
+        let owner_a_not_an_owner_data = AssetOwner {
+            pubkey: updated_owner_pubkey,
+            owner: Updated {
+                value: Some(updated_owner),
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(wv)),
+            },
+            is_current_owner: Updated {
+                value: false,
+                slot_updated: slot,
+                update_version: Some(UpdateVersion::WriteVersion(wv)),
+            },
+            ..Default::default()
+        }
+        .convert_to_fb(&mut builder);
+        builder.finish_minimal(owner_a_not_an_owner_data);
+        let owner_a_not_an_owner_data = builder.finished_data().to_vec();
+        builder.reset();
+
+        let merge_result = merge_complete_details_fb_simple_raw(
+            &[],
+            Some(&original_data_bytes.as_slice()),
+            vec![owner_a_not_an_owner_data.as_slice()].into_iter(), //perm.into_iter().map(|d| *d),
+        )
+        .expect("expected merge to return some value");
+        let resulting_asset = fb::root_as_asset_complete_details(&merge_result).unwrap();
+
+        assert_eq!(
+            resulting_asset.owner().unwrap().owner().unwrap().value().unwrap().bytes(),
+            existing_owner.to_bytes()
+        );
     }
 }
