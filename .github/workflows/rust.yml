@@ -73,12 +73,13 @@ jobs:
           - 5432:5432
         env:
           POSTGRES_PASSWORD: postgres
+        volumes:
+          - ${{ github.workspace }}/rocks_dump:/rocks_dump
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          --mount type=bind,source=${{ github.workspace }}/rocks_dump,target=/rocks_dump,readonly
 
     steps:
       - name: Check out
