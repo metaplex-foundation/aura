@@ -164,3 +164,31 @@ async fn test_reg_search_assets() {
     let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_regular_nft_collection() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts(["J1S9H3QjnRtBbbuD4HjPV6RpRhwuk4zKbxsnCHuTgh9w"]);
+
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"        
+    {
+        "id": "J1S9H3QjnRtBbbuD4HjPV6RpRhwuk4zKbxsnCHuTgh9w"
+    }
+    "#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: GetAsset = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    insta::assert_json_snapshot!(name.clone(), response);
+}
