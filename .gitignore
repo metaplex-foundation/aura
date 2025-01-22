@@ -36,3 +36,5 @@ my_rocksdb/
 _rocksdb_backup/
 _rocksdb_backup_archives/
 /.project
+# Used by integration tests
+rocks_dump

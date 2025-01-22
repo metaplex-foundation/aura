@@ -78,10 +78,14 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --mount type=bind,source=${{ github.workspace }}/rocks_dump,target=/rocks_dump,readonly
 
     steps:
       - name: Check out
         uses: actions/checkout@v3
+
+      - name: Prepare directories
+        run: mkdir -p db-data rocks_dump
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler

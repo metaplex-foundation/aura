@@ -65,8 +65,10 @@ const API_MAX_PAGE_LIMIT: usize = 100;
 
 const DUMP_SYNCHRONIZER_BATCH_SIZE: usize = 1000;
 const SYNCHRONIZER_PARALLEL_TASKS: usize = 1;
+const SYNCHRONIZER_DUMP_PATH: &str = "rocks_dump";
 
 const POSTGRE_MIGRATIONS_PATH: &str = "../migrations";
+const POSTGRE_BASE_DUMP_PATH: &str = "/";
 
 pub struct TestSetup {
     pub name: String,
@@ -105,7 +107,7 @@ impl TestSetup {
                 red_metrics.clone(),
                 MIN_PG_CONNECTIONS,
                 POSTGRE_MIGRATIONS_PATH,
-                Some(PathBuf::from_str("./dump").unwrap()),
+                Some(PathBuf::from_str(POSTGRE_BASE_DUMP_PATH).unwrap()),
                 None,
             )
             .await
@@ -185,7 +187,7 @@ impl TestSetup {
             storage.clone(),
             index_storage.clone(),
             DUMP_SYNCHRONIZER_BATCH_SIZE,
-            "./dump".to_string(),
+            SYNCHRONIZER_DUMP_PATH.to_string(),
             metrics_state.synchronizer_metrics.clone(),
             SYNCHRONIZER_PARALLEL_TASKS,
         );
@@ -395,7 +397,16 @@ pub async fn get_token_largest_account(client: &RpcClient, mint: Pubkey) -> anyh
     }
 }
 
-pub async fn index_account_bytes(setup: &TestSetup, account_bytes: Vec<u8>) {
+pub async fn index_and_sync_account_bytes(setup: &TestSetup, account_bytes: Vec<u8>) {
+    process_and_save_accounts_to_rocks(setup, account_bytes).await;
+
+    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+    // copy data to Postgre
+    setup.synchronizer.synchronize_nft_asset_indexes(&shutdown_rx, 1000).await.unwrap();
+    setup.synchronizer.synchronize_fungible_asset_indexes(&shutdown_rx, 1000).await.unwrap();
+}
+
+async fn process_and_save_accounts_to_rocks(setup: &TestSetup, account_bytes: Vec<u8>) {
     let parsed_acc = setup.message_parser.parse_account(account_bytes, false).unwrap();
     let ready_to_process = parsed_acc
         .into_iter()
@@ -425,11 +436,6 @@ pub async fn index_account_bytes(setup: &TestSetup, account_bytes: Vec<u8>) {
         .await;
 
     let _ = batch_storage.flush();
-
-    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    setup.synchronizer.synchronize_nft_asset_indexes(&shutdown_rx, 1000).await.unwrap();
-
-    setup.synchronizer.synchronize_fungible_asset_indexes(&shutdown_rx, 1000).await.unwrap();
 }
 
 pub async fn cached_fetch_account(
@@ -539,11 +545,12 @@ pub enum Order {
     AllPermutations,
 }
 
+/// Data will be indexed, saved to RocskDB and copied to Postgre.
 pub async fn index_seed_events(setup: &TestSetup, events: Vec<&SeedEvent>) {
     for event in events {
         match event {
             SeedEvent::Account(account) => {
-                index_account_with_ordered_slot(setup, *account).await;
+                index_and_sync_account_with_ordered_slot(setup, *account).await;
             },
             SeedEvent::Nft(mint) => {
                 index_nft(setup, *mint).await;
@@ -553,6 +560,23 @@ pub async fn index_seed_events(setup: &TestSetup, events: Vec<&SeedEvent>) {
             },
             SeedEvent::TokenMint(mint) => {
                 index_token_mint(setup, *mint).await;
+            },
+        }
+    }
+}
+
+/// Data will be indexed and saved to one DB - RocksDB.
+///
+/// For sync with Postgre additional method should be called.
+pub async fn single_db_index_seed_events(setup: &TestSetup, events: Vec<&SeedEvent>) {
+    for event in events {
+        match event {
+            SeedEvent::Account(account) => {
+                index_account_with_ordered_slot(setup, *account).await;
+            },
+            _ => {
+                // TODO: add more seed events processing if it needs
+                panic!("Current SeedEvent is not supported for single DB processing")
             },
         }
     }
@@ -616,7 +640,7 @@ pub async fn index_account(setup: &TestSetup, account: Pubkey) {
     // they are "stale".
     let slot = Some(DEFAULT_SLOT);
     let account_bytes = cached_fetch_account(setup, account, slot).await;
-    index_account_bytes(setup, account_bytes).await;
+    index_and_sync_account_bytes(setup, account_bytes).await;
 }
 
 #[derive(Clone, Copy)]
@@ -632,10 +656,16 @@ pub async fn get_nft_accounts(setup: &TestSetup, mint: Pubkey) -> NftAccounts {
     NftAccounts { mint, metadata: metadata_account, token: token_account }
 }
 
+async fn index_and_sync_account_with_ordered_slot(setup: &TestSetup, account: Pubkey) {
+    let slot = None;
+    let account_bytes = cached_fetch_account(setup, account, slot).await;
+    index_and_sync_account_bytes(setup, account_bytes).await;
+}
+
 async fn index_account_with_ordered_slot(setup: &TestSetup, account: Pubkey) {
     let slot = None;
     let account_bytes = cached_fetch_account(setup, account, slot).await;
-    index_account_bytes(setup, account_bytes).await;
+    process_and_save_accounts_to_rocks(setup, account_bytes).await;
 }
 
 async fn index_token_mint(setup: &TestSetup, mint: Pubkey) {
@@ -650,7 +680,7 @@ async fn index_token_mint(setup: &TestSetup, mint: Pubkey) {
     let metadata_account = Metadata::find_pda(&mint).0;
     match cached_fetch_account_with_error_handling(setup, metadata_account, slot).await {
         Ok(account_bytes) => {
-            index_account_bytes(setup, account_bytes).await;
+            index_and_sync_account_bytes(setup, account_bytes).await;
         },
         Err(_) => {
             // If we can't find the metadata account, then we assume that the mint is not an NFT.
