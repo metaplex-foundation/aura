@@ -202,7 +202,10 @@ where
                 tracing::info!("Regular sync required for nft asset");
                 self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key).await
             },
-            SyncStatus::NoSyncRequired => Ok(tracing::info!("No sync required for nft asset")),
+            SyncStatus::NoSyncRequired => {
+                tracing::info!("No sync required for nft asset");
+                Ok(())
+            },
         }
     }
 
@@ -226,7 +229,10 @@ where
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
                     .await
             },
-            SyncStatus::NoSyncRequired => Ok(tracing::info!("No sync required for fungible asset")),
+            SyncStatus::NoSyncRequired => {
+                tracing::info!("No sync required for fungible asset");
+                Ok(())
+            },
         }
     }
 
