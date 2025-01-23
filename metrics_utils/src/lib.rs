@@ -1267,3 +1267,44 @@ impl BatchMintPersisterMetricsConfig {
         );
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct RocksDbMetricsConfig {
+    start_time: Gauge,
+    rocksdb_backup_latency: Histogram,
+}
+
+impl RocksDbMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            rocksdb_backup_latency: Histogram::new(
+                [60.0, 300.0, 600.0, 1200.0, 1800.0, 3600.0, 5400.0, 7200.0, 9000.0, 10800.0]
+                    .into_iter(),
+            ),
+        }
+    }
+
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+
+    pub fn set_rocksdb_backup_latency(&self, duration: f64) {
+        self.rocksdb_backup_latency.observe(duration);
+    }
+
+    pub fn register(&self, registry: &mut Registry) {
+        self.start_time();
+        registry.register(
+            "ingester_rocksdb_backup_latency",
+            "Histogram of rocksdb backup duration",
+            self.rocksdb_backup_latency.clone(),
+        );
+    }
+}
+
+impl Default for RocksDbMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}

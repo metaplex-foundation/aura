@@ -322,6 +322,48 @@ pub struct SynchronizerClapArgs {
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
+pub struct RocksDbBackupServiceClapArgs {
+    #[clap(long, env, default_value = "./my_rocksdb", help = "Rocks db path container")]
+    pub rocks_db_path_container: String,
+    #[clap(long, env, default_value = "./my_rocksdb_secondary", help = "Rocks db secondary path")]
+    pub rocks_db_secondary_path: String,
+    #[clap(long, env = "ROCKS_BACKUP_ARCHIVES_DIR", help = "Rocks backup archives dir")]
+    pub backup_archives_dir: String,
+    #[clap(long, env = "ROCKS_BACKUP_DIR", help = "Rocks backup dir")]
+    pub backup_dir: String,
+    #[clap(
+        long,
+        env = "ROCKS_FLUSH_BEFORE_BACKUP",
+        help = "Whether to flush RocksDb before backup"
+    )]
+    pub flush_before_backup: bool,
+    #[clap(long, env = "ROCKS_INTERVAL_IN_SECONDS", help = "Backup interval (seconds)")]
+    pub interval_in_seconds: i64,
+
+    #[clap(
+        long("run_profiling"),
+        env = "IS_RUN_PROFILING",
+        default_value_t = false,
+        help = "Start profiling (default: false)"
+    )]
+    pub is_run_profiling: bool,
+    #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
+    pub heap_path: String,
+
+    #[clap(
+        long,
+        env = "ROCKS_DB_BACKUP_SERVICE_METRICS_PORT",
+        help = "Metrics port. Start HTTP server to report metrics if port exist."
+    )]
+    pub metrics_port: Option<u16>,
+    pub profiling_file_path_container: Option<String>,
+
+    #[clap(long, env, default_value = "info", help = "warn|info|debug")]
+    pub log_level: String,
+}
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
 pub struct MigratorClapArgs {
     #[clap(long, env, help = "Rocks json source db dir")]
     pub rocks_json_source_db: String,
