@@ -115,10 +115,14 @@ pub async fn main() -> Result<(), IngesterError> {
             &args
                 .rocks_backup_url
                 .expect("rocks_backup_url is required for the restore rocks db process"),
-            &args
-                .rocks_backup_archives_dir
-                .expect("rocks_backup_archives_dir is required for the restore rocks db process"),
-            &args.rocks_db_path_container,
+            &PathBuf::from_str(
+                &args.rocks_backup_archives_dir.expect(
+                    "rocks_backup_archives_dir is required for the restore rocks db process",
+                ),
+            )
+            .expect("invalid rocks backup archives dir"),
+            &PathBuf::from_str(&args.rocks_db_path_container)
+                .expect("invalid rocks backup archives dir"),
         )
         .await?;
     }

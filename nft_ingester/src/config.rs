@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use clap::{ArgAction, Parser, ValueEnum};
+// TODO: replace String paths with PathBuf
 use figment::value::Dict;
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
@@ -324,22 +327,19 @@ pub struct SynchronizerClapArgs {
 #[command(author, version, about, long_about = None)]
 pub struct RocksDbBackupServiceClapArgs {
     #[clap(long, env, default_value = "./my_rocksdb", help = "Rocks db path container")]
-    pub rocks_db_path_container: String,
+    pub rocks_db_path_container: PathBuf,
     #[clap(long, env, default_value = "./my_rocksdb_secondary", help = "Rocks db secondary path")]
-    pub rocks_db_secondary_path: String,
+    pub rocks_db_secondary_path: PathBuf,
     #[clap(long, env = "ROCKS_BACKUP_ARCHIVES_DIR", help = "Rocks backup archives dir")]
-    pub backup_archives_dir: String,
+    pub backup_archives_dir: PathBuf,
     #[clap(long, env = "ROCKS_BACKUP_DIR", help = "Rocks backup dir")]
-    pub backup_dir: String,
+    pub backup_dir: PathBuf,
     #[clap(
         long,
         env = "ROCKS_FLUSH_BEFORE_BACKUP",
         help = "Whether to flush RocksDb before backup"
     )]
     pub flush_before_backup: bool,
-
-    #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
-    pub heap_path: String,
 
     #[clap(long, env, default_value = "info", help = "warn|info|debug")]
     pub log_level: String,
