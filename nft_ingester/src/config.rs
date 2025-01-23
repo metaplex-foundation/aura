@@ -1,4 +1,4 @@
-use clap::{ArgAction, Parser, ValueEnum};
+use clap::{Parser, ValueEnum};
 use figment::value::Dict;
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
@@ -68,13 +68,12 @@ pub struct IngesterClapArgs {
     pub parallel_json_downloaders: i32,
 
     #[clap(
-        long("disable-api"),
-        default_value_t = true,
-        action = ArgAction::SetFalse,
+        long("run-api"),
+        default_value = "true",
         env = "RUN_API",
-        help = "Disable API (default: true)"
+        help = "Run API (default: true)"
     )]
-    pub run_api: bool,
+    pub run_api: Option<bool>,
 
     #[clap(
         long("run-gapfiller"),
@@ -89,7 +88,7 @@ pub struct IngesterClapArgs {
     pub gapfiller_peer_addr: Option<String>,
 
     #[clap(
-        long("run-profiling"),
+        long,
         default_value_t = false,
         env = "INGESTER_RUN_PROFILING",
         help = "Start profiling (default: false)"
@@ -114,16 +113,14 @@ pub struct IngesterClapArgs {
     #[clap(long, env, help = "Rocks backup archives dir")]
     pub rocks_backup_archives_dir: Option<String>,
 
-    // requires = "rocks_migration_storage_path" is not working because default value is true. (clap issue)
     #[clap(
-        long("disable-rocks-migration"),
+        long,
         env = "ENABLE_ROCKS_MIGRATION",
-        action = ArgAction::SetFalse,
-        default_value_t = true,
-        help = "Disable migration for rocksdb (default: true) requires: rocks_migration_storage_path"
+        default_value = "true",
+        help = "Enable migration for rocksdb (default: true) requires: rocks_migration_storage_path"
     )]
-    pub enable_rocks_migration: bool,
-    #[clap(long, env, help = "Migration storage path dir")]
+    pub enable_rocks_migration: Option<bool>,
+    #[clap(long, env, requires_if("true", "enable_rocks_migration"), help = "Migration storage path dir")]
     pub rocks_migration_storage_path: Option<String>,
 
     #[clap(long, env, help = "Start consistent checker (default: false)")]
@@ -181,18 +178,17 @@ pub struct IngesterClapArgs {
     #[clap(long, env, help = "#api Storage service base url")]
     pub storage_service_base_url: Option<String>,
 
-    // requires = "rocks_slots_db_path" is not working because default value is true.
     #[clap(
-        long("disable-backfiller"),
-        action = ArgAction::SetFalse,
+        long,
         env = "RUN_BACKFILLER",
-        default_value_t = true,
-        help = "Disable backfiller. (default: true) requires: rocks_slots_db_path",
+        default_value = "true",
+        help = "Run backfiller. (default: true) requires: rocks_slots_db_path",
     )]
-    pub run_backfiller: bool,
+    pub run_backfiller: Option<bool>,
     #[clap(
         long,
         env,
+        requires_if("true", "run_backfiller"),
         help = "#backfiller Path to the RocksDB instance with slots (required for the backfiller to work)"
     )]
     pub rocks_slots_db_path: Option<String>,
@@ -213,13 +209,12 @@ pub struct IngesterClapArgs {
     pub big_table_config: Option<BigTableConfig>,
 
     #[clap(
-        long("disable-bubblegum-backfiller"),
-        action = ArgAction::SetFalse,
+        long,
         env = "RUN_BUBBLEGUM_BACKFILLER",
-        default_value_t = true,
-        help = "#bubbl Disable bubblegum backfiller (default: true)"
+        default_value = "true",
+        help = "#bubbl Run bubblegum backfiller (default: true)"
     )]
-    pub run_bubblegum_backfiller: bool,
+    pub run_bubblegum_backfiller: Option<bool>,
     #[clap(
         long,
         env = "SHOULD_REINGEST",
@@ -581,18 +576,18 @@ mod tests {
         assert_eq!(args.pg_max_db_connections, 100);
         assert_eq!(args.sequence_consistent_checker_wait_period_sec, 60);
         assert_eq!(args.parallel_json_downloaders, 100);
-        assert_eq!(args.run_api, true);
+        assert!(args.run_api.unwrap_or(false));
         assert_eq!(args.run_gapfiller, false);
         assert_eq!(args.run_profiling, false);
         assert_eq!(args.is_restore_rocks_db, false);
-        assert_eq!(args.run_bubblegum_backfiller, true);
+        assert!(args.run_bubblegum_backfiller.unwrap_or(false));
         assert_eq!(args.run_sequence_consistent_checker, false);
         assert_eq!(args.should_reingest, false);
         assert_eq!(args.check_proofs, false);
         assert_eq!(args.check_proofs_commitment, CommitmentLevel::Finalized);
         assert_eq!(args.archives_dir, "/rocksdb/_rocks_backup_archives");
         assert_eq!(args.skip_check_tree_gaps, false);
-        assert_eq!(args.run_backfiller, true);
+        assert!(args.run_backfiller.unwrap_or(false));
         assert_eq!(args.backfiller_source_mode, BackfillerSourceMode::RPC);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.log_level, "info");

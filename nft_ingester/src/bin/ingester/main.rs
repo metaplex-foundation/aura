@@ -84,12 +84,12 @@ pub async fn main() -> Result<(), IngesterError> {
 
     info!("Starting Ingester...");
     info!("___________________________________",);
-    info!("API: {}", args.run_api);
-    if args.run_api {
+    info!("API: {}", args.run_api.unwrap_or(false));
+    if args.run_api.unwrap_or(false) {
         info!("API port: localhost:{}", args.server_port);
     }
-    info!("Back Filler: {}", args.run_backfiller);
-    info!("Bubblegum BackFiller: {}", args.run_bubblegum_backfiller);
+    info!("Back Filler: {}", args.run_backfiller.unwrap_or(false));
+    info!("Bubblegum BackFiller: {}", args.run_bubblegum_backfiller.unwrap_or(false));
     info!("Gap Filler: {}", args.run_gapfiller);
     info!("Run Profiling: {}", args.run_profiling);
     info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker);
@@ -130,7 +130,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let primary_rocks_storage = Arc::new(
         init_primary_storage(
             &args.rocks_db_path_container,
-            args.enable_rocks_migration,
+            args.enable_rocks_migration.unwrap_or(false),
             &args.rocks_migration_storage_path,
             &metrics_state,
             mutexed_tasks.clone(),
@@ -327,7 +327,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rx = shutdown_rx.resubscribe();
     let file_storage_path = args.file_storage_path_container.clone();
 
-    if args.run_api {
+    if args.run_api.unwrap_or(false) {
         info!("Starting API (Ingester)...");
         let middleware_json_downloader = args
             .json_middleware_config
@@ -390,7 +390,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let shutdown_token = CancellationToken::new();
 
     // Backfiller
-    if args.run_backfiller {
+    if args.run_backfiller.unwrap_or(false) {
         info!("Start backfiller...");
 
         let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
@@ -425,7 +425,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .await,
         );
 
-        if args.run_bubblegum_backfiller {
+        if args.run_bubblegum_backfiller.unwrap_or(false) {
             info!("Runing Bubblegum backfiller (ingester)...");
 
             if args.should_reingest {
