@@ -38,7 +38,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Building the services
 FROM cacher AS builder
 COPY . .
-RUN cargo build --release --bin ingester --bin api --bin backfill --bin synchronizer --bin slot_persister
+RUN cargo build --release --bin ingester --bin api --bin backfill --bin synchronizer --bin slot_persister --bin rocksdb_backup
 
 # Building the profiling feature services
 FROM cacher AS builder-with-profiling
@@ -58,6 +58,7 @@ COPY --from=builder /rust/target/release/backfill ${APP}/backfill
 COPY --from=builder /rust/target/release/api ${APP}/api
 COPY --from=builder /rust/target/release/synchronizer ${APP}/synchronizer
 COPY --from=builder /rust/target/release/slot_persister ${APP}/slot_persister
+COPY --from=builder /rust/target/release/rocksdb_backup ${APP}/rocksdb_backup
 COPY --from=builder-with-profiling /rust/target/release/ingester ${APP}/profiling_ingester
 COPY --from=builder-with-profiling /rust/target/release/backfill ${APP}/profiling_backfill
 COPY --from=builder-with-profiling /rust/target/release/api ${APP}/profiling_api
