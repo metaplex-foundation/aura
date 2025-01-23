@@ -43,7 +43,7 @@ RUN cargo build --release --bin ingester --bin api --bin backfill --bin synchron
 # Building the profiling feature services
 FROM cacher AS builder-with-profiling
 COPY . .
-RUN cargo build --release --features profiling --bin ingester --bin api --bin backfill --bin synchronizer --bin slot_persister --bin rocksdb_backup
+RUN cargo build --release --features profiling --bin ingester --bin api --bin backfill --bin synchronizer --bin slot_persister
 
 # Final image
 FROM rust:1.84-slim-bullseye AS runtime
@@ -64,7 +64,6 @@ COPY --from=builder-with-profiling /rust/target/release/backfill ${APP}/profilin
 COPY --from=builder-with-profiling /rust/target/release/api ${APP}/profiling_api
 COPY --from=builder-with-profiling /rust/target/release/synchronizer ${APP}/profiling_synchronizer
 COPY --from=builder-with-profiling /rust/target/release/slot_persister ${APP}/profiling_slot_persister
-COPY --from=builder-with-profiling /rust/target/release/rocksdb_backup ${APP}/profiling_rocksdb_backup
 
 WORKDIR ${APP}
 STOPSIGNAL SIGINT

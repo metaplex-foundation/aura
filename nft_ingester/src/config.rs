@@ -337,26 +337,9 @@ pub struct RocksDbBackupServiceClapArgs {
         help = "Whether to flush RocksDb before backup"
     )]
     pub flush_before_backup: bool,
-    #[clap(long, env = "ROCKS_INTERVAL_IN_SECONDS", help = "Backup interval (seconds)")]
-    pub interval_in_seconds: i64,
 
-    #[clap(
-        long("run_profiling"),
-        env = "IS_RUN_PROFILING",
-        default_value_t = false,
-        help = "Start profiling (default: false)"
-    )]
-    pub is_run_profiling: bool,
     #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
-
-    #[clap(
-        long,
-        env = "ROCKS_DB_BACKUP_SERVICE_METRICS_PORT",
-        help = "Metrics port. Start HTTP server to report metrics if port exist."
-    )]
-    pub metrics_port: Option<u16>,
-    pub profiling_file_path_container: Option<String>,
 
     #[clap(long, env, default_value = "info", help = "warn|info|debug")]
     pub log_level: String,
