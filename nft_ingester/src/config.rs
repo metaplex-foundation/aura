@@ -120,7 +120,12 @@ pub struct IngesterClapArgs {
         help = "Enable migration for rocksdb (default: true) requires: rocks_migration_storage_path"
     )]
     pub enable_rocks_migration: Option<bool>,
-    #[clap(long, env, requires_if("true", "enable_rocks_migration"), help = "Migration storage path dir")]
+    #[clap(
+        long,
+        env,
+        requires_if("true", "enable_rocks_migration"),
+        help = "Migration storage path dir"
+    )]
     pub rocks_migration_storage_path: Option<String>,
 
     #[clap(long, env, help = "Start consistent checker (default: false)")]
@@ -182,7 +187,7 @@ pub struct IngesterClapArgs {
         long,
         env = "RUN_BACKFILLER",
         default_value = "true",
-        help = "Run backfiller. (default: true) requires: rocks_slots_db_path",
+        help = "Run backfiller. (default: true) requires: rocks_slots_db_path"
     )]
     pub run_backfiller: Option<bool>,
     #[clap(
