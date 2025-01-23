@@ -3854,7 +3854,7 @@ mod tests {
         let merge_result = merge_complete_details_fb_simple_raw(
             &[],
             Some(&original_data_bytes.as_slice()),
-            vec![owner_a_not_an_owner_data.as_slice()].into_iter(), //perm.into_iter().map(|d| *d),
+            vec![owner_a_not_an_owner_data.as_slice()].into_iter(),
         )
         .expect("expected merge to return some value");
         let resulting_asset = fb::root_as_asset_complete_details(&merge_result).unwrap();
