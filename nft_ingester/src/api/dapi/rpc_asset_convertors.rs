@@ -366,7 +366,11 @@ pub fn asset_to_rpc(
         _ => None,
     };
     let supply = match interface {
-        Interface::V1NFT => {
+        Interface::V1NFT
+        | Interface::LegacyNft
+        | Interface::Nft
+        | Interface::ProgrammableNFT
+        | Interface::Custom => {
             if let Some(edition_info) = &full_asset.edition_data {
                 Some(Supply {
                     edition_nonce,
