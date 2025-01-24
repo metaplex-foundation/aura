@@ -102,6 +102,7 @@ fn convert_rocks_asset_model(
         token_account: asset_selected_maps.token_accounts.get(asset_pubkey).cloned(),
         inscription,
         spl_mint: asset_selected_maps.spl_mints.get(asset_pubkey).cloned(),
+
         token_symbol: token_symbols.get(&asset_pubkey.to_string()).cloned(),
         token_price: token_prices.get(&asset_pubkey.to_string()).cloned(),
     })
@@ -193,6 +194,7 @@ pub async fn get_by_ids<
 
     let unique_asset_ids: Vec<Pubkey> = unique_asset_ids_map.keys().cloned().collect();
     let asset_ids_string = asset_ids.clone().into_iter().map(|id| id.to_string()).collect_vec();
+
     let (token_prices, token_symbols) = if options.show_fungible {
         let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids_string.as_slice());
         let token_symbols_fut =
