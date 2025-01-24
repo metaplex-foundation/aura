@@ -102,6 +102,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         json_downloader_metrics.clone(),
                         red_metrics.clone(),
                         args.parallel_json_downloaders,
+                        args.api_skip_inline_json_refresh.unwrap_or_default(),
                     )
                     .await,
                 ))

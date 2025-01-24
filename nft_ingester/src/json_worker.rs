@@ -33,6 +33,7 @@ pub struct JsonWorker {
     pub db_client: Arc<PgClient>,
     pub rocks_db: Arc<Storage>,
     pub num_of_parallel_workers: i32,
+    pub should_skip_refreshes: bool,
     pub metrics: Arc<JsonDownloaderMetricsConfig>,
     pub red_metrics: Arc<RequestErrorDurationMetrics>,
 }
@@ -44,10 +45,12 @@ impl JsonWorker {
         metrics: Arc<JsonDownloaderMetricsConfig>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         parallel_json_downloaders: i32,
+        should_skip_refreshes: bool,
     ) -> Self {
         Self {
             db_client,
             num_of_parallel_workers: parallel_json_downloaders,
+            should_skip_refreshes,
             metrics,
             red_metrics,
             rocks_db,
@@ -340,6 +343,10 @@ impl JsonDownloader for JsonWorker {
                 Err(JsonDownloaderError::ErrorDownloading(e.to_string()))
             },
         }
+    }
+
+    fn skips_refreshes(&self) -> bool {
+        self.should_skip_refreshes
     }
 }
 

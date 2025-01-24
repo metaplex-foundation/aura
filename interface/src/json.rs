@@ -14,6 +14,7 @@ pub trait JsonDownloader {
         &self,
         url: String,
     ) -> Result<JsonDownloadResult, crate::error::JsonDownloaderError>;
+    fn skips_refreshes(&self) -> bool;
 }
 
 #[automock]

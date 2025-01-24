@@ -15,7 +15,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use interface::slots_dumper::SlotsDumper;
 use metrics_utils::MetricState;
 use rocks_db::{
-    column::TypedColumn, columns::offchain_data::OffChainData, migrator::MigrationVersions, Storage,
+    column::TypedColumn, columns::offchain_data::{OffChainData, OffChainDataDeprecated}, migrator::MigrationVersions, Storage,
 };
 use tokio::{
     signal,
@@ -113,7 +113,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = Arc::new(
         Storage::open_readonly_with_cfs(
             &args.target_db_path,
-            vec![RawBlock::NAME, MigrationVersions::NAME, OffChainData::NAME],
+            vec![RawBlock::NAME, MigrationVersions::NAME, OffChainDataDeprecated::NAME],
             Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
             metrics_state.red_metrics,
         )

@@ -230,6 +230,7 @@ pub async fn get_by_ids<
                     let curr_time = chrono::Utc::now().timestamp();
                     if offchain_data.storage_mutability.is_mutable()
                         && curr_time > offchain_data.last_read_at + METADATA_CACHE_TTL
+                        && !json_downloader.skips_refreshes()
                     {
                         download_needed = true;
                     }
