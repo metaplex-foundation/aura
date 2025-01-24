@@ -73,15 +73,17 @@ jobs:
           - 5432:5432
         env:
           POSTGRES_PASSWORD: postgres
-        volumes:
-          - ./integration_tests/rocks_dump:/rocks_dump
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --mount type=bind,source=${{ github.workspace }}/integration_tests/rocks_dump,target=/rocks_dump,readonly
 
     steps:
+      - name: Prepare directories
+        run: mkdir -p integration_tests/rocks_dump
+
       - name: Check out
         uses: actions/checkout@v3
 
@@ -128,12 +130,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
-
-      - name: Prepare directories
-        run: mkdir -p ./integration_tests/rocks_dump
-
-      - name: Set permissions
-        run: chmod -R 777 ./integration_tests/rocks_dump
 
       - name: Run tests
         env:
