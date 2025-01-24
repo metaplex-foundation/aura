@@ -88,6 +88,9 @@ jobs:
       - name: Prepare directories
         run: mkdir -p ./integration_tests/rocks_dump
 
+      - name: Set permissions
+        run: chmod -R 777 ./integration_tests/rocks_dump
+
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
