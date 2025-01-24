@@ -85,9 +85,6 @@ pub struct SearchAssetsOptions {
     pub show_inscription: bool,
     #[serde(default)]
     pub show_zero_balance: bool,
-    /// This option enable adding information about token symbol and price.
-    #[serde(default)]
-    pub show_fungible: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
@@ -593,7 +590,7 @@ impl From<SearchAssetsOptions> for GetByMethodsOptions {
             show_collection_metadata: value.show_collection_metadata,
             show_inscription: value.show_inscription,
             show_zero_balance: value.show_zero_balance,
-            show_fungible: value.show_fungible,
+            show_fungible: false,
         }
     }
 }
