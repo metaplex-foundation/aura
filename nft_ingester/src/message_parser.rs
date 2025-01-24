@@ -1,4 +1,4 @@
-use std::{fmt::Debug, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 
 use blockbuster::{
     error::BlockbusterError,
@@ -19,7 +19,7 @@ use entities::{
 use flatbuffers::FlatBufferBuilder;
 use itertools::Itertools;
 use solana_program::{program_pack::Pack, pubkey::Pubkey};
-use tracing::log::{debug, warn};
+use tracing::{debug, warn};
 use utils::flatbuffer::account_data_generated::account_data::root_as_account_data;
 
 use crate::{
@@ -150,7 +150,7 @@ impl MessageParser {
                 };
             },
             Err(e) => {
-                account_parsing_error(e, account_info);
+                warn!(error = %e, pubkey = %account_info.pubkey, "Error while parsing account: {:?} {:?}", e, account_info);
             },
         }
 
@@ -249,7 +249,7 @@ impl MessageParser {
                 };
             },
             Err(e) => {
-                account_parsing_error(e, account_update);
+                warn!(error = %e, pubkey = %account_update.pubkey, "Error while parsing account: {:?} {:?}", e, account_update);
             },
         }
 
@@ -349,7 +349,9 @@ impl MessageParser {
             Err(e) => match e {
                 BlockbusterError::AccountTypeNotImplemented
                 | BlockbusterError::UninitializedAccount => {},
-                _ => account_parsing_error(e, account_info),
+                _ => {
+                    warn!(error = %e, pubkey = %account_info.pubkey, "Error while parsing account: {:?} {:?}", e, account_info)
+                },
             },
         }
 
@@ -372,7 +374,7 @@ impl MessageParser {
                 };
             },
             Err(e) => {
-                account_parsing_error(e, account_info);
+                warn!(error = %e, pubkey = %account_info.pubkey, "Error while parsing account: {:?} {:?}", e, account_info)
             },
         }
 
@@ -409,7 +411,7 @@ impl MessageParser {
                 ParsedInscription::UnhandledAccount => {},
             },
             Err(e) => {
-                account_parsing_error(e, account_info);
+                warn!(error = %e, pubkey = %account_info.pubkey, "Error while parsing account: {:?} {:?}", e, account_info)
             },
         }
 
@@ -507,8 +509,4 @@ fn map_account_info_fb_bytes(
     builder.finish(account_info_wip, None);
 
     Ok(builder.finished_data().to_owned())
-}
-
-fn account_parsing_error(err: impl Debug, account_info: &plerkle::AccountInfo) {
-    warn!("Error while parsing account: {:?} {}", err, account_info.pubkey);
 }
