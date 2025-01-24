@@ -19,7 +19,7 @@ docker run -d \
     -e POSTGRES_PASSWORD=$DB_PASSWORD \
     -e POSTGRES_DB=$DB_NAME \
     -v "$DB_PATH:/var/lib/postgresql/data:rw" \
-    -v "$ROCKS_DUMP_PATH:/rocks_dump:ro" \
+    -v "$ROCKS_DUMP_PATH:/aura/integration_tests/rocks_dump:ro" \
     -p $HOST_PORT:$CONTAINER_PORT \
     --shm-size=1g \
     $IMAGE_NAME \
