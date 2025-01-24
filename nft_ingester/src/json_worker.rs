@@ -347,7 +347,7 @@ impl JsonDownloader for JsonWorker {
         }
     }
 
-    fn skips_refreshes(&self) -> bool {
+    fn skip_refresh(&self) -> bool {
         self.should_skip_refreshes
     }
 }
