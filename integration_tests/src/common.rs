@@ -68,7 +68,7 @@ const SYNCHRONIZER_PARALLEL_TASKS: usize = 1;
 const SYNCHRONIZER_DUMP_PATH: &str = "rocks_dump";
 
 const POSTGRE_MIGRATIONS_PATH: &str = "../migrations";
-const POSTGRE_BASE_DUMP_PATH: &str = "/";
+const POSTGRE_BASE_DUMP_PATH: &str = "/aura/integration_tests/";
 
 pub struct TestSetup {
     pub name: String,

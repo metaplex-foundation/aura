@@ -78,7 +78,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          --mount type=bind,source=${{ github.workspace }}/integration_tests/rocks_dump,target=/rocks_dump,readonly
+          --mount type=bind,source=${{ github.workspace }},target=/aura,readonly
 
     steps:
       - name: Prepare directories
