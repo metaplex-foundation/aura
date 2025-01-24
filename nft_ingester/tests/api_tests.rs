@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use std::{collections::HashMap, str::FromStr, sync::Arc};
+    use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 
     use base64::{engine::general_purpose, Engine};
     use blockbuster::{
@@ -2308,11 +2308,13 @@ mod tests {
         "#;
 
         let mut mock_middleware = MockJsonDownloader::new();
-        mock_middleware.expect_download_file().with(predicate::eq(url)).times(1).returning(
-            move |_| {
+        mock_middleware
+            .expect_download_file()
+            .with(predicate::eq(url), predicate::eq(Duration::from_secs(3)))
+            .times(1)
+            .returning(move |_, _| {
                 Ok(interface::json::JsonDownloadResult::JsonContent(offchain_data.to_string()))
-            },
-        );
+            });
 
         let api = nft_ingester::api::api_impl::DasApi::<
             MaybeProofChecker,

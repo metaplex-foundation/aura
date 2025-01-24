@@ -1,4 +1,4 @@
-use std::{collections::HashMap, string::ToString, sync::Arc};
+use std::{collections::HashMap, string::ToString, sync::Arc, time::Duration};
 
 use entities::{
     api_req_params::{AssetSortDirection, Options},
@@ -33,6 +33,7 @@ use crate::api::dapi::rpc_asset_models::FullAsset;
 
 pub const COLLECTION_GROUP_KEY: &str = "collection";
 pub const METADATA_CACHE_TTL: i64 = 86400; // 1 day
+pub const CLIENT_TIMEOUT: Duration = Duration::from_secs(3);
 
 fn convert_rocks_asset_model(
     asset_pubkey: &Pubkey,
@@ -230,6 +231,7 @@ pub async fn get_by_ids<
                     let curr_time = chrono::Utc::now().timestamp();
                     if offchain_data.storage_mutability.is_mutable()
                         && curr_time > offchain_data.last_read_at + METADATA_CACHE_TTL
+                        && !json_downloader.skip_refresh()
                     {
                         download_needed = true;
                     }
@@ -267,7 +269,8 @@ pub async fn get_by_ids<
                     let json_downloader = json_downloader.clone();
 
                     async move {
-                        let response = json_downloader.download_file(url.clone()).await;
+                        let response =
+                            json_downloader.download_file(url.clone(), CLIENT_TIMEOUT).await;
                         (url, response)
                     }
                 })

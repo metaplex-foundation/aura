@@ -71,6 +71,14 @@ pub struct IngesterClapArgs {
     pub parallel_json_downloaders: i32,
 
     #[clap(
+        long,
+        env,
+        default_value = "true",
+        help = "Skip inline json refreshes if the metadata may be stale"
+    )]
+    pub api_skip_inline_json_refresh: Option<bool>,
+
+    #[clap(
         long("run-api"),
         default_value = "true",
         env = "RUN_API",
@@ -506,7 +514,13 @@ pub struct ApiClapArgs {
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     #[clap(long, env, default_value = "100")]
     pub parallel_json_downloaders: i32,
-
+    #[clap(
+        long,
+        env,
+        default_value = "true",
+        help = "Skip inline json refreshes if the metadata may be stale"
+    )]
+    pub api_skip_inline_json_refresh: Option<bool>,
     #[clap(long, env, default_value = "info", help = "info|debug")]
     pub log_level: String,
 }
