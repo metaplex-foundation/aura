@@ -71,7 +71,11 @@ snapshot_kind: text
       "ownership_model": "single",
       "owner": "9PacVenjPyQYiWBha89UYRM1nn6mf9bGY7vi32zY6DLn"
     },
-    "supply": null,
+    "supply": {
+      "print_max_supply": 0,
+      "print_current_supply": 0,
+      "edition_nonce": 255
+    },
     "mutable": true,
     "burnt": false,
     "lamports": 5616720,
@@ -153,7 +157,11 @@ snapshot_kind: text
       "ownership_model": "single",
       "owner": "3H3d3hfpZVVdVwuFAxDtDSFN2AdR7kwiDA3ynbnbkhc9"
     },
-    "supply": null,
+    "supply": {
+      "print_max_supply": 0,
+      "print_current_supply": 0,
+      "edition_nonce": 255
+    },
     "mutable": true,
     "burnt": false,
     "lamports": 5616720,
