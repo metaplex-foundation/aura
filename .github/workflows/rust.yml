@@ -78,6 +78,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --mount type=bind,source=${{ github.workspace }},target=/aura,readonly
 
     steps:
       - name: Check out
@@ -126,6 +127,9 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
+
+      - name: Prepare directories
+        run: mkdir -p integration_tests/rocks_dump
 
       - name: Run tests
         env:
