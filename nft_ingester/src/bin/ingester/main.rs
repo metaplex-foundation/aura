@@ -115,10 +115,14 @@ pub async fn main() -> Result<(), IngesterError> {
             &args
                 .rocks_backup_url
                 .expect("rocks_backup_url is required for the restore rocks db process"),
-            &args
-                .rocks_backup_archives_dir
-                .expect("rocks_backup_archives_dir is required for the restore rocks db process"),
-            &args.rocks_db_path_container,
+            &PathBuf::from_str(
+                &args.rocks_backup_archives_dir.expect(
+                    "rocks_backup_archives_dir is required for the restore rocks db process",
+                ),
+            )
+            .expect("invalid rocks backup archives dir"),
+            &PathBuf::from_str(&args.rocks_db_path_container)
+                .expect("invalid rocks backup archives dir"),
         )
         .await?;
     }
@@ -625,17 +629,4 @@ pub async fn main() -> Result<(), IngesterError> {
     .await;
 
     Ok(())
-
-    // todo: remove backup service from here and move it to a separate process with a secondary db - verify it's possible first!
-    // start backup service
-    // if config.store_db_backups() {
-    //     info!("Start store DB  backup...");
-    //     let backup_service = BackupService::new(primary_rocks_storage.db.clone(), &backup_service::load_config()?)?;
-    //     let cloned_metrics = metrics_state.ingester_metrics.clone();
-    //     let cloned_rx = shutdown_rx.resubscribe();
-    //     mutexed_tasks
-    //         .lock()
-    //         .await
-    //         .spawn(perform_backup(backup_service, cloned_rx, cloned_metrics));
-    // }
 }

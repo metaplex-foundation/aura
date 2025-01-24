@@ -4,7 +4,7 @@ use reqwest;
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
-pub enum BackupServiceError {
+pub enum RocksDbBackupServiceError {
     #[error("Backup engine info is empty")]
     BackupEngineInfoIsEmpty {},
     #[error("Backup error for {0}: {1}")]
@@ -21,21 +21,21 @@ pub enum BackupServiceError {
     ReqwestError(String),
 }
 
-impl From<rocksdb::Error> for BackupServiceError {
+impl From<rocksdb::Error> for RocksDbBackupServiceError {
     fn from(err: rocksdb::Error) -> Self {
-        BackupServiceError::DatabaseError(err.to_string())
+        RocksDbBackupServiceError::DatabaseError(err.to_string())
     }
 }
 
-impl From<io::Error> for BackupServiceError {
+impl From<io::Error> for RocksDbBackupServiceError {
     fn from(value: Error) -> Self {
-        BackupServiceError::StdError(value.to_string())
+        RocksDbBackupServiceError::StdError(value.to_string())
     }
 }
 
-impl From<reqwest::Error> for BackupServiceError {
+impl From<reqwest::Error> for RocksDbBackupServiceError {
     fn from(value: reqwest::Error) -> Self {
-        BackupServiceError::ReqwestError(value.to_string())
+        RocksDbBackupServiceError::ReqwestError(value.to_string())
     }
 }
 
