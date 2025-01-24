@@ -1,5 +1,4 @@
 #[cfg(test)]
-
 #[cfg(feature = "integration_tests")]
 mod tests {
     use std::{collections::HashMap, str::FromStr, sync::Arc};
