@@ -74,7 +74,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: postgres
         volumes:
-          - ./rocks_dump:/rocks_dump
+          - ./integration_tests/rocks_dump:/rocks_dump
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -86,7 +86,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Prepare directories
-        run: mkdir -p db-data rocks_dump
+        run: mkdir -p ./integration_tests/rocks_dump
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler

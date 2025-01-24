@@ -65,7 +65,7 @@ const API_MAX_PAGE_LIMIT: usize = 100;
 
 const DUMP_SYNCHRONIZER_BATCH_SIZE: usize = 1000;
 const SYNCHRONIZER_PARALLEL_TASKS: usize = 1;
-const SYNCHRONIZER_DUMP_PATH: &str = "./rocks_dump";
+const SYNCHRONIZER_DUMP_PATH: &str = "rocks_dump";
 
 const POSTGRE_MIGRATIONS_PATH: &str = "../migrations";
 const POSTGRE_BASE_DUMP_PATH: &str = "/";
