@@ -195,7 +195,7 @@ where
         let state = self.get_sync_state(run_full_sync_threshold, asset_type).await?;
         match state {
             SyncStatus::FullSyncRequired(state) => {
-                tracing::debug!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
+                tracing::warn!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
                 self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key).await
             },
             SyncStatus::RegularSyncRequired(state) => {
@@ -220,7 +220,7 @@ where
 
         match state {
             SyncStatus::FullSyncRequired(state) => {
-                tracing::debug!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
+                tracing::warn!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
                     .await
             },

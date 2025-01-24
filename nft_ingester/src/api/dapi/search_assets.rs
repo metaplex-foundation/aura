@@ -36,7 +36,7 @@ pub async fn search_assets<
 >(
     index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
     rocks_db: Arc<Storage>,
-    filter: SearchAssetsQuery,
+    mut filter: SearchAssetsQuery,
     sort_by: AssetSorting,
     limit: u64,
     page: Option<u64>,
@@ -55,6 +55,9 @@ pub async fn search_assets<
     tree_gaps_checker: &Option<Arc<PPC>>,
     native_mint_pubkey: &str,
 ) -> Result<AssetList, StorageError> {
+    if options.show_fungible {
+        filter.token_type = Some(TokenType::All)
+    }
     let show_native_balance = options.show_native_balance;
     let (asset_list, native_balance) = tokio::join!(
         fetch_assets(
