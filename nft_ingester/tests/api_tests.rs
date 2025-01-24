@@ -2989,11 +2989,11 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "FIXME: mismatched number of tokens"]
     async fn test_token_type() {
         let cnt = 100;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+
         let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
@@ -3002,7 +3002,7 @@ mod tests {
             Arc::new(SynchronizerMetricsConfig::new()),
             1,
         );
-        let fungible_token_mint1 = generated_assets.pubkeys[0]; // non-existed token
+        let fungible_token_mint1 = Pubkey::new_unique(); // non-existed token
         let fungible_token_mint2 =
             Pubkey::from_str("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m").unwrap(); // MPLX token
         let mint1 = Mint {
@@ -3056,7 +3056,27 @@ mod tests {
             write_version: 10,
         };
 
-        let ftm_complete = AssetCompleteDetails {
+        let ftm_complete1 = AssetCompleteDetails {
+            pubkey: fungible_token_mint1,
+            static_details: Some(AssetStaticDetails {
+                pubkey: fungible_token_mint1,
+                specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: fungible_token_mint1,
+                owner: Updated::new(10, Some(UpdateVersion::WriteVersion(10)), None),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Default::default(),
+            }),
+            ..Default::default()
+        };
+
+        let ftm_complete2 = AssetCompleteDetails {
             pubkey: fungible_token_mint2,
             static_details: Some(AssetStaticDetails {
                 pubkey: fungible_token_mint2,
@@ -3081,10 +3101,21 @@ mod tests {
             .db
             .put_cf(
                 &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
-                fungible_token_mint2,
-                ftm_complete.convert_to_fb_bytes(),
+                fungible_token_mint1,
+                ftm_complete1.convert_to_fb_bytes(),
             )
             .unwrap();
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                fungible_token_mint2,
+                ftm_complete2.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
         let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
             10,
@@ -3170,6 +3201,7 @@ mod tests {
             page: Some(1),
             owner_address: Some(owner.to_string()),
             options: SearchAssetsOptions {
+                show_fungible: true,
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
@@ -3202,11 +3234,11 @@ mod tests {
         );
 
         assert!(res.items[1].clone().token_info.unwrap().symbol.is_none());
+        assert!(res.items[1].clone().token_info.unwrap().price_info.is_none());
         assert_eq!(
             res.items[1].clone().token_info.unwrap().associated_token_address.unwrap(),
             fungible_token_account1.to_string()
         );
-        assert!(res.items[1].clone().token_info.unwrap().price_info.is_none());
 
         let payload = SearchAssets {
             limit: Some(1000),
@@ -3276,11 +3308,19 @@ mod tests {
         let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
-        // Totally we have 3 assets with required owner
+        // Totally we have 3 assets with required owner. show_fungible is false by default, so we don't have token info.
         assert_eq!(res.items.len(), 3);
         assert!(res.items[0].mint_extensions.is_none());
+        assert!(res.items[0].clone().token_info.unwrap().symbol.is_none());
+        assert!(res.items[0].clone().token_info.unwrap().price_info.is_none());
+
         assert!(res.items[1].mint_extensions.is_none());
+        assert!(res.items[1].clone().token_info.map_or(true, |info| info.symbol.is_none()));
+        assert!(res.items[1].clone().token_info.map_or(true, |info| info.price_info.is_none()));
+
         assert!(res.items[2].mint_extensions.is_none());
+        assert!(res.items[2].clone().token_info.map_or(true, |info| info.symbol.is_none()));
+        assert!(res.items[2].clone().token_info.map_or(true, |info| info.price_info.is_none()));
 
         let payload = SearchAssets {
             limit: Some(1000),

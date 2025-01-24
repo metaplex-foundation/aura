@@ -210,12 +210,6 @@ fn add_filter_clause<'a>(
     }
 
     if let Some(ref token_type) = filter.token_type {
-        if token_type == &TokenType::All && filter.owner_address.is_some() {
-            query_builder.push(
-                " LEFT JOIN fungible_tokens ON assets_v3.ast_pubkey = fungible_tokens.fbt_asset ",
-            );
-            group_clause_required = true;
-        }
         if token_type == &TokenType::Fungible && filter.owner_address.is_some() {
             query_builder.push(
                 " INNER JOIN fungible_tokens ON assets_v3.ast_pubkey = fungible_tokens.fbt_asset ",
