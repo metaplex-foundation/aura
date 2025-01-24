@@ -15,7 +15,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use interface::slots_dumper::SlotsDumper;
 use metrics_utils::MetricState;
 use rocks_db::{
-    column::TypedColumn, columns::offchain_data::{OffChainData, OffChainDataDeprecated}, migrator::MigrationVersions, Storage,
+    column::TypedColumn, columns::offchain_data::OffChainDataDeprecated,
+    migrator::MigrationVersions, Storage,
 };
 use tokio::{
     signal,

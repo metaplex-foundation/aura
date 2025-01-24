@@ -17,7 +17,7 @@ use serde_json::Value;
 use tokio::{
     sync::{broadcast::Receiver, mpsc, mpsc::error::TryRecvError, Mutex},
     task::JoinSet,
-    time::{self, Duration, Instant},
+    time::{Duration, Instant},
 };
 use tracing::{debug, error};
 use url::Url;
@@ -27,7 +27,7 @@ use crate::api::dapi::rpc_asset_convertors::parse_files;
 pub const JSON_BATCH: usize = 300;
 pub const WIPE_PERIOD_SEC: u64 = 60;
 pub const SLEEP_TIME: u64 = 1;
-pub const CLIENT_TIMEOUT: u64 = 5;
+pub const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct JsonWorker {
     pub db_client: Arc<PgClient>,
@@ -217,8 +217,9 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
 
                         let begin_processing = Instant::now();
 
-                        let response =
-                            json_downloader.download_file(task.metadata_url.clone()).await;
+                        let response = json_downloader
+                            .download_file(task.metadata_url.clone(), CLIENT_TIMEOUT)
+                            .await;
 
                         json_downloader.metrics.set_latency_task_executed(
                             "json_downloader",
@@ -254,14 +255,15 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
 
 #[async_trait]
 impl JsonDownloader for JsonWorker {
-    async fn download_file(&self, url: String) -> Result<JsonDownloadResult, JsonDownloaderError> {
+    async fn download_file(
+        &self,
+        url: String,
+        timeout: Duration,
+    ) -> Result<JsonDownloadResult, JsonDownloaderError> {
         let start_time = chrono::Utc::now();
-        let client = ClientBuilder::new()
-            .timeout(time::Duration::from_secs(CLIENT_TIMEOUT))
-            .build()
-            .map_err(|e| {
-                JsonDownloaderError::ErrorDownloading(format!("Failed to create client: {:?}", e))
-            })?;
+        let client = ClientBuilder::new().timeout(timeout).build().map_err(|e| {
+            JsonDownloaderError::ErrorDownloading(format!("Failed to create client: {:?}", e))
+        })?;
 
         // Detect if the URL is an IPFS link
         let parsed_url = if url.starts_with("ipfs://") {
