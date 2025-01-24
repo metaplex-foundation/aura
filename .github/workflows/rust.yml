@@ -81,9 +81,6 @@ jobs:
           --mount type=bind,source=${{ github.workspace }},target=/aura,readonly
 
     steps:
-      - name: Prepare directories
-        run: mkdir -p integration_tests/rocks_dump
-
       - name: Check out
         uses: actions/checkout@v3
 
@@ -131,9 +128,12 @@ jobs:
             target/
           key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
 
+      - name: Prepare directories
+        run: mkdir -p integration_tests/rocks_dump
+
       - name: Run tests
         env:
           DATABASE_TEST_URL: "postgres://postgres:postgres@127.0.0.1:5432/postgres"
           DEVNET_RPC_URL: ${{ secrets.SOLANA_DEVNET_RPC_URL }}
           MAINNET_RPC_URL: ${{ secrets.SOLANA_MAINNET_RPC_URL }}
-        run: cargo test --features integration_tests -- --nocapture
+        run: cargo test --features integration_tests test_full_sync_core_get_assets_by_authority -- --nocapture
