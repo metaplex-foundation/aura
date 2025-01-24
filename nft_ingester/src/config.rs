@@ -580,7 +580,7 @@ impl BigTableConfig {
 
 pub fn init_logger(log_level: &str) {
     let t = tracing_subscriber::fmt().with_env_filter(log_level);
-    t.event_format(fmt::format::json()).init();
+    t.event_format(fmt::format::json().with_line_number(true).with_file(true)).init();
 }
 
 #[cfg(test)]

@@ -192,8 +192,13 @@ pub async fn main() -> Result<(), IngesterError> {
             },
         };
         let redis_receiver = Arc::new(
-            RedisReceiver::new(personal_message_config, ConsumptionType::All, ack_channel.clone())
-                .await?,
+            RedisReceiver::new(
+                personal_message_config,
+                ConsumptionType::All,
+                ack_channel.clone(),
+                metrics_state.redis_receiver_metrics.clone(),
+            )
+            .await?,
         );
 
         run_accounts_processor(
@@ -236,6 +241,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 personal_message_config.clone(),
                 ConsumptionType::All,
                 ack_channel.clone(),
+                metrics_state.redis_receiver_metrics.clone(),
             )
             .await?,
         );

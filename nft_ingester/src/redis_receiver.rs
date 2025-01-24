@@ -6,13 +6,14 @@ use interface::{
     error::UsecaseError, signature_persistence::UnprocessedTransactionsGetter,
     unprocessed_data_getter::UnprocessedAccountsGetter,
 };
+use metrics_utils::RedisReceiverMetricsConfig;
 use num_traits::Zero;
 use plerkle_messenger::{
     redis_messenger::RedisMessenger, ConsumptionType, Messenger, MessengerConfig, ACCOUNT_STREAM,
     TRANSACTION_STREAM,
 };
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
-use tracing::{info, log::error};
+use tracing::{error, info};
 
 use crate::{error::IngesterError, message_parser::MessageParser};
 
@@ -21,6 +22,7 @@ pub struct RedisReceiver {
     message_parser: Arc<MessageParser>,
     messanger: Mutex<RedisMessenger>,
     ack_channel: UnboundedSender<(&'static str, String)>,
+    metrics: Arc<RedisReceiverMetricsConfig>,
 }
 
 impl RedisReceiver {
@@ -28,11 +30,12 @@ impl RedisReceiver {
         config: MessengerConfig,
         consumption_type: ConsumptionType,
         ack_channel: UnboundedSender<(&'static str, String)>,
+        metrics: Arc<RedisReceiverMetricsConfig>,
     ) -> Result<Self, IngesterError> {
         info!("Initializing RedisReceiver...");
         let message_parser = Arc::new(MessageParser::new());
         let messanger = Mutex::new(RedisMessenger::new(config).await?);
-        Ok(Self { messanger, consumption_type, message_parser, ack_channel })
+        Ok(Self { messanger, consumption_type, message_parser, ack_channel, metrics })
     }
 }
 
@@ -46,19 +49,23 @@ impl UnprocessedTransactionsGetter for RedisReceiver {
             .recv(TRANSACTION_STREAM, self.consumption_type.clone())
             .await
             .map_err(|e| UsecaseError::Messenger(e.to_string()))?;
+        self.metrics.inc_transactions_received_by(recv_data.len() as u64);
         let mut result = Vec::new();
         for item in recv_data {
             if let Some(tx) = self.message_parser.parse_transaction(item.data, false) {
                 result.push(BufferedTxWithID { tx, id: item.id })
+            } else {
+                self.metrics.inc_transaction_parse_errors_by(1);
             }
         }
+        self.metrics.inc_transactions_parsed_by(result.len() as u64);
         Ok(result)
     }
 
     fn ack(&self, id: String) {
         let send = self.ack_channel.send((TRANSACTION_STREAM, id));
         if let Err(err) = send {
-            error!("Account stream ack error: {}", err);
+            error!(error = %err, "Account stream ack error: {:?}", err);
         }
     }
 }
@@ -77,6 +84,7 @@ impl UnprocessedAccountsGetter for RedisReceiver {
             .await
             .map_err(|e| UsecaseError::Messenger(e.to_string()))?;
 
+        self.metrics.inc_accounts_received_by(recv_data.len() as u64);
         let mut result = Vec::new();
         let mut unknown_account_types_ids = Vec::new();
         for item in recv_data {
@@ -101,10 +109,12 @@ impl UnprocessedAccountsGetter for RedisReceiver {
                     }
                 },
                 Err(err) => {
-                    error!("Parsing account: {}", err)
+                    error!(error = %err, "Error parsing account: {:?}", err);
+                    self.metrics.inc_account_parse_errors_by(1);
                 },
             }
         }
+        self.metrics.inc_accounts_parsed_by(result.len() as u64);
 
         UnprocessedAccountsGetter::ack(self, unknown_account_types_ids);
         Ok(result)
@@ -117,7 +127,7 @@ impl UnprocessedAccountsGetter for RedisReceiver {
             }
             let send = self.ack_channel.send((ACCOUNT_STREAM, id));
             if let Err(err) = send {
-                error!("Account stream ack error: {}", err);
+                error!(error = %err, "Account stream ack error: {:?}", err);
             }
         }
     }
