@@ -85,12 +85,6 @@ jobs:
       - name: Check out
         uses: actions/checkout@v3
 
-      - name: Prepare directories
-        run: mkdir -p ./integration_tests/rocks_dump
-
-      - name: Set permissions
-        run: chmod -R 777 ./integration_tests/rocks_dump
-
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
@@ -134,6 +128,12 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
+
+      - name: Prepare directories
+        run: mkdir -p ./integration_tests/rocks_dump
+
+      - name: Set permissions
+        run: chmod -R 777 ./integration_tests/rocks_dump
 
       - name: Run tests
         env:
