@@ -38,6 +38,7 @@ impl RocksMigration for OffChainDataMigration {
     const VERSION: u64 = 4;
     const DESERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     const SERIALIZATION_TYPE: SerializationType = SerializationType::Flatbuffers;
+    type KeyType = String;
     type NewDataType = OffChainData;
     type OldDataType = OffChainDataDeprecated;
 }
