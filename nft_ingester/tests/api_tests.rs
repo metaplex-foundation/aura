@@ -99,28 +99,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let limit = 10;
@@ -472,28 +451,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -611,28 +569,7 @@ mod tests {
     async fn test_metadata_sanitizer() {
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, 0, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -760,28 +697,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -876,28 +792,8 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -1043,28 +939,8 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -1212,28 +1088,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -1365,28 +1220,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
 
         let first_tree = Pubkey::new_unique();
         let second_tree = Pubkey::new_unique();
@@ -1578,28 +1412,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
 
         let token_updates_processor =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
@@ -1793,28 +1606,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
 
         let token_updates_processor =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
@@ -2039,28 +1831,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -2096,28 +1867,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -2154,28 +1904,7 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -2212,28 +1941,8 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
@@ -2317,29 +2026,10 @@ mod tests {
                 Ok(interface::json::JsonDownloadResult::JsonContent(offchain_data.to_string()))
             });
 
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            MockJsonDownloader,
-            MockJsonPersister,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            Some(Arc::new(mock_middleware)),
-            None,
-            JsonMiddlewareConfig { is_enabled: true, max_urls_to_parse: 10 },
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
+        let api = create_api(
+            &env,
+            Some(JsonMiddlewareConfig { is_enabled: true, max_urls_to_parse: 10 }),
         );
-
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
 
@@ -2461,28 +2151,8 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            Some(env.rocks_env.storage.clone()),
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+
+        let api = create_api(&env, None);
         let asset_id = Pubkey::new_unique();
         let tree_id = Pubkey::new_unique();
         env.rocks_env
@@ -2514,28 +2184,8 @@ mod tests {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+
+        let api = create_api(&env, None);
         let asset_fees_count = 1000;
         let mut asset_ids = Vec::with_capacity(asset_fees_count);
         for _ in 0..asset_fees_count {
@@ -2581,28 +2231,8 @@ mod tests {
         let total_assets = 2000;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, total_assets, SLOT_UPDATED).await;
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
@@ -2662,28 +2292,8 @@ mod tests {
         mock_account_balance_getter
             .expect_get_account_balance_lamports()
             .returning(move |_| Ok(10_u64.pow(9)));
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(mock_account_balance_getter),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
@@ -2786,28 +2396,7 @@ mod tests {
         );
         o.await.unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = GetAsset {
@@ -2937,28 +2526,7 @@ mod tests {
             write_version: 1000,
         }).unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = GetAsset {
@@ -2989,6 +2557,221 @@ mod tests {
         let res: Asset = serde_json::from_value(res).unwrap();
         assert_eq!(res.inscription, None);
         assert_eq!(res.spl20, None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_search_assets_get_all_spec_classes() {
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+
+        let number_items = 100;
+        let cli = Cli::default();
+
+        let (env, generated_assets) = setup::TestEnvironment::create_and_setup_from_closures(
+            &cli,
+            number_items,
+            100,
+            &[
+                SpecificationAssetClass::Unknown,
+                SpecificationAssetClass::ProgrammableNft,
+                SpecificationAssetClass::Nft,
+                SpecificationAssetClass::FungibleAsset,
+                SpecificationAssetClass::FungibleToken,
+                SpecificationAssetClass::MplCoreCollection,
+                SpecificationAssetClass::MplCoreAsset,
+            ],
+            RocksTestEnvironmentSetup::with_authority,
+            RocksTestEnvironmentSetup::test_one_owner,
+            RocksTestEnvironmentSetup::dynamic_data,
+            RocksTestEnvironmentSetup::collection_without_authority,
+        )
+        .await;
+
+        let api = create_api(&env, None);
+        let owner = generated_assets.owners[0].owner.value.unwrap();
+
+        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            200_000,
+            "".to_string(),
+            Arc::new(SynchronizerMetricsConfig::new()),
+            1,
+        );
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::All),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(res.items.len(), number_items);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_search_assets_freeze_delegate_authorities_for_fungible() {
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+
+        let number_items = 100;
+        let cli = Cli::default();
+
+        let (env, generated_assets) =
+            setup::TestEnvironment::create_noise(&cli, number_items, 100).await;
+
+        let fungible_token_mint = Pubkey::new_unique();
+        let mint_authority = Pubkey::new_unique();
+        let freeze_authority = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+
+        let mint = Mint {
+            pubkey: fungible_token_mint,
+            supply: 100000,
+            decimals: 2,
+            mint_authority: Some(mint_authority.clone()),
+            freeze_authority: Some(freeze_authority),
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: None,
+        };
+
+        let fungible_token_account = Pubkey::new_unique();
+        let delegate = Pubkey::new_unique();
+
+        let token_account = TokenAccount {
+            pubkey: fungible_token_account,
+            mint: fungible_token_mint,
+            delegate: Some(delegate.clone()),
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 0,
+            write_version: 10,
+        };
+
+        let ftm_complete = AssetCompleteDetails {
+            pubkey: fungible_token_mint,
+            static_details: Some(AssetStaticDetails {
+                pubkey: fungible_token_mint,
+                specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: fungible_token_mint,
+                owner: Updated::new(10, Some(UpdateVersion::WriteVersion(10)), None),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            }),
+            ..Default::default()
+        };
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                fungible_token_mint,
+                ftm_complete.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                fungible_token_account,
+                &token_account,
+            )
+            .unwrap();
+
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint)
+            .unwrap();
+        batch_storage.flush().unwrap();
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
+
+        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            200_000,
+            "".to_string(),
+            Arc::new(SynchronizerMetricsConfig::new()),
+            1,
+        );
+        let synchronizer = Arc::new(synchronizer);
+        let mut tasks = JoinSet::new();
+
+        for asset_type in ASSET_TYPES {
+            let rx = rx.resubscribe();
+            let synchronizer = synchronizer.clone();
+            match asset_type {
+                AssetType::Fungible => {
+                    tasks.spawn(async move {
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await
+                    });
+                },
+                AssetType::NonFungible => {
+                    tasks.spawn(
+                        async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
+                    );
+                },
+            }
+        }
+        while let Some(res) = tasks.join_next().await {
+            if let Err(err) = res {
+                panic!("{err}");
+            }
+        }
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::Fungible),
+            ..Default::default()
+        };
+
+        let api = create_api(&env, None);
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(res.items.len(), 1);
+        assert_eq!(
+            res.items[0].clone().token_info.unwrap().mint_authority.unwrap(),
+            mint_authority.to_string()
+        );
+        assert_eq!(
+            res.items[0].clone().token_info.unwrap().freeze_authority.unwrap(),
+            freeze_authority.to_string()
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -3175,28 +2958,7 @@ mod tests {
             }
         }
 
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
@@ -3413,28 +3175,7 @@ mod tests {
             .unwrap();
         batch_storage.flush().unwrap();
 
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = GetAsset {
@@ -3480,7 +3221,7 @@ mod tests {
             &cli,
             cnt,
             100,
-            RocksTestEnvironmentSetup::static_data_for_fungible,
+            &[SpecificationAssetClass::FungibleToken],
             RocksTestEnvironmentSetup::with_authority,
             RocksTestEnvironmentSetup::test_owner,
             RocksTestEnvironmentSetup::dynamic_data,
@@ -3605,28 +3346,7 @@ mod tests {
             }
         }
 
-        let api = nft_ingester::api::api_impl::DasApi::<
-            MaybeProofChecker,
-            JsonWorker,
-            JsonWorker,
-            MockAccountBalanceGetter,
-            RaydiumTokenPriceFetcher,
-            Storage,
-        >::new(
-            env.pg_env.client.clone(),
-            env.rocks_env.storage.clone(),
-            Arc::new(ApiMetricsConfig::new()),
-            None,
-            None,
-            50,
-            None,
-            None,
-            JsonMiddlewareConfig::default(),
-            Arc::new(MockAccountBalanceGetter::new()),
-            None,
-            Arc::new(RaydiumTokenPriceFetcher::default()),
-            NATIVE_MINT_PUBKEY.to_string(),
-        );
+        let api = create_api(&env, None);
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
@@ -3915,5 +3635,33 @@ mod tests {
         let idx_non_fungible_asset_iter = rocks_env.storage.assets_update_idx.iter_start();
         assert_eq!(idx_fungible_asset_iter.count(), 6);
         assert_eq!(idx_non_fungible_asset_iter.count(), 6);
+    }
+
+    fn create_api(
+        env: &setup::TestEnvironment,
+        json_middleware_config: Option<JsonMiddlewareConfig>,
+    ) -> nft_ingester::api::api_impl::DasApi<
+        MaybeProofChecker,
+        JsonWorker,
+        JsonWorker,
+        MockAccountBalanceGetter,
+        RaydiumTokenPriceFetcher,
+        Storage,
+    > {
+        nft_ingester::api::api_impl::DasApi::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            None,
+            50,
+            None,
+            None,
+            json_middleware_config.unwrap_or(JsonMiddlewareConfig::default()),
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+            NATIVE_MINT_PUBKEY.to_string(),
+        )
     }
 }

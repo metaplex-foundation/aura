@@ -4,11 +4,9 @@ pub mod rocks;
 
 use std::sync::Arc;
 
-use entities::enums::{AssetType, ASSET_TYPES};
+use entities::enums::{AssetType, SpecificationAssetClass, ASSET_TYPES};
 use metrics_utils::MetricsTrait;
-use rocks_db::columns::asset::{
-    AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner, AssetStaticDetails,
-};
+use rocks_db::columns::asset::{AssetAuthority, AssetCollection, AssetDynamicDetails, AssetOwner};
 use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
 use tokio::task::JoinSet;
@@ -30,7 +28,33 @@ impl<'a> TestEnvironment<'a> {
             cli,
             cnt,
             slot,
-            RocksTestEnvironmentSetup::static_data_for_nft,
+            &[SpecificationAssetClass::Nft],
+            RocksTestEnvironmentSetup::with_authority,
+            RocksTestEnvironmentSetup::test_owner,
+            RocksTestEnvironmentSetup::dynamic_data,
+            RocksTestEnvironmentSetup::collection_without_authority,
+        )
+        .await
+    }
+
+    pub async fn create_noise(
+        cli: &'a Cli,
+        cnt: usize,
+        slot: u64,
+    ) -> (TestEnvironment<'a>, rocks::GeneratedAssets) {
+        Self::create_and_setup_from_closures(
+            cli,
+            cnt,
+            slot,
+            &[
+                SpecificationAssetClass::Unknown,
+                SpecificationAssetClass::ProgrammableNft,
+                SpecificationAssetClass::Nft,
+                SpecificationAssetClass::FungibleAsset,
+                SpecificationAssetClass::FungibleToken,
+                SpecificationAssetClass::MplCoreCollection,
+                SpecificationAssetClass::MplCoreAsset,
+            ],
             RocksTestEnvironmentSetup::with_authority,
             RocksTestEnvironmentSetup::test_owner,
             RocksTestEnvironmentSetup::dynamic_data,
@@ -44,7 +68,7 @@ impl<'a> TestEnvironment<'a> {
         cli: &'a Cli,
         cnt: usize,
         slot: u64,
-        static_details: fn(&[Pubkey], u64) -> Vec<AssetStaticDetails>,
+        spec_asset_class_list: &[SpecificationAssetClass],
         authorities: fn(&[Pubkey]) -> Vec<AssetAuthority>,
         owners: fn(&[Pubkey]) -> Vec<AssetOwner>,
         dynamic_details: fn(&[Pubkey], u64) -> Vec<AssetDynamicDetails>,
@@ -57,7 +81,7 @@ impl<'a> TestEnvironment<'a> {
             .generate_from_closure(
                 cnt,
                 slot,
-                static_details,
+                spec_asset_class_list,
                 authorities,
                 owners,
                 dynamic_details,
