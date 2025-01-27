@@ -117,6 +117,8 @@ impl TestSetup {
         let rpc_url = match opts.network.unwrap_or_default() {
             Network::Mainnet => std::env::var("MAINNET_RPC_URL").unwrap(),
             Network::Devnet => std::env::var("DEVNET_RPC_URL").unwrap(),
+            Network::EclipseMainnet => std::env::var("ECLIPSE_MAINNET_RPC_URL").unwrap(),
+            Network::EclipseDevnet => std::env::var("ECLIPSE_DEVNET_RPC_URL").unwrap(),
         };
         let client = Arc::new(RpcClient::new(rpc_url.to_string()));
 
@@ -537,6 +539,8 @@ pub enum Network {
     #[default]
     Mainnet,
     Devnet,
+    EclipseMainnet,
+    EclipseDevnet,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -553,7 +557,7 @@ pub async fn index_seed_events(setup: &TestSetup, events: Vec<&SeedEvent>) {
                 index_and_sync_account_with_ordered_slot(setup, *account).await;
             },
             SeedEvent::Nft(mint) => {
-                index_nft(setup, *mint).await;
+                index_nft_accounts(setup, get_nft_accounts(setup, *mint).await).await;
             },
             SeedEvent::Signature(sig) => {
                 index_transaction(setup, *sig).await;
@@ -686,10 +690,6 @@ async fn index_token_mint(setup: &TestSetup, mint: Pubkey) {
             // If we can't find the metadata account, then we assume that the mint is not an NFT.
         },
     }
-}
-
-pub async fn index_nft(setup: &TestSetup, mint: Pubkey) {
-    index_nft_accounts(setup, get_nft_accounts(setup, mint).await).await;
 }
 
 pub async fn index_nft_accounts(setup: &TestSetup, nft_accounts: NftAccounts) {

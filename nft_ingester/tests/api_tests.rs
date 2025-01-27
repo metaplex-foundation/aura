@@ -3717,4 +3717,178 @@ mod tests {
             NATIVE_MINT_PUBKEY.to_string(),
         )
     }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_static_details_transition_from_fungible_into_nft() {
+        // Given Fungible Metadata
+        // When updated comes
+        // Then it should be recorded as fungible
+
+        let cnt = 0;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+            Storage,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+            NATIVE_MINT_PUBKEY.to_string(),
+        );
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+
+        let token_updates_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        let mplx_updates_processor =
+            MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+
+        let token_key = Pubkey::new_unique();
+        let mint_key = Pubkey::new_unique();
+        let owner_key = Pubkey::new_unique();
+
+        let mint_auth_key = Pubkey::new_unique();
+
+        let token_acc = TokenAccount {
+            pubkey: token_key,
+            mint: mint_key,
+            delegate: None,
+            owner: owner_key,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 1,
+            amount: 1,
+            write_version: 1,
+        };
+
+        let mint_acc = Mint {
+            pubkey: mint_key,
+            slot_updated: 1,
+            supply: 10,
+            decimals: 0,
+            mint_authority: Some(mint_auth_key),
+            freeze_authority: None,
+            token_program: Default::default(),
+            extensions: None,
+            write_version: 1,
+        };
+
+        let metadata = MetadataInfo {
+            metadata: Metadata {
+                key: Key::MetadataV1,
+                update_authority: Pubkey::new_unique(),
+                mint: mint_key,
+                name: "".to_string(),
+                symbol: "".to_string(),
+                uri: "".to_string(),
+                seller_fee_basis_points: 0,
+                creators: None,
+                primary_sale_happened: false,
+                is_mutable: true,
+                edition_nonce: None,
+                token_standard: Some(mpl_token_metadata::types::TokenStandard::Fungible),
+                collection: None,
+                uses: None,
+                collection_details: None,
+                programmable_config: None,
+            },
+            slot_updated: 1,
+            write_version: 1,
+            lamports: 1,
+            executable: false,
+            metadata_owner: None,
+            rent_epoch: 0,
+        };
+        let offchain_data = OffChainData {
+            url: Some("https://ping-pong".to_string()),
+            metadata: Some("{\"msg\": \"hallo\"}".to_string()),
+            ..Default::default()
+        };
+
+        env.rocks_env
+            .storage
+            .asset_offchain_data
+            .put(offchain_data.url.clone().unwrap(), offchain_data.clone())
+            .unwrap();
+
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        token_updates_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .unwrap();
+        token_updates_processor
+            .transform_and_save_token_account(&mut batch_storage, token_acc.pubkey, &token_acc)
+            .unwrap();
+
+        mplx_updates_processor
+            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .unwrap();
+        batch_storage.flush().unwrap();
+
+        let payload = GetAsset {
+            id: mint_key.to_string(),
+            options: Options { show_unverified_collections: true, ..Default::default() },
+        };
+        let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
+
+        assert_eq!(response["interface"], "FungibleToken".to_string());
+
+        // Given record that respects fungible metadata
+        // When updated comes with NFT metadata
+        // Then it should transfer to NFT
+
+        let metadata = MetadataInfo {
+            metadata: Metadata {
+                token_standard: Some(mpl_token_metadata::types::TokenStandard::NonFungible),
+                ..metadata.metadata
+            },
+            ..metadata
+        };
+
+        mplx_updates_processor
+            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .unwrap();
+        batch_storage.flush().unwrap();
+        let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
+
+        assert_eq!(response["interface"], "V1_NFT".to_string());
+
+        // Given record that respects NFT metadata
+        // When updated comes with fungible metadata
+        // Then it should stay as NFT
+        let metadata = MetadataInfo {
+            metadata: Metadata {
+                token_standard: Some(mpl_token_metadata::types::TokenStandard::Fungible),
+                ..metadata.metadata
+            },
+            ..metadata
+        };
+
+        mplx_updates_processor
+            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .unwrap();
+        batch_storage.flush().unwrap();
+        let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
+
+        assert_eq!(response["interface"], "V1_NFT".to_string());
+    }
 }
