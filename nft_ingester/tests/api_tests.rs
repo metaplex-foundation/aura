@@ -30,10 +30,7 @@ mod tests {
             TokenAccount, UpdateVersion, Updated,
         },
     };
-    use interface::{
-        account_balance::MockAccountBalanceGetter,
-        json::{MockJsonDownloader, MockJsonPersister},
-    };
+    use interface::{account_balance::MockAccountBalanceGetter, json::MockJsonDownloader};
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig, SynchronizerMetricsConfig};
     use mockall::predicate;
     use mpl_token_metadata::{accounts::MasterEdition, types::Key};
@@ -2590,15 +2587,6 @@ mod tests {
         let api = create_api(&env, None);
         let owner = generated_assets.owners[0].owner.value.unwrap();
 
-        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
-            env.rocks_env.storage.clone(),
-            env.pg_env.client.clone(),
-            200_000,
-            "".to_string(),
-            Arc::new(SynchronizerMetricsConfig::new()),
-            1,
-        );
-
         let payload = SearchAssets {
             limit: Some(1000),
             page: Some(1),
@@ -2624,8 +2612,7 @@ mod tests {
         let number_items = 100;
         let cli = Cli::default();
 
-        let (env, generated_assets) =
-            setup::TestEnvironment::create_noise(&cli, number_items, 100).await;
+        let (env, _) = setup::TestEnvironment::create_noise(&cli, number_items, 100).await;
 
         let fungible_token_mint = Pubkey::new_unique();
         let mint_authority = Pubkey::new_unique();
