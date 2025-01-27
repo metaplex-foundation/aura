@@ -322,7 +322,7 @@ impl RocksTestEnvironmentSetup {
             .iter()
             .map(|pubkey| AssetOwner {
                 pubkey: *pubkey,
-                owner: generate_test_updated(Some(owner_uuid.clone())),
+                owner: generate_test_updated(Some(owner_uuid)),
                 owner_type: generate_test_updated(entities::enums::OwnerType::Single),
                 owner_delegate_seq: generate_test_updated(Some(
                     rand::thread_rng().gen_range(0..100),
