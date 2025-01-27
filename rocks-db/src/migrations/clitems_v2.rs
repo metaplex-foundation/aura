@@ -1,7 +1,7 @@
 use entities::models::Updated;
 
 use crate::{
-    columns::cl_items::{ClItemDeprecated, ClItemV2},
+    columns::cl_items::{ClItemDeprecated, ClItemKey, ClItemV2},
     migrator::{RocksMigration, SerializationType},
 };
 
@@ -10,6 +10,7 @@ impl RocksMigration for ClItemsV2Migration {
     const VERSION: u64 = 5;
     const DESERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
     const SERIALIZATION_TYPE: SerializationType = SerializationType::Bincode;
+    type KeyType = ClItemKey;
     type NewDataType = ClItemV2;
     type OldDataType = ClItemDeprecated;
 }
