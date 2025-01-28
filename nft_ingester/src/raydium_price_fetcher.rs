@@ -18,7 +18,7 @@ pub struct RaydiumTokenPriceFetcher {
 
 impl Default for RaydiumTokenPriceFetcher {
     fn default() -> Self {
-        Self::new("https://api-v3.raydium.io".to_string(), CACHE_TTL, None)
+        Self::new(crate::consts::RAYDIUM_API_HOST.to_string(), CACHE_TTL, None)
     }
 }
 
@@ -138,11 +138,9 @@ impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
                     ))
                 })?;
 
-            for maybe_token_data in tokens_data {
-                if let Some(MintIdsItem { address, symbol }) = maybe_token_data {
-                    self.symbol_cache.insert(address.clone(), symbol.clone()).await;
-                    result.insert(address, symbol);
-                }
+            for MintIdsItem { address, symbol } in tokens_data.into_iter().flatten() {
+                self.symbol_cache.insert(address.clone(), symbol.clone()).await;
+                result.insert(address, symbol);
             }
         }
 

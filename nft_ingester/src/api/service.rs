@@ -112,7 +112,7 @@ pub async fn start_api(
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let token_price_fetcher = Arc::new(RaydiumTokenPriceFetcher::new(
-        "https://api-v3.raydium.io".to_string(),
+        crate::consts::RAYDIUM_API_HOST.to_string(),
         crate::raydium_price_fetcher::CACHE_TTL,
         red_metrics,
     ));
