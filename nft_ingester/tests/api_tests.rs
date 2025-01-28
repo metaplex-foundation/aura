@@ -30,7 +30,10 @@ mod tests {
             TokenAccount, UpdateVersion, Updated,
         },
     };
-    use interface::{account_balance::MockAccountBalanceGetter, json::MockJsonDownloader};
+    use interface::{
+        account_balance::MockAccountBalanceGetter,
+        json::{MockJsonDownloader, MockJsonPersister},
+    };
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig, SynchronizerMetricsConfig};
     use mockall::predicate;
     use mpl_token_metadata::{accounts::MasterEdition, types::Key};
@@ -2023,10 +2026,29 @@ mod tests {
                 Ok(interface::json::JsonDownloadResult::JsonContent(offchain_data.to_string()))
             });
 
-        let api = create_api(
-            &env,
-            Some(JsonMiddlewareConfig { is_enabled: true, max_urls_to_parse: 10 }),
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            MockJsonDownloader,
+            MockJsonPersister,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+            Storage,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            None,
+            50,
+            Some(Arc::new(mock_middleware)),
+            None,
+            JsonMiddlewareConfig { is_enabled: true, max_urls_to_parse: 10 },
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+            NATIVE_MINT_PUBKEY.to_string(),
         );
+
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
 
@@ -2149,7 +2171,29 @@ mod tests {
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
 
-        let api = create_api(&env, None);
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+            Storage,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            Some(env.rocks_env.storage.clone()),
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(MockAccountBalanceGetter::new()),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+            NATIVE_MINT_PUBKEY.to_string(),
+        );
+
         let asset_id = Pubkey::new_unique();
         let tree_id = Pubkey::new_unique();
         env.rocks_env
@@ -2290,7 +2334,29 @@ mod tests {
             .expect_get_account_balance_lamports()
             .returning(move |_| Ok(10_u64.pow(9)));
 
-        let api = create_api(&env, None);
+        let api = nft_ingester::api::api_impl::DasApi::<
+            MaybeProofChecker,
+            JsonWorker,
+            JsonWorker,
+            MockAccountBalanceGetter,
+            RaydiumTokenPriceFetcher,
+            Storage,
+        >::new(
+            env.pg_env.client.clone(),
+            env.rocks_env.storage.clone(),
+            Arc::new(ApiMetricsConfig::new()),
+            None,
+            None,
+            50,
+            None,
+            None,
+            JsonMiddlewareConfig::default(),
+            Arc::new(mock_account_balance_getter),
+            None,
+            Arc::new(RaydiumTokenPriceFetcher::default()),
+            NATIVE_MINT_PUBKEY.to_string(),
+        );
+
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
