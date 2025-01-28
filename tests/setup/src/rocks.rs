@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use entities::{enums::SpecificationAssetClass, models::Updated};
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rand::{random, Rng};
+use rand::{random, seq::SliceRandom, Rng};
 use rocks_db::{
     column::TypedColumn,
     columns::{
@@ -78,18 +78,49 @@ impl RocksTestEnvironment {
         &self,
         cnt: usize,
         slot: u64,
-        static_details: fn(&[Pubkey], u64) -> Vec<AssetStaticDetails>,
+        spec_asset_class_list: &[SpecificationAssetClass],
         authorities: fn(&[Pubkey]) -> Vec<AssetAuthority>,
         owners: fn(&[Pubkey]) -> Vec<AssetOwner>,
         dynamic_details: fn(&[Pubkey], u64) -> Vec<AssetDynamicDetails>,
         collections: fn(&[Pubkey]) -> Vec<AssetCollection>,
     ) -> GeneratedAssets {
         let pubkeys = (0..cnt).map(|_| self.generate_and_store_pubkey(slot)).collect::<Vec<_>>();
-        let static_details = static_details(&pubkeys, slot);
+        let static_details =
+            spec_asset_class_list.iter().cycle().take(cnt).cloned().collect::<Vec<_>>();
+
+        let asset_static_details = RocksTestEnvironmentSetup::generate_static_data_with_asset_list(
+            &pubkeys,
+            cnt as u64,
+            &static_details,
+        );
         let authorities = authorities(&pubkeys);
         let owners = owners(&pubkeys);
         let dynamic_details = dynamic_details(&pubkeys, slot);
         let collections = collections(&pubkeys);
+
+        let assets = GeneratedAssets {
+            pubkeys,
+            static_details: asset_static_details,
+            authorities,
+            owners,
+            dynamic_details,
+            collections,
+        };
+
+        self.put_everything_in_the_database(&assets)
+            .await
+            .expect("Cannot store 'GeneratedAssets' into storage.");
+
+        assets
+    }
+
+    pub async fn generate_assets(&self, cnt: usize, slot: u64) -> GeneratedAssets {
+        let pubkeys = (0..cnt).map(|_| self.generate_and_store_pubkey(slot)).collect::<Vec<_>>();
+        let static_details = RocksTestEnvironmentSetup::static_data_for_nft(&pubkeys, slot);
+        let authorities = RocksTestEnvironmentSetup::with_authority(&pubkeys);
+        let owners = RocksTestEnvironmentSetup::test_owner(&pubkeys);
+        let dynamic_details = RocksTestEnvironmentSetup::dynamic_data(&pubkeys, slot);
+        let collections = RocksTestEnvironmentSetup::collection_without_authority(&pubkeys);
 
         let assets = GeneratedAssets {
             pubkeys,
@@ -107,9 +138,23 @@ impl RocksTestEnvironment {
         assets
     }
 
-    pub async fn generate_assets(&self, cnt: usize, slot: u64) -> GeneratedAssets {
+    /// spec_asset_class_list: list of available Asset Classes that generator will use for generated data.
+    pub async fn generate_assets_with_specification_classes(
+        &self,
+        cnt: usize,
+        slot: u64,
+        spec_asset_class_list: Vec<SpecificationAssetClass>,
+    ) -> GeneratedAssets {
+        let mut rng = rand::thread_rng();
         let pubkeys = (0..cnt).map(|_| self.generate_and_store_pubkey(slot)).collect::<Vec<_>>();
-        let static_details = RocksTestEnvironmentSetup::static_data_for_nft(&pubkeys, slot);
+        let static_details =
+            spec_asset_class_list.choose_multiple(&mut rng, cnt).cloned().collect::<Vec<_>>();
+
+        let static_details = RocksTestEnvironmentSetup::generate_static_data_with_asset_list(
+            &pubkeys,
+            slot,
+            &static_details,
+        );
         let authorities = RocksTestEnvironmentSetup::with_authority(&pubkeys);
         let owners = RocksTestEnvironmentSetup::test_owner(&pubkeys);
         let dynamic_details = RocksTestEnvironmentSetup::dynamic_data(&pubkeys, slot);
@@ -196,10 +241,6 @@ impl RocksTestEnvironmentSetup {
         Self::generate_static_data(pubkeys, slot, SpecificationAssetClass::Nft)
     }
 
-    pub fn static_data_for_fungible(pubkeys: &[Pubkey], slot: u64) -> Vec<AssetStaticDetails> {
-        Self::generate_static_data(pubkeys, slot, SpecificationAssetClass::FungibleToken)
-    }
-
     fn generate_static_data(
         pubkeys: &[Pubkey],
         slot: u64,
@@ -211,6 +252,24 @@ impl RocksTestEnvironmentSetup {
                 pubkey: *pubkey,
                 created_at: slot as i64,
                 specification_asset_class,
+                royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
+                edition_address: Default::default(),
+            })
+            .collect()
+    }
+
+    fn generate_static_data_with_asset_list(
+        pubkeys: &[Pubkey],
+        slot: u64,
+        spec_asset_class_list: &[SpecificationAssetClass],
+    ) -> Vec<AssetStaticDetails> {
+        pubkeys
+            .iter()
+            .zip(spec_asset_class_list.iter())
+            .map(|(pubkey, spec_class)| AssetStaticDetails {
+                pubkey: *pubkey,
+                created_at: slot as i64,
+                specification_asset_class: *spec_class,
                 royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
                 edition_address: Default::default(),
             })
@@ -239,6 +298,23 @@ impl RocksTestEnvironmentSetup {
             .map(|pubkey| AssetOwner {
                 pubkey: *pubkey,
                 owner: generate_test_updated(Some(Pubkey::new_unique())),
+                owner_type: generate_test_updated(entities::enums::OwnerType::Single),
+                owner_delegate_seq: generate_test_updated(Some(
+                    rand::thread_rng().gen_range(0..100),
+                )),
+                delegate: generate_test_updated(Some(Pubkey::new_unique())),
+                is_current_owner: generate_test_updated(true),
+            })
+            .collect()
+    }
+
+    pub fn test_one_owner(pubkeys: &[Pubkey]) -> Vec<AssetOwner> {
+        let owner_uuid = Pubkey::new_unique();
+        pubkeys
+            .iter()
+            .map(|pubkey| AssetOwner {
+                pubkey: *pubkey,
+                owner: generate_test_updated(Some(owner_uuid)),
                 owner_type: generate_test_updated(entities::enums::OwnerType::Single),
                 owner_delegate_seq: generate_test_updated(Some(
                     rand::thread_rng().gen_range(0..100),

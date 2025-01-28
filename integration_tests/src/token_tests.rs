@@ -1,0 +1,56 @@
+use std::sync::Arc;
+
+use entities::{api_req_params::GetAsset, enums::AssetType};
+use function_name::named;
+use itertools::Itertools;
+use nft_ingester::api::dapi::response::{AssetList, TokenAccountsList};
+use serial_test::serial;
+use tokio::{
+    sync::{broadcast, Mutex},
+    task::JoinSet,
+};
+
+use crate::common::{
+    index_seed_events, seed_token_mints, trim_test_name, Network, SeedEvent, TestSetup,
+    TestSetupOptions,
+};
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_fungible_token_mint_freeze_authority() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+    )
+    .await;
+
+    // USDC token
+    let seeds: Vec<SeedEvent> = seed_token_mints(&["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"]);
+
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+    {
+        "id": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    }
+    "#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: GetAsset = serde_json::from_str(request).unwrap();
+    let response_value = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let res: AssetList = serde_json::from_value(response_value.clone()).unwrap();
+
+    insta::assert_json_snapshot!(name, response_value.clone());
+
+    // assert_eq!(
+    //     res.items[0].clone().token_info.unwrap().mint_authority.unwrap(),
+    //     "BJE5MMbqXjVwjAF7oxwPYXnTXDyspzZyt4vwenNw5ruG".to_string()
+    // );
+    // assert_eq!(
+    //     res.items[0].clone().token_info.unwrap().freeze_authority.unwrap(),
+    //     "7dGbd2QZcCKcTndnHcTL8q7SMVXAkp688NTQYwrRCrar".to_string()
+    // );
+}

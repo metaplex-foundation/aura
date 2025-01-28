@@ -123,7 +123,10 @@ mod tests {
 mod mtg_441_tests {
     use std::sync::Arc;
 
-    use entities::api_req_params::{GetAsset, Options};
+    use entities::{
+        api_req_params::{GetAsset, Options},
+        enums::SpecificationAssetClass,
+    };
     use interface::account_balance::MockAccountBalanceGetter;
     use metrics_utils::ApiMetricsConfig;
     use nft_ingester::{
@@ -189,7 +192,7 @@ mod mtg_441_tests {
             &cli,
             20,
             SLOT_UPDATED,
-            RocksTestEnvironmentSetup::static_data_for_mpl,
+            &[SpecificationAssetClass::MplCoreAsset],
             RocksTestEnvironmentSetup::without_authority,
             RocksTestEnvironmentSetup::test_owner,
             RocksTestEnvironmentSetup::dynamic_data,
@@ -225,7 +228,7 @@ mod mtg_441_tests {
             &cli,
             20,
             SLOT_UPDATED,
-            RocksTestEnvironmentSetup::static_data_for_mpl,
+            &[SpecificationAssetClass::MplCoreAsset],
             RocksTestEnvironmentSetup::with_authority,
             RocksTestEnvironmentSetup::test_owner,
             RocksTestEnvironmentSetup::dynamic_data,
@@ -260,7 +263,7 @@ mod mtg_441_tests {
             &cli,
             20,
             SLOT_UPDATED,
-            RocksTestEnvironmentSetup::static_data_for_mpl,
+            &[SpecificationAssetClass::MplCoreAsset],
             RocksTestEnvironmentSetup::with_authority,
             RocksTestEnvironmentSetup::test_owner,
             RocksTestEnvironmentSetup::dynamic_data,
@@ -291,11 +294,11 @@ mod mtg_441_tests {
     #[tracing_test::traced_test]
     async fn authority_none_collection_authority_none() {
         let cli = Cli::default();
-        let (env, generated_assets) = setup::TestEnvironment::create_and_setup_from_closures(
+        let (env, generated_assets) = TestEnvironment::create_and_setup_from_closures(
             &cli,
             20,
             SLOT_UPDATED,
-            RocksTestEnvironmentSetup::static_data_for_mpl,
+            &[SpecificationAssetClass::MplCoreAsset],
             RocksTestEnvironmentSetup::without_authority,
             RocksTestEnvironmentSetup::test_owner,
             RocksTestEnvironmentSetup::dynamic_data,
