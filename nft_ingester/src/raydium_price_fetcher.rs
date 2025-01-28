@@ -36,6 +36,43 @@ impl RaydiumTokenPriceFetcher {
         }
     }
 
+    pub async fn warmup(&self) -> Result<(), IngesterError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct MintListItem {
+            address: String,
+            symbol: String,
+        }
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct MintListResponse {
+            mint_list: Vec<MintListItem>,
+        }
+        // returns well-known token infos
+        let req = "mint/list";
+        let response = self.get(req).await.map_err(|e| UsecaseError::Reqwest(e.to_string()))?;
+
+        let tokens_data = response
+            .get("data")
+            .and_then(|mint_list| {
+                serde_json::from_value::<MintListResponse>(mint_list.clone()).ok()
+            })
+            .ok_or_else(|| {
+                UsecaseError::Reqwest(format!(
+                "No 'data' field in RaydiumTokenPriceFetcher ids response. Full response: {:#?}",
+                response
+            ))
+            })?;
+
+        for MintListItem { address, symbol } in tokens_data.mint_list {
+            self.symbol_cache.insert(address.clone(), symbol.clone()).await;
+        }
+
+        self.symbol_cache.run_pending_tasks().await;
+
+        Ok(())
+    }
+
     async fn get(&self, endpoint: &str) -> Result<serde_json::Value, IngesterError> {
         let start_time = chrono::Utc::now();
         let response = reqwest::get(format!("{host}/{ep}", host = self.host, ep = endpoint))
@@ -53,6 +90,13 @@ impl RaydiumTokenPriceFetcher {
         }
         response
     }
+
+    /// Returns the approximate sizes of the symbol and the price caches.
+    ///
+    /// The return format is (symbol_cache_size, price_cache_size).
+    pub fn get_cache_sizes(&self) -> (u64, u64) {
+        (self.symbol_cache.weighted_size(), self.price_cache.weighted_size())
+    }
 }
 
 #[async_trait]
@@ -61,6 +105,12 @@ impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
         &self,
         token_ids: &[String],
     ) -> Result<HashMap<String, String>, UsecaseError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct MintIdsItem {
+            address: String,
+            symbol: String,
+        }
         let token_ids_str: Vec<String> = token_ids.iter().map(ToString::to_string).collect();
         let mut result = HashMap::with_capacity(token_ids.len());
         let mut missing_token_ids = Vec::new();
@@ -80,7 +130,7 @@ impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
 
             let tokens_data = response
                 .get("data")
-                .and_then(|td| td.as_array())
+                .and_then(|item| serde_json::from_value::<Vec<Option<MintIdsItem>>>(item.clone()).ok())
                 .ok_or_else(|| {
                     UsecaseError::Reqwest(format!(
                         "No 'data' field in RaydiumTokenPriceFetcher ids response. Full response: {:#?}",
@@ -88,13 +138,8 @@ impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
                     ))
                 })?;
 
-            for data in tokens_data {
-                if let (Some(address), Some(symbol)) = (
-                    data.get("address").and_then(|a| a.as_str()),
-                    data.get("symbol").and_then(|s| s.as_str()),
-                ) {
-                    let address = address.to_string();
-                    let symbol = symbol.to_string();
+            for maybe_token_data in tokens_data {
+                if let Some(MintIdsItem { address, symbol }) = maybe_token_data {
                     self.symbol_cache.insert(address.clone(), symbol.clone()).await;
                     result.insert(address, symbol);
                 }
