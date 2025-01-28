@@ -150,7 +150,7 @@ impl RocksTestEnvironment {
         let static_details =
             spec_asset_class_list.choose_multiple(&mut rng, cnt).cloned().collect::<Vec<_>>();
 
-        let static_details = RocksTestEnvironmentSetup::static_data_for_different_types(
+        let static_details = RocksTestEnvironmentSetup::generate_static_data_with_asset_list(
             &pubkeys,
             slot,
             &static_details,
@@ -239,14 +239,6 @@ impl RocksTestEnvironmentSetup {
 
     pub fn static_data_for_nft(pubkeys: &[Pubkey], slot: u64) -> Vec<AssetStaticDetails> {
         Self::generate_static_data(pubkeys, slot, SpecificationAssetClass::Nft)
-    }
-
-    pub fn static_data_for_different_types(
-        pubkeys: &[Pubkey],
-        slot: u64,
-        spec_asset_class_list: &[SpecificationAssetClass],
-    ) -> Vec<AssetStaticDetails> {
-        Self::generate_static_data_with_asset_list(pubkeys, slot, spec_asset_class_list)
     }
 
     fn generate_static_data(
