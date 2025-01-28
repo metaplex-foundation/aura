@@ -338,71 +338,116 @@ async fn process_slots(
                 break;
             }
 
-            let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
-
-            let fetch_futures = slots_to_fetch.iter().map(|&slot| {
-                let backfill_source = backfill_source.clone();
-                let semaphore = semaphore.clone();
-                let shutdown_token = shutdown_token.clone();
-
-                async move {
-                    let _permit = semaphore.acquire().await;
-                    fetch_block_with_retries(backfill_source, slot, shutdown_token).await
-                }
-            });
-
-            let results = join_all(fetch_futures).await;
-
+            // We will fill `new_failed_slots` if any slot(s) or the whole chunk fails
             let mut new_failed_slots = Vec::new();
 
-            for result in results {
-                match result {
-                    Ok((slot, raw_block)) => {
-                        successful_blocks.insert(slot, raw_block);
-                    },
-                    Err((slot, e)) => {
-                        new_failed_slots.push(slot);
-                        error!("Failed to fetch slot {}: {:?}", slot, e);
-                    },
-                }
+            // -------------------------------------------------------------
+            // 1) FETCH BLOCKS — Bigtable vs. RPC
+            // -------------------------------------------------------------
+            match &*backfill_source {
+                // ---------------------------------------------------------
+                // BIGTABLE PATH: fetch the entire chunk in one call
+                // ---------------------------------------------------------
+                BackfillSource::Bigtable(bigtable_client) => {
+                    // Attempt to fetch the whole chunk at once
+                    match bigtable_client.get_blocks(&slots_to_fetch).await {
+                        Ok(blocks) => {
+                            // If success, convert each fetched block into RawBlock
+                            for (slot, confirmed_block) in blocks {
+                                successful_blocks
+                                    .insert(slot, RawBlock { slot, block: confirmed_block });
+                            }
+                        },
+                        Err(e) => {
+                            // The entire chunk failed to fetch; mark all slots as failed
+                            error!("Failed to fetch chunk via Bigtable: {}", e);
+                            new_failed_slots = slots_to_fetch.clone();
+                        },
+                    }
+                },
+
+                // ---------------------------------------------------------
+                // RPC or other variant: old concurrency approach
+                // ---------------------------------------------------------
+                _ => {
+                    let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
+
+                    let fetch_futures = slots_to_fetch.iter().map(|&slot| {
+                        let backfill_source = backfill_source.clone();
+                        let semaphore = semaphore.clone();
+                        let shutdown_token = shutdown_token.clone();
+
+                        async move {
+                            // Acquire concurrency permit
+                            let _permit = semaphore.acquire().await;
+                            fetch_block_with_retries(backfill_source, slot, shutdown_token).await
+                        }
+                    });
+
+                    let results = join_all(fetch_futures).await;
+
+                    for result in results {
+                        match result {
+                            Ok((slot, raw_block)) => {
+                                successful_blocks.insert(slot, raw_block);
+                            },
+                            Err((slot, e)) => {
+                                error!("Failed to fetch slot {}: {:?}", slot, e);
+                                new_failed_slots.push(slot);
+                            },
+                        }
+                    }
+                },
             }
 
+            // -------------------------------------------------------------
+            // 2) IF all fetched, WRITE TO ROCKSDB
+            // -------------------------------------------------------------
             if new_failed_slots.is_empty() {
-                // All slots fetched successfully, save to database
+                // All slots for this batch were successfully fetched
                 debug!(
                     "All slots fetched successfully for current batch. Saving {} slots to RocksDB.",
                     successful_blocks.len()
                 );
-                if let Err(e) = target_db.raw_blocks_cbor.put_batch(successful_blocks.clone()).await
-                {
-                    error!("Failed to save blocks to RocksDB: {}", e);
-                    // Handle error or retry saving as needed
-                    batch_retries += 1;
-                    if batch_retries >= MAX_BATCH_RETRIES {
-                        panic!(
-                            "Failed to save batch to RocksDB after {} retries. Discarding batch.",
-                            MAX_BATCH_RETRIES
+
+                // Try saving to DB (we also retry on DB write errors)
+                match target_db.raw_blocks_cbor.put_batch(successful_blocks.clone()).await {
+                    Ok(_) => {
+                        // Successfully saved to DB; proceed to next batch
+                        let last_slot = successful_blocks.keys().max().cloned().unwrap_or(0);
+                        info!(
+                            "Successfully saved batch to RocksDB. Last stored slot: {}",
+                            last_slot
                         );
-                    } else {
-                        warn!(
-                            "Retrying batch save {}/{} after {} ms due to error.",
-                            batch_retries, MAX_BATCH_RETRIES, batch_delay_ms
-                        );
-                        tokio::time::sleep(Duration::from_millis(batch_delay_ms)).await;
-                        batch_delay_ms *= 2;
-                    }
-                } else {
-                    // Successfully saved, proceed to next batch
-                    let last_slot = successful_blocks.keys().max().cloned().unwrap_or(0);
-                    info!("Successfully saved batch to RocksDB. Last stored slot: {}", last_slot);
-                    break;
+                        break; // proceed to next chunk
+                    },
+                    Err(e) => {
+                        // DB write failed; retry
+                        error!("Failed to save blocks to RocksDB: {}", e);
+                        batch_retries += 1;
+                        if batch_retries >= MAX_BATCH_RETRIES {
+                            panic!(
+                                "Failed to save batch to RocksDB after {} retries. Discarding batch.",
+                                MAX_BATCH_RETRIES
+                            );
+                        } else {
+                            warn!(
+                                "Retrying batch save {}/{} after {} ms due to error: {}",
+                                batch_retries, MAX_BATCH_RETRIES, batch_delay_ms, e
+                            );
+                            tokio::time::sleep(Duration::from_millis(batch_delay_ms)).await;
+                            batch_delay_ms *= 2;
+                        }
+                    },
                 }
             } else {
+                // Some or all slots failed to fetch
                 batch_retries += 1;
                 if batch_retries >= MAX_BATCH_RETRIES {
                     panic!(
-                        "Failed to fetch all slots in batch after {} retries. Discarding batch.",
-                        MAX_BATCH_RETRIES
+                        "Failed to fetch all slots in batch after {} retries. Discarding batch. Slots: {:?}",
+                        MAX_BATCH_RETRIES,
+                        new_failed_slots
                     );
                 } else {
                     warn!(

@@ -95,7 +95,78 @@ impl BlockProducer for BigTableClient {
         }
     }
 }
+impl BigTableClient {
+    pub async fn get_blocks(
+        &self,
+        slots: &[u64],
+    ) -> Result<Vec<(u64, solana_transaction_status::UiConfirmedBlock)>, StorageError> {
+        let mut counter = GET_DATA_FROM_BG_RETRIES;
 
+        loop {
+            let blocks_iter = match self
+                .big_table_client
+                .get_confirmed_blocks_with_data(slots)
+                .await
+            {
+                Ok(blocks_iter) => blocks_iter, // `blocks_iter` implements Iterator<Item = (u64, ConfirmedBlock)>
+                Err(err) => {
+                    warn!("Error getting blocks: {}, retrying", err);
+                    counter -= 1;
+                    if counter == 0 {
+                        return Err(StorageError::Common(format!("Error getting block: {}", err)));
+                    }
+                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_DATA_FROM_BG))
+                        .await;
+                    continue;
+                },
+            };
+
+            // For each `(slot, block)` we’ll transform it into
+            //   Result<(u64, UiConfirmedBlock), StorageError>
+            let encoded_blocks_result = blocks_iter
+                .map(
+                    |(slot, mut block)| -> Result<
+                        (u64, solana_transaction_status::UiConfirmedBlock),
+                        StorageError,
+                    > {
+                        // Filter out any transactions that are not bubblegum.
+                        block.transactions.retain(is_bubblegum_transaction);
+
+                        // Attempt to encode the block. If it fails, return Err(...) here,
+                        // which causes the entire collect() to fail.
+                        let encoded = block
+                            .clone()
+                            .encode_with_options(
+                                solana_transaction_status::UiTransactionEncoding::Base58,
+                                BlockEncodingOptions {
+                                    transaction_details: TransactionDetails::Full,
+                                    show_rewards: false,
+                                    max_supported_transaction_version: Some(u8::MAX),
+                                },
+                            )
+                            .map_err(|e| StorageError::Common(e.to_string()))?;
+
+                        Ok((slot, encoded))
+                    },
+                )
+                // Collect all Ok(...) items into a Vec, or return the first Err(...) we encounter.
+                .collect::<Result<Vec<_>, StorageError>>();
+
+            // If encoding any block failed, you might want to *retry* the entire request
+            // or just bubble up the error. Here we bubble it up:
+            match encoded_blocks_result {
+                Ok(blocks) => {
+                    // Succeeded encoding every block; return immediately.
+                    return Ok(blocks);
+                },
+                Err(e) => {
+                    warn!("Error encoding a block: {}", e);
+                    return Err(e);
+                },
+            }
+        }
+    }
+}
 fn is_bubblegum_transaction(tx: &TransactionWithStatusMeta) -> bool {
     let meta = if let Some(meta) = tx.get_status_meta() {
         if let Err(_err) = meta.status {
