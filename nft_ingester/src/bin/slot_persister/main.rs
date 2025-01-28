@@ -324,6 +324,9 @@ async fn process_slots(
             break;
         }
 
+        // Log the start of a new batch
+        info!("Starting a new batch of {} slots (chunk_size = {}).", batch.len(), args.chunk_size);
+
         let mut batch_retries = 0;
         let mut batch_delay_ms = INITIAL_BATCH_DELAY_MS;
 
@@ -338,7 +341,14 @@ async fn process_slots(
                 break;
             }
 
-            // We will fill `new_failed_slots` if any slot(s) or the whole chunk fails
+            // Log how many slots remain to be fetched in this retry loop
+            debug!(
+                "Fetching {} slots in this retry iteration. (Retry: {}/{})",
+                slots_to_fetch.len(),
+                batch_retries,
+                MAX_BATCH_RETRIES
+            );
+
             let mut new_failed_slots = Vec::new();
 
             match &*backfill_source {
@@ -346,19 +356,19 @@ async fn process_slots(
                 // 1) Bigtable path: split the batch into sub-chunks, fetch in parallel
                 // ------------------------------------------------------------------
                 BackfillSource::Bigtable(bigtable_client) => {
-                    // We want up to `args.max_concurrency` parallel requests.
-                    // We'll split `slots_to_fetch` into that many sub-chunks.
-                    // Example: if slots_to_fetch.len()=300 & max_concurrency=10,
-                    // each sub-chunk is ~30 slots.
                     let total = slots_to_fetch.len();
+                    // Force sub_chunk_size to at least 1
                     let sub_chunk_size = std::cmp::max(total / args.max_concurrency, 1);
-
-                    // Force at least a single sub-chunk
                     let sub_chunks: Vec<&[u64]> = slots_to_fetch.chunks(sub_chunk_size).collect();
 
-                    // A semaphore ensures we won't exceed `args.max_concurrency`
-                    // *sub-chunk fetches* in parallel. (Though usually sub_chunks.len()
-                    // is <= max_concurrency anyway.)
+                    info!(
+                        "Bigtable path: Splitting {} slots into {} sub-chunks (max_concurrency={}).",
+                        total,
+                        sub_chunks.len(),
+                        args.max_concurrency
+                    );
+
+                    // A semaphore ensures we won't exceed `args.max_concurrency` sub-chunk fetches
                     let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
 
                     let fetch_futures = sub_chunks.into_iter().map(|sub_slots| {
@@ -367,15 +377,34 @@ async fn process_slots(
                         let shutdown_token = shutdown_token.clone();
 
                         async move {
+                            let sub_slots_len = sub_slots.len();
                             let _permit = semaphore.acquire().await;
                             if shutdown_token.is_cancelled() {
+                                error!(
+                                    "Shutdown while waiting to fetch sub-chunk: {:?}",
+                                    sub_slots
+                                );
                                 return Err((sub_slots.to_vec(), "Shutdown".to_string()));
                             }
 
                             // Single Bigtable call for this sub-chunk
                             match bigtable_client.get_blocks(sub_slots).await {
-                                Ok(blocks_map) => Ok(blocks_map),
-                                Err(e) => Err((sub_slots.to_vec(), e.to_string())),
+                                Ok(blocks_map) => {
+                                    debug!(
+                                        "Fetched sub-chunk of {} slots successfully.",
+                                        sub_slots_len
+                                    );
+                                    Ok(blocks_map)
+                                }
+                                Err(e) => {
+                                    error!(
+                                        "Failed to fetch sub-chunk of {} slots: {}. Sub-chunk: {:?}",
+                                        sub_slots_len,
+                                        e,
+                                        sub_slots
+                                    );
+                                    Err((sub_slots.to_vec(), e.to_string()))
+                                }
                             }
                         }
                     });
