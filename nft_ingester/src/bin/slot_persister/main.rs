@@ -56,7 +56,7 @@ struct Args {
     metrics_port: u16,
 
     /// Number of slots to process in each batch
-    #[arg(short, long, default_value_t = 200)]
+    #[arg(short, long, default_value_t = 200, env = "SLOT_PERSISTER_CHUNK_SIZE")]
     chunk_size: usize,
 
     /// Maximum number of concurrent requests
