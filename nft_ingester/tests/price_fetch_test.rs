@@ -47,4 +47,13 @@ mod tests {
         assert!(prices.get(&token_pie).unwrap().clone() > 0.0);
         assert!(prices.get(&non_existed_token).is_none());
     }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_token_price_fetcher_warmup() {
+        let token_price_fetcher = RaydiumTokenPriceFetcher::default();
+        token_price_fetcher.warmup().await.expect("warmup must succeed");
+
+        // check that the cache was pre-filled by some token symbols
+        assert!(token_price_fetcher.get_cache_sizes().0 > 0);
+    }
 }
