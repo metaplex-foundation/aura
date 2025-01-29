@@ -1,10 +1,18 @@
 use std::sync::Arc;
 
-use entities::api_req_params::{GetAsset, GetAssetBatch, GetAssetsByGroup, SearchAssets};
+use entities::{
+    api_req_params::{GetAsset, GetAssetBatch, GetAssetsByGroup, SearchAssets},
+    enums::AssetType,
+};
 use function_name::named;
 use itertools::Itertools;
+use nft_ingester::api::dapi::response::AssetList;
+use rocks_db::storage_traits::AssetIndexReader;
 use serial_test::serial;
-use tokio::{sync::Mutex, task::JoinSet};
+use tokio::{
+    sync::{broadcast, Mutex},
+    task::JoinSet,
+};
 
 use super::common::*;
 
@@ -168,6 +176,34 @@ async fn test_reg_search_assets() {
 #[tokio::test]
 #[serial]
 #[named]
+async fn test_regular_nft_collection() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts(["J1S9H3QjnRtBbbuD4HjPV6RpRhwuk4zKbxsnCHuTgh9w"]);
+
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"        
+    {
+        "id": "J1S9H3QjnRtBbbuD4HjPV6RpRhwuk4zKbxsnCHuTgh9w"
+    }
+    "#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: GetAsset = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    insta::assert_json_snapshot!(name.clone(), response);
+}
+
+#[tokio::test]
+#[serial]
+#[named]
 async fn test_search_by_owner_with_show_zero_balance() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
@@ -211,5 +247,82 @@ async fn test_search_by_owner_with_show_zero_balance() {
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
     let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    insta::assert_json_snapshot!(name, response);
+}
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn get_asset_nft_token_22_with_metadata() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts(["Cpy4TfoLi1qtcx1grKx373NVksQ2xA3hMyNQvT2HFfQn"]);
+
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+    {
+        "id": "Cpy4TfoLi1qtcx1grKx373NVksQ2xA3hMyNQvT2HFfQn"
+    }
+    "#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: GetAsset = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+
+    insta::assert_json_snapshot!(name, response);
+}
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_requested_non_fungibles_are_non_fungibles() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::EclipseMainnet), clear_db: true },
+    )
+    .await;
+
+    let seeds = seed_token_mints([
+        "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ",
+        "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom",
+        "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1",
+        "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
+        "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH",
+    ]);
+
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+        {
+            "limit": 500,
+            "ownerAddress": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz",
+            "tokenType": "nonFungible",
+            "options": {
+                "showCollectionMetadata": true,
+                "showGrandTotal": true,
+                "showInscription": true,
+                "showNativeBalance": true
+            }
+        }"#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+
+    response["items"].as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "V1_NFT");
+        true
+    });
+
     insta::assert_json_snapshot!(name, response);
 }

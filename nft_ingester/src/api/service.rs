@@ -18,7 +18,7 @@ use tokio::{
     sync::{broadcast::Receiver, Mutex},
     task::{JoinError, JoinSet},
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
@@ -111,6 +111,20 @@ pub async fn start_api(
     }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let token_price_fetcher = Arc::new(RaydiumTokenPriceFetcher::new(
+        crate::consts::RAYDIUM_API_HOST.to_string(),
+        crate::raydium_price_fetcher::CACHE_TTL,
+        red_metrics,
+    ));
+    let tpf = token_price_fetcher.clone();
+    tasks.lock().await.spawn(async move {
+        if let Err(e) = tpf.warmup().await {
+            warn!(error = %e, "Failed to warm up Raydium token price fetcher, cache is empty: {:?}", e);
+        }
+        let (symbol_cache_size, _) = tpf.get_cache_sizes();
+        info!(%symbol_cache_size, "Warmed up Raydium token price fetcher with {} symbols", symbol_cache_size);
+        Ok(())
+    });
     let api = DasApi::new(
         pg_client.clone(),
         rocks_db,
@@ -123,11 +137,7 @@ pub async fn start_api(
         json_middleware_config.unwrap_or_default(),
         account_balance_getter,
         storage_service_base_url,
-        Arc::new(RaydiumTokenPriceFetcher::new(
-            "https://api-v3.raydium.io".to_string(),
-            crate::raydium_price_fetcher::CACHE_TTL,
-            red_metrics,
-        )),
+        token_price_fetcher,
         native_mint_pubkey,
     );
 

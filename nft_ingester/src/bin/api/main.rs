@@ -30,7 +30,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     info!("Starting API server...");
 
-    let guard = if args.is_run_profiling {
+    let guard = if args.run_profiling {
         Some(pprof::ProfilerGuardBuilder::default().frequency(100).build().unwrap())
     } else {
         None
@@ -102,6 +102,7 @@ pub async fn main() -> Result<(), IngesterError> {
                         json_downloader_metrics.clone(),
                         red_metrics.clone(),
                         args.parallel_json_downloaders,
+                        args.api_skip_inline_json_refresh.unwrap_or_default(),
                     )
                     .await,
                 ))

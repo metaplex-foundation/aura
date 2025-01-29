@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use clap::{Parser, ValueEnum};
+// TODO: replace String paths with PathBuf
 use figment::value::Dict;
 use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
@@ -6,7 +9,7 @@ use tracing_subscriber::fmt;
 
 use crate::error::IngesterError;
 
-#[derive(Parser, Debug)]
+#[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct IngesterClapArgs {
     #[clap(
@@ -68,43 +71,51 @@ pub struct IngesterClapArgs {
     pub parallel_json_downloaders: i32,
 
     #[clap(
-        long("run_api"),
-        default_value_t = true,
-        env = "IS_RUN_API",
-        help = "Run API (default: false)"
+        long,
+        env,
+        default_value = "true",
+        help = "Skip inline json refreshes if the metadata may be stale"
     )]
-    pub is_run_api: bool,
+    pub api_skip_inline_json_refresh: Option<bool>,
 
     #[clap(
-        long("run_gapfiller"),
+        long("run-api"),
+        default_value = "true",
+        env = "RUN_API",
+        help = "Run API (default: true)"
+    )]
+    pub run_api: Option<bool>,
+
+    #[clap(
+        long("run-gapfiller"),
         default_value_t = false,
-        env = "IS_RUN_GAPFILLER",
-        help = "Start gapfiller",
+        env = "RUN_GAPFILLER",
+        help = "Start gapfiller.  (default: false)",
         requires = "gapfiller_peer_addr"
     )]
-    pub is_run_gapfiller: bool,
+    pub run_gapfiller: bool,
 
     #[clap(long, env, default_value = "0.0.0.0", help = "Gapfiller peer address")]
     pub gapfiller_peer_addr: Option<String>,
 
     #[clap(
-        long("run_profiling"),
+        long,
         default_value_t = false,
-        env = "IS_RUN_PROFILING",
+        env = "INGESTER_RUN_PROFILING",
         help = "Start profiling (default: false)"
     )]
-    pub is_run_profiling: bool,
+    pub run_profiling: bool,
 
     #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
 
     // Group: Rocks DB Configuration
     #[clap(
-        long("restore_rocks_db"),
+        long("restore-rocks-db"),
         default_value_t = false,
-        env = "IS_RESTORE_ROCKS_DB",
+        env = "RESTORE_ROCKS_DB",
         help = "Try restore rocks (default: false)",
-        requires = "rocks_backup_url", //todo: if true
+        requires = "rocks_backup_url",
         requires = "rocks_backup_archives_dir"
     )]
     pub is_restore_rocks_db: bool,
@@ -112,17 +123,23 @@ pub struct IngesterClapArgs {
     pub rocks_backup_url: Option<String>,
     #[clap(long, env, help = "Rocks backup archives dir")]
     pub rocks_backup_archives_dir: Option<String>,
+
     #[clap(
         long,
-        env = "IS_ENABLE_ROCKS_MIGRATION",
-        default_value_t = true,
-        help = "Enable migration for rocksdb (default: true)"
+        env = "ENABLE_ROCKS_MIGRATION",
+        default_value = "true",
+        help = "Enable migration for rocksdb (default: true) requires: rocks_migration_storage_path"
     )]
-    pub rocks_enable_migration: bool,
-    #[clap(long, env, help = "Migration storage path dir")]
+    pub enable_rocks_migration: Option<bool>,
+    #[clap(
+        long,
+        env,
+        requires_if("true", "enable_rocks_migration"),
+        help = "Migration storage path dir"
+    )]
     pub rocks_migration_storage_path: Option<String>,
 
-    #[clap(long, env, default_value_t = false, help = "Start consistent checker (default: false)")]
+    #[clap(long, env, help = "Start consistent checker (default: false)")]
     pub run_sequence_consistent_checker: bool,
 
     #[clap(
@@ -179,15 +196,15 @@ pub struct IngesterClapArgs {
 
     #[clap(
         long,
-        env = "IS_RUN_BACKFILLER",
-        default_value_t = true,
-        help = "Start backfiller (default: true)",
-        requires = "rocks_slots_db_path"
+        env = "RUN_BACKFILLER",
+        default_value = "true",
+        help = "Run backfiller. (default: true) requires: rocks_slots_db_path"
     )]
-    pub is_run_backfiller: bool,
+    pub run_backfiller: Option<bool>,
     #[clap(
         long,
         env,
+        requires_if("true", "run_backfiller"),
         help = "#backfiller Path to the RocksDB instance with slots (required for the backfiller to work)"
     )]
     pub rocks_slots_db_path: Option<String>,
@@ -209,11 +226,11 @@ pub struct IngesterClapArgs {
 
     #[clap(
         long,
-        env = "IS_RUN_BUBBLEGUM_BACKFILLER",
-        default_value_t = true,
-        help = "#bubbl Start bubblegum backfiller (default: true)"
+        env = "RUN_BUBBLEGUM_BACKFILLER",
+        default_value = "true",
+        help = "#bubbl Run bubblegum backfiller (default: true)"
     )]
-    pub is_run_bubblegum_backfiller: bool,
+    pub run_bubblegum_backfiller: Option<bool>,
     #[clap(
         long,
         env = "SHOULD_REINGEST",
@@ -279,12 +296,12 @@ pub struct SynchronizerClapArgs {
     pub rocks_dump_path: String,
 
     #[clap(
-        long("run_profiling"),
-        env = "IS_RUN_PROFILING",
+        long("run-profiling"),
+        env = "SYNCHRONIZER_RUN_PROFILING",
         default_value_t = false,
         help = "Start profiling (default: false)"
     )]
-    pub is_run_profiling: bool,
+    pub run_profiling: bool,
     #[clap(long, env, default_value = "/usr/src/app/heaps", help = "Heap path")]
     pub heap_path: String,
 
@@ -309,6 +326,28 @@ pub struct SynchronizerClapArgs {
     pub synchronizer_parallel_tasks: usize,
     #[clap(long, env, default_value = "0")]
     pub timeout_between_syncs_sec: u64,
+
+    #[clap(long, env, default_value = "info", help = "warn|info|debug")]
+    pub log_level: String,
+}
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+pub struct RocksDbBackupServiceClapArgs {
+    #[clap(long, env, default_value = "./my_rocksdb", help = "Rocks db path container")]
+    pub rocks_db_path_container: PathBuf,
+    #[clap(long, env, default_value = "./my_rocksdb_secondary", help = "Rocks db secondary path")]
+    pub rocks_db_secondary_path: PathBuf,
+    #[clap(long, env = "ROCKS_BACKUP_ARCHIVES_DIR", help = "Rocks backup archives dir")]
+    pub backup_archives_dir: PathBuf,
+    #[clap(long, env = "ROCKS_BACKUP_DIR", help = "Rocks backup dir")]
+    pub backup_dir: PathBuf,
+    #[clap(
+        long,
+        env = "ROCKS_FLUSH_BEFORE_BACKUP",
+        help = "Whether to flush RocksDb before backup"
+    )]
+    pub flush_before_backup: bool,
 
     #[clap(long, env, default_value = "info", help = "warn|info|debug")]
     pub log_level: String,
@@ -411,12 +450,12 @@ pub struct ApiClapArgs {
     )]
     pub skip_check_tree_gaps: bool,
     #[clap(
-        env = "IS_RUN_PROFILING",
-        long("run_profiling"),
+        env = "API_RUN_PROFILING",
+        long("run-profiling"),
         default_value_t = false,
-        help = "Start profiling (default: false)"
+        help = "Start profiling. (default: false)"
     )]
-    pub is_run_profiling: bool,
+    pub run_profiling: bool,
 
     #[clap(
         long,
@@ -475,7 +514,13 @@ pub struct ApiClapArgs {
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     #[clap(long, env, default_value = "100")]
     pub parallel_json_downloaders: i32,
-
+    #[clap(
+        long,
+        env,
+        default_value = "true",
+        help = "Skip inline json refreshes if the metadata may be stale"
+    )]
+    pub api_skip_inline_json_refresh: Option<bool>,
     #[clap(long, env, default_value = "info", help = "info|debug")]
     pub log_level: String,
 }
@@ -549,7 +594,7 @@ impl BigTableConfig {
 
 pub fn init_logger(log_level: &str) {
     let t = tracing_subscriber::fmt().with_env_filter(log_level);
-    t.event_format(fmt::format::json()).init();
+    t.event_format(fmt::format::json().with_line_number(true).with_file(true)).init();
 }
 
 #[cfg(test)]
@@ -575,18 +620,18 @@ mod tests {
         assert_eq!(args.pg_max_db_connections, 100);
         assert_eq!(args.sequence_consistent_checker_wait_period_sec, 60);
         assert_eq!(args.parallel_json_downloaders, 100);
-        assert_eq!(args.is_run_api, true);
-        assert_eq!(args.is_run_gapfiller, false);
-        assert_eq!(args.is_run_profiling, false);
+        assert!(args.run_api.unwrap_or(false));
+        assert_eq!(args.run_gapfiller, false);
+        assert_eq!(args.run_profiling, false);
         assert_eq!(args.is_restore_rocks_db, false);
-        assert_eq!(args.is_run_bubblegum_backfiller, true);
+        assert!(args.run_bubblegum_backfiller.unwrap_or(false));
         assert_eq!(args.run_sequence_consistent_checker, false);
         assert_eq!(args.should_reingest, false);
         assert_eq!(args.check_proofs, false);
         assert_eq!(args.check_proofs_commitment, CommitmentLevel::Finalized);
         assert_eq!(args.archives_dir, "/rocksdb/_rocks_backup_archives");
         assert_eq!(args.skip_check_tree_gaps, false);
-        assert_eq!(args.is_run_backfiller, true);
+        assert!(args.run_backfiller.unwrap_or(false));
         assert_eq!(args.backfiller_source_mode, BackfillerSourceMode::RPC);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.log_level, "info");
@@ -604,7 +649,7 @@ mod tests {
         assert_eq!(args.pg_max_db_connections, 100);
         assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
         assert_eq!(args.rocks_db_secondary_path, "./my_rocksdb_secondary");
-        assert_eq!(args.is_run_profiling, false);
+        assert_eq!(args.run_profiling, false);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.dump_synchronizer_batch_size, 200000);
         assert_eq!(args.dump_sync_threshold, 150000000);
@@ -628,7 +673,7 @@ mod tests {
         assert_eq!(args.rocks_sync_interval_seconds, 2);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.skip_check_tree_gaps, false);
-        assert_eq!(args.is_run_profiling, false);
+        assert_eq!(args.run_profiling, false);
         assert_eq!(args.check_proofs, false);
         assert_eq!(args.check_proofs_probability, 0.1);
         assert_eq!(args.check_proofs_commitment, CommitmentLevel::Finalized);

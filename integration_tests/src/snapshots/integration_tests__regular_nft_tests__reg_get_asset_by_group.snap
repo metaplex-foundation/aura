@@ -80,7 +80,11 @@ snapshot_kind: text
         "ownership_model": "single",
         "owner": "9qUcfdADyrrTSetFjNjF9Ro7LKAqzJkzZV6WKLHfv5MU"
       },
-      "supply": null,
+      "supply": {
+        "print_max_supply": 0,
+        "print_current_supply": 0,
+        "edition_nonce": 254
+      },
       "mutable": true,
       "burnt": false,
       "lamports": 5616720,

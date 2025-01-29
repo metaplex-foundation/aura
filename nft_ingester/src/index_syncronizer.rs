@@ -34,8 +34,8 @@ where
     T: AssetIndexSourceStorage,
     U: AssetIndexStorage,
 {
-    primary_storage: Arc<T>,
-    index_storage: Arc<U>,
+    rocks_primary_storage: Arc<T>,
+    pg_index_storage: Arc<U>,
     dump_synchronizer_batch_size: usize,
     dump_path: String,
     metrics: Arc<SynchronizerMetricsConfig>,
@@ -49,16 +49,16 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        primary_storage: Arc<T>,
-        index_storage: Arc<U>,
+        rocks_primary_storage: Arc<T>,
+        pg_index_storage: Arc<U>,
         dump_synchronizer_batch_size: usize,
         dump_path: String,
         metrics: Arc<SynchronizerMetricsConfig>,
         parallel_tasks: usize,
     ) -> Self {
         Synchronizer {
-            primary_storage,
-            index_storage,
+            rocks_primary_storage,
+            pg_index_storage,
             dump_synchronizer_batch_size,
             dump_path,
             metrics,
@@ -109,16 +109,16 @@ where
         run_full_sync_threshold: i64,
         asset_type: AssetType,
     ) -> Result<SyncStatus, IngesterError> {
-        let last_indexed_key = self.index_storage.fetch_last_synced_id(asset_type).await?;
+        let last_indexed_key = self.pg_index_storage.fetch_last_synced_id(asset_type).await?;
         let last_indexed_key = last_indexed_key.map(decode_u64x2_pubkey).transpose()?;
 
         // Fetch the last known key from the primary storage
         let (last_key, prefix) = match asset_type {
             AssetType::NonFungible => {
-                (self.primary_storage.last_known_nft_asset_updated_key()?, "nft")
+                (self.rocks_primary_storage.last_known_nft_asset_updated_key()?, "nft")
             },
             AssetType::Fungible => {
-                (self.primary_storage.last_known_fungible_asset_updated_key()?, "fungible")
+                (self.rocks_primary_storage.last_known_fungible_asset_updated_key()?, "fungible")
             },
         };
         let Some(last_key) = last_key else {
@@ -195,13 +195,17 @@ where
         let state = self.get_sync_state(run_full_sync_threshold, asset_type).await?;
         match state {
             SyncStatus::FullSyncRequired(state) => {
-                tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
+                tracing::warn!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
                 self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key).await
             },
             SyncStatus::RegularSyncRequired(state) => {
+                tracing::debug!("Regular sync required for nft asset");
                 self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key).await
             },
-            SyncStatus::NoSyncRequired => Ok(()),
+            SyncStatus::NoSyncRequired => {
+                tracing::debug!("No sync required for nft asset");
+                Ok(())
+            },
         }
     }
 
@@ -216,15 +220,19 @@ where
 
         match state {
             SyncStatus::FullSyncRequired(state) => {
-                tracing::info!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
+                tracing::warn!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
                     .await
             },
             SyncStatus::RegularSyncRequired(state) => {
+                tracing::debug!("Regular sync required for fungible asset");
                 self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
                     .await
             },
-            SyncStatus::NoSyncRequired => Ok(()),
+            SyncStatus::NoSyncRequired => {
+                tracing::debug!("No sync required for fungible asset");
+                Ok(())
+            },
         }
     }
 
@@ -234,8 +242,12 @@ where
         asset_type: AssetType,
     ) -> Result<(), IngesterError> {
         let last_known_key = match asset_type {
-            AssetType::NonFungible => self.primary_storage.last_known_nft_asset_updated_key()?,
-            AssetType::Fungible => self.primary_storage.last_known_fungible_asset_updated_key()?,
+            AssetType::NonFungible => {
+                self.rocks_primary_storage.last_known_nft_asset_updated_key()?
+            },
+            AssetType::Fungible => {
+                self.rocks_primary_storage.last_known_fungible_asset_updated_key()?
+            },
         };
         let Some(last_known_key) = last_known_key else {
             return Ok(());
@@ -273,7 +285,7 @@ where
         num_shards: u64,
     ) -> Result<(), IngesterError> {
         let base_path = std::path::Path::new(self.dump_path.as_str());
-        self.index_storage.destructive_prep_to_batch_nft_load().await?;
+        self.pg_index_storage.destructive_prep_to_batch_nft_load().await?;
 
         let shards = shard_pubkeys(num_shards);
         type ResultWithPaths = Result<(usize, String, String, String, String), String>;
@@ -322,7 +334,7 @@ where
             let end = *end;
             let shutdown_rx = rx.resubscribe();
             let metrics = self.metrics.clone();
-            let rocks_storage = self.primary_storage.clone();
+            let rocks_storage = self.rocks_primary_storage.clone();
             tasks.spawn_blocking(move || {
                 let res = rocks_storage.dump_nft_csv(
                     assets_file,
@@ -350,7 +362,7 @@ where
         while let Some(task) = tasks.join_next().await {
             let (_cnt, assets_path, creators_path, authorities_path, metadata_path) =
                 task.map_err(|e| e.to_string())??;
-            let index_storage = self.index_storage.clone();
+            let index_storage = self.pg_index_storage.clone();
             let semaphore = semaphore.clone();
             index_tasks.spawn(async move {
                 index_storage
@@ -368,9 +380,9 @@ where
             task.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
         }
         tracing::info!("All NFT assets loads complete. Finalizing the batch load");
-        self.index_storage.finalize_batch_nft_load().await?;
+        self.pg_index_storage.finalize_batch_nft_load().await?;
         tracing::info!("Batch load finalized for NFTs");
-        self.index_storage
+        self.pg_index_storage
             .update_last_synced_key(last_included_rocks_key, AssetType::NonFungible)
             .await?;
         Ok(())
@@ -383,7 +395,7 @@ where
         num_shards: u64,
     ) -> Result<(), IngesterError> {
         let base_path = std::path::Path::new(self.dump_path.as_str());
-        self.index_storage.destructive_prep_to_batch_fungible_load().await?;
+        self.pg_index_storage.destructive_prep_to_batch_fungible_load().await?;
 
         let shards = shard_pubkeys(num_shards);
         let mut tasks: JoinSet<Result<(usize, String), String>> = JoinSet::new();
@@ -405,7 +417,7 @@ where
             let end = *end;
             let shutdown_rx = rx.resubscribe();
             let metrics = self.metrics.clone();
-            let rocks_storage = self.primary_storage.clone();
+            let rocks_storage = self.rocks_primary_storage.clone();
 
             tasks.spawn_blocking(move || {
                 let res = rocks_storage.dump_fungible_csv(
@@ -423,7 +435,7 @@ where
         let semaphore = Arc::new(tokio::sync::Semaphore::new(1));
         while let Some(task) = tasks.join_next().await {
             let (_cnt, fungible_tokens_path) = task.map_err(|e| e.to_string())??;
-            let index_storage = self.index_storage.clone();
+            let index_storage = self.pg_index_storage.clone();
             let semaphore = semaphore.clone();
             index_tasks.spawn(async move {
                 index_storage
@@ -435,9 +447,9 @@ where
             task.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
         }
         tracing::info!("All token accounts/fungibles loads complete. Finalizing the batch load");
-        self.index_storage.finalize_batch_fungible_load().await?;
+        self.pg_index_storage.finalize_batch_fungible_load().await?;
         tracing::info!("Batch load finalized for fungibles");
-        self.index_storage
+        self.pg_index_storage
             .update_last_synced_key(last_included_rocks_key, AssetType::Fungible)
             .await?;
         Ok(())
@@ -461,7 +473,7 @@ where
                     break;
                 }
                 let (updated_keys, last_included_key) =
-                    self.primary_storage.fetch_fungible_asset_updated_keys(
+                    self.rocks_primary_storage.fetch_fungible_asset_updated_keys(
                         starting_key.clone(),
                         Some(last_key.clone()),
                         self.dump_synchronizer_batch_size,
@@ -482,8 +494,8 @@ where
                 // Update the asset indexes in the index storage
                 // let last_included_key = AssetsUpdateIdx::encode_key(last_included_key);
                 last_included_rocks_key = Some(last_included_key);
-                let primary_storage = self.primary_storage.clone();
-                let index_storage = self.index_storage.clone();
+                let primary_storage = self.rocks_primary_storage.clone();
+                let index_storage = self.pg_index_storage.clone();
                 let metrics = self.metrics.clone();
                 tasks.spawn(async move {
                     Self::syncronize_fungible_batch(
@@ -518,7 +530,7 @@ where
                     last_included_rocks_key.slot,
                     last_included_rocks_key.pubkey,
                 );
-                self.index_storage
+                self.pg_index_storage
                     .update_last_synced_key(&last_included_rocks_key, AssetType::Fungible)
                     .await?;
             } else {
@@ -550,7 +562,7 @@ where
                     break;
                 }
                 let (updated_keys, last_included_key) =
-                    self.primary_storage.fetch_nft_asset_updated_keys(
+                    self.rocks_primary_storage.fetch_nft_asset_updated_keys(
                         starting_key.clone(),
                         Some(last_key.clone()),
                         self.dump_synchronizer_batch_size,
@@ -571,8 +583,8 @@ where
                 // Update the asset indexes in the index storage
                 // let last_included_key = AssetsUpdateIdx::encode_key(last_included_key);
                 last_included_rocks_key = Some(last_included_key);
-                let primary_storage = self.primary_storage.clone();
-                let index_storage = self.index_storage.clone();
+                let primary_storage = self.rocks_primary_storage.clone();
+                let index_storage = self.pg_index_storage.clone();
                 let metrics = self.metrics.clone();
                 tasks.spawn(async move {
                     Self::syncronize_nft_batch(
@@ -607,7 +619,7 @@ where
                     last_included_rocks_key.slot,
                     last_included_rocks_key.pubkey,
                 );
-                self.index_storage
+                self.pg_index_storage
                     .update_last_synced_key(&last_included_rocks_key, AssetType::NonFungible)
                     .await?;
             } else {

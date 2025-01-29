@@ -1,4 +1,4 @@
-use std::{collections::HashMap, string::ToString, sync::Arc};
+use std::{collections::HashMap, string::ToString, sync::Arc, time::Duration};
 
 use entities::{
     api_req_params::{AssetSortDirection, Options},
@@ -33,6 +33,7 @@ use crate::api::dapi::rpc_asset_models::FullAsset;
 
 pub const COLLECTION_GROUP_KEY: &str = "collection";
 pub const METADATA_CACHE_TTL: i64 = 86400; // 1 day
+pub const CLIENT_TIMEOUT: Duration = Duration::from_secs(3);
 
 fn convert_rocks_asset_model(
     asset_pubkey: &Pubkey,
@@ -101,6 +102,7 @@ fn convert_rocks_asset_model(
         token_account: asset_selected_maps.token_accounts.get(asset_pubkey).cloned(),
         inscription,
         spl_mint: asset_selected_maps.spl_mints.get(asset_pubkey).cloned(),
+
         token_symbol: token_symbols.get(&asset_pubkey.to_string()).cloned(),
         token_price: token_prices.get(&asset_pubkey.to_string()).cloned(),
     })
@@ -192,6 +194,7 @@ pub async fn get_by_ids<
 
     let unique_asset_ids: Vec<Pubkey> = unique_asset_ids_map.keys().cloned().collect();
     let asset_ids_string = asset_ids.clone().into_iter().map(|id| id.to_string()).collect_vec();
+
     let (token_prices, token_symbols) = if options.show_fungible {
         let token_prices_fut = token_price_fetcher.fetch_token_prices(asset_ids_string.as_slice());
         let token_symbols_fut =
@@ -230,6 +233,7 @@ pub async fn get_by_ids<
                     let curr_time = chrono::Utc::now().timestamp();
                     if offchain_data.storage_mutability.is_mutable()
                         && curr_time > offchain_data.last_read_at + METADATA_CACHE_TTL
+                        && !json_downloader.skip_refresh()
                     {
                         download_needed = true;
                     }
@@ -267,7 +271,8 @@ pub async fn get_by_ids<
                     let json_downloader = json_downloader.clone();
 
                     async move {
-                        let response = json_downloader.download_file(url.clone()).await;
+                        let response =
+                            json_downloader.download_file(url.clone(), CLIENT_TIMEOUT).await;
                         (url, response)
                     }
                 })

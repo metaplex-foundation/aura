@@ -7,7 +7,7 @@ use interface::error::UsecaseError;
 use plerkle_messenger::MessengerError;
 use plerkle_serialization::error::PlerkleSerializationError;
 use postgre_client::error::IndexDbError;
-use rocks_db::errors::{BackupServiceError, StorageError};
+use rocks_db::errors::{RocksDbBackupServiceError, StorageError};
 use solana_sdk::{pubkey::ParsePubkeyError, signature::ParseSignatureError};
 use solana_transaction_status::EncodeError;
 use thiserror::Error;
@@ -212,8 +212,8 @@ impl From<sqlx::Error> for IngesterError {
     }
 }
 
-impl From<BackupServiceError> for IngesterError {
-    fn from(value: BackupServiceError) -> Self {
+impl From<RocksDbBackupServiceError> for IngesterError {
+    fn from(value: RocksDbBackupServiceError) -> Self {
         IngesterError::BackupError(value.to_string())
     }
 }

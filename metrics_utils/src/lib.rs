@@ -56,6 +56,7 @@ pub struct MetricState {
     pub fork_cleaner_metrics: Arc<ForkCleanerMetricsConfig>,
     pub batch_mint_processor_metrics: Arc<BatchMintProcessorMetricsConfig>,
     pub batch_mint_persisting_metrics: Arc<BatchMintPersisterMetricsConfig>,
+    pub redis_receiver_metrics: Arc<RedisReceiverMetricsConfig>,
     pub registry: Registry,
 }
 
@@ -83,6 +84,7 @@ impl MetricState {
             batch_mint_processor_metrics: Arc::new(BatchMintProcessorMetricsConfig::new()),
             batch_mint_persisting_metrics: Arc::new(BatchMintPersisterMetricsConfig::new()),
             red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
+            redis_receiver_metrics: Arc::new(RedisReceiverMetricsConfig::new()),
             registry: Registry::default(),
         }
     }
@@ -558,6 +560,7 @@ impl MetricsTrait for MetricState {
         self.red_metrics.register(&mut self.registry);
         self.fork_cleaner_metrics.register(&mut self.registry);
         self.batch_mint_processor_metrics.register(&mut self.registry);
+        self.redis_receiver_metrics.register(&mut self.registry);
     }
 }
 
@@ -1264,6 +1267,101 @@ impl BatchMintPersisterMetricsConfig {
             "batch_mints_processing_latency",
             "A histogram of batch mints persisting latency",
             self.persisting_latency.clone(),
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RedisReceiverMetricsConfig {
+    start_time: Gauge,
+    transactions_received: Counter,
+    accounts_received: Counter,
+    transactions_parsed: Counter,
+    accounts_parsed: Counter,
+    transaction_parse_errors: Counter,
+    account_parse_errors: Counter,
+}
+
+impl Default for RedisReceiverMetricsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RedisReceiverMetricsConfig {
+    pub fn new() -> Self {
+        Self {
+            start_time: Default::default(),
+            transactions_received: Default::default(),
+            accounts_received: Default::default(),
+            transactions_parsed: Default::default(),
+            accounts_parsed: Default::default(),
+            transaction_parse_errors: Default::default(),
+            account_parse_errors: Default::default(),
+        }
+    }
+    pub fn start_time(&self) -> i64 {
+        self.start_time.set(Utc::now().timestamp())
+    }
+    pub fn inc_transactions_received_by(&self, count: u64) -> u64 {
+        self.transactions_received.inc_by(count)
+    }
+    pub fn inc_accounts_received_by(&self, count: u64) -> u64 {
+        self.accounts_received.inc_by(count)
+    }
+    pub fn inc_transactions_parsed_by(&self, count: u64) -> u64 {
+        self.transactions_parsed.inc_by(count)
+    }
+    pub fn inc_accounts_parsed_by(&self, count: u64) -> u64 {
+        self.accounts_parsed.inc_by(count)
+    }
+    pub fn inc_transaction_parse_errors_by(&self, count: u64) -> u64 {
+        self.transaction_parse_errors.inc_by(count)
+    }
+    pub fn inc_account_parse_errors_by(&self, count: u64) -> u64 {
+        self.account_parse_errors.inc_by(count)
+    }
+    pub fn register(&self, registry: &mut Registry) {
+        registry.register(
+            "redis_receiver_start_time",
+            "Redis receiver metrics start time",
+            self.start_time.clone(),
+        );
+
+        registry.register(
+            "redis_total_transactions_received",
+            "Total transactions received (by all workers)",
+            self.transactions_received.clone(),
+        );
+
+        registry.register(
+            "redis_total_accounts_received",
+            "Total accounts received (by all workers)",
+            self.accounts_received.clone(),
+        );
+
+        registry.register(
+            "redis_total_transactions_parsed",
+            "Total transactions parsed (by all workers)",
+            self.transactions_parsed.clone(),
+        );
+
+        registry.register(
+            "redis_total_accounts_parsed",
+            "Total accounts parsed (by all workers)",
+            self.accounts_parsed.clone(),
+        );
+
+        registry.register(
+            "redis_total_transaction_parse_errors",
+            "Total transaction parse errors",
+            self.transaction_parse_errors.clone(),
+        );
+
+        registry.register(
+            "redis_total_account_parse_errors",
+            "Total account parse errors (by all workers)",
+            self.account_parse_errors.clone(),
         );
     }
 }

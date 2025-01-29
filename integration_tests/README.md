@@ -7,7 +7,9 @@ This Cargo package helps us run multi-package tests in our workspace. This setup
 
 ## Setup
 
-First setup a local Postgres database and export the postgres database URL as follows:
+First, set up a local PostgreSQL database. This can be done using the `run_postgres.sh` script. It is highly recommended to use this script as it creates and mounts the required directory, `rocks_dump`. This directory is essential for tests involving full database synchronization.
+
+Then export the postgres database URL as follows:
 ```export DATABASE_TEST_URL=postgres://postgres@localhost/<database_name>```
 
 Also gain access to mainnet RPCs and devnet RPCs and export the URLs as follows. Currently,

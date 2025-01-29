@@ -27,7 +27,11 @@ Run indexer with minimum functionality. (without API/Back Filler/Bubblegum BackF
 ./target/debug/ingester \
   --pg-database-url postgres://solana:solana@localhost:5432/aura_db \
   --rpc-host https://mainnet-aura.metaplex.com/{personal_rpc_key} \
-  --redis-connection-config '{"redis_connection_str":"redis://127.0.0.1:6379/0"}'
+  --redis-connection-config '{"redis_connection_str":"redis://127.0.0.1:6379/0"}' \
+  --run-api false \
+  --run-backfiller false \
+  --enable-rocks-migration false 
+  
 ```
 
 ### Main components that can be run with ingester

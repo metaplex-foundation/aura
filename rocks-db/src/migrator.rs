@@ -38,12 +38,17 @@ pub trait RocksMigration {
     const VERSION: u64;
     const DESERIALIZATION_TYPE: SerializationType;
     const SERIALIZATION_TYPE: SerializationType;
-    type NewDataType: Sync + Serialize + DeserializeOwned + Send + TypedColumn;
+    type KeyType: 'static + Hash + Eq + std::fmt::Debug;
+    type NewDataType: Sync
+        + Serialize
+        + DeserializeOwned
+        + Send
+        + TypedColumn<KeyType = Self::KeyType>;
     type OldDataType: Sync
         + Serialize
         + DeserializeOwned
         + Send
-        + TypedColumn
+        + TypedColumn<KeyType = Self::KeyType>
         + Into<<Self::NewDataType as TypedColumn>::ValueType>;
 }
 
@@ -242,7 +247,7 @@ impl<'a> MigrationApplier<'a> {
     {
         let mut batch = HashMap::new();
         for (key, value) in Self::migration_column_iter::<M>(&temporary_migration_storage.db)? {
-            let key_decoded = match column.decode_key(key.to_vec()) {
+            let key_decoded = match M::OldDataType::decode_key(key.to_vec()) {
                 Ok(key_decoded) => key_decoded,
                 Err(e) => {
                     error!("migration data decode_key: {:?}, {}", key.to_vec(), e);

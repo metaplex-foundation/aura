@@ -108,7 +108,7 @@ async fn fetch_assets<
     JP: JsonPersister + Sync + Send + 'static,
     PPC: ProcessingPossibilityChecker + Sync + Send + 'static,
 >(
-    index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
+    pg_index_client: Arc<impl postgre_client::storage_traits::AssetPubkeyFilteredFetcher>,
     rocks_db: Arc<Storage>,
     filter: SearchAssetsQuery,
     sort_by: AssetSorting,
@@ -145,7 +145,7 @@ async fn fetch_assets<
         }
     };
 
-    let keys = index_client
+    let keys = pg_index_client
         .get_asset_pubkeys_filtered(filter, &sort_by.into(), limit, page, before, after, &options)
         .await
         .map_err(|e| {
@@ -206,13 +206,14 @@ async fn fetch_assets<
     };
     let mut grand_total = None;
     if options.show_grand_total {
-        grand_total = Some(index_client.get_grand_total(filter, &options).await.map_err(|e| {
-            if e.to_string().contains("statement timeout") {
-                StorageError::QueryTimedOut
-            } else {
-                StorageError::Common(e.to_string())
-            }
-        })?)
+        grand_total =
+            Some(pg_index_client.get_grand_total(filter, &options).await.map_err(|e| {
+                if e.to_string().contains("statement timeout") {
+                    StorageError::QueryTimedOut
+                } else {
+                    StorageError::Common(e.to_string())
+                }
+            })?)
     }
 
     let resp = AssetList {
