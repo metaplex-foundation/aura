@@ -172,7 +172,7 @@ async fn test_account_updates() {
 
         setup.clean_up_data_bases().await;
 
-        index_nft(&setup, mint).await;
+        index_nft_accounts(&setup, get_nft_accounts(&setup, mint).await).await;
 
         let response =
             setup.das_api.get_asset(request.clone(), mutexed_tasks.clone()).await.unwrap();
@@ -217,7 +217,7 @@ async fn test_account_updates() {
     for named_update in named_updates.clone() {
         setup.clean_up_data_bases().await;
 
-        index_nft(&setup, mint).await;
+        index_nft_accounts(&setup, get_nft_accounts(&setup, mint).await).await;
 
         let other_named_updates = named_updates
             .clone()

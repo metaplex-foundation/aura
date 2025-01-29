@@ -136,4 +136,6 @@ jobs:
           DATABASE_TEST_URL: "postgres://postgres:postgres@127.0.0.1:5432/postgres"
           DEVNET_RPC_URL: ${{ secrets.SOLANA_DEVNET_RPC_URL }}
           MAINNET_RPC_URL: ${{ secrets.SOLANA_MAINNET_RPC_URL }}
+          ECLIPSE_DEVNET_RPC_URL: ${{ secrets.SOLANA_ECLIPSE_DEVNET_RPC_URL }}
+          ECLIPSE_MAINNET_RPC_URL: ${{ secrets.SOLANA_ECLIPSE_MAINNET_RPC_URL }}
         run: cargo test --features integration_tests -- --nocapture
