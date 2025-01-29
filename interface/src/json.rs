@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use mockall::automock;
 
@@ -13,7 +15,9 @@ pub trait JsonDownloader {
     async fn download_file(
         &self,
         url: String,
+        timeout: Duration,
     ) -> Result<JsonDownloadResult, crate::error::JsonDownloaderError>;
+    fn skip_refresh(&self) -> bool;
 }
 
 #[automock]

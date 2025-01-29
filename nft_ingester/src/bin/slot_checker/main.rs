@@ -121,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = Arc::new(
         Storage::open_readonly_with_cfs(
             &args.target_db_path,
-            vec![RawBlock::NAME, MigrationVersions::NAME, OffChainData::NAME],
+            vec![RawBlock::NAME, MigrationVersions::NAME, OffChainDataDeprecated::NAME],
             Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
             metrics_state.red_metrics,
         )

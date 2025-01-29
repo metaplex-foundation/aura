@@ -207,6 +207,7 @@ pub async fn main() -> Result<(), IngesterError> {
             metrics_state.json_downloader_metrics.clone(),
             metrics_state.red_metrics.clone(),
             args.parallel_json_downloaders,
+            args.api_skip_inline_json_refresh.unwrap_or_default(),
         )
         .await,
     );

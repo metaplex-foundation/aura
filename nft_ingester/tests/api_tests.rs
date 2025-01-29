@@ -2300,12 +2300,10 @@ mod tests {
         let mut mock_middleware = MockJsonDownloader::new();
         mock_middleware
             .expect_download_file()
-            .with(predicate::eq(url))
+            .with(predicate::eq(url), predicate::eq(Duration::from_secs(3)))
             .times(1)
-            .returning(move |_| {
-                Ok(interface::json::JsonDownloadResult::JsonContent(
-                    offchain_data.to_string(),
-                ))
+            .returning(move |_, _| {
+                Ok(interface::json::JsonDownloadResult::JsonContent(offchain_data.to_string()))
             });
 
         let api = nft_ingester::api::api_impl::DasApi::<
