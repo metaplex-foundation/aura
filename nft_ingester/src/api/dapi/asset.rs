@@ -277,7 +277,7 @@ pub async fn get_by_ids<
                 }
             }
 
-            if download_needed {
+            if download_needed && !json_downloader.skip_refresh() {
                 urls_to_download.push(url.clone());
             }
 
