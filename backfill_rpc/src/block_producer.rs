@@ -8,7 +8,7 @@ use solana_transaction_status::{TransactionDetails, UiConfirmedBlock};
 use tracing::error;
 use usecase::bigtable::is_bubblegum_transaction_encoded;
 
-use crate::rpc::{BackfillRPC, GET_TX_RETRIES};
+use crate::rpc::{BackfillRPC, MAX_RPC_RETRIES};
 
 const SECONDS_TO_RETRY_GET_BLOCK: u64 = 5;
 
@@ -19,7 +19,7 @@ impl BlockProducer for BackfillRPC {
         slot: u64,
         _backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<UiConfirmedBlock, StorageError> {
-        let mut counter = GET_TX_RETRIES;
+        let mut counter = MAX_RPC_RETRIES;
 
         loop {
             let mut encoded_block = match self
