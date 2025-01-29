@@ -430,6 +430,8 @@ pub struct JsonDownloadTask {
     pub status: TaskStatus,
     pub attempts: i16,
     pub max_attempts: i16,
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -471,6 +473,8 @@ impl Default for JsonDownloadTask {
             status: TaskStatus::Pending,
             attempts: 1,
             max_attempts: 10,
+            etag: None,
+            last_modified: None,
         }
     }
 }

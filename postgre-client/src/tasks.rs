@@ -137,7 +137,7 @@ impl PgClient {
             tsk_locked_until = NOW() + INTERVAL '90 seconds'
             FROM cte
             WHERE t.tsk_id = cte.tsk_id
-            RETURNING t.tsk_metadata_url, t.tsk_status, t.tsk_attempts, t.tsk_max_attempts;",
+            RETURNING t.tsk_metadata_url, t.tsk_status, t.tsk_attempts, t.tsk_max_attempts, t.tsk_etag, t.tsk_last_modified;",
         );
 
         let query = query_builder.build();
@@ -150,8 +150,16 @@ impl PgClient {
             let status: TaskStatus = row.get("tsk_status");
             let attempts: i16 = row.get("tsk_attempts");
             let max_attempts: i16 = row.get("tsk_max_attempts");
-
-            tasks.push(JsonDownloadTask { metadata_url, status, attempts, max_attempts });
+            let etag: Option<String> = row.get("tsk_etag");
+            let last_modified: Option<String> = row.get("tsk_last_modified");
+            tasks.push(JsonDownloadTask {
+                metadata_url,
+                status,
+                attempts,
+                max_attempts,
+                etag,
+                last_modified,
+            });
         }
 
         Ok(tasks)
