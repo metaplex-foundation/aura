@@ -2831,7 +2831,7 @@ mod tests {
     async fn test_token_type() {
         let cnt = 100;
         let cli = Cli::default();
-        let (env, generated_assets) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
+        let (env, _) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
 
         let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
@@ -3838,12 +3838,12 @@ mod tests {
         assert_eq!(response["interface"], "V1_NFT".to_string());
     }
 
-    /// Cover task MTG-947
+    /// Cover task changes MTG-947
     #[tokio::test(flavor = "multi_thread")]
     async fn test_determining_non_fungible_tokens() {
         let cnt = 100;
         let cli = Cli::default();
-        let (env, generated_assets) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
+        let (env, _) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
 
         let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
