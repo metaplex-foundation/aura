@@ -2030,7 +2030,6 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                                 let mut oldish_owner = oldish_owner.clone();
                                 merge_field(&mut oldish_owner.owner, new_owner.owner());
                                 merge_field(&mut oldish_owner.delegate, new_owner.delegate());
-                                merge_field(&mut oldish_owner.owner_type, new_owner.owner_type());
                                 merge_field(
                                     &mut oldish_owner.owner_delegate_seq,
                                     new_owner.owner_delegate_seq(),
@@ -2039,6 +2038,13 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                                     &mut oldish_owner.is_current_owner,
                                     new_owner.is_current_owner(),
                                 );
+
+                                // owner type should not be taken from any other owners because it's even merged separately.
+                                // and with such an approach we will have global(same) owner_type for all the records.
+                                //
+                                // otherwise it may(and will) affect rows in other_known_owners field by saving there owners with different owner types.
+                                // meaning some of the rows will have correct owner type and some of them will not have it at all(Unknown).
+                                oldish_owner.owner_type = owner_owner_type;
 
                                 merged_owner = oldish_owner;
                             }
