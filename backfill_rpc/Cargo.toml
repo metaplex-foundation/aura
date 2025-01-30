@@ -19,6 +19,11 @@ plerkle_serialization = { workspace = true }
 flatbuffers = { workspace = true }
 tracing = { workspace = true }
 usecase = { path = "../usecase" }
+tokio-retry = { workspace = true }
 
 [features]
 rpc_tests = []
+
+[dev-dependencies]
+serde_json = { workspace = true }
+warp = "0.3.7"
