@@ -1,8 +1,12 @@
 use std::sync::Arc;
 
-use entities::api_req_params::{GetAsset, GetAssetsByOwner};
+use entities::{
+    api_req_params::{GetAsset, GetAssetsByOwner, SearchAssets},
+    enums::Interface,
+};
 use function_name::named;
 use itertools::Itertools;
+use nft_ingester::api::dapi::response::AssetList;
 use serial_test::serial;
 use tokio::{sync::Mutex, task::JoinSet};
 

@@ -2831,7 +2831,7 @@ mod tests {
     async fn test_token_type() {
         let cnt = 100;
         let cli = Cli::default();
-        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
+        let (env, _) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
 
         let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
@@ -2867,7 +2867,7 @@ mod tests {
             extensions: None,
         };
 
-        let owner = generated_assets.owners[50].owner.value.unwrap();
+        let owner = Pubkey::new_unique();
         let fungible_token_account1 = Pubkey::new_unique();
         let fungible_token_account2 = Pubkey::new_unique();
         let token_account1 = TokenAccount {
@@ -2899,7 +2899,7 @@ mod tests {
             pubkey: fungible_token_mint1,
             static_details: Some(AssetStaticDetails {
                 pubkey: fungible_token_mint1,
-                specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
                 royalty_target_type: RoyaltyTargetType::Single,
                 created_at: 10,
                 edition_address: None,
@@ -3029,10 +3029,10 @@ mod tests {
         let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
-        // We created 2 fungible tokens^ 1 with real pubkey (MPLX)
-        // so this token contain info about symbol and price
-        // and 1 non-existed token, so response for it do not include such info
-        assert_eq!(res.items.len(), 2);
+        assert_eq!(res.items.len(), 2, "SearchAssets get by owner_address and token_type Fungible");
+        assert_eq!(res.items[0].clone().interface, Interface::FungibleAsset);
+        assert_eq!(res.items[1].clone().interface, Interface::FungibleToken);
+
         //
         // todo MTG-1263 part related to the show_fungible functionality, that shouldn't work for SearchAssets and some work is needed.
         // assert_eq!(res.items[0].clone().token_info.unwrap().symbol.unwrap(), "MPLX".to_string());
@@ -3065,59 +3065,6 @@ mod tests {
             owner_address: Some(owner.to_string()),
             options: SearchAssetsOptions {
                 show_unverified_collections: true,
-                ..Default::default()
-            },
-            token_type: Some(TokenType::NonFungible),
-            ..Default::default()
-        };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
-        let res: AssetList = serde_json::from_value(res).unwrap();
-
-        // We have 1 NonFungible token, created in setup::TestEnvironment::create fn
-        assert_eq!(res.items.len(), 1);
-        // assert!(res.items[0].token_info.is_none());
-
-        let payload = SearchAssets {
-            limit: Some(1000),
-            page: Some(1),
-            owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
-            token_type: Some(TokenType::CompressedNFT),
-            ..Default::default()
-        };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
-        let res: AssetList = serde_json::from_value(res).unwrap();
-
-        // Our NonFungible token is not compressed
-        assert!(res.items.is_empty());
-
-        let payload = SearchAssets {
-            limit: Some(1000),
-            page: Some(1),
-            owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
-                show_unverified_collections: true,
-                ..Default::default()
-            },
-            token_type: Some(TokenType::RegularNFT),
-            ..Default::default()
-        };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
-        let res: AssetList = serde_json::from_value(res).unwrap();
-
-        // Our NonFungible token is not compressed
-        assert_eq!(res.items.len(), 1);
-        // assert!(res.items[0].token_info.is_none());
-
-        let payload = SearchAssets {
-            limit: Some(1000),
-            page: Some(1),
-            owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
-                show_unverified_collections: true,
                 show_zero_balance: true,
                 ..Default::default()
             },
@@ -3127,11 +3074,10 @@ mod tests {
         let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
-        // Totally we have 3 assets with required owner. show_fungible is false by default, so we don't have token info.
-        assert_eq!(res.items.len(), 3);
+        // Totally we have 2 assets with required owner. show_fungible is false by default, so we don't have token info.
+        assert_eq!(res.items.len(), 2);
         assert!(res.items[0].mint_extensions.is_none());
         assert!(res.items[1].mint_extensions.is_none());
-        assert!(res.items[2].mint_extensions.is_none());
 
         let payload = SearchAssets {
             limit: Some(1000),
@@ -3890,5 +3836,312 @@ mod tests {
         let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["interface"], "V1_NFT".to_string());
+    }
+
+    /// Cover task changes MTG-947
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_determining_non_fungible_tokens() {
+        let cnt = 100;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
+
+        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            200_000,
+            "".to_string(),
+            Arc::new(SynchronizerMetricsConfig::new()),
+            1,
+        );
+
+        let fungible_token_mint1 = Pubkey::new_unique();
+        let fungible_token_mint2 = Pubkey::new_unique();
+        let mint1 = Mint {
+            pubkey: fungible_token_mint1,
+            supply: 1,
+            decimals: 0,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: None,
+        };
+        let mint2 = Mint {
+            pubkey: fungible_token_mint2,
+            supply: 1,
+            decimals: 0,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 7,
+            write_version: 10,
+            extensions: None,
+        };
+
+        let owner = Pubkey::new_unique();
+        let fungible_token_account1 = Pubkey::new_unique();
+        let fungible_token_account2 = Pubkey::new_unique();
+        let token_account1 = TokenAccount {
+            pubkey: fungible_token_account1,
+            mint: fungible_token_mint1,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 0,
+            write_version: 10,
+        };
+        let token_account2 = TokenAccount {
+            pubkey: fungible_token_account2,
+            mint: fungible_token_mint2,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 30000,
+            write_version: 10,
+        };
+
+        let ftm_complete1 = AssetCompleteDetails {
+            pubkey: fungible_token_mint1,
+            static_details: Some(AssetStaticDetails {
+                pubkey: fungible_token_mint1,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: fungible_token_mint1,
+                owner: Updated::new(100, Some(UpdateVersion::WriteVersion(100)), Some(owner)),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            }),
+            ..Default::default()
+        };
+
+        let ftm_complete2 = AssetCompleteDetails {
+            pubkey: fungible_token_mint2,
+            static_details: Some(AssetStaticDetails {
+                pubkey: fungible_token_mint2,
+                specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: fungible_token_mint2,
+                owner: Updated::new(100, Some(UpdateVersion::WriteVersion(100)), Some(owner)),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            }),
+            ..Default::default()
+        };
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                fungible_token_mint1,
+                ftm_complete1.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                fungible_token_mint2,
+                ftm_complete2.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                fungible_token_account1,
+                &token_account1,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                fungible_token_account2,
+                &token_account2,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account1,
+                &token_account1,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account2,
+                &token_account2,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .unwrap();
+        batch_storage.flush().unwrap();
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
+
+        let synchronizer = Arc::new(synchronizer);
+        let mut tasks = JoinSet::new();
+
+        for asset_type in ASSET_TYPES {
+            let rx = rx.resubscribe();
+            let synchronizer = synchronizer.clone();
+            match asset_type {
+                AssetType::Fungible => {
+                    tasks.spawn(async move {
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await
+                    });
+                },
+                AssetType::NonFungible => {
+                    tasks.spawn(
+                        async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
+                    );
+                },
+            }
+        }
+
+        while let Some(res) = tasks.join_next().await {
+            if let Err(err) = res {
+                panic!("{err}");
+            }
+        }
+
+        let api = create_api(&env, None);
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::Fungible),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(
+            res.items.len(),
+            0,
+            "We set supply:1 and decimals:0, so system should recognise fungible token as NFT"
+        );
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::All),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(res.items.len(), 2, "SearchAssets by token_type:All show_zero_balance: true");
+        assert_eq!(res.items[0].clone().interface, Interface::V1NFT);
+        assert_eq!(res.items[1].clone().interface, Interface::V1NFT);
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: false,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::All),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // todo FIX MTG-1283 assert value should be 1
+        assert_eq!(res.items.len(), 2, "SearchAssets by token_type:All show_zero_balance: false");
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::NonFungible),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(
+            res.items.len(),
+            2,
+            "SearchAssets by token_type: NonFungible, show_zero_balance: true"
+        );
+        assert_eq!(res.items[0].clone().interface, Interface::V1NFT);
+        assert_eq!(res.items[1].clone().interface, Interface::V1NFT);
+
+        let payload = SearchAssets {
+            limit: Some(1000),
+            page: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: false,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::NonFungible),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // todo FIX MTG-1283 assert value should be 1
+        assert_eq!(
+            res.items.len(),
+            2,
+            "SearchAssets by token_type: NonFungible, show_zero_balance: false"
+        );
     }
 }

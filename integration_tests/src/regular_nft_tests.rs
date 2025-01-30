@@ -277,3 +277,57 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
 
     insta::assert_json_snapshot!(name, response);
 }
+
+//todo Fix in MTG-1278/on-chain-integration-tests-are-not-working-for-fungible-tokens
+#[ignore]
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_requested_fungibles_are_fungibles() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::EclipseMainnet), clear_db: true },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_accounts(["EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz"]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let seeds = seed_token_mints([
+        "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ",
+        "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom",
+        "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1",
+        "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
+        "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH",
+        "87K3PtGNihT6dKjxULK25MVapZKXQWN4zXqC1BEshHKd",
+    ]);
+
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+        {
+            "limit": 500,
+            "ownerAddress": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz",
+            "tokenType": "fungible",
+            "options": {
+                "showCollectionMetadata": true,
+                "showGrandTotal": true,
+                "showInscription": true,
+                "showNativeBalance": true
+            }
+        }"#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+
+    response["items"].as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "FungibleToken");
+        true
+    });
+
+    insta::assert_json_snapshot!(name, response);
+}
