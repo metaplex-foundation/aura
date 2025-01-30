@@ -1976,12 +1976,11 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                         owner_owner_delegate_seq = new_owner.owner_delegate_seq();
                         owner_is_current_owner = new_owner.is_current_owner();
                     } else {
-                        // if the owner pubkey is the same we merge the owner fields
+                        // if the owner pubkey is the same(meaning same token account addresses) we merge the owner fields
                         if owner_pubkey.map(|k| k.bytes()) == new_owner.pubkey().map(|k| k.bytes())
                         {
                             merge_field(&mut owner_owner, new_owner.owner());
                             merge_field(&mut owner_delegate, new_owner.delegate());
-                            merge_field(&mut owner_owner_type, new_owner.owner_type());
                             merge_field(
                                 &mut owner_owner_delegate_seq,
                                 new_owner.owner_delegate_seq(),
@@ -2015,7 +2014,6 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                                     owner_pubkey = new_current_owner.pubkey;
                                     owner_owner = new_current_owner.owner;
                                     owner_delegate = new_current_owner.delegate;
-                                    owner_owner_type = new_current_owner.owner_type;
                                     owner_owner_delegate_seq = new_current_owner.owner_delegate_seq;
                                     owner_is_current_owner = new_current_owner.is_current_owner;
                                     other_known_owners.remove(new_owner_key);
@@ -2032,7 +2030,6 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                                 let mut oldish_owner = oldish_owner.clone();
                                 merge_field(&mut oldish_owner.owner, new_owner.owner());
                                 merge_field(&mut oldish_owner.delegate, new_owner.delegate());
-                                merge_field(&mut oldish_owner.owner_type, new_owner.owner_type());
                                 merge_field(
                                     &mut oldish_owner.owner_delegate_seq,
                                     new_owner.owner_delegate_seq(),
@@ -2041,6 +2038,13 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                                     &mut oldish_owner.is_current_owner,
                                     new_owner.is_current_owner(),
                                 );
+
+                                // owner type should not be taken from any other owners because it's even merged separately.
+                                // and with such an approach we will have global(same) owner_type for all the records.
+                                //
+                                // otherwise it may(and will) affect rows in other_known_owners field by saving there owners with different owner types.
+                                // meaning some of the rows will have correct owner type and some of them will not have it at all(Unknown).
+                                oldish_owner.owner_type = owner_owner_type;
 
                                 merged_owner = oldish_owner;
                             }
@@ -2073,12 +2077,18 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                                 owner_pubkey = merged_owner.pubkey;
                                 owner_owner = merged_owner.owner;
                                 owner_delegate = merged_owner.delegate;
-                                owner_owner_type = merged_owner.owner_type;
                                 owner_owner_delegate_seq = merged_owner.owner_delegate_seq;
                                 owner_is_current_owner = merged_owner.is_current_owner;
                                 other_known_owners.remove(new_owner_pubkey.bytes());
                             }
                         }
+                        // Since the owner type can only be changed through a mint account state update,
+                        // we should avoid modifying it every time we receive token account updates for the corresponding mint.
+                        // Even in cases where multiple mint account state updates occur within a single slot, the merge function
+                        // ensures that the latest update is preserved, as the WriteVersion is saved during the process.
+
+                        // Additionally, during the processing of token account updates, the owner type is set to its default value.
+                        merge_field(&mut owner_owner_type, new_owner.owner_type());
                     }
                 }
             }
