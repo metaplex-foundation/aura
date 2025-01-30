@@ -30,18 +30,18 @@ mod tests {
         assert!(response == None);
 
         let last_seen_slot = 242827927u64;
-        storage.merge_top_parameter::<u64>(Parameter::TopSeenSlot, last_seen_slot).await.unwrap();
+        storage.merge_top_parameter::<u64>(Parameter::LastBackfilledSlot, last_seen_slot).await.unwrap();
         let response = storage.get_last_ingested_slot().await.unwrap();
 
         assert!(response == Some(last_seen_slot));
 
         let some_old_slot = 137_827_927u64;
-        storage.merge_top_parameter::<u64>(Parameter::TopSeenSlot, some_old_slot).await.unwrap();
+        storage.merge_top_parameter::<u64>(Parameter::LastBackfilledSlot, some_old_slot).await.unwrap();
         let response = storage.get_last_ingested_slot().await.unwrap();
         assert!(response == Some(last_seen_slot));
 
         let some_new_slot = 243_827_927u64;
-        storage.merge_top_parameter::<u64>(Parameter::TopSeenSlot, some_new_slot).await.unwrap();
+        storage.merge_top_parameter::<u64>(Parameter::LastBackfilledSlot, some_new_slot).await.unwrap();
         let response = storage.get_last_ingested_slot().await.unwrap();
         assert!(response == Some(some_new_slot));
     }
