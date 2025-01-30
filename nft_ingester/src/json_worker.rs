@@ -494,3 +494,123 @@ impl JsonPersister for JsonWorker {
         Ok(())
     }
 }
+
+#[cfg(all(test, feature = "integration_tests"))]
+mod tests {
+    use testcontainers::clients::Cli;
+
+    use super::*;
+
+    mod json_downloader {
+        use super::*;
+
+        #[tokio::test]
+        async fn json_worker_downloads_json_metadata() {
+            let cli = Cli::default();
+            let (env, _) = setup::TestEnvironment::create(&cli, 1, 1).await;
+            let pg = env.pg_env.client.clone();
+            let rocks_db = env.rocks_env.storage.clone();
+            let metrics = Arc::new(JsonDownloaderMetricsConfig::new());
+            let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+            let worker = JsonWorker::new(pg, rocks_db, metrics, red_metrics, 1, true).await;
+            let url_to_download =
+                "ipfs://QmTmNdx3cNT4wv5yyi7ajvPLZTVia6QzWzg1AAkKtauqqs".to_owned();
+
+            let metadata = worker
+                .download_file(url_to_download, Duration::from_secs(5))
+                .await
+                .expect("JsonDownloader must download from a valid IPFS url");
+            let expected_metadata = "{\n    \"name\": \"Path of Discovery\",\n    \"description\": \"In this tranquil forest, a lone Turbo stands at the threshold of possibility, where the whispers of nature meet the call of the unknown. A gentle breeze carries the scent of moss and distant waters while the Turbo gazes into the distance steadily, preparing for a journey that is both personal and boundless. A quiet exploration, where each step forward is an invitation into a world brimming with mystery and promise. A delicate balance between serenity and curiosity, reminding us that even the most peaceful paths can lead to grand discoveries in realms beyond imagination.\",\n    \"image\": \"https://ipfs.raribleuserdata.com/ipfs/QmRgzQHEdGh47WDE6jPgvdA1jvRdgjuknuQbjgu1N4JrUm\"\n}";
+            assert_eq!(metadata, JsonDownloadResult::JsonContent(expected_metadata.to_string()));
+        }
+
+        #[tokio::test]
+        async fn json_worker_downloads_media_and_mime_type_metadata() {
+            let cli = Cli::default();
+            let (env, _) = setup::TestEnvironment::create(&cli, 1, 1).await;
+            let pg = env.pg_env.client.clone();
+            let rocks_db = env.rocks_env.storage.clone();
+            let metrics = Arc::new(JsonDownloaderMetricsConfig::new());
+            let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+            let worker = JsonWorker::new(pg, rocks_db, metrics, red_metrics, 1, true).await;
+            let url_to_download =
+                "https://arweave.net/b2oifxVmEaHQVTko9l1tEx-eaTLwKErBn-GRRDy2qvM".to_owned();
+            let mime_type = "video/quicktime".to_owned();
+
+            let metadata = worker
+                .download_file(url_to_download.clone(), Duration::from_secs(5))
+                .await
+                .expect("JsonDownloader must download from a valid Arweave url");
+            assert_eq!(
+                metadata,
+                JsonDownloadResult::MediaUrlAndMimeType { url: url_to_download, mime_type }
+            );
+        }
+
+        #[tokio::test]
+        async fn json_worker_fails_if_invalid_non_ipfs_url_given() {
+            let cli = Cli::default();
+            let (env, _) = setup::TestEnvironment::create(&cli, 1, 1).await;
+            let pg = env.pg_env.client.clone();
+            let rocks_db = env.rocks_env.storage.clone();
+            let metrics = Arc::new(JsonDownloaderMetricsConfig::new());
+            let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+            let worker = JsonWorker::new(pg, rocks_db, metrics, red_metrics, 1, true).await;
+            let url_to_download = "foo:bar://".to_owned();
+
+            let metadata = worker.download_file(url_to_download, Duration::from_secs(5)).await;
+
+            assert!(matches!(metadata, Err(JsonDownloaderError::ErrorDownloading(_))));
+        }
+
+        #[tokio::test]
+        async fn json_worker_fails_if_non_ok_status_code_received() {
+            let cli = Cli::default();
+            let (env, _) = setup::TestEnvironment::create(&cli, 1, 1).await;
+            let pg = env.pg_env.client.clone();
+            let rocks_db = env.rocks_env.storage.clone();
+            let metrics = Arc::new(JsonDownloaderMetricsConfig::new());
+            let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+            let worker = JsonWorker::new(pg, rocks_db, metrics, red_metrics, 1, true).await;
+            let url_to_download = "https://arweave.net/foo/bar/baz".to_owned();
+
+            let metadata = worker.download_file(url_to_download, Duration::from_secs(5)).await;
+
+            assert!(matches!(metadata, Err(JsonDownloaderError::ErrorStatusCode(_))));
+        }
+
+        #[tokio::test]
+        async fn json_worker_fails_if_metadata_url_leads_to_audio() {
+            let cli = Cli::default();
+            let (env, _) = setup::TestEnvironment::create(&cli, 1, 1).await;
+            let pg = env.pg_env.client.clone();
+            let rocks_db = env.rocks_env.storage.clone();
+            let metrics = Arc::new(JsonDownloaderMetricsConfig::new());
+            let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+            let worker = JsonWorker::new(pg, rocks_db, metrics, red_metrics, 1, true).await;
+            let url_to_download =
+                "https://arweave.net/Ymlb5ONszJKIH405I2ZqgLJec-J5Wf1UjJs4K8LPz5M".to_owned();
+
+            let metadata = worker.download_file(url_to_download, Duration::from_secs(5)).await;
+
+            assert!(matches!(metadata, Err(JsonDownloaderError::GotNotJsonFile)));
+        }
+
+        #[tokio::test]
+        async fn json_worker_fails_if_text_metadata_is_not_json() {
+            let cli = Cli::default();
+            let (env, _) = setup::TestEnvironment::create(&cli, 1, 1).await;
+            let pg = env.pg_env.client.clone();
+            let rocks_db = env.rocks_env.storage.clone();
+            let metrics = Arc::new(JsonDownloaderMetricsConfig::new());
+            let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+            let worker = JsonWorker::new(pg, rocks_db, metrics, red_metrics, 1, true).await;
+            let url_to_download =
+                "https://arweave.net/b0Ww2l2Qq62WwH6nRwwn2784a9RJWLBi21HVLELvpVQ".to_owned();
+
+            let metadata = worker.download_file(url_to_download, Duration::from_secs(5)).await;
+
+            assert!(matches!(metadata, Err(JsonDownloaderError::CouldNotDeserialize)));
+        }
+    }
+}
