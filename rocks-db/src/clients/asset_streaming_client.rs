@@ -201,7 +201,7 @@ async fn get_complete_asset_details(
         .get(url.clone().value)?
         .map(Into::into);
     let cutoff_slot = Storage::column::<ParameterColumn<u64>>(backend.clone(), metrics.clone())
-        .get(Parameter::TopSeenSlot)?
+        .get(Parameter::LastBackfilledSlot)?
         .flatten()
         .unwrap_or_default()
         .wrapping_sub(OFFSET_SLOTS);
