@@ -1,0 +1,84 @@
+---
+source: integration_tests/src/regular_nft_tests.rs
+assertion_line: 338
+expression: response
+snapshot_kind: text
+---
+{
+  "total": 1,
+  "grand_total": 1,
+  "limit": 500,
+  "items": [
+    {
+      "interface": "FungibleToken",
+      "id": "LaihKXA47apnS599tyEyasY2REfEzBNe4heunANhsMx",
+      "content": {
+        "$schema": "https://schema.metaplex.com/nft1.0.json",
+        "json_uri": "https://shdw-drive.genesysgo.net/8p5qCRykwNvzF43HMk15bCfL6xA94GKe6ZRepinmWjDi/laika.png",
+        "files": [],
+        "metadata": {
+          "name": "Laika",
+          "symbol": "LAIKA",
+          "token_standard": "Fungible"
+        },
+        "links": {}
+      },
+      "authorities": [
+        {
+          "address": "VALe8acTXrBYfzrZVLZWpCConYeWy1QCe1N54SQ4Dwe",
+          "scopes": [
+            "full"
+          ]
+        }
+      ],
+      "compression": {
+        "eligible": false,
+        "compressed": false,
+        "data_hash": "",
+        "creator_hash": "",
+        "asset_hash": "",
+        "tree": "",
+        "seq": 0,
+        "leaf_id": 0
+      },
+      "grouping": [],
+      "royalty": {
+        "royalty_model": "creators",
+        "target": null,
+        "percent": 0.0,
+        "basis_points": 0,
+        "primary_sale_happened": false,
+        "locked": false
+      },
+      "creators": [
+        {
+          "address": "VALe8acTXrBYfzrZVLZWpCConYeWy1QCe1N54SQ4Dwe",
+          "share": 100,
+          "verified": true
+        }
+      ],
+      "ownership": {
+        "frozen": false,
+        "delegated": false,
+        "delegate": null,
+        "ownership_model": "token",
+        "owner": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz"
+      },
+      "supply": null,
+      "mutable": true,
+      "burnt": false,
+      "lamports": 10054876,
+      "executable": false,
+      "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+      "rent_epoch": 0,
+      "token_info": {
+        "balance": 11498799900000,
+        "supply": 99499899652878324,
+        "decimals": 5,
+        "token_program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "associated_token_address": "7qfEt4otpcr1LHPVZ2hjCB1d77wSZJfSDgwiXcUCneaT"
+      }
+    }
+  ],
+  "cursor": "LaihKXA47apnS599tyEyasY2REfEzBNe4heunANhsMx"
+}
