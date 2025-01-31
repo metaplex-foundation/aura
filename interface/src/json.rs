@@ -3,7 +3,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use mockall::automock;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JsonDownloadResult {
     JsonContent(String),
     MediaUrlAndMimeType { url: String, mime_type: String },
