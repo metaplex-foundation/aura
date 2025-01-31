@@ -1,6 +1,6 @@
 ---
 source: integration_tests/src/regular_nft_tests.rs
-assertion_line: 214
+assertion_line: 250
 expression: response
 snapshot_kind: text
 ---
@@ -54,10 +54,14 @@ snapshot_kind: text
         "frozen": false,
         "delegated": false,
         "delegate": null,
-        "ownership_model": "single",
+        "ownership_model": "token",
         "owner": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM"
       },
-      "supply": null,
+      "supply": {
+        "print_max_supply": 0,
+        "print_current_supply": 0,
+        "edition_nonce": 252
+      },
       "mutable": true,
       "burnt": false,
       "lamports": 5616720,
