@@ -31,7 +31,7 @@ async fn test_reg_get_asset() {
 
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
-    let request = r#"        
+    let request = r#"
     {
         "id": "CMVuYDS9nTeujfTPJb8ik7CRhAqZv4DfjfdamFLkJgxE"
     }
@@ -65,7 +65,7 @@ async fn test_reg_get_asset_batch() {
 
     for (request, individual_test_name) in [
         (
-            r#"        
+            r#"
         {
             "ids": ["HTKAVZZrDdyecCxzm3WEkCsG1GUmiqKm73PvngfuYRNK", "2NqdYX6kJmMUoChnDXU2UrP9BsoPZivRw3uJG8iDhRRd"]
         }
@@ -73,7 +73,7 @@ async fn test_reg_get_asset_batch() {
             "only-2",
         ),
         (
-            r#"        
+            r#"
         {
             "ids": ["2NqdYX6kJmMUoChnDXU2UrP9BsoPZivRw3uJG8iDhRRd", "5rEeYv8R25b8j6YTHJvYuCKEzq44UCw1Wx1Wx2VPPLz1"]
         }
@@ -81,7 +81,7 @@ async fn test_reg_get_asset_batch() {
             "only-2-different-2",
         ),
         (
-            r#"        
+            r#"
         {
             "ids": [
                 "2NqdYX6kJmMUoChnDXU2UrP9BsoPZivRw3uJG8iDhRRd",
@@ -120,7 +120,7 @@ async fn test_reg_get_asset_by_group() {
 
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
-    let request = r#"        
+    let request = r#"
     {
         "groupKey": "collection",
         "groupValue": "8Rt3Ayqth4DAiPnW9MDFi63TiQJHmohfTWLMQFHi4KZH",
@@ -158,7 +158,7 @@ async fn test_reg_search_assets() {
 
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
-    let request = r#"        
+    let request = r#"
     {
         "ownerAddress": "6Cr66AabRYymhZgYQSfTCo6FVpH18wXrMZswAbcErpyX",
         "page": 1,
@@ -188,7 +188,7 @@ async fn test_regular_nft_collection() {
 
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
-    let request = r#"        
+    let request = r#"
     {
         "id": "J1S9H3QjnRtBbbuD4HjPV6RpRhwuk4zKbxsnCHuTgh9w"
     }
@@ -241,12 +241,25 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
     )
     .await;
 
+    let seeds: Vec<SeedEvent> = seed_accounts([
+        "7qfEt4otpcr1LHPVZ2hjCB1d77wSZJfSDgwiXcUCneaT",
+        "9cyPkra7ANoDmMM4Abw8rYKxv3aWC3jZUjz8NtWaYo6D",
+        "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
+        "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
+        "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
+        "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
+        "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
     let seeds = seed_token_mints([
         "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ",
         "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom",
         "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1",
         "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
         "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH",
+        "87K3PtGNihT6dKjxULK25MVapZKXQWN4zXqC1BEshHKd",
+        "LaihKXA47apnS599tyEyasY2REfEzBNe4heunANhsMx", // Fungible
     ]);
 
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
@@ -269,6 +282,8 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
     let request: SearchAssets = serde_json::from_str(request).unwrap();
     let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
 
+    assert_eq!(response["items"].as_array().unwrap().len(), 5);
+
     response["items"].as_array().unwrap().iter().all(|i| {
         let interface = i["interface"].as_str().unwrap();
         assert_eq!(interface, "V1_NFT");
@@ -278,8 +293,6 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
     insta::assert_json_snapshot!(name, response);
 }
 
-//todo Fix in MTG-1278/on-chain-integration-tests-are-not-working-for-fungible-tokens
-#[ignore]
 #[tokio::test]
 #[serial]
 #[named]
@@ -291,7 +304,7 @@ async fn test_requested_fungibles_are_fungibles() {
     )
     .await;
 
-    let seeds: Vec<SeedEvent> = seed_accounts(["EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz"]);
+    let seeds: Vec<SeedEvent> = seed_accounts(["7qfEt4otpcr1LHPVZ2hjCB1d77wSZJfSDgwiXcUCneaT"]);
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let seeds = seed_token_mints([
@@ -301,6 +314,7 @@ async fn test_requested_fungibles_are_fungibles() {
         "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
         "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH",
         "87K3PtGNihT6dKjxULK25MVapZKXQWN4zXqC1BEshHKd",
+        "LaihKXA47apnS599tyEyasY2REfEzBNe4heunANhsMx", // Fungible
     ]);
 
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
@@ -322,6 +336,8 @@ async fn test_requested_fungibles_are_fungibles() {
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
     let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response["items"].as_array().unwrap().len(), 1);
 
     response["items"].as_array().unwrap().iter().all(|i| {
         let interface = i["interface"].as_str().unwrap();
