@@ -63,6 +63,24 @@ impl<'a> TestEnvironment<'a> {
         .await
     }
 
+    pub async fn create_burnt(
+        cli: &'a Cli,
+        cnt: usize,
+        slot: u64,
+    ) -> (TestEnvironment<'a>, rocks::GeneratedAssets) {
+        Self::create_and_setup_from_closures(
+            cli,
+            cnt,
+            slot,
+            RocksTestEnvironmentSetup::static_data_for_nft,
+            RocksTestEnvironmentSetup::with_authority,
+            RocksTestEnvironmentSetup::test_owner,
+            RocksTestEnvironmentSetup::dynamic_data_burnt,
+            RocksTestEnvironmentSetup::collection_without_authority,
+        )
+        .await
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub async fn create_and_setup_from_closures(
         cli: &'a Cli,
