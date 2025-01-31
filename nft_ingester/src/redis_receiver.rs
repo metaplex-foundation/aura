@@ -114,7 +114,8 @@ impl UnprocessedAccountsGetter for RedisReceiver {
                 },
             }
         }
-        self.metrics.inc_accounts_parsed_by(result.len() as u64);
+        self.metrics
+            .inc_accounts_parsed_by((result.len() + unknown_account_types_ids.len()) as u64);
 
         UnprocessedAccountsGetter::ack(self, unknown_account_types_ids);
         Ok(result)
