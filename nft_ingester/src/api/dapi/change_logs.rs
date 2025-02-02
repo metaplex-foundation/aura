@@ -152,7 +152,7 @@ pub async fn get_proof_for_assets<
                         as i64,
                     cli_tree: node.tree_key.to_bytes().to_vec(),
                 },
-                alt_hash,
+                alt_hash.map(|a| a.value),
             )
         })
         .collect::<Vec<_>>();
@@ -169,7 +169,7 @@ pub async fn get_proof_for_assets<
 
 fn get_asset_proof(
     asset_id: &Pubkey,
-    nodes: &[(SimpleChangeLog, Option<Updated<Vec<u8>>>)],
+    nodes: &[(SimpleChangeLog, Option<Vec<u8>>)],
     leaves: &HashMap<Vec<u8>, (model::ClItemsModel, u64, Option<Updated<Vec<u8>>>)>,
     proof_checker: Option<Arc<impl ProofChecker + Sync + Send + 'static>>,
     metrics: Arc<ApiMetricsConfig>,
@@ -181,10 +181,10 @@ fn get_asset_proof(
     };
 
     let req_indexes = get_required_nodes_for_proof(leaf.node_idx);
-    let mut final_node_list: Vec<(SimpleChangeLog, Option<Updated<Vec<u8>>>)> =
+    let mut final_node_list: Vec<(SimpleChangeLog, Option<Vec<u8>>)> =
         vec![(SimpleChangeLog::default(), None); req_indexes.len()];
 
-    let mut relevant_nodes: Vec<&(SimpleChangeLog, Option<Updated<Vec<u8>>>)> = nodes
+    let mut relevant_nodes: Vec<&(SimpleChangeLog, Option<Vec<u8>>)> = nodes
         .iter()
         .filter(|node| node.0.cli_tree == leaf.tree && req_indexes.contains(&node.0.cli_node_idx))
         .collect();
@@ -229,10 +229,13 @@ fn get_asset_proof(
             }
         }
     }
-    if valid_proof.is_none() || valid_proof.unwrap().is_empty() {
+    if valid_proof.is_none() {
         return None;
     }
-    let valid_proof = valid_proof.unwrap();
+    let mut valid_proof = valid_proof.unwrap();
+    if valid_proof.is_empty() {
+        return None;
+    }
     let root = valid_proof.pop().unwrap().cli_hash;
     let proof: Vec<Vec<u8>> = valid_proof.iter().map(|model| model.cli_hash.clone()).collect();
 
