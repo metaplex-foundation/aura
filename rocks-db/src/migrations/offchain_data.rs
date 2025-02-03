@@ -7,7 +7,7 @@ use crate::{
 
 impl From<OffChainDataDeprecated> for OffChainData {
     fn from(value: OffChainDataDeprecated) -> Self {
-        let immutability = StorageMutability::from(value.url.as_str());
+        let immutability = StorageMutability::from_url(value.url.as_str());
         Self {
             storage_mutability: immutability,
             url: Some(value.url),

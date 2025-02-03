@@ -18,7 +18,7 @@ mod tests {
         buffer::Buffer,
         config::{HealthCheckInfo, JsonMiddlewareConfig},
         consts::DEFAULT_MAXIMUM_HEALTHY_DESYNC,
-        json_worker::JsonWorker,
+        metadata_workers::json_worker::JsonWorker,
         processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
         raydium_price_fetcher::RaydiumTokenPriceFetcher,
         transaction_ingester,

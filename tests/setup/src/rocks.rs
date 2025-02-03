@@ -10,7 +10,7 @@ use rocks_db::{
             AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetOwner,
             AssetStaticDetails,
         },
-        offchain_data::OffChainData,
+        offchain_data::{OffChainData, StorageMutability},
     },
     errors::StorageError,
     migrator::MigrationState,
@@ -186,7 +186,7 @@ impl RocksTestEnvironment {
                 url: Some(ToOwned::to_owned(DEFAULT_TEST_URL)),
                 metadata: Some(ToOwned::to_owned("{}")),
                 last_read_at: Utc::now().timestamp(),
-                storage_mutability: DEFAULT_TEST_URL.into(),
+                storage_mutability: StorageMutability::from_url(DEFAULT_TEST_URL),
             },
         )?;
 

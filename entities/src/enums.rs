@@ -119,6 +119,29 @@ pub enum ChainMutability {
     Mutable,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy, PartialEq, sqlx::Type, Eq)]
+#[sqlx(type_name = "mutability", rename_all = "lowercase")]
+pub enum OffchainDataMutability {
+    Immutable,
+    #[default]
+    Mutable,
+}
+
+impl TryFrom<&str> for OffchainDataMutability {
+    type Error = String;
+
+    fn try_from(storage_mutability: &str) -> Result<Self, Self::Error> {
+        let storage_mutability = storage_mutability.to_lowercase();
+        if storage_mutability == "immutable" {
+            Ok(OffchainDataMutability::Immutable)
+        } else if storage_mutability == "mutable" {
+            Ok(OffchainDataMutability::Mutable)
+        } else {
+            Err(format!("Invalid storage mutability: {}", storage_mutability))
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub enum Interface {
     #[serde(rename = "V1_NFT")]
@@ -286,7 +309,6 @@ impl From<RoyaltyModel> for RoyaltyTargetType {
 pub enum TaskStatus {
     #[default]
     Pending,
-    Running,
     Success,
     Failed,
 }

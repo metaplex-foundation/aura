@@ -223,7 +223,7 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
 
                 progress_bar.inc(tasks.len() as u64);
 
-                last_key_in_batch = Some(tasks.last().unwrap().tsk_id.clone());
+                last_key_in_batch = Some(tasks.last().unwrap().metadata_hash.clone());
 
                 let keys_to_check: Vec<String> = tasks
                     .iter()

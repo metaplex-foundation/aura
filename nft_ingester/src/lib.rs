@@ -12,7 +12,6 @@ pub mod index_synchronizer;
 pub mod init;
 pub mod inmemory_slots_dumper;
 pub mod inscription_raw_parsing;
-pub mod json_worker;
 pub mod message_handler;
 pub mod message_parser;
 pub mod plerkle;
@@ -25,3 +24,5 @@ pub mod scheduler;
 pub mod sequence_consistent;
 pub mod tcp_receiver;
 pub mod transaction_ingester;
+
+pub mod metadata_workers;

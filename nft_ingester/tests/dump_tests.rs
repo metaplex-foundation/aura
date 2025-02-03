@@ -132,7 +132,7 @@ mod mtg_441_tests {
         api::{dapi::rpc_asset_models::Asset, DasApi},
         config::{HealthCheckInfo, JsonMiddlewareConfig},
         consts::DEFAULT_MAXIMUM_HEALTHY_DESYNC,
-        json_worker::JsonWorker,
+        metadata_workers::json_worker::JsonWorker,
         raydium_price_fetcher::RaydiumTokenPriceFetcher,
     };
     use rocks_db::Storage;

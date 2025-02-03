@@ -33,8 +33,12 @@ use nft_ingester::{
     error::IngesterError,
     gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller},
     init::{init_index_storage_with_migration, init_primary_storage},
-    json_worker,
-    json_worker::JsonWorker,
+    metadata_workers::{
+        downloader::MetadataDownloader,
+        json_worker::JsonWorker,
+        persister::{TasksPersister, JSON_BATCH},
+        streamer::TasksStreamer,
+    },
     processors::{
         accounts_processor::run_accounts_processor,
         transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
@@ -52,6 +56,7 @@ use postgre_client::PG_MIGRATIONS_PATH;
 use pprof::ProfilerGuardBuilder;
 use rocks_db::{storage_traits::AssetSlotStorage, SlotStorage};
 use solana_client::nonblocking::rpc_client::RpcClient;
+use tokio::sync::{mpsc, Mutex};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Server;
 use tracing::{error, info, warn};
@@ -377,7 +382,7 @@ pub async fn main() -> Result<(), IngesterError> {
         last_saved_slot,
     ));
 
-    let json_processor = Arc::new(
+    let json_worker = Arc::new(
         JsonWorker::new(
             index_pg_storage.clone(),
             primary_rocks_storage.clone(),
@@ -444,7 +449,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .json_middleware_config
             .as_ref()
             .filter(|conf| conf.is_enabled)
-            .map(|_| json_processor.clone());
+            .map(|_| json_worker.clone());
 
         // it will check if asset which was requested is from the tree which has gaps in sequences
         // gap in sequences means missed transactions and  as a result incorrect asset data
@@ -489,10 +494,40 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
-    usecase::executor::spawn(json_worker::run(
-        json_processor.clone(),
+    let (pending_tasks_sender, pending_tasks_receiver) = mpsc::channel(JSON_BATCH);
+    let (refresh_tasks_sender, refresh_tasks_receiver) = mpsc::channel(JSON_BATCH);
+
+    let metadata_streamer = TasksStreamer::new(
+        json_worker.db_client.clone(),
         cancellation_token.child_token(),
-    ));
+        pending_tasks_sender,
+        refresh_tasks_sender,
+    );
+
+    let (metadata_to_persist_sender, metadata_to_persist_receiver) = mpsc::channel(JSON_BATCH);
+    let pending_tasks_receiver = Arc::new(Mutex::new(pending_tasks_receiver));
+    let refresh_tasks_receiver = Arc::new(Mutex::new(refresh_tasks_receiver));
+    let metadata_dowloader = MetadataDownloader::new(
+        json_worker.clone(),
+        metadata_to_persist_sender,
+        pending_tasks_receiver,
+        refresh_tasks_receiver,
+        cancellation_token.child_token(),
+    );
+
+    let metadata_persister = TasksPersister::new(
+        json_worker.clone(),
+        metadata_to_persist_receiver,
+        cancellation_token.child_token(),
+    );
+
+    usecase::executor::spawn(async move {
+        tokio::join!(
+            metadata_streamer.run(json_worker.num_of_parallel_workers),
+            metadata_dowloader.run(),
+            metadata_persister.run(),
+        );
+    });
 
     // Backfiller
     if args.run_backfiller.unwrap_or_default() {
