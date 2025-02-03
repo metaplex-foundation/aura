@@ -222,10 +222,10 @@ fn get_asset_proof(
     let mut leaf_hash = leaf.hash.clone();
     let mut valid_proof = build_proof(final_node_list.clone(), leaf.hash.clone());
     if valid_proof.is_none() {
-        if let Some(alt_leaf_hash) = alt_leaf_hash {
+        if let Some(ref alt_leaf_hash) = alt_leaf_hash {
             valid_proof = build_proof(final_node_list.clone(), alt_leaf_hash.value.clone());
             if valid_proof.is_some() {
-                leaf_hash = alt_leaf_hash.value;
+                leaf_hash = alt_leaf_hash.value.clone();
             }
         }
     }
