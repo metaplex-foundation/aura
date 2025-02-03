@@ -253,7 +253,7 @@ async fn test_search_by_owner_with_show_zero_balance() {
 #[tokio::test]
 #[serial]
 #[named]
-async fn test_requested_non_fungibles_are_non_fungibles_and_page() {
+async fn test_search_assets_by_owner_with_pages() {
     let test_name = trim_test_name(function_name!());
 
     let setup = TestSetup::new_with_options(
@@ -271,6 +271,27 @@ async fn test_requested_non_fungibles_are_non_fungibles_and_page() {
     ]);
 
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+        {
+            "ownerAddress": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz",
+            "tokenType": "all",
+            "options": {
+                "showCollectionMetadata": true,
+                "showGrandTotal": true,
+                "showInscription": true,
+                "showNativeBalance": true
+            }
+        }"#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+
+    let name_all_assets = format!("{}_all_assets", test_name);
+
+    insta::assert_json_snapshot!(name_all_assets, response);
 
     let request = r#"
         {

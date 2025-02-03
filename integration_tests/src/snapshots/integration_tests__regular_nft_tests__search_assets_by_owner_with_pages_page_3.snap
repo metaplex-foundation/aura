@@ -1,6 +1,6 @@
 ---
 source: integration_tests/src/regular_nft_tests.rs
-assertion_line: 342
+assertion_line: 363
 expression: response
 snapshot_kind: text
 ---

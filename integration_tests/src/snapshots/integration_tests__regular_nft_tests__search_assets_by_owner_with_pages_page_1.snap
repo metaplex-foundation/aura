@@ -1,6 +1,6 @@
 ---
 source: integration_tests/src/regular_nft_tests.rs
-assertion_line: 319
+assertion_line: 317
 expression: response
 snapshot_kind: text
 ---
@@ -8,11 +8,11 @@ snapshot_kind: text
   "total": 2,
   "grand_total": 5,
   "limit": 2,
-  "page": 2,
+  "page": 1,
   "items": [
     {
       "interface": "V1_NFT",
-      "id": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1",
+      "id": "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ",
       "content": {
         "$schema": "https://schema.metaplex.com/nft1.0.json",
         "json_uri": "https://nftstorage.link/ipfs/bafkreigq3rvy636lvj23tid5ioxd4ovtcivfbhhjst5hk7fhziedygew3a",
@@ -68,11 +68,11 @@ snapshot_kind: text
       "mint_extensions": {
         "metadata_pointer": {
           "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
-          "metadata_address": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1"
+          "metadata_address": "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ"
         },
         "metadata": {
           "update_authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
-          "mint": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1",
+          "mint": "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ",
           "name": "LIBRE",
           "symbol": "LIBRE",
           "uri": "https://nftstorage.link/ipfs/bafkreigq3rvy636lvj23tid5ioxd4ovtcivfbhhjst5hk7fhziedygew3a",
@@ -80,7 +80,7 @@ snapshot_kind: text
         },
         "group_member_pointer": {
           "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
-          "member_address": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1"
+          "member_address": "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ"
         }
       },
       "token_info": {
@@ -88,20 +88,20 @@ snapshot_kind: text
         "supply": 1,
         "decimals": 0,
         "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
-        "associated_token_address": "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
+        "associated_token_address": "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
         "freeze_authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m"
       }
     },
     {
       "interface": "V1_NFT",
-      "id": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
+      "id": "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom",
       "content": {
         "$schema": "https://schema.metaplex.com/nft1.0.json",
-        "json_uri": "ipfs://QmTmNdx3cNT4wv5yyi7ajvPLZTVia6QzWzg1AAkKtauqqs",
+        "json_uri": "https://api.akord.com/files/5d0e6fa5-01dc-4893-a2d7-64be4d576449",
         "files": [],
         "metadata": {
-          "name": "Path of Discovery",
-          "symbol": "POD"
+          "name": "backpack.eclipse",
+          "symbol": "SN"
         },
         "links": {}
       },
@@ -149,29 +149,20 @@ snapshot_kind: text
       "burnt": false,
       "mint_extensions": {
         "metadata_pointer": {
-          "authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb",
-          "metadata_address": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB"
+          "authority": "6qVNPWh4Qhr6pBVZQMNpxwn477rg5LUkjBFuG5KpZvJc",
+          "metadata_address": "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom"
         },
         "metadata": {
-          "update_authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb",
-          "mint": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
-          "name": "Path of Discovery",
-          "symbol": "POD",
-          "uri": "ipfs://QmTmNdx3cNT4wv5yyi7ajvPLZTVia6QzWzg1AAkKtauqqs",
-          "additional_metadata": [
-            [
-              "royalty_basis_points",
-              "5000"
-            ],
-            [
-              "AsSKqK7CkxFUf3KaoQzzr8ZLPm5fFguUtVE5QwGALQQn",
-              "100"
-            ]
-          ]
+          "update_authority": "6qVNPWh4Qhr6pBVZQMNpxwn477rg5LUkjBFuG5KpZvJc",
+          "mint": "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom",
+          "name": "backpack.eclipse",
+          "symbol": "SN",
+          "uri": "https://api.akord.com/files/5d0e6fa5-01dc-4893-a2d7-64be4d576449",
+          "additional_metadata": []
         },
         "group_member_pointer": {
-          "authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb",
-          "member_address": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB"
+          "authority": "6qVNPWh4Qhr6pBVZQMNpxwn477rg5LUkjBFuG5KpZvJc",
+          "member_address": "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom"
         }
       },
       "token_info": {
@@ -179,8 +170,7 @@ snapshot_kind: text
         "supply": 1,
         "decimals": 0,
         "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
-        "associated_token_address": "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
-        "freeze_authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb"
+        "associated_token_address": "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R"
       }
     }
   ]
