@@ -419,7 +419,7 @@ fn test_build_proof_single_no_match() {
         cli_tree: vec![],
     };
     let alt = vec![99, 99, 99];
-    let candidates = vec![(node, Some(alt))];
+    let candidates = vec![CandidateNode { node, alt: Some(alt) }];
     let leaf = vec![1, 2, 3]; // does not match either primary or alt
 
     let result = build_proof(&candidates, &leaf);
