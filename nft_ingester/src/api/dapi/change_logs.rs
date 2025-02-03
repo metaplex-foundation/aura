@@ -422,7 +422,7 @@ fn test_build_proof_single_no_match() {
     let candidates = vec![(node, Some(alt))];
     let leaf = vec![1, 2, 3]; // does not match either primary or alt
 
-    let result = build_proof(candidates, leaf);
+    let result = build_proof(&candidates, &leaf);
     assert_eq!(result, None);
 }
 
@@ -459,7 +459,7 @@ fn test_generated_proof_with_length_20() {
     let proof = result.unwrap();
     assert_eq!(proof.len(), 21);
     for (i, node) in proof.iter().enumerate() {
-        assert_eq!(node.cli_hash, candidates[i].0.cli_hash);
+        assert_eq!(node.cli_hash, candidates[i].node.cli_hash);
     }
 }
 
@@ -499,7 +499,7 @@ fn test_generated_proof_with_length_20_all_alts() {
     let proof = result.unwrap();
     assert_eq!(proof.len(), 21);
     for (i, node) in proof.iter().enumerate() {
-        if let Some(expected) = candidates.get(i).unwrap().1.clone() {
+        if let Some(expected) = candidates.get(i).unwrap().alt.clone() {
             assert_eq!(node.cli_hash, expected);
         }
     }
@@ -864,6 +864,6 @@ pub fn test_valid_mainline_with_invalid_alternatives() {
     let proof = build_proof(&final_node_list, &leaf);
     assert!(proof.is_some());
     for (i, node) in proof.unwrap().iter().enumerate() {
-        assert_eq!(node.cli_hash, final_node_list[i].0.cli_hash);
+        assert_eq!(node.cli_hash, final_node_list[i].node.cli_hash);
     }
 }
