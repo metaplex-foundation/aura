@@ -300,17 +300,15 @@ fn build_proof(
         }
         return None;
     }
-    let sibling = candidates[candidates.len() - 1].clone();
+    let sibling = candidates[0].clone();
     let is_sibling_left = sibling.0.cli_node_idx % 2 == 0;
     let main_root_hash = if is_sibling_left {
         keccak::hashv(&[&sibling.0.cli_hash, &leaf])
     } else {
         keccak::hashv(&[&leaf, &sibling.0.cli_hash])
     };
-    if let Some(valid_proof) =
-        build_proof(candidates[..candidates.len() - 1].to_vec(), main_root_hash.0.to_vec())
-    {
-        return Some([valid_proof, vec![sibling.0]].concat());
+    if let Some(valid_proof) = build_proof(candidates[1..].to_vec(), main_root_hash.0.to_vec()) {
+        return Some([vec![sibling.0], valid_proof].concat());
     }
     if let Some(alt_sibling) = sibling.1 {
         let alt_hash = if is_sibling_left {
@@ -318,12 +316,10 @@ fn build_proof(
         } else {
             keccak::hashv(&[&leaf, &alt_sibling])
         };
-        if let Some(valid_proof) =
-            build_proof(candidates[..candidates.len() - 1].to_vec(), alt_hash.0.to_vec())
-        {
+        if let Some(valid_proof) = build_proof(candidates[1..].to_vec(), alt_hash.0.to_vec()) {
             let mut sibling = sibling.0.clone();
             sibling.cli_hash = alt_sibling;
-            return Some([valid_proof, vec![sibling]].concat());
+            return Some([vec![sibling], valid_proof].concat());
         }
     }
     return None;
@@ -447,7 +443,7 @@ fn test_generated_proof_with_length_20_all_alts() {
         let node = SimpleChangeLog {
             cli_hash: random_shit.clone(),
             cli_level: 0,
-            cli_node_idx: 1 >> (20 - i) as i64, // keeping it simple - always the left-most node
+            cli_node_idx: 1 << (21 - i) as i64, // keeping it simple - always the left-most node
             cli_seq: 0,
             cli_tree: vec![],
         };
@@ -463,7 +459,6 @@ fn test_generated_proof_with_length_20_all_alts() {
         cli_tree: vec![],
     };
     candidates.push((root_node, Some(leaf.clone())));
-    candidates.reverse();
     let result = build_proof(candidates.clone(), original_leaf);
     assert!(result.is_some());
     let proof = result.unwrap();
@@ -482,5 +477,358 @@ fn make_empty_node(lvl: i64, node_index: i64) -> SimpleChangeLog {
         cli_hash: empty_node(lvl as u32).to_vec(),
         cli_seq: 0,
         cli_tree: vec![],
+    }
+}
+
+#[test]
+pub fn test_valid_mainline_with_invalid_alternatives() {
+    let cli_tree = vec![
+        51, 110, 42, 4, 221, 82, 221, 8, 14, 42, 227, 168, 2, 155, 0, 127, 46, 104, 120, 38, 189,
+        7, 197, 4, 225, 14, 93, 183, 39, 79, 1, 65,
+    ];
+    let final_node_list = vec![
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    247, 41, 158, 116, 39, 111, 5, 180, 211, 148, 144, 29, 169, 76, 166, 7, 52,
+                    220, 20, 16, 232, 138, 18, 246, 190, 179, 5, 109, 143, 136, 187, 50,
+                ],
+                cli_level: 1,
+                cli_node_idx: 16877711,
+                cli_seq: 100515,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    73, 34, 61, 36, 227, 245, 69, 236, 116, 10, 14, 227, 226, 213, 91, 63, 39, 71,
+                    95, 51, 35, 206, 140, 253, 90, 23, 15, 218, 126, 190, 134, 135,
+                ],
+                cli_level: 2,
+                cli_node_idx: 8438854,
+                cli_seq: 100513,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    220, 218, 104, 238, 42, 40, 245, 102, 189, 57, 17, 218, 111, 212, 80, 172, 32,
+                    242, 74, 81, 186, 13, 214, 183, 165, 227, 118, 87, 37, 2, 86, 245,
+                ],
+                cli_level: 3,
+                cli_node_idx: 4219426,
+                cli_seq: 100511,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    81, 68, 74, 119, 16, 168, 37, 102, 206, 125, 124, 124, 132, 239, 167, 243, 183,
+                    57, 196, 135, 27, 4, 43, 157, 239, 49, 12, 255, 168, 227, 205, 107,
+                ],
+                cli_level: 4,
+                cli_node_idx: 2109712,
+                cli_seq: 100507,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    93, 214, 21, 70, 101, 14, 91, 94, 114, 226, 78, 55, 233, 141, 155, 205, 21,
+                    223, 157, 204, 61, 135, 169, 230, 105, 205, 249, 121, 151, 188, 194, 152,
+                ],
+                cli_level: 5,
+                cli_node_idx: 1054857,
+                cli_seq: 100531,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    67, 109, 221, 244, 43, 77, 127, 38, 33, 36, 177, 183, 61, 38, 177, 14, 138, 82,
+                    60, 132, 180, 189, 224, 244, 190, 2, 196, 165, 225, 44, 170, 122,
+                ],
+                cli_level: 6,
+                cli_node_idx: 527429,
+                cli_seq: 100563,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    220, 198, 188, 149, 105, 14, 24, 37, 143, 71, 156, 25, 8, 197, 74, 133, 169,
+                    241, 11, 11, 116, 154, 249, 14, 174, 137, 253, 167, 77, 108, 41, 105,
+                ],
+                cli_level: 7,
+                cli_node_idx: 263715,
+                cli_seq: 100627,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    219, 229, 230, 233, 178, 17, 36, 39, 122, 128, 207, 71, 73, 182, 2, 162, 123,
+                    235, 43, 71, 242, 207, 235, 220, 175, 56, 134, 114, 230, 249, 102, 157,
+                ],
+                cli_level: 8,
+                cli_node_idx: 131856,
+                cli_seq: 16845866,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    203, 106, 187, 169, 161, 204, 84, 238, 16, 79, 156, 93, 181, 49, 134, 60, 232,
+                    31, 137, 32, 36, 216, 147, 36, 46, 87, 21, 234, 217, 22, 71, 19,
+                ],
+                cli_level: 9,
+                cli_node_idx: 65929,
+                cli_seq: 16852129,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    229, 91, 43, 96, 177, 165, 4, 129, 206, 144, 205, 1, 161, 233, 200, 127, 62,
+                    143, 41, 109, 28, 227, 8, 28, 110, 11, 51, 145, 208, 116, 64, 94,
+                ],
+                cli_level: 10,
+                cli_node_idx: 32965,
+                cli_seq: 2483344,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    18, 26, 217, 144, 121, 63, 234, 155, 78, 249, 114, 108, 167, 88, 233, 81, 249,
+                    203, 104, 160, 165, 135, 26, 25, 186, 170, 119, 5, 63, 122, 56, 4,
+                ],
+                cli_level: 11,
+                cli_node_idx: 16483,
+                cli_seq: 16858475,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    8, 45, 237, 33, 93, 211, 227, 199, 41, 91, 20, 194, 98, 93, 44, 228, 135, 243,
+                    30, 168, 80, 235, 177, 163, 177, 101, 7, 110, 164, 218, 210, 25,
+                ],
+                cli_level: 12,
+                cli_node_idx: 8240,
+                cli_seq: 16853212,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    220, 31, 60, 152, 167, 62, 246, 34, 171, 69, 120, 204, 195, 234, 33, 47, 77,
+                    98, 193, 195, 214, 139, 123, 13, 3, 156, 87, 165, 177, 164, 88, 191,
+                ],
+                cli_level: 13,
+                cli_node_idx: 4121,
+                cli_seq: 16855791,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    233, 106, 120, 106, 253, 180, 90, 75, 114, 41, 242, 39, 233, 194, 217, 10, 245,
+                    218, 12, 11, 21, 43, 77, 178, 145, 165, 250, 22, 99, 254, 116, 188,
+                ],
+                cli_level: 14,
+                cli_node_idx: 2061,
+                cli_seq: 16855780,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    195, 143, 3, 113, 213, 80, 219, 63, 6, 144, 169, 243, 36, 106, 165, 2, 78, 246,
+                    223, 237, 240, 233, 169, 105, 87, 213, 221, 178, 101, 33, 131, 7,
+                ],
+                cli_level: 15,
+                cli_node_idx: 1031,
+                cli_seq: 16859416,
+                cli_tree: cli_tree.clone(),
+            },
+            Some(vec![
+                162, 252, 216, 169, 227, 252, 119, 77, 83, 252, 196, 157, 53, 129, 205, 6, 72, 233,
+                155, 22, 160, 66, 44, 126, 138, 126, 122, 153, 136, 44, 0, 164,
+            ]),
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    58, 156, 228, 251, 242, 206, 130, 55, 219, 45, 103, 71, 57, 203, 107, 17, 78,
+                    167, 38, 1, 219, 33, 115, 240, 57, 147, 90, 224, 44, 122, 124, 185,
+                ],
+                cli_level: 16,
+                cli_node_idx: 514,
+                cli_seq: 16858734,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    56, 86, 228, 90, 46, 150, 206, 116, 94, 31, 141, 6, 247, 217, 83, 141, 173,
+                    233, 201, 140, 114, 8, 95, 230, 81, 167, 144, 122, 231, 82, 95, 146,
+                ],
+                cli_level: 17,
+                cli_node_idx: 256,
+                cli_seq: 16861318,
+                cli_tree: cli_tree.clone(),
+            },
+            Some(vec![
+                200, 12, 56, 255, 235, 109, 167, 225, 141, 47, 119, 219, 146, 93, 138, 188, 106,
+                248, 120, 239, 67, 35, 98, 65, 68, 203, 14, 42, 10, 43, 100, 154,
+            ]),
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    135, 212, 16, 109, 254, 152, 133, 104, 178, 220, 47, 34, 177, 45, 46, 44, 87,
+                    153, 253, 82, 152, 93, 115, 128, 44, 47, 221, 211, 85, 55, 139, 101,
+                ],
+                cli_level: 18,
+                cli_node_idx: 129,
+                cli_seq: 16861764,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    74, 138, 103, 209, 49, 235, 212, 22, 198, 41, 175, 25, 211, 185, 217, 207, 177,
+                    176, 119, 96, 202, 46, 131, 102, 4, 220, 160, 238, 16, 104, 230, 110,
+                ],
+                cli_level: 19,
+                cli_node_idx: 65,
+                cli_seq: 16861760,
+                cli_tree: cli_tree.clone(),
+            },
+            Some(vec![
+                147, 130, 232, 145, 154, 148, 105, 167, 157, 98, 96, 57, 136, 193, 168, 97, 32,
+                130, 118, 244, 72, 127, 74, 4, 120, 236, 143, 69, 129, 194, 120, 199,
+            ]),
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    106, 76, 162, 225, 172, 41, 172, 5, 172, 189, 81, 103, 219, 159, 145, 219, 59,
+                    6, 163, 26, 238, 23, 230, 248, 28, 120, 244, 99, 99, 90, 41, 168,
+                ],
+                cli_level: 20,
+                cli_node_idx: 33,
+                cli_seq: 16861767,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    235, 175, 80, 8, 181, 52, 52, 129, 180, 76, 62, 171, 0, 216, 85, 180, 225, 174,
+                    210, 255, 31, 107, 48, 177, 247, 240, 131, 251, 130, 2, 13, 221,
+                ],
+                cli_level: 21,
+                cli_node_idx: 17,
+                cli_seq: 16861770,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    191, 55, 102, 208, 117, 212, 135, 127, 240, 91, 30, 72, 0, 194, 10, 130, 178,
+                    161, 228, 218, 1, 23, 34, 212, 172, 60, 252, 25, 62, 145, 240, 127,
+                ],
+                cli_level: 22,
+                cli_node_idx: 9,
+                cli_seq: 16861774,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    30, 72, 161, 219, 233, 200, 175, 221, 197, 29, 140, 155, 123, 7, 149, 243, 41,
+                    106, 169, 32, 84, 11, 52, 207, 30, 81, 115, 16, 245, 187, 255, 112,
+                ],
+                cli_level: 23,
+                cli_node_idx: 5,
+                cli_seq: 16861779,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    201, 47, 223, 252, 48, 225, 24, 144, 42, 233, 9, 216, 204, 219, 142, 98, 115,
+                    118, 174, 81, 31, 100, 121, 122, 213, 134, 255, 231, 0, 186, 168, 152,
+                ],
+                cli_level: 24,
+                cli_node_idx: 3,
+                cli_seq: 16861776,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+        (
+            SimpleChangeLog {
+                cli_hash: vec![
+                    203, 225, 45, 209, 200, 233, 137, 229, 61, 78, 138, 108, 44, 79, 234, 25, 189,
+                    253, 33, 129, 57, 239, 131, 72, 160, 27, 166, 177, 118, 194, 241, 183,
+                ],
+                cli_level: 25,
+                cli_node_idx: 1,
+                cli_seq: 16861779,
+                cli_tree: cli_tree.clone(),
+            },
+            None,
+        ),
+    ];
+    let leaf = vec![
+        228, 119, 100, 82, 32, 252, 105, 143, 204, 55, 100, 0, 137, 216, 104, 138, 227, 10, 217,
+        111, 36, 181, 226, 19, 169, 224, 40, 205, 31, 160, 142, 218,
+    ];
+    let proof = build_proof(final_node_list.clone(), leaf);
+    assert!(proof.is_some());
+    for (i, node) in proof.unwrap().iter().enumerate() {
+        assert_eq!(node.cli_hash, final_node_list[i].0.cli_hash);
     }
 }
