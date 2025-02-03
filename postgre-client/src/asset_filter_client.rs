@@ -104,7 +104,12 @@ impl PgClient {
         if group_clause_required {
             query_builder.push(" GROUP BY ast_pubkey, ast_slot_created, ast_slot_updated ");
         }
-        query_builder.push(") ");
+
+        // Add ORDER BY clause
+        let direction = match (&order.sort_direction, order_reversed) {
+            (AssetSortDirection::Asc, true) | (AssetSortDirection::Desc, false) => " DESC ",
+            (AssetSortDirection::Asc, false) | (AssetSortDirection::Desc, true) => " ASC ",
+        };
 
         // the function with a side-effect that mutates the query_builder
         if let Some(owner_address) = &filter.owner_address {
@@ -113,9 +118,29 @@ impl PgClient {
                     TokenType::Fungible
                     | TokenType::NonFungible
                     | TokenType::RegularNFT
-                    | TokenType::CompressedNFT => {},
+                    | TokenType::CompressedNFT => {
+                        query_builder.push(")");
+                    },
                     TokenType::All => {
-                        query_builder.push("  UNION ");
+                        // For this type of query we do union and apply limit with ordering for both parts of a query.
+                        // It allows us to speed up the query for queries with wallets which has lots of assets.
+                        // Not the cleanest approach.
+                        // TODO: this may be improved
+                        query_builder.push(" ORDER BY ");
+                        query_builder.push(order.sort_by.to_string().replace("ast_", ""));
+                        query_builder.push(direction);
+
+                        query_builder.push(" LIMIT ");
+                        if let Some(page_num) = page.filter(|&p| p > 1) {
+                            let lim = page_num * limit;
+                            query_builder.push_bind(lim as i64);
+                        } else {
+                            query_builder.push_bind(limit as i64);
+                        }
+
+                        query_builder.push(")");
+
+                        query_builder.push("  UNION ALL ");
                         query_builder.push("  ( ");
                         query_builder.push(
                             "SELECT
@@ -123,7 +148,7 @@ impl PgClient {
                     ast_slot_created,
                     ast_slot_updated
                     FROM assets_v3
-                    JOIN fungible_tokens ON ast_pubkey = fungible_tokens.fbt_asset
+                    JOIN fungible_tokens ON ast_pubkey = fungible_tokens.fbt_asset AND ast_owner_type = 'token'
                     WHERE ast_supply > 0 AND fbt_owner = ",
                         );
                         query_builder.push_bind(owner_address);
@@ -137,17 +162,28 @@ impl PgClient {
                                 " AND assets_v3.ast_is_collection_verified IS DISTINCT FROM FALSE",
                             );
                         }
+
+                        query_builder.push(" ORDER BY ");
+                        query_builder.push(order.sort_by.to_string());
+                        query_builder.push(direction);
+
+                        query_builder.push(" LIMIT ");
+                        if let Some(page_num) = page.filter(|&p| p > 1) {
+                            let lim = page_num * limit;
+                            query_builder.push_bind(lim as i64);
+                        } else {
+                            query_builder.push_bind(limit as i64);
+                        }
+
                         query_builder.push(")");
                     },
                 }
+            } else {
+                query_builder.push(")");
             }
+        } else {
+            query_builder.push(")");
         }
-
-        // Add ORDER BY clause
-        let direction = match (&order.sort_direction, order_reversed) {
-            (AssetSortDirection::Asc, true) | (AssetSortDirection::Desc, false) => " DESC ",
-            (AssetSortDirection::Asc, false) | (AssetSortDirection::Desc, true) => " ASC ",
-        };
 
         query_builder.push(" ORDER BY ");
         query_builder.push(order.sort_by.to_string().replace("ast_", ""));

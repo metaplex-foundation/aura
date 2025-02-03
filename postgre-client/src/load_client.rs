@@ -140,7 +140,11 @@ impl PgClient {
         )
         .await?;
 
-        for index in ["fungible_tokens_fbt_asset_idx", "fungible_tokens_fbt_owner_balance_idx"] {
+        for index in [
+            "fungible_tokens_fbt_asset_idx",
+            "fungible_tokens_fbt_owner_balance_idx",
+            "fungible_tokens_fbt_owner_fbt_asset_fbt_balance_idx",
+        ] {
             self.drop_index(transaction, index).await?;
         }
         Ok(())
@@ -169,7 +173,6 @@ impl PgClient {
             "assets_v3_is_frozen",
             "assets_v3_metadata_url",
             "assets_v3_owner",
-            "assets_v3_owner_type",
             "assets_v3_royalty_amount",
             "assets_v3_royalty_target_type",
             "assets_v3_slot_created",
@@ -177,6 +180,7 @@ impl PgClient {
             "assets_v3_specification_asset_class",
             "assets_v3_specification_version",
             "assets_v3_supply",
+            "assets_v3_ast_owner_type_ast_pubkey_idx",
         ] {
             self.drop_index(transaction, index).await?;
         }
@@ -207,7 +211,6 @@ impl PgClient {
                 ("assets_v3_is_frozen", "assets_v3(ast_is_frozen) WHERE ast_is_frozen IS TRUE"),
                 ("assets_v3_metadata_url", "assets_v3 (ast_metadata_url_id) WHERE ast_metadata_url_id IS NOT NULL"),
                 ("assets_v3_owner", "assets_v3(ast_owner) WHERE ast_owner IS NOT NULL"),
-                ("assets_v3_owner_type", "assets_v3 (ast_owner_type) WHERE ast_owner_type IS NOT NULL AND ast_owner_type <> 'unknown'::owner_type"),
                 ("assets_v3_royalty_amount", "assets_v3 (ast_royalty_amount)"),
                 ("assets_v3_royalty_target_type", "assets_v3 (ast_royalty_target_type) WHERE ast_royalty_target_type <> 'creators'::royalty_target_type"),
                 ("assets_v3_slot_created", "assets_v3 (ast_slot_created)"),
@@ -215,6 +218,7 @@ impl PgClient {
                 ("assets_v3_specification_asset_class", "assets_v3 (ast_specification_asset_class) WHERE ast_specification_asset_class IS NOT NULL AND ast_specification_asset_class <> 'unknown'::specification_asset_class"),
                 ("assets_v3_specification_version", "assets_v3 (ast_specification_version) WHERE ast_specification_version <> 'v1'::specification_versions"),
                 ("assets_v3_supply", "assets_v3(ast_supply) WHERE ast_supply IS NOT NULL"),
+                ("assets_v3_ast_owner_type_ast_pubkey_idx", "assets_v3 (ast_owner_type, ast_pubkey)")
             ]{
                 self.create_index(transaction, index, on_query_string).await?;
             }
@@ -395,6 +399,10 @@ impl PgClient {
         for (index, on_query_string) in [
             ("fungible_tokens_fbt_owner_balance_idx", "fungible_tokens(fbt_owner, fbt_balance)"),
             ("fungible_tokens_fbt_asset_idx", "fungible_tokens(fbt_asset)"),
+            (
+                "fungible_tokens_fbt_owner_fbt_asset_fbt_balance_idx",
+                "fungible_tokens(fbt_owner, fbt_asset, fbt_balance)",
+            ),
         ] {
             self.create_index(transaction, index, on_query_string).await?;
         }

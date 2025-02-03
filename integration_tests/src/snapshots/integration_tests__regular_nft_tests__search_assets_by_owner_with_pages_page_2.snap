@@ -1,0 +1,187 @@
+---
+source: integration_tests/src/regular_nft_tests.rs
+assertion_line: 340
+expression: response
+snapshot_kind: text
+---
+{
+  "total": 2,
+  "grand_total": 5,
+  "limit": 2,
+  "page": 2,
+  "items": [
+    {
+      "interface": "V1_NFT",
+      "id": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1",
+      "content": {
+        "$schema": "https://schema.metaplex.com/nft1.0.json",
+        "json_uri": "https://nftstorage.link/ipfs/bafkreigq3rvy636lvj23tid5ioxd4ovtcivfbhhjst5hk7fhziedygew3a",
+        "files": [],
+        "metadata": {
+          "name": "LIBRE",
+          "symbol": "LIBRE"
+        },
+        "links": {}
+      },
+      "authorities": [
+        {
+          "address": "",
+          "scopes": [
+            "full"
+          ]
+        }
+      ],
+      "compression": {
+        "eligible": false,
+        "compressed": false,
+        "data_hash": "",
+        "creator_hash": "",
+        "asset_hash": "",
+        "tree": "",
+        "seq": 0,
+        "leaf_id": 0
+      },
+      "grouping": [],
+      "royalty": {
+        "royalty_model": "creators",
+        "target": null,
+        "percent": 0.0,
+        "basis_points": 0,
+        "primary_sale_happened": false,
+        "locked": false
+      },
+      "creators": [],
+      "ownership": {
+        "frozen": false,
+        "delegated": false,
+        "delegate": null,
+        "ownership_model": "single",
+        "owner": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz"
+      },
+      "supply": {
+        "print_max_supply": 0,
+        "print_current_supply": 0,
+        "edition_nonce": null
+      },
+      "mutable": true,
+      "burnt": false,
+      "mint_extensions": {
+        "metadata_pointer": {
+          "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
+          "metadata_address": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1"
+        },
+        "metadata": {
+          "update_authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
+          "mint": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1",
+          "name": "LIBRE",
+          "symbol": "LIBRE",
+          "uri": "https://nftstorage.link/ipfs/bafkreigq3rvy636lvj23tid5ioxd4ovtcivfbhhjst5hk7fhziedygew3a",
+          "additional_metadata": []
+        },
+        "group_member_pointer": {
+          "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
+          "member_address": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1"
+        }
+      },
+      "token_info": {
+        "balance": 1,
+        "supply": 1,
+        "decimals": 0,
+        "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "associated_token_address": "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
+        "freeze_authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m"
+      }
+    },
+    {
+      "interface": "V1_NFT",
+      "id": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
+      "content": {
+        "$schema": "https://schema.metaplex.com/nft1.0.json",
+        "json_uri": "ipfs://QmTmNdx3cNT4wv5yyi7ajvPLZTVia6QzWzg1AAkKtauqqs",
+        "files": [],
+        "metadata": {
+          "name": "Path of Discovery",
+          "symbol": "POD"
+        },
+        "links": {}
+      },
+      "authorities": [
+        {
+          "address": "",
+          "scopes": [
+            "full"
+          ]
+        }
+      ],
+      "compression": {
+        "eligible": false,
+        "compressed": false,
+        "data_hash": "",
+        "creator_hash": "",
+        "asset_hash": "",
+        "tree": "",
+        "seq": 0,
+        "leaf_id": 0
+      },
+      "grouping": [],
+      "royalty": {
+        "royalty_model": "creators",
+        "target": null,
+        "percent": 0.0,
+        "basis_points": 0,
+        "primary_sale_happened": false,
+        "locked": false
+      },
+      "creators": [],
+      "ownership": {
+        "frozen": false,
+        "delegated": false,
+        "delegate": null,
+        "ownership_model": "single",
+        "owner": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz"
+      },
+      "supply": {
+        "print_max_supply": 0,
+        "print_current_supply": 0,
+        "edition_nonce": null
+      },
+      "mutable": true,
+      "burnt": false,
+      "mint_extensions": {
+        "metadata_pointer": {
+          "authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb",
+          "metadata_address": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB"
+        },
+        "metadata": {
+          "update_authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb",
+          "mint": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
+          "name": "Path of Discovery",
+          "symbol": "POD",
+          "uri": "ipfs://QmTmNdx3cNT4wv5yyi7ajvPLZTVia6QzWzg1AAkKtauqqs",
+          "additional_metadata": [
+            [
+              "royalty_basis_points",
+              "5000"
+            ],
+            [
+              "AsSKqK7CkxFUf3KaoQzzr8ZLPm5fFguUtVE5QwGALQQn",
+              "100"
+            ]
+          ]
+        },
+        "group_member_pointer": {
+          "authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb",
+          "member_address": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB"
+        }
+      },
+      "token_info": {
+        "balance": 1,
+        "supply": 1,
+        "decimals": 0,
+        "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "associated_token_address": "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
+        "freeze_authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb"
+      }
+    }
+  ]
+}

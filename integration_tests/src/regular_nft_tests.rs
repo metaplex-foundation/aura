@@ -204,6 +204,168 @@ async fn test_regular_nft_collection() {
 #[tokio::test]
 #[serial]
 #[named]
+async fn test_search_by_owner_with_show_zero_balance() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // mint for fungible acc
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let seeds: Vec<SeedEvent> = seed_accounts([
+        "3rzjtWZcZyvADaT5rrkRwGKWjnuzvK3PDedGMUwpnrrP", // empty token acc from NFT (3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG)
+        "94eSnb5qBWTvxj3gqP6Ukq8bPhRTNNVZrE7zR5yTZd9E", // fungible token with zero balance
+    ]);
+
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts([
+        "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", // NFT wallet has
+        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG", // NFT wallet used to have
+    ]);
+
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "all",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": true
+        }
+    }
+    "#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    insta::assert_json_snapshot!(name, response);
+}
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_search_assets_by_owner_with_pages() {
+    let test_name = trim_test_name(function_name!());
+
+    let setup = TestSetup::new_with_options(
+        test_name.clone(),
+        TestSetupOptions { network: Some(Network::EclipseMainnet), clear_db: true },
+    )
+    .await;
+
+    let seeds = seed_token_mints([
+        "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ",
+        "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom",
+        "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1",
+        "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
+        "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH",
+    ]);
+
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+        {
+            "ownerAddress": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz",
+            "tokenType": "all",
+            "options": {
+                "showCollectionMetadata": true,
+                "showGrandTotal": true,
+                "showInscription": true,
+                "showNativeBalance": true
+            }
+        }"#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+
+    let name_all_assets = format!("{}_all_assets", test_name);
+
+    insta::assert_json_snapshot!(name_all_assets, response);
+
+    let request = r#"
+        {
+            "page": 1,
+            "limit": 2,
+            "ownerAddress": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz",
+            "tokenType": "all",
+            "options": {
+                "showCollectionMetadata": true,
+                "showGrandTotal": true,
+                "showInscription": true,
+                "showNativeBalance": true
+            }
+        }"#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+
+    let name_page_1 = format!("{}_page_1", test_name);
+
+    insta::assert_json_snapshot!(name_page_1, response);
+
+    let request = r#"
+        {
+            "page": 2,
+            "limit": 2,
+            "ownerAddress": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz",
+            "tokenType": "all",
+            "options": {
+                "showCollectionMetadata": true,
+                "showGrandTotal": true,
+                "showInscription": true,
+                "showNativeBalance": true
+            }
+        }"#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+
+    let name_page_2 = format!("{}_page_2", test_name);
+
+    insta::assert_json_snapshot!(name_page_2, response);
+
+    let request = r#"
+        {
+            "page": 3,
+            "limit": 2,
+            "ownerAddress": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz",
+            "tokenType": "all",
+            "options": {
+                "showCollectionMetadata": true,
+                "showGrandTotal": true,
+                "showInscription": true,
+                "showNativeBalance": true
+            }
+        }"#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+
+    let name_page_3 = format!("{}_page_3", test_name);
+
+    insta::assert_json_snapshot!(name_page_3, response);
+}
+
+#[tokio::test]
+#[serial]
+#[named]
 async fn get_asset_nft_token_22_with_metadata() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
