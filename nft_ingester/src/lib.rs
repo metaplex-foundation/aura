@@ -25,3 +25,5 @@ pub mod scheduler;
 pub mod sequence_consistent;
 pub mod tcp_receiver;
 pub mod transaction_ingester;
+
+pub mod metadata_workers;
