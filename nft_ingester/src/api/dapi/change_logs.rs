@@ -453,7 +453,6 @@ fn test_generated_proof_with_length_20() {
         cli_tree: vec![],
     };
     candidates.push(CandidateNode { node: root_node, alt: None });
-    candidates.reverse();
     let result = build_proof(&candidates, &original_leaf);
     assert!(result.is_some());
     let proof = result.unwrap();
