@@ -132,7 +132,7 @@ impl PgClient {
 
                         query_builder.push(" LIMIT ");
                         if let Some(page_num) = page.filter(|&p| p > 1) {
-                            let lim = (page_num - 1) * limit;
+                            let lim = page_num * limit;
                             query_builder.push_bind(lim as i64);
                         } else {
                             query_builder.push_bind(limit as i64);
@@ -169,7 +169,7 @@ impl PgClient {
 
                         query_builder.push(" LIMIT ");
                         if let Some(page_num) = page.filter(|&p| p > 1) {
-                            let lim = (page_num - 1) * limit;
+                            let lim = page_num * limit;
                             query_builder.push_bind(lim as i64);
                         } else {
                             query_builder.push_bind(limit as i64);

@@ -1,0 +1,132 @@
+---
+source: integration_tests/src/regular_nft_tests.rs
+assertion_line: 342
+expression: response
+snapshot_kind: text
+---
+{
+  "total": 1,
+  "grand_total": 5,
+  "limit": 2,
+  "page": 3,
+  "items": [
+    {
+      "interface": "V1_NFT",
+      "id": "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH",
+      "content": {
+        "$schema": "https://schema.metaplex.com/nft1.0.json",
+        "json_uri": "https://s3.filebase.com/eclipsedomains/eclipse-item.json",
+        "files": [],
+        "metadata": {
+          "name": "backpack.eclipse",
+          "symbol": "ED"
+        },
+        "links": {}
+      },
+      "authorities": [
+        {
+          "address": "",
+          "scopes": [
+            "full"
+          ]
+        }
+      ],
+      "compression": {
+        "eligible": false,
+        "compressed": false,
+        "data_hash": "",
+        "creator_hash": "",
+        "asset_hash": "",
+        "tree": "",
+        "seq": 0,
+        "leaf_id": 0
+      },
+      "grouping": [],
+      "royalty": {
+        "royalty_model": "creators",
+        "target": null,
+        "percent": 0.0,
+        "basis_points": 0,
+        "primary_sale_happened": false,
+        "locked": false
+      },
+      "creators": [],
+      "ownership": {
+        "frozen": false,
+        "delegated": false,
+        "delegate": null,
+        "ownership_model": "single",
+        "owner": "EcxjN4mea6Ah9WSqZhLtSJJCZcxY73Vaz6UVHFZZ5Ttz"
+      },
+      "supply": {
+        "print_max_supply": 0,
+        "print_current_supply": 0,
+        "edition_nonce": null
+      },
+      "mutable": true,
+      "burnt": false,
+      "mint_extensions": {
+        "permanent_delegate": {
+          "delegate": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo"
+        },
+        "metadata_pointer": {
+          "authority": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo",
+          "metadata_address": "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH"
+        },
+        "metadata": {
+          "update_authority": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo",
+          "mint": "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH",
+          "name": "backpack.eclipse",
+          "symbol": "ED",
+          "uri": "https://s3.filebase.com/eclipsedomains/eclipse-item.json",
+          "additional_metadata": [
+            [
+              "royalty_basis_points",
+              "500"
+            ],
+            [
+              "FBepPeUcmFupjK7rWonB5gKtjT16AbExnhSVC1bBPAqf",
+              "100"
+            ],
+            [
+              "expiration_date",
+              "1765018176"
+            ],
+            [
+              "domain",
+              "backpack.eclipse"
+            ],
+            [
+              "extension",
+              "eclipse"
+            ],
+            [
+              "length",
+              "8"
+            ],
+            [
+              "created_at",
+              "1733482176"
+            ],
+            [
+              "updated_at",
+              "1735340757"
+            ]
+          ]
+        },
+        "group_member_pointer": {
+          "authority": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo",
+          "member_address": "EdmnsgHGEeeBoGEhtK4th6L3ebmfzfR9Lvw9oi9t4nnL"
+        }
+      },
+      "token_info": {
+        "balance": 1,
+        "supply": 1,
+        "decimals": 0,
+        "token_program": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+        "associated_token_address": "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
+        "freeze_authority": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo"
+      }
+    }
+  ]
+}
