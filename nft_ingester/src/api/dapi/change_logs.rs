@@ -223,13 +223,14 @@ fn get_asset_proof(
     let mut valid_proof = build_proof(final_node_list.clone(), leaf.hash.clone());
     if valid_proof.is_none() {
         if let Some(alt_leaf_hash) = alt_leaf_hash {
-            valid_proof = build_proof(final_node_list, alt_leaf_hash.value.clone());
+            valid_proof = build_proof(final_node_list.clone(), alt_leaf_hash.value.clone());
             if valid_proof.is_some() {
                 leaf_hash = alt_leaf_hash.value;
             }
         }
     }
     if valid_proof.is_none() {
+        warn!(?final_node_list, ?leaf, ?alt_leaf_hash, "Proof for asset {:?} is invalid", asset_id);
         return None;
     }
     let mut valid_proof = valid_proof.unwrap();
