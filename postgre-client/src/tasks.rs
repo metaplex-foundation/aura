@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use entities::{
     enums::TaskStatus,
-    models::{JsonDownloadTask, Task, UrlWithStatus},
+    models::{JsonDownloadTask, MetadataDownloadTask, Task, UrlWithStatus},
 };
 use metrics_utils::IngesterMetricsConfig;
 use sqlx::{Postgres, QueryBuilder, Row};
@@ -113,6 +113,82 @@ impl PgClient {
         query.execute(&self.pool).await?;
 
         Ok(())
+    }
+
+    pub async fn get_pending_metadata_tasks(
+        &self,
+        tasks_count: i32,
+    ) -> Result<Vec<MetadataDownloadTask>, IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "WITH selected_tasks AS (
+                                    SELECT t.metadata_hash FROM tasks AS t
+                                    WHERE t.status = 'pending' AND NOW() > t.next_try_at
+                                    FOR UPDATE
+                                    LIMIT ",
+        );
+        query_builder.push_bind(tasks_count);
+
+        query_builder.push(
+            ")
+            UPDATE tasks t
+            SET next_try_at = NOW() + INTERVAL '1 day'
+            FROM selected_tasks
+            WHERE t.metadata_hash = selected_tasks.metadata_hash
+            RETURNING t.metadata_hash, t.metadata_url, t.status, t.attempts, t.max_attempts, t.error;");
+
+        let query = query_builder.build();
+        let rows = query.fetch_all(&self.pool).await?;
+
+        let mut tasks = Vec::new();
+
+        for row in rows {
+            let metadata_url: String = row.get("metadata_url");
+            let status: TaskStatus = row.get("task_status");
+            let etag: Option<String> = row.get("etag");
+            let last_modified_at: Option<String> = row.get("last_modified_at");
+
+            tasks.push(MetadataDownloadTask { metadata_url, status, etag, last_modified_at });
+        }
+
+        Ok(tasks)
+    }
+
+    pub async fn get_refresh_metadata_tasks(
+        &self,
+        tasks_count: i32,
+    ) -> Result<Vec<MetadataDownloadTask>, IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "WITH selected_tasks AS (
+                                    SELECT t.metadata_hash FROM tasks AS t
+                                    WHERE t.status = 'refresh' AND NOW() > t.next_try_at AND t.mutability = 'mutable'
+                                    FOR UPDATE
+                                    LIMIT ",
+        );
+        query_builder.push_bind(tasks_count);
+
+        query_builder.push(
+            ")
+            UPDATE tasks t
+            SET next_try_at = NOW() + INTERVAL '1 day'
+            FROM selected_tasks
+            WHERE t.metadata_hash = selected_tasks.metadata_hash
+            RETURNING t.metadata_hash, t.metadata_url, t.status, t.attempts, t.max_attempts, t.error;");
+
+        let query = query_builder.build();
+        let rows = query.fetch_all(&self.pool).await?;
+
+        let mut tasks = Vec::new();
+
+        for row in rows {
+            let metadata_url: String = row.get("metadata_url");
+            let status: TaskStatus = row.get("task_status");
+            let etag: Option<String> = row.get("etag");
+            let last_modified_at: Option<String> = row.get("last_modified_at");
+
+            tasks.push(MetadataDownloadTask { metadata_url, status, etag, last_modified_at });
+        }
+
+        Ok(tasks)
     }
 
     pub async fn get_pending_tasks(

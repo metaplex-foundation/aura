@@ -519,6 +519,14 @@ pub struct JsonDownloadTask {
 }
 
 #[derive(Debug, Clone)]
+pub struct MetadataDownloadTask {
+    pub metadata_url: String,
+    pub status: TaskStatus,
+    pub etag: Option<String>,
+    pub last_modified_at: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct BatchMintWithState {
     pub file_name: String,
     pub state: BatchMintState,
