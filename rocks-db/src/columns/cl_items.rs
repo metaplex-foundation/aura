@@ -38,6 +38,34 @@ pub struct ClItemV2 {
 }
 
 impl ClItemV2 {
+    /// Returns the hash of the node that should be used for proof construction.
+    /// If the pending hash is not present or is older then the finalized one, the finalized hash is returned.
+    /// Returns the finalized hash as an alternative hash if the pending hash is older than the cutoff slot.
+    /// This will indicate either a missed update for the finalized data, or the pending data is on a fork.
+    pub fn get_hash_with_finalized_alternative(
+        &self,
+        cutoff_slot: u64,
+    ) -> (Updated<Vec<u8>>, Option<Updated<Vec<u8>>>) {
+        match (&self.finalized_hash, &self.pending_hash) {
+            (Some(finalized), Some(pending)) => {
+                // if the finalized hash is newer than the pending hash, return the finalized hash
+                // also return the finalized hash if the pending slot is way behind the last known finalized slot
+                if finalized.get_upd_ver_seq() > pending.get_upd_ver_seq()
+                    || finalized.slot_updated > pending.slot_updated
+                {
+                    (finalized.clone(), None)
+                } else if pending.slot_updated < cutoff_slot {
+                    (pending.clone(), Some(finalized.clone()))
+                } else {
+                    (pending.clone(), None)
+                }
+            },
+            (Some(finalized), None) => (finalized.clone(), None),
+            (None, Some(pending)) => (pending.clone(), None),
+            (None, None) => (Updated::new(0, None, vec![]), None),
+        }
+    }
+
     pub fn get_updated_hash(&self, cutoff_slot: u64) -> Updated<Vec<u8>> {
         match (&self.finalized_hash, &self.pending_hash) {
             (Some(finalized), Some(pending)) => {

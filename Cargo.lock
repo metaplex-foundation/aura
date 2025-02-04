@@ -4829,6 +4829,7 @@ dependencies = [
  "postgre-client",
  "pprof",
  "prometheus-client",
+ "rand 0.8.5",
  "reqwest",
  "rocks-db",
  "rocksdb",

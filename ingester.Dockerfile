@@ -46,7 +46,7 @@ COPY . .
 RUN cargo build --release --features profiling --bin ingester --bin api --bin backfill --bin synchronizer --bin slot_persister
 
 # Final image
-FROM rust:1.84-slim-bullseye AS runtime
+FROM debian:bullseye-slim AS runtime
 ARG APP=/usr/src/app
 RUN apt update && apt install -y curl ca-certificates tzdata libjemalloc2 google-perftools graphviz libjemalloc-dev && rm -rf /var/lib/apt/lists/*
 COPY --from=cacher /usr/local/lib/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2
