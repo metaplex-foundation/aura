@@ -129,6 +129,21 @@ Add compression support for NFT metadata
 - Fixes #123
 ```
 
+### Continuous Integration
+
+All branches must pass our CI pipeline before being merged. The CI pipeline includes:
+- Code style checks
+- Unit tests
+- Integration tests
+- Build verification
+
+CI is automatically triggered for:
+- All pull requests targeting `develop` or `main`
+- Release branches
+- Hotfix branches
+
+Note: Direct pushes to `develop` and `main` branches are prohibited. All changes must go through pull requests.
+
 ### Pull Request Process
 
 1. Update the README.md or relevant documentation with details of changes if needed
