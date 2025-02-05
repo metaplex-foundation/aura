@@ -219,6 +219,7 @@ pub async fn get_by_ids<
     let mut asset_selected_maps = rocks_db
         .get_asset_selected_maps_async(unique_asset_ids.clone(), owner_address, &options)
         .await?;
+
     if let Some(json_downloader) = json_downloader {
         let mut urls_to_download = Vec::new();
 
