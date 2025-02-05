@@ -81,7 +81,39 @@ We follow the GitFlow branching model for our development process. This provides
 
 ### Commit Messages
 
-Follow these guidelines for commit messages:
+We follow [Conventional Commits](https://www.conventionalcommits.org/) specification for our commit messages. This leads to more readable messages that are easy to follow when looking through the project history and enables automatic generation of changelogs.
+
+Each commit message should be structured as follows:
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+Common types:
+- `feat`: A new feature
+- `fix`: A bug fix
+- `docs`: Documentation only changes
+- `style`: Changes that do not affect the meaning of the code
+- `refactor`: A code change that neither fixes a bug nor adds a feature
+- `perf`: A code change that improves performance
+- `test`: Adding missing tests or correcting existing tests
+- `chore`: Changes to the build process or auxiliary tools
+
+Example:
+```
+feat(api): add pagination to assets endpoint
+
+- Implement cursor-based pagination
+- Add limit parameter
+- Update API documentation
+
+Closes #123
+```
+
+Additionally, follow these guidelines for the message content:
 - Use the present tense ("Add feature" not "Added feature")
 - Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
 - Limit the first line to 72 characters or less
