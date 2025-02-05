@@ -123,7 +123,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 ),
             )
             .expect("invalid rocks backup archives dir"),
-            &PathBuf::from_str(&args.rocks_db_path_container)
+            &PathBuf::from_str(&args.rocks_db_path)
                 .expect("invalid rocks backup archives dir"),
         )
         .await?;
@@ -135,7 +135,7 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Init primary storage...");
     let primary_rocks_storage = Arc::new(
         init_primary_storage(
-            &args.rocks_db_path_container,
+            &args.rocks_db_path,
             args.enable_rocks_migration.unwrap_or(false),
             &args.rocks_migration_storage_path,
             &metrics_state,
