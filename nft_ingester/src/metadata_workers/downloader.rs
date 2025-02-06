@@ -8,6 +8,8 @@ use interface::{
 };
 use metrics_utils::{red::RequestErrorDurationMetrics, JsonDownloaderMetricsConfig};
 use reqwest::ClientBuilder;
+use reqwest_middleware::ClientBuilder as MiddlewareClientBuilder;
+use reqwest_retry::{policies::ExponentialBackoffBuilder, RetryTransientMiddleware};
 use serde_json::Value;
 use tokio::{
     sync::{
@@ -23,6 +25,9 @@ use url::Url;
 
 use crate::json_worker::JsonWorker;
 pub const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
+pub const MAX_RETRIES: u32 = 3;
+pub const MIN_RETRY_INTERVAL: Duration = Duration::from_secs(1);
+pub const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(3);
 
 pub struct MetadataDownloader {
     pub worker: Arc<JsonWorker>,
@@ -124,9 +129,16 @@ impl NewJsonDownloader for JsonWorker {
         timeout: Duration,
     ) -> Result<JsonDownloadResult, JsonDownloaderError> {
         let start_time = chrono::Utc::now();
+        let retry_policy = ExponentialBackoffBuilder::default()
+            .retry_bounds(MIN_RETRY_INTERVAL, MAX_RETRY_INTERVAL)
+            .build_with_max_retries(MAX_RETRIES);
+
         let client = ClientBuilder::new().timeout(timeout).build().map_err(|e| {
             JsonDownloaderError::ErrorDownloading(format!("Failed to create client: {:?}", e))
         })?;
+        let client = MiddlewareClientBuilder::new(client)
+            .with(RetryTransientMiddleware::new_with_policy(retry_policy))
+            .build();
 
         // Detect if the URL is an IPFS link
         let parsed_url = if download_task.metadata_url.starts_with("ipfs://") {
