@@ -159,6 +159,7 @@ impl TryFrom<GetAssetsByOwner> for SearchAssetsQuery {
                 validate_pubkey(asset_owner.owner_address).map(|k| k.to_bytes().to_vec())?,
             ),
             supply: Some(AssetSupply::Greater(0)),
+            burnt: asset_owner.options.show_burnt,
             ..Default::default()
         })
     }

@@ -1863,6 +1863,104 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
+    async fn test_get_only_non_burnt_assets_by_owner() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, generated_assets) =
+            setup::TestEnvironment::create_burnt(&cli, cnt, SLOT_UPDATED).await;
+        let api = create_api(&env, None);
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+
+        let ref_value = generated_assets.owners[8].clone();
+        let payload = GetAssetsByOwner {
+            owner_address: ref_value.owner.value.map(|owner| owner.to_string()).unwrap_or_default(),
+            sort_by: None,
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: None,
+            options: GetByMethodsOptions {
+                show_unverified_collections: true,
+                show_burnt: Some(false),
+                ..Default::default()
+            },
+        };
+
+        let res = api.get_assets_by_owner(payload, mutexed_tasks.clone()).await.unwrap();
+        let res_obj: AssetList = serde_json::from_value(res).unwrap();
+
+        // in the setup all assets were created as burnt
+        // meaning that if we do not explicitly specify show_burnt
+        // in the options, the response will be empty
+        assert_eq!(res_obj.total, 0, "total should be 0");
+        assert_eq!(res_obj.items.len(), 0, "items length should be 0");
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_get_only_burnt_assets_by_owner() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, generated_assets) =
+            setup::TestEnvironment::create_burnt(&cli, cnt, SLOT_UPDATED).await;
+        let api = create_api(&env, None);
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+
+        let ref_value = generated_assets.owners[8].clone();
+        let payload = GetAssetsByOwner {
+            owner_address: ref_value.owner.value.map(|owner| owner.to_string()).unwrap_or_default(),
+            sort_by: None,
+            limit: None,
+            page: None,
+            before: None,
+            after: None,
+            cursor: None,
+            options: GetByMethodsOptions {
+                show_unverified_collections: true,
+                show_burnt: Some(true),
+                ..Default::default()
+            },
+        };
+
+        let res = api.get_assets_by_owner(payload, mutexed_tasks.clone()).await.unwrap();
+        let res_obj: AssetList = serde_json::from_value(res).unwrap();
+
+        assert_eq!(res_obj.total, 1, "total should be 1");
+        assert_eq!(res_obj.items.len(), 1, "items length should be 1");
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn test_search_assets_excluding_burnt_assets() {
+        let cnt = 20;
+        let cli = Cli::default();
+        let (env, _generated_assets) =
+            setup::TestEnvironment::create_burnt(&cli, cnt, SLOT_UPDATED).await;
+        let api = create_api(&env, None);
+        let tasks = JoinSet::new();
+        let mutexed_tasks = Arc::new(Mutex::new(tasks));
+        let limit = 20;
+        let payload = SearchAssets {
+            burnt: Some(false),
+            limit: Some(limit),
+            options: SearchAssetsOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        assert!(res.is_object());
+        let res_obj: AssetList = serde_json::from_value(res).unwrap();
+        assert_eq!(res_obj.total, 0, "total should be 0");
+        assert_eq!(res_obj.items.len(), 0, "assets length should be 0");
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
     async fn test_get_assets_by_group() {
         let cnt = 20;
         let cli = Cli::default();
