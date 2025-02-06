@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use entities::
-    models::MetadataDownloadTask
-;
+use entities::models::MetadataDownloadTask;
 use interface::{
     error::JsonDownloaderError,
     json::{JsonDownloadResult, NewJsonDownloader},
@@ -56,7 +54,8 @@ impl MetadataDownloader {
             self.refresh_metadata_tasks_rx.clone(),
             self.worker.clone(),
             self.metadata_to_persist_tx.clone(),
-        ).await;
+        )
+        .await;
     }
 
     pub async fn download_tasks(
@@ -79,18 +78,19 @@ impl MetadataDownloader {
                         debug!("Shutting down metadata downloader worker");
                     },
                     _ = async move {
-                        match metadata_task_rx.recv().await {
+                        loop {
+                            match metadata_task_rx.recv().await {
                             Ok(task) => {
                                 let begin_processing = Instant::now();
 
                                 let response = NewJsonDownloader::download_file(&*worker, &task, CLIENT_TIMEOUT)
                                     .await;
-        
+
                                 worker.metrics.set_latency_task_executed(
                                     "json_downloader",
                                     begin_processing.elapsed().as_millis() as f64,
                                 );
-        
+
                                 if let Err(err) = metadata_to_persist_tx.send((task.metadata_url, response)).await {
                                     error!(
                                         "Error during sending JSON download result to the channel: {}",
@@ -109,7 +109,7 @@ impl MetadataDownloader {
                                 }
                             },
                         }
-                    } => {},
+                    }} => {},
                 }
             });
         }
