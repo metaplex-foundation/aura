@@ -62,6 +62,7 @@ The API specification is compatible with the standard DAS specification here htt
 
 ### Developing and running
 
+Please read our [contribution guidelines](CONTRIBUTING.md) for details on our GitFlow process and how to submit pull requests to us.
 
 #### Run Integration Tests
 
