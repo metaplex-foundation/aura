@@ -27,7 +27,7 @@ async fn main() -> Result<(), RocksDbBackupServiceError> {
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
     let storage = Storage::open_secondary(
-        &args.rocks_db_path_container,
+        &args.rocks_db_path,
         &args.rocks_db_secondary_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
@@ -36,7 +36,7 @@ async fn main() -> Result<(), RocksDbBackupServiceError> {
     .unwrap();
 
     debug!(
-        rocks_db_path_container = ?args.rocks_db_path_container,
+        rocks_db_path_container = ?args.rocks_db_path,
         rocks_db_secondary_path = ?args.rocks_db_secondary_path,
         "Opened RocksDb in secondary mode"
     );

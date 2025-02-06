@@ -27,7 +27,7 @@ pub struct IngesterClapArgs {
         default_value = "./my_rocksdb",
         help = "Rocks db path container"
     )]
-    pub rocks_db_path_container: String,
+    pub rocks_db_path: String,
 
     #[clap(
         short('f'),
@@ -284,7 +284,7 @@ pub struct SynchronizerClapArgs {
         default_value = "./my_rocksdb",
         help = "Rocks db path container"
     )]
-    pub rocks_db_path_container: String,
+    pub rocks_db_path: String,
     #[clap(
         long,
         env,
@@ -335,7 +335,7 @@ pub struct SynchronizerClapArgs {
 #[command(author, version, about, long_about = None)]
 pub struct RocksDbBackupServiceClapArgs {
     #[clap(long, env, default_value = "./my_rocksdb", help = "Rocks db path container")]
-    pub rocks_db_path_container: PathBuf,
+    pub rocks_db_path: PathBuf,
     #[clap(long, env, default_value = "./my_rocksdb_secondary", help = "Rocks db secondary path")]
     pub rocks_db_secondary_path: PathBuf,
     #[clap(long, env = "ROCKS_BACKUP_ARCHIVES_DIR", help = "Rocks backup archives dir")]
@@ -419,7 +419,7 @@ pub struct ApiClapArgs {
         default_value = "./my_rocksdb",
         help = "Rocks db path container"
     )]
-    pub rocks_db_path_container: String,
+    pub rocks_db_path: String,
     #[clap(
         long,
         env,
@@ -615,7 +615,7 @@ mod tests {
             "{}",
         ]);
 
-        assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
+        assert_eq!(args.rocks_db_path, "./my_rocksdb");
         assert_eq!(args.file_storage_path_container, "./tmp/file_storage");
         assert_eq!(args.pg_max_db_connections, 100);
         assert_eq!(args.sequence_consistent_checker_wait_period_sec, 60);
@@ -647,7 +647,7 @@ mod tests {
 
         assert_eq!(args.rocks_dump_path, "./tmp/rocks_dump");
         assert_eq!(args.pg_max_db_connections, 100);
-        assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
+        assert_eq!(args.rocks_db_path, "./my_rocksdb");
         assert_eq!(args.rocks_db_secondary_path, "./my_rocksdb_secondary");
         assert_eq!(args.run_profiling, false);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
@@ -668,7 +668,7 @@ mod tests {
             "postgres://solana:solana@localhost:5432/aura_db",
         ]);
 
-        assert_eq!(args.rocks_db_path_container, "./my_rocksdb");
+        assert_eq!(args.rocks_db_path, "./my_rocksdb");
         assert_eq!(args.rocks_db_secondary_path, "./my_rocksdb_secondary");
         assert_eq!(args.rocks_sync_interval_seconds, 2);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
