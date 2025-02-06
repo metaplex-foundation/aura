@@ -371,6 +371,14 @@ impl JsonPersister for JsonWorker {
 
         for (metadata_url, result) in results.iter() {
             match result {
+                Ok(JsonDownloadResult::NotModified) => {
+                    pg_updates.push(UpdatedTask {
+                        status: TaskStatus::Success,
+                        metadata_url: metadata_url.clone(),
+                        error: "".to_string(),
+                    });
+                    self.metrics.inc_tasks("json", MetricStatus::SUCCESS);
+                },
                 Ok(JsonDownloadResult::JsonContent(json_file)) => {
                     rocks_updates.insert(
                         metadata_url.clone(),
