@@ -34,7 +34,7 @@ struct Args {
     target_db_path: PathBuf,
 
     /// Optional starting slot number
-    #[arg(short, long)]
+    #[arg(long)]
     start_slot: Option<u64>,
 
     /// Number of concurrent workers (default: 16)
@@ -42,7 +42,7 @@ struct Args {
     workers: usize,
 
     /// Optional comma-separated list of slot numbers to process
-    #[arg(short = 's', long)]
+    #[arg(long)]
     slots: Option<String>,
 }
 
@@ -330,7 +330,7 @@ async fn send_slots_to_workers(
     }
 }
 
-// Function to send all slots starting from start_slot to workers
+// Function to send all slots backwards up to the start_slot to workers
 async fn send_all_slots_to_workers(
     source_db: rocksdb::DB,
     slot_sender: async_channel::Sender<(u64, Vec<u8>)>,
@@ -339,13 +339,8 @@ async fn send_all_slots_to_workers(
 ) {
     let cf_handle = source_db.cf_handle(RawBlock::NAME).unwrap();
     let mut iter = source_db.raw_iterator_cf(&cf_handle);
-
-    // Determine starting point
-    if let Some(start_slot) = start_slot {
-        iter.seek(RawBlock::encode_key(start_slot));
-    } else {
-        iter.seek_to_first();
-    }
+    let final_key = start_slot.map(|start_slot| RawBlock::encode_key(start_slot));
+    iter.seek_to_last();
 
     // Send slots to the channel
     while iter.valid() {
@@ -355,6 +350,9 @@ async fn send_all_slots_to_workers(
         }
 
         if let Some((key, value)) = iter.item() {
+            if final_key.is_some() && key < final_key.as_ref().unwrap().as_slice() {
+                break;
+            }
             let slot = u64::from_be_bytes(key.try_into().expect("Failed to decode the slot key"));
             let raw_block_data = value.to_vec();
 
@@ -364,8 +362,8 @@ async fn send_all_slots_to_workers(
                 break;
             }
 
-            // Move to the next slot
-            iter.next();
+            // Move to the previous slot
+            iter.prev();
         } else {
             break;
         }
