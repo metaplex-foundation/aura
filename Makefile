@@ -1,5 +1,8 @@
-.PHONY: build start build-integrity-verification start-integrity-verification dev stop clippy test start-backfiller
+.PHONY: ci build start build-integrity-verification start-integrity-verification dev stop clippy test start-backfiller
 SHELL := /bin/bash
+
+ci:
+	@./docker/build-all.sh
 
 build:
 	@docker compose -f docker-compose.yaml build ingester das-api synchronizer slot-persister backfill
