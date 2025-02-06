@@ -89,6 +89,9 @@ pub async fn main() -> Result<(), IngesterError> {
         Ok(())
     });
 
+    #[cfg(not(feature = "profiling"))]
+    graceful_stop(mutexed_tasks, shutdown_tx, None).await;
+    #[cfg(feature = "profiling")]
     graceful_stop(mutexed_tasks, shutdown_tx, None, None, None, "").await;
 
     Ok(())
