@@ -60,9 +60,18 @@ The project's structure is a reflection of the following clean architecture prin
 
 The API specification is compatible with the standard DAS specification here https://github.com/metaplex-foundation/api-specifications
 
+### Contributing
+Please read our [contribution guidelines](CONTRIBUTING.md) for details on our GitFlow process and how to submit pull requests to us.
+
 ### Developing and running
 
-Please read our [contribution guidelines](CONTRIBUTING.md) for details on our GitFlow process and how to submit pull requests to us.
+To build all docker images locally, just run:
+```sh
+make ci
+```
+
+This will produce several images corresponding to the binary names, e.g. ingester, api, and others. This script
+will tag them as `mplx-aura/<binary name>:latest` so you can run the containers independently.
 
 #### Run Integration Tests
 
@@ -70,6 +79,12 @@ Please read our [contribution guidelines](CONTRIBUTING.md) for details on our Gi
 cargo t -F integration_tests
 ```
 
+#### Note on profiling
+
+In the previous versions, profiling binaries were available to run using the main `docker-compose.yaml`. However,
+it was since then removed, and to run profiling of any of the binaries, one has to replace `dockerfile` parameter
+in any of the services listed in `docker-compose.yaml` to `docker/profiling/app.Dockerfile`. This will build the
+required binary using the `profiling` feature and thus allow for profiling of the binary.
 
 
 Full documentation and contribution guidelines coming soon…

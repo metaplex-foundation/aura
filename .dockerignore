@@ -6,3 +6,9 @@ node-modules
 ledger
 tmp
 .anchor
+docker/
+doc/
+scripts/
+*.md
+*.sh
+*.yaml

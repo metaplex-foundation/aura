@@ -1,20 +1,26 @@
-use std::{fs::File, io::Write, ops::DerefMut, path::PathBuf, sync::Arc};
+#[cfg(feature = "profiling")]
+use std::{fs::File, io::Write};
+use std::{ops::DerefMut, path::PathBuf, sync::Arc};
 
 use metrics_utils::{red::RequestErrorDurationMetrics, MetricState};
 use postgre_client::PgClient;
+#[cfg(feature = "profiling")]
 use pprof::{protos::Message, ProfilerGuard};
 use rocks_db::{migrator::MigrationState, Storage};
 use tempfile::TempDir;
+#[cfg(feature = "profiling")]
+use tokio::process::Command;
 use tokio::{
-    process::Command,
     sync::{broadcast::Sender, Mutex},
     task::{JoinError, JoinSet},
 };
 use tokio_util::sync::CancellationToken;
+#[cfg(feature = "profiling")]
 use tracing::error;
 
 use crate::error::IngesterError;
 
+#[cfg(feature = "profiling")]
 const MALLOC_CONF_ENV: &str = "MALLOC_CONF";
 
 pub async fn init_index_storage_with_migration(
@@ -84,6 +90,22 @@ pub async fn init_primary_storage(
     )?)
 }
 
+#[cfg(not(feature = "profiling"))]
+pub async fn graceful_stop(
+    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    shutdown_tx: Sender<()>,
+    shutdown_token: Option<CancellationToken>,
+) {
+    usecase::graceful_stop::listen_shutdown().await;
+    let _ = shutdown_tx.send(());
+    if let Some(token) = shutdown_token {
+        token.cancel();
+    }
+
+    usecase::graceful_stop::graceful_stop(tasks.lock().await.deref_mut()).await
+}
+
+#[cfg(feature = "profiling")]
 pub async fn graceful_stop(
     tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     shutdown_tx: Sender<()>,
@@ -115,6 +137,7 @@ pub async fn graceful_stop(
     usecase::graceful_stop::graceful_stop(tasks.lock().await.deref_mut()).await
 }
 
+#[cfg(feature = "profiling")]
 async fn generate_profiling_gif(heap_path: &str) {
     let program = match std::env::current_exe()
         .map_err(|e| IngesterError::Usecase(e.to_string()))
