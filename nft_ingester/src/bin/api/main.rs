@@ -30,6 +30,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     info!("Starting API server...");
 
+    #[cfg(feature = "profiling")]
     let guard = if args.run_profiling {
         Some(pprof::ProfilerGuardBuilder::default().frequency(100).build().unwrap())
     } else {
@@ -209,6 +210,10 @@ pub async fn main() -> Result<(), IngesterError> {
     });
 
     // --stop
+    #[cfg(not(feature = "profiling"))]
+    graceful_stop(mutexed_tasks, shutdown_tx, None).await;
+
+    #[cfg(feature = "profiling")]
     graceful_stop(
         mutexed_tasks,
         shutdown_tx,

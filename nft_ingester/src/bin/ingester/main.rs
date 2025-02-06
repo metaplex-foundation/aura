@@ -50,6 +50,7 @@ use nft_ingester::{
 };
 use plerkle_messenger::{ConsumptionType, MessengerConfig, MessengerType};
 use postgre_client::PG_MIGRATIONS_PATH;
+#[cfg(feature = "profiling")]
 use pprof::ProfilerGuardBuilder;
 use rocks_db::{storage_traits::AssetSlotStorage, SlotStorage};
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -102,6 +103,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
 
+    #[cfg(feature = "profiling")]
     let guard = args.run_profiling.then(|| {
         ProfilerGuardBuilder::default()
             .frequency(100)
@@ -625,6 +627,10 @@ pub async fn main() -> Result<(), IngesterError> {
     start_metrics(metrics_state.registry, args.metrics_port).await;
 
     // --stop
+    #[cfg(not(feature = "profiling"))]
+    graceful_stop(mutexed_tasks, shutdown_tx, Some(shutdown_token)).await;
+
+    #[cfg(feature = "profiling")]
     graceful_stop(
         mutexed_tasks,
         shutdown_tx,
