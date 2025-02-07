@@ -339,7 +339,7 @@ async fn send_all_slots_to_workers(
 ) {
     let cf_handle = source_db.cf_handle(RawBlock::NAME).unwrap();
     let mut iter = source_db.raw_iterator_cf(&cf_handle);
-    let final_key = start_slot.map(|start_slot| RawBlock::encode_key(start_slot));
+    let final_key = start_slot.map(RawBlock::encode_key);
     iter.seek_to_last();
 
     // Send slots to the channel
