@@ -33,9 +33,13 @@ struct Args {
     #[arg(short, long, env = "TARGET_MAIN_DB_PATH")]
     target_db_path: PathBuf,
 
-    /// Optional starting slot number
+    /// Optional first slot number to start processing from
     #[arg(long)]
-    start_slot: Option<u64>,
+    first_slot: Option<u64>,
+
+    /// Optional last slot number to process until
+    #[arg(long)]
+    last_slot: Option<u64>,
 
     /// Number of concurrent workers (default: 16)
     #[arg(short = 'w', long, default_value_t = 16)]
@@ -145,26 +149,34 @@ async fn main() {
             error!("Failed to seek to last slot");
             return;
         }
-        let last_slot = iter
+        let db_last_slot = iter
             .key()
             .map(|k| u64::from_be_bytes(k.try_into().expect("Failed to decode the last slot key")))
             .expect("Failed to get the last slot");
 
         // Determine the starting slot
-        let start_slot = if let Some(start_slot) = args.start_slot {
-            info!("Starting from slot: {}", start_slot);
-            start_slot
+        let first_slot = if let Some(first_slot) = args.first_slot {
+            info!("Starting from slot: {}", first_slot);
+            first_slot
         } else {
             iter.seek_to_first();
             iter.key()
                 .map(|k| {
-                    u64::from_be_bytes(k.try_into().expect("Failed to decode the start slot key"))
+                    u64::from_be_bytes(k.try_into().expect("Failed to decode the first slot key"))
                 })
-                .expect("Failed to get the start slot")
+                .expect("Failed to get the first slot")
         };
 
-        info!("Start slot: {}, Last slot: {}", start_slot, last_slot);
-        last_slot - start_slot + 1
+        // Determine the last slot to process
+        let last_slot = args.last_slot.unwrap_or(db_last_slot);
+        info!("First slot: {}, Last slot: {}", first_slot, last_slot);
+
+        if last_slot < first_slot {
+            error!("Last slot {} is less than first slot {}", last_slot, first_slot);
+            return;
+        }
+
+        last_slot - first_slot + 1
     };
 
     let progress_bar = Arc::new(ProgressBar::new(total_slots));
@@ -275,12 +287,13 @@ async fn main() {
         )
         .await;
     } else {
-        // Process all slots from start_slot
+        // Process all slots from first_slot to last_slot
         send_all_slots_to_workers(
             source_db,
             slot_sender.clone(),
             shutdown_token.clone(),
-            args.start_slot,
+            args.first_slot,
+            args.last_slot,
         )
         .await;
     }
@@ -330,17 +343,27 @@ async fn send_slots_to_workers(
     }
 }
 
-// Function to send all slots backwards up to the start_slot to workers
+// Function to send all slots backwards up to the first_slot to workers
 async fn send_all_slots_to_workers(
     source_db: rocksdb::DB,
     slot_sender: async_channel::Sender<(u64, Vec<u8>)>,
     shutdown_token: CancellationToken,
-    start_slot: Option<u64>,
+    first_slot: Option<u64>,
+    last_slot: Option<u64>,
 ) {
     let cf_handle = source_db.cf_handle(RawBlock::NAME).unwrap();
     let mut iter = source_db.raw_iterator_cf(&cf_handle);
-    let final_key = start_slot.map(RawBlock::encode_key);
-    iter.seek_to_last();
+    let final_key = first_slot.map(RawBlock::encode_key);
+
+    // Start from the last slot or the provided last_slot
+    if let Some(last_slot) = last_slot {
+        iter.seek(RawBlock::encode_key(last_slot));
+        if !iter.valid() {
+            iter.seek_to_last();
+        }
+    } else {
+        iter.seek_to_last();
+    }
 
     // Send slots to the channel
     while iter.valid() {
