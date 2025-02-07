@@ -2,7 +2,7 @@
 
 set -eo pipefail
 
-BINARIES=("ingester" "slot_persister" "backfill" "api" "synchronizer" "rocksdb_backup" "integrity-verification")
+BINARIES=("ingester" "slot_persister" "backfill" "api" "synchronizer" "rocksdb_backup")
 
 docker build . -f docker/base.Dockerfile -t mplx-aura/base:latest
 

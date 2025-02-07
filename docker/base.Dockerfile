@@ -13,4 +13,4 @@ COPY --from=planner /rust/recipe.json recipe.json
 RUN apt update && apt install -y libclang-dev protobuf-compiler
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
-RUN cargo build --release --bin ingester --bin slot_persister --bin backfill --bin api --bin synchronizer  --bin rocksdb_backup --bin integrity-verification
+RUN cargo build --release --bin ingester --bin slot_persister --bin backfill --bin api --bin synchronizer  --bin rocksdb_backup
