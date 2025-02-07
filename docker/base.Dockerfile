@@ -14,3 +14,6 @@ RUN apt update && apt install -y libclang-dev protobuf-compiler
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release --bin ingester --bin slot_persister --bin backfill --bin api --bin synchronizer  --bin rocksdb_backup
+ARG VERSION_INFO
+ENV VERSION_INFO=${VERSION_INFO}
+RUN echo "$VERSION_INFO" > VERSION.txt
