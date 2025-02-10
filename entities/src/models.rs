@@ -22,8 +22,9 @@ use solana_transaction_status::{
 use sqlx::types::chrono;
 
 use crate::enums::{
-    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
-    TaskStatus, TokenMetadataEdition, TokenStandard, UnprocessedAccount, UseMethod,
+    ChainMutability, OffchainDataMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
+    SpecificationVersions, TaskStatus, TokenMetadataEdition, TokenStandard, UnprocessedAccount,
+    UseMethod,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq, Hash)]
@@ -418,12 +419,12 @@ pub struct TokenAccResponse {
 
 #[derive(Debug, Clone, Default)]
 pub struct Task {
-    pub ofd_metadata_url: String,
-    pub ofd_locked_until: Option<chrono::DateTime<chrono::Utc>>,
-    pub ofd_attempts: i32,
-    pub ofd_max_attempts: i32,
-    pub ofd_error: Option<String>,
-    pub ofd_status: TaskStatus,
+    pub metadata_url: String,
+    pub etag: Option<String>,
+    pub last_modified_at: Option<String>,
+    pub mutability: OffchainDataMutability,
+    pub next_try_at: chrono::DateTime<chrono::Utc>,
+    pub status: TaskStatus,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -513,22 +514,11 @@ impl TransactionInfo {
 }
 
 #[derive(Debug, Clone)]
-pub struct JsonDownloadTask {
+pub struct MetadataDownloadTask {
     pub metadata_url: String,
     pub status: TaskStatus,
-    pub attempts: i16,
-    pub max_attempts: i16,
-}
-
-impl Default for JsonDownloadTask {
-    fn default() -> Self {
-        Self {
-            metadata_url: "".to_string(),
-            status: TaskStatus::Pending,
-            attempts: 1,
-            max_attempts: 10,
-        }
-    }
+    pub etag: Option<String>,
+    pub last_modified_at: Option<String>,
 }
 
 pub struct CoreFee {

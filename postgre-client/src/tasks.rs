@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use entities::{
     enums::TaskStatus,
-    models::{JsonDownloadTask, MetadataDownloadTask, Task, UrlWithStatus},
+    models::{MetadataDownloadTask, Task, UrlWithStatus},
 };
 use metrics_utils::IngesterMetricsConfig;
 use sqlx::{Postgres, QueryBuilder, Row};
@@ -16,45 +16,47 @@ pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
 
 pub struct UpdatedTask {
     pub status: TaskStatus,
+    pub mutability: String,
     pub metadata_url: String,
-    pub error: String,
+    pub etag: Option<String>,
+    pub last_modified_at: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct JsonTask {
-    pub tsk_id: Vec<u8>,
+    pub metadata_hash: Vec<u8>,
     pub metadata_url: String,
     pub status: TaskStatus,
 }
 
 impl PgClient {
-    async fn insert_new_tasks(&self, data: &mut Vec<Task>) -> Result<(), IndexDbError> {
-        data.sort_by(|a, b| a.ofd_metadata_url.cmp(&b.ofd_metadata_url));
+    pub async fn insert_new_tasks(&self, data: &mut Vec<Task>) -> Result<(), IndexDbError> {
+        data.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
 
         let mut query_builder = QueryBuilder::new(
             "INSERT INTO tasks (
-                tsk_id,
-                tsk_metadata_url,
-                tsk_locked_until,
-                tsk_attempts,
-                tsk_max_attempts,
-                tsk_error,
-                tsk_status
+                metadata_hash,
+                metadata_url,
+                etag,
+                last_modified,
+                mutability,
+                next_try_at,
+                status,
             ) ",
         );
 
-        query_builder.push_values(data, |mut b, off_d| {
-            let tsk = UrlWithStatus::new(off_d.ofd_metadata_url.as_str(), false);
-            b.push_bind(tsk.get_metadata_id());
-            b.push_bind(tsk.metadata_url);
-            b.push_bind(off_d.ofd_locked_until);
-            b.push_bind(off_d.ofd_attempts);
-            b.push_bind(off_d.ofd_max_attempts);
-            b.push_bind(off_d.ofd_error.clone());
-            b.push_bind(off_d.ofd_status);
+        query_builder.push_values(data, |mut b, offchain_data| {
+            let task = UrlWithStatus::new(offchain_data.metadata_url.as_str(), false);
+            b.push_bind(task.get_metadata_id());
+            b.push_bind(task.metadata_url);
+            b.push_bind(offchain_data.etag.clone());
+            b.push_bind(offchain_data.last_modified_at.clone());
+            b.push_bind(offchain_data.mutability);
+            b.push_bind(offchain_data.next_try_at);
+            b.push_bind(offchain_data.status);
         });
 
-        query_builder.push("ON CONFLICT (tsk_id) DO NOTHING;");
+        query_builder.push("ON CONFLICT DO NOTHING;");
 
         let query = query_builder.build();
         query.execute(&self.pool).await?;
@@ -93,21 +95,53 @@ impl PgClient {
         }
     }
 
-    pub async fn update_tasks_and_attempts(
-        &self,
-        data: Vec<UpdatedTask>,
-    ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("UPDATE tasks SET tsk_status = tmp.tsk_status, tsk_attempts = tsk_attempts+1, tsk_error = tmp.tsk_error FROM (");
+    pub async fn update_tasks(&self, data: Vec<UpdatedTask>) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "
+            UPDATE tasks 
+            SET 
+                status = tmp.status, 
+                etag = tmp.etag, 
+                last_modified = tmp.last_modified, 
+                mutability = tmp.mutability, 
+                next_refresh_at = NOW + INTERVAL '1 day' 
+                FROM (
+        ",
+        );
 
-        query_builder.push_values(data, |mut b, key| {
-            let tsk = UrlWithStatus::new(key.metadata_url.as_str(), false); // status is ignoring here
-            b.push_bind(tsk.metadata_url);
-            b.push_bind(key.status);
-            b.push_bind(key.error);
+        query_builder.push_values(data, |mut b, task| {
+            let url = UrlWithStatus::new(task.metadata_url.as_str(), false); // status is ignored here
+            b.push_bind(url.metadata_url);
+            b.push_bind(task.status);
+            b.push_bind(task.etag.clone());
+            b.push_bind(task.last_modified_at.clone());
+            b.push_bind(task.mutability);
         });
 
-        query_builder.push(") as tmp (tsk_metadata_url, tsk_status, tsk_error) WHERE tasks.tsk_metadata_url = tmp.tsk_metadata_url;");
+        query_builder.push(") as tmp (status, etag, last_modified, mutability) WHERE tasks.metadata_hash = tmp.metadata_hash;");
+
+        let query = query_builder.build();
+        query.execute(&self.pool).await?;
+
+        Ok(())
+    }
+
+    pub async fn update_tasks_attempt_time(&self, data: Vec<String>) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "
+            UPDATE tasks 
+            SET
+                next_refresh_at = NOW + INTERVAL '1 day' 
+                WHERE tasks.metadata_url IN (
+        ",
+        );
+
+        query_builder.push_values(data, |mut b, task| {
+            let url = UrlWithStatus::new(task.as_str(), false); // status is ignored here
+            b.push_bind(url.metadata_url);
+        });
+
+        query_builder.push(");");
 
         let query = query_builder.build();
         query.execute(&self.pool).await?;
@@ -191,85 +225,6 @@ impl PgClient {
         Ok(tasks)
     }
 
-    pub async fn get_pending_tasks(
-        &self,
-        tasks_count: i32,
-    ) -> Result<Vec<JsonDownloadTask>, IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("WITH cte AS (
-                                        SELECT tsk_id
-                                        FROM tasks
-                                        WHERE (tsk_status = 'running' OR tsk_status = 'pending') AND tsk_locked_until < NOW() AND tsk_attempts < tsk_max_attempts
-                                        LIMIT ");
-
-        query_builder.push_bind(tasks_count);
-
-        // skip locked not to intersect with synchronizer work
-        query_builder.push(
-            " FOR UPDATE SKIP LOCKED
-            )
-            UPDATE tasks t
-            SET tsk_status = 'running',
-            tsk_locked_until = NOW() + INTERVAL '90 seconds'
-            FROM cte
-            WHERE t.tsk_id = cte.tsk_id
-            RETURNING t.tsk_metadata_url, t.tsk_status, t.tsk_attempts, t.tsk_max_attempts;",
-        );
-
-        let query = query_builder.build();
-        let rows = query.fetch_all(&self.pool).await?;
-
-        let mut tasks = Vec::new();
-
-        for row in rows {
-            let metadata_url: String = row.get("tsk_metadata_url");
-            let status: TaskStatus = row.get("tsk_status");
-            let attempts: i16 = row.get("tsk_attempts");
-            let max_attempts: i16 = row.get("tsk_max_attempts");
-
-            tasks.push(JsonDownloadTask { metadata_url, status, attempts, max_attempts });
-        }
-
-        Ok(tasks)
-    }
-
-    pub async fn insert_json_download_tasks(
-        &self,
-        data: &mut Vec<Task>,
-    ) -> Result<(), IndexDbError> {
-        data.sort_by(|a, b| a.ofd_metadata_url.cmp(&b.ofd_metadata_url));
-
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "INSERT INTO tasks (
-                tsk_id,
-                tsk_metadata_url,
-                tsk_locked_until,
-                tsk_attempts,
-                tsk_max_attempts,
-                tsk_error,
-                tsk_status
-            ) ",
-        );
-
-        query_builder.push_values(data, |mut b, off_d| {
-            let tsk = UrlWithStatus::new(off_d.ofd_metadata_url.as_str(), false);
-            b.push_bind(tsk.get_metadata_id());
-            b.push_bind(tsk.metadata_url);
-            b.push_bind(off_d.ofd_locked_until);
-            b.push_bind(off_d.ofd_attempts);
-            b.push_bind(off_d.ofd_max_attempts);
-            b.push_bind(off_d.ofd_error.clone());
-            b.push_bind(off_d.ofd_status);
-        });
-
-        query_builder.push("ON CONFLICT (tsk_id) DO NOTHING;");
-
-        let query = query_builder.build();
-        query.execute(&self.pool).await?;
-
-        Ok(())
-    }
-
     pub async fn get_tasks_count(&self) -> Result<i64, IndexDbError> {
         let resp = sqlx::query("SELECT COUNT(*) FROM tasks").fetch_one(&self.pool).await?;
         let count: i64 = resp.get(0);
@@ -282,15 +237,21 @@ impl PgClient {
         limit: i64,
         after: Option<Vec<u8>>,
     ) -> Result<Vec<JsonTask>, IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("select tsk_id, tsk_metadata_url, tsk_status from tasks");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "
+            SELECT
+                metadata_hash,
+                metadata_url,
+                status
+            FROM tasks",
+        );
 
         if let Some(after) = after {
-            query_builder.push(" where tsk_id > ");
+            query_builder.push(" WHERE metadata_hash > ");
             query_builder.push_bind(after);
         }
 
-        query_builder.push(" order by tsk_id");
+        query_builder.push(" ORDER BY metadata_hash");
 
         query_builder.push(" limit ");
 
@@ -302,11 +263,11 @@ impl PgClient {
         let mut tasks = Vec::new();
 
         for row in rows {
-            let tsk_id: Vec<u8> = row.get("tsk_id");
-            let metadata_url: String = row.get("tsk_metadata_url");
-            let status: TaskStatus = row.get("tsk_status");
+            let metadata_hash: Vec<u8> = row.get("metadata_hash");
+            let metadata_url: String = row.get("metadata_url");
+            let status: TaskStatus = row.get("status");
 
-            tasks.push(JsonTask { tsk_id, metadata_url, status });
+            tasks.push(JsonTask { metadata_hash, metadata_url, status });
         }
 
         Ok(tasks)

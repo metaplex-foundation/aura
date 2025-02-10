@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use interface::{
     error::JsonDownloaderError,
-    json::{JsonDownloadResult, JsonPersister},
+    json::{JsonPersister, MetadataDownloadResult},
 };
 use tokio::{
     sync::mpsc::Receiver,
@@ -17,28 +17,26 @@ pub const SLEEP_TIME: u64 = 1;
 
 pub struct TasksPersister<T: JsonPersister + Send + Sync + 'static> {
     pub persister: Arc<T>,
-    pub json_receiver: Receiver<(String, Result<JsonDownloadResult, JsonDownloaderError>)>,
+    pub json_receiver: Receiver<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
+    pub shutdown_rx: tokio::sync::broadcast::Receiver<()>,
 }
 
 impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
     pub fn new(
         persister: Arc<T>,
-        json_receiver: Receiver<(String, Result<JsonDownloadResult, JsonDownloaderError>)>,
+        json_receiver: Receiver<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
+        shutdown_rx: tokio::sync::broadcast::Receiver<()>,
     ) -> Self {
-        Self { persister, json_receiver }
+        Self { persister, json_receiver, shutdown_rx }
     }
 
-    pub async fn run(
-        mut self,
-        mut shutdown_rx: tokio::sync::broadcast::Receiver<()>,
-        tasks: &mut JoinSet<()>,
-    ) {
+    pub async fn run(mut self, tasks: &mut JoinSet<()>) {
         tasks.spawn(async move {
             let mut buffer = vec![];
             let persister = self.persister.clone();
 
             tokio::select! {
-                _ = shutdown_rx.recv() => {
+                _ = self.shutdown_rx.recv() => {
                     if let Err(e) = self.persister.persist_response(buffer).await {
                         error!("Could not save JSONs to the storage: {:?}", e);
                     } else {
