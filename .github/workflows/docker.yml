@@ -8,6 +8,11 @@ on:
     branches: [develop]
     tags: ["v*"]
 
+# Add permissions block for GitHub Container Registry access
+permissions:
+  contents: read
+  packages: write
+
 env:
   PUSH_CONDITION: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["refs/head/main", "refs/head/develop"]'), github.event.workflow_dispatch.ref)) }}
 
