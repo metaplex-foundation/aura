@@ -81,6 +81,9 @@ pub async fn main() -> Result<(), IngesterError> {
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     mutexed_tasks.lock().await.spawn(async move {
         // --stop
+        #[cfg(not(feature = "profiling"))]
+        graceful_stop(cloned_tasks, shutdown_tx, None).await;
+        #[cfg(feature = "profiling")]
         graceful_stop(cloned_tasks, shutdown_tx, None, None, None, "").await;
 
         Ok(())
