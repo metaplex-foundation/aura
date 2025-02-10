@@ -8,7 +8,7 @@ use nft_ingester::{
     consts::RAYDIUM_API_HOST,
     error::IngesterError,
     init::graceful_stop,
-    json_worker::JsonWorker,
+    metadata_workers::json_worker::JsonWorker,
     raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
 };
 use prometheus_client::registry::Registry;

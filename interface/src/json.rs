@@ -10,25 +10,31 @@ pub enum JsonDownloadResult {
     NotModified,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetadataDownloadResult {
+    pub etag: Option<String>,
+    pub last_modified_at: Option<String>,
+    pub result: JsonDownloadResult,
+}
+
+impl MetadataDownloadResult {
+    pub fn new(
+        etag: Option<String>,
+        last_modified_at: Option<String>,
+        result: JsonDownloadResult,
+    ) -> Self {
+        Self { etag, last_modified_at, result }
+    }
+}
+
 #[automock]
 #[async_trait]
 pub trait JsonDownloader {
     async fn download_file(
         &self,
-        url: String,
-        timeout: Duration,
-    ) -> Result<JsonDownloadResult, crate::error::JsonDownloaderError>;
-    fn skip_refresh(&self) -> bool;
-}
-
-#[automock]
-#[async_trait]
-pub trait NewJsonDownloader {
-    async fn download_file(
-        &self,
         metadata_download_task: &entities::models::MetadataDownloadTask,
         timeout: Duration,
-    ) -> Result<JsonDownloadResult, crate::error::JsonDownloaderError>;
+    ) -> Result<MetadataDownloadResult, crate::error::JsonDownloaderError>;
     fn skip_refresh(&self) -> bool;
 }
 
@@ -37,6 +43,6 @@ pub trait NewJsonDownloader {
 pub trait JsonPersister {
     async fn persist_response(
         &self,
-        results: Vec<(String, Result<JsonDownloadResult, crate::error::JsonDownloaderError>)>,
+        results: Vec<(String, Result<MetadataDownloadResult, crate::error::JsonDownloaderError>)>,
     ) -> Result<(), crate::error::JsonDownloaderError>;
 }

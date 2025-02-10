@@ -38,8 +38,12 @@ use nft_ingester::{
     error::IngesterError,
     gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller},
     init::{graceful_stop, init_index_storage_with_migration, init_primary_storage},
-    json_worker,
-    json_worker::JsonWorker,
+    metadata_workers::{
+        downloader::MetadataDownloader,
+        json_worker::JsonWorker,
+        persister::{TasksPersister, JSON_BATCH},
+        streamer::TasksStreamer,
+    },
     processors::{
         accounts_processor::run_accounts_processor,
         transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
@@ -58,7 +62,7 @@ use pprof::ProfilerGuardBuilder;
 use rocks_db::{storage_traits::AssetSlotStorage, SlotStorage};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use tokio::{
-    sync::{broadcast, Mutex},
+    sync::{broadcast, mpsc, Mutex},
     task::JoinSet,
     time::sleep as tokio_sleep,
 };
@@ -299,18 +303,6 @@ pub async fn main() -> Result<(), IngesterError> {
         last_saved_slot,
     ));
 
-    let json_processor = Arc::new(
-        JsonWorker::new(
-            index_pg_storage.clone(),
-            primary_rocks_storage.clone(),
-            metrics_state.json_downloader_metrics.clone(),
-            metrics_state.red_metrics.clone(),
-            args.parallel_json_downloaders,
-            args.api_skip_inline_json_refresh.unwrap_or_default(),
-        )
-        .await,
-    );
-
     if args.run_gapfiller {
         info!("Start gapfiller...");
         let gaped_data_client =
@@ -362,13 +354,25 @@ pub async fn main() -> Result<(), IngesterError> {
     let cloned_rx = shutdown_rx.resubscribe();
     let file_storage_path = args.file_storage_path_container.clone();
 
+    let json_worker = Arc::new(
+        JsonWorker::new(
+            index_pg_storage.clone(),
+            primary_rocks_storage.clone(),
+            metrics_state.json_downloader_metrics.clone(),
+            metrics_state.red_metrics.clone(),
+            args.parallel_json_downloaders,
+            args.api_skip_inline_json_refresh.unwrap_or_default(),
+        )
+        .await,
+    );
+
     if args.run_api.unwrap_or(false) {
         info!("Starting API (Ingester)...");
         let middleware_json_downloader = args
             .json_middleware_config
             .as_ref()
             .filter(|conf| conf.is_enabled)
-            .map(|_| json_processor.clone());
+            .map(|_| json_worker.clone());
 
         // it will check if asset which was requested is from the tree which has gaps in sequences
         // gap in sequences means missed transactions and  as a result incorrect asset data
@@ -417,9 +421,44 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
-    let cloned_rx = shutdown_rx.resubscribe();
-    let cloned_jp = json_processor.clone();
-    mutexed_tasks.lock().await.spawn(json_worker::run(cloned_jp, cloned_rx).map(|_| Ok(())));
+    let (pending_tasks_sender, pending_tasks_receiver) = mpsc::channel(JSON_BATCH);
+    let (refresh_tasks_sender, refresh_tasks_receiver) = mpsc::channel(JSON_BATCH);
+    let (tasks_sender, tasks_receiver) = broadcast::channel(JSON_BATCH);
+    let tasks_receiver = Arc::new(Mutex::new(tasks_receiver));
+
+    let metadata_streamer = TasksStreamer::new(
+        json_worker.db_client.clone(),
+        shutdown_rx.resubscribe(),
+        pending_tasks_sender,
+        refresh_tasks_sender,
+        tasks_receiver,
+    );
+
+    let (metadata_to_persists_sender, metadata_to_persists_receiver) = mpsc::channel(JSON_BATCH);
+    let pending_tasks_receiver = Arc::new(Mutex::new(pending_tasks_receiver));
+    let refresh_tasks_receiver = Arc::new(Mutex::new(refresh_tasks_receiver));
+    let metadata_dowloader = MetadataDownloader::new(
+        json_worker.clone(),
+        metadata_to_persists_sender,
+        pending_tasks_receiver,
+        refresh_tasks_receiver,
+        shutdown_rx.resubscribe(),
+    );
+
+    let metadata_persister = TasksPersister::new(
+        json_worker.clone(),
+        metadata_to_persists_receiver,
+        shutdown_rx.resubscribe(),
+    );
+
+    let mut workers_pool = JoinSet::new();
+    mutexed_tasks.lock().await.spawn(async move {
+        metadata_streamer.run(json_worker.num_of_parallel_workers, &mut workers_pool).await;
+        metadata_dowloader.run(&mut workers_pool).await;
+        metadata_persister.run(&mut workers_pool).await;
+
+        Ok(())
+    });
 
     let shutdown_token = CancellationToken::new();
 

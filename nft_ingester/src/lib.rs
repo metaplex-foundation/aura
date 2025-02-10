@@ -13,7 +13,6 @@ pub mod index_syncronizer;
 pub mod init;
 pub mod inmemory_slots_dumper;
 pub mod inscription_raw_parsing;
-pub mod json_worker;
 pub mod message_handler;
 pub mod message_parser;
 pub mod plerkle;

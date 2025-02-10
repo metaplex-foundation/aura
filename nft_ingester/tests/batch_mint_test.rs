@@ -33,7 +33,7 @@ use nft_ingester::{
     },
     config::JsonMiddlewareConfig,
     error::IngesterError,
-    json_worker::JsonWorker,
+    metadata_workers::json_worker::JsonWorker,
     processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
     raydium_price_fetcher::RaydiumTokenPriceFetcher,
 };
