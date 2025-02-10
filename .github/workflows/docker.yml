@@ -48,7 +48,7 @@ jobs:
         with:
           file: docker/base.Dockerfile
           push: false
-          tags: mplx-aura/base:latest
+          tags: ghcr.io/mplx-aura/base:latest
           outputs: type=docker,dest=${{ runner.temp }}/base.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -103,7 +103,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            mplx-aura/${{ matrix.binary-name }}
+            ghcr.io/mplx-aura/${{ matrix.binary-name }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
