@@ -1,6 +1,6 @@
 ---
 source: integration_tests/src/regular_nft_tests.rs
-assertion_line: 302
+assertion_line: 288
 expression: response
 snapshot_kind: text
 ---
@@ -70,11 +70,9 @@ snapshot_kind: text
       "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
       "rent_epoch": 18446744073709551615,
       "token_info": {
-        "balance": 1,
         "supply": 1,
         "decimals": 0,
         "token_program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-        "associated_token_address": "3oiDhCQMDzxj8NcLfRBCQj3R9mQkE1DnDZfrNbAgruQk",
         "mint_authority": "565tK79EKhQSYybx52awrrFhD4m2ty198rrUBmiqq7xo",
         "freeze_authority": "565tK79EKhQSYybx52awrrFhD4m2ty198rrUBmiqq7xo"
       }

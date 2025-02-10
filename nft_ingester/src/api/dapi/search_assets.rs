@@ -188,6 +188,7 @@ async fn fetch_assets<
         tree_gaps_checker,
     )
     .await?;
+
     let assets = assets.into_iter().flatten().collect::<Vec<_>>();
     let (items, errors) = asset_list_to_rpc(assets, &owner_address);
     let total = items.len() as u32;
