@@ -144,3 +144,6 @@ name = "synchronizer_utils"
 
 [[bin]]
 name = "dumper"
+
+[[bin]]
+name = "burnt_assets_ingester"
