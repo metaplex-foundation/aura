@@ -1,23 +1,27 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use clap::Parser;
+use entities::{
+    enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass},
+    models::{Creator, Updated},
+};
 use metrics_utils::{red::RequestErrorDurationMetrics, IngesterMetricsConfig};
-use rocks_db::{migrator::MigrationState, Storage};
-use tokio::fs::File;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tracing::{error, info};
-
-use entities::enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass};
-use entities::models::Creator;
-use entities::models::Updated;
 use nft_ingester::api::dapi::rpc_asset_models::Asset;
-use rocks_db::batch_savers::BatchSaveStorage;
-use rocks_db::columns::asset::{
-    AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetOwner,
-    AssetStaticDetails,
+use rocks_db::{
+    batch_savers::BatchSaveStorage,
+    columns::asset::{
+        AssetAuthority, AssetCollection, AssetCompleteDetails, AssetDynamicDetails, AssetOwner,
+        AssetStaticDetails,
+    },
+    migrator::MigrationState,
+    Storage,
 };
 use solana_sdk::pubkey::Pubkey;
+use tokio::{
+    fs::File,
+    io::{AsyncBufReadExt, BufReader},
+};
+use tracing::{error, info};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -279,7 +283,7 @@ async fn main() {
         let asset: Asset = match serde_json::from_str(&line) {
             Ok(asset) => asset,
             Err(e) => {
-                error!("Failed to parse JSON line: {}", e);
+                error!(error = %e, "Failed to parse JSON line");
                 error_count += 1;
                 continue;
             },
@@ -290,18 +294,22 @@ async fn main() {
 
         // Store the asset
         if let Err(e) = batch_storage.store_complete(&asset_complete) {
-            error!("Failed to store asset {}: {}", asset_complete.pubkey, e);
+            error!(error = %e, pubkey = %asset_complete.pubkey, "Failed to store asset");
             error_count += 1;
             continue;
         }
-        batch_storage.asset_updated_with_batch(0, asset_complete.pubkey);
+        if let Err(e) = batch_storage.asset_updated_with_batch(0, asset_complete.pubkey) {
+            error!(error = %e, pubkey = %asset_complete.pubkey, "Failed to update asset batch status");
+            error_count += 1;
+            continue;
+        }
 
         processed_count += 1;
 
         // Flush the batch if it's filled
         if batch_storage.batch_filled() {
             if let Err(e) = batch_storage.flush() {
-                error!("Failed to flush batch: {}", e);
+                error!(error = %e, "Failed to flush batch");
                 error_count += 1;
             }
             info!("Processed {} assets ({} errors)", processed_count, error_count);
@@ -310,7 +318,7 @@ async fn main() {
 
     // Flush any remaining assets
     if let Err(e) = batch_storage.flush() {
-        error!("Failed to flush final batch: {}", e);
+        error!(error = %e, "Failed to flush final batch");
         error_count += 1;
     }
 
@@ -322,8 +330,9 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_convert_simple_mpl_core_asset() {
