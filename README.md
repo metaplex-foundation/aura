@@ -72,7 +72,7 @@ make ci
 ```
 
 This will produce several images corresponding to the binary names, e.g. ingester, api, and others. This script
-will tag them as `mplx-aura/<binary name>:latest` so you can run the containers independently.
+will tag them as `ghcr.io/mplx-aura/<binary name>:latest` so you can run the containers independently.
 
 #### Run Integration Tests
 

@@ -16,7 +16,7 @@ RUN apt update && apt install -y curl ca-certificates tzdata libjemalloc2 google
 ENV TZ=Etc/UTC APP_USER=appuser LD_PRELOAD="/usr/local/lib/libjemalloc.so.2"
 RUN groupadd $APP_USER && useradd -g $APP_USER $APP_USER && mkdir -p ${APP}
 COPY --from=builder /usr/local/lib/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2
-COPY --from=mplx-aura/base:latest /rust/VERSION.txt ${APP}/VERSION.txt
+COPY --from=ghcr.io/mplx-aura/base:latest /rust/VERSION.txt ${APP}/VERSION.txt
 COPY --from=builder /rust/target/release/${BINARY} ${APP}/${BINARY}
 WORKDIR ${APP}
 ENTRYPOINT ["/bin/bash", "-c", "./$BINARY"]
