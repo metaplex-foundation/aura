@@ -119,6 +119,14 @@ pub enum ChainMutability {
     Mutable,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy, PartialEq, sqlx::Type)]
+#[sqlx(type_name = "task_status", rename_all = "lowercase")]
+pub enum OffchainDataMutability {
+    Immutable,
+    #[default]
+    Mutable,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub enum Interface {
     #[serde(rename = "V1_NFT")]
@@ -286,7 +294,6 @@ impl From<RoyaltyModel> for RoyaltyTargetType {
 pub enum TaskStatus {
     #[default]
     Pending,
-    Running,
     Success,
     Failed,
 }

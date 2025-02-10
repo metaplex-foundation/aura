@@ -1,3 +1,5 @@
+use std::fmt::{self, Display, Formatter};
+
 use entities::models::OffChainDataGrpc;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use serde::{Deserialize, Serialize};
@@ -15,6 +17,15 @@ pub enum StorageMutability {
     #[default]
     Immutable,
     Mutable,
+}
+
+impl Display for StorageMutability {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            StorageMutability::Immutable => write!(f, "immutable"),
+            StorageMutability::Mutable => write!(f, "mutable"),
+        }
+    }
 }
 
 impl StorageMutability {

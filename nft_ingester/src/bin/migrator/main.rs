@@ -197,8 +197,8 @@ impl JsonMigrator {
         let tasks_buffer = Arc::new(Mutex::new(Vec::new()));
 
         let cloned_tasks_buffer = tasks_buffer.clone();
-        let cloned_pg_client = self.database_pool.clone();
-        let cloned_metrics = self.metrics.clone();
+        let pg_client = self.database_pool.clone();
+        let metrics = self.metrics.clone();
 
         let tasks_batch_to_insert = 1000;
 
@@ -280,20 +280,13 @@ impl JsonMigrator {
                                 continue;
                             }
 
-                            let mut task = Task {
-                                ofd_metadata_url: url,
-                                ofd_locked_until: None,
-                                ofd_attempts: 0,
-                                ofd_max_attempts: 10,
-                                ofd_error: None,
-                                ..Default::default()
-                            };
+                            let mut task = Task { metadata_url: url, ..Default::default() };
 
                             let mut buff = tasks_buffer.lock().await;
 
                             match downloaded_json.unwrap() {
                                 Some(_) => {
-                                    task.ofd_status = TaskStatus::Success;
+                                    task.status = TaskStatus::Success;
 
                                     buff.push(task);
                                 },

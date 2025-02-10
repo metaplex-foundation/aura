@@ -7,7 +7,8 @@ use nft_ingester::{
     config::{init_logger, read_version_info, ApiClapArgs, HealthCheckInfo},
     consts::{RAYDIUM_API_HOST, VERSION_FILE_PATH},
     error::IngesterError,
-    json_worker::JsonWorker,
+    init::graceful_stop,
+    metadata_workers::json_worker::JsonWorker,
     raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
 };
 use prometheus_client::registry::Registry;
