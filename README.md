@@ -60,10 +60,11 @@ The project's structure is a reflection of the following clean architecture prin
 
 The API specification is compatible with the standard DAS specification here https://github.com/metaplex-foundation/api-specifications
 
-### Contributing
+### Developing and running
+
+#### Contributing
 Please read our [contribution guidelines](CONTRIBUTING.md) for details on our GitFlow process and how to submit pull requests to us.
 
-### Developing and running
 
 To build all docker images locally, just run:
 ```sh
