@@ -1970,6 +1970,32 @@ mod tests {
         );
     }
 
+    #[test]
+    fn get_assets_by_authority_params_decode_correctly_with_positional_arguments() {
+        let request_params = r#"["DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz",null,null,null,null,null,{"showUnverifiedCollections":true},null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByAuthority = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByAuthority");
+        assert_eq!(
+            params_deserialized,
+            GetAssetsByAuthority {
+                authority_address: "DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz".to_owned(),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: GetByMethodsOptions {
+                    show_unverified_collections: true,
+                    ..Default::default()
+                },
+                cursor: None
+            }
+        );
+    }
+
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_json_middleware() {
