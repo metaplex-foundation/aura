@@ -3879,6 +3879,7 @@ version = "0.6.1-dev"
 dependencies = [
  "anchor-lang 0.30.1",
  "async-trait",
+ "chrono",
  "entities",
  "futures",
  "jsonrpc-core 19.0.0",

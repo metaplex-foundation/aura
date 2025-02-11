@@ -19,7 +19,7 @@ use solana_sdk::{
 use solana_transaction_status::{
     EncodedConfirmedBlock, InnerInstructions, TransactionWithStatusMeta,
 };
-use sqlx::types::chrono;
+use sqlx::types::chrono::{DateTime, Utc};
 
 use crate::enums::{
     ChainMutability, OffchainDataMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass,
@@ -421,9 +421,9 @@ pub struct TokenAccResponse {
 pub struct Task {
     pub metadata_url: String,
     pub etag: Option<String>,
-    pub last_modified_at: Option<String>,
+    pub last_modified_at: Option<DateTime<Utc>>,
     pub mutability: OffchainDataMutability,
-    pub next_try_at: chrono::DateTime<chrono::Utc>,
+    pub next_try_at: DateTime<Utc>,
     pub status: TaskStatus,
 }
 

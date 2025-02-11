@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use mockall::automock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,14 +14,14 @@ pub enum JsonDownloadResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataDownloadResult {
     pub etag: Option<String>,
-    pub last_modified_at: Option<String>,
+    pub last_modified_at: Option<DateTime<Utc>>,
     pub result: JsonDownloadResult,
 }
 
 impl MetadataDownloadResult {
     pub fn new(
         etag: Option<String>,
-        last_modified_at: Option<String>,
+        last_modified_at: Option<DateTime<Utc>>,
         result: JsonDownloadResult,
     ) -> Self {
         Self { etag, last_modified_at, result }
