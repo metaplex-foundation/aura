@@ -31,7 +31,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
     #[tracing_test::traced_test]
-    #[ignore = "FIXME: on macos, the generated CSV files cannot be found"]
     async fn test_csv_export_from_rocks_import_into_pg() {
         let env = RocksTestEnvironment::new(&[]);
         let number_of_assets = 1000;
@@ -63,7 +62,7 @@ mod tests {
         batch_storage.flush().unwrap();
 
         let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
+        let temp_dir = TempDir::new_in("./tmp").expect("Failed to create a temporary directory");
         let temp_dir_path = temp_dir.path();
 
         let temp_dir_path = temp_dir_path.to_str().unwrap();
