@@ -279,9 +279,9 @@ impl PgClient {
         status_to_set: TaskStatus,
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("update tasks SET tsk_status = ");
+            QueryBuilder::new("update tasks SET task_status = ");
         query_builder.push_bind(status_to_set);
-        query_builder.push(" WHERE tsk_metadata_url IN (");
+        query_builder.push(" WHERE metadata_url IN (");
 
         let mut qb = query_builder.separated(", ");
         for url in tasks_urls {
