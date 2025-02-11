@@ -24,16 +24,17 @@ mod tests {
         },
         enums::{
             AssetType, ChainMutability, Interface, OwnerType, OwnershipModel, RoyaltyModel,
-            RoyaltyTargetType, SpecificationAssetClass, TokenStandard, TokenType, ASSET_TYPES,
+            RoyaltyTargetType, SpecificationAssetClass, TaskStatus, TokenStandard, TokenType,
+            ASSET_TYPES,
         },
         models::{
-            AssetSignature, AssetSignatureKey, BurntMetadataSlot, ChainDataV1, MetadataInfo, Mint,
-            TokenAccount, UpdateVersion, Updated,
+            AssetSignature, AssetSignatureKey, BurntMetadataSlot, ChainDataV1,
+            MetadataDownloadTask, MetadataInfo, Mint, TokenAccount, UpdateVersion, Updated,
         },
     };
     use interface::{
         account_balance::MockAccountBalanceGetter,
-        json::{MockJsonDownloader, MockJsonPersister},
+        json::{JsonDownloadResult, MetadataDownloadResult, MockJsonDownloader, MockJsonPersister},
     };
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig, SynchronizerMetricsConfig};
     use mockall::predicate;
@@ -51,7 +52,7 @@ mod tests {
         cleaners::indexer_cleaner::clean_syncronized_idxs,
         config::{HealthCheckInfo, JsonMiddlewareConfig},
         consts::DEFAULT_MAXIMUM_HEALTHY_DESYNC,
-        json_worker::JsonWorker,
+        metadata_workers::json_worker::JsonWorker,
         price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater},
         processors::account_based::{
             mplx_updates_processor::MplxAccountsProcessor,
@@ -2034,13 +2035,24 @@ mod tests {
         }
         "#;
 
+        let metadata_download_task = MetadataDownloadTask {
+            metadata_url: url.clone(),
+            etag: None,
+            last_modified_at: None,
+            status: TaskStatus::Pending,
+        };
+
         let mut mock_middleware = MockJsonDownloader::new();
         mock_middleware
             .expect_download_file()
-            .with(predicate::eq(url), predicate::eq(Duration::from_secs(3)))
+            .with(predicate::eq(metadata_download_task), predicate::eq(Duration::from_secs(3)))
             .times(1)
             .returning(move |_, _| {
-                Ok(interface::json::JsonDownloadResult::JsonContent(offchain_data.to_string()))
+                Ok(MetadataDownloadResult {
+                    etag: None,
+                    last_modified_at: None,
+                    result: JsonDownloadResult::JsonContent(offchain_data.to_string()),
+                })
             });
 
         let api = nft_ingester::api::api_impl::DasApi::<
