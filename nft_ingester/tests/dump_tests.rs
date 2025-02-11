@@ -131,7 +131,7 @@ mod mtg_441_tests {
     use nft_ingester::{
         api::{dapi::rpc_asset_models::Asset, DasApi},
         config::JsonMiddlewareConfig,
-        json_worker::JsonWorker,
+        metadata_workers::json_worker::JsonWorker,
         raydium_price_fetcher::RaydiumTokenPriceFetcher,
     };
     use rocks_db::Storage;

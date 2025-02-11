@@ -386,7 +386,7 @@ impl AssetIndexStorage for PgClient {
                 file_path,
                 "tasks",
                 temp_postfix.as_str(),
-                "tsk_id, tsk_metadata_url, tsk_status",
+                "metadata_hash, metadata_url, task_status",
                 true,
                 Some(semaphore),
             )
@@ -490,7 +490,7 @@ impl AssetIndexStorage for PgClient {
 
 #[derive(sqlx::FromRow, Debug)]
 struct TaskIdRawResponse {
-    pub(crate) tsk_id: Vec<u8>,
+    pub(crate) metadata_hash: Vec<u8>,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -534,7 +534,7 @@ impl PgClient {
 
         // Declare the cursor
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "DECLARE all_tasks CURSOR FOR SELECT tsk_id FROM tasks WHERE tsk_id IS NOT NULL",
+            "DECLARE all_tasks CURSOR FOR SELECT metadata_hash FROM tasks WHERE metadata_hash IS NOT NULL",
         );
         self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, "cursor")
             .await?;
@@ -555,7 +555,7 @@ impl PgClient {
             }
 
             for row in rows {
-                set.insert(row.tsk_id);
+                set.insert(row.metadata_hash);
             }
         }
 
