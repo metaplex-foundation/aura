@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use entities::{enums::TaskStatus, models::MetadataDownloadTask};
 use interface::{
     error::JsonDownloaderError,
@@ -123,10 +124,11 @@ impl JsonDownloader for JsonWorker {
             .headers()
             .get("etag")
             .and_then(|etag| etag.to_str().ok().map(ToString::to_string));
-        let last_modified = response
-            .headers()
-            .get("last-modified")
-            .and_then(|ct| ct.to_str().ok().map(ToString::to_string));
+        let last_modified: Option<DateTime<Utc>> =
+            response.headers().get("last-modified").and_then(|ct| {
+                ct.to_str().ok().map(|date| date.parse().expect("Wasn't able to parse the date"))
+            });
+
         if response.status() == reqwest::StatusCode::NOT_MODIFIED {
             return Ok(MetadataDownloadResult::new(
                 etag,

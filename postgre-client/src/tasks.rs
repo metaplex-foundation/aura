@@ -1,5 +1,6 @@
 use std::{collections::VecDeque, sync::Arc};
 
+use chrono::{DateTime, Utc};
 use entities::{
     enums::TaskStatus,
     models::{MetadataDownloadTask, Task, UrlWithStatus},
@@ -19,7 +20,7 @@ pub struct UpdatedTask {
     pub mutability: String,
     pub metadata_url: String,
     pub etag: Option<String>,
-    pub last_modified_at: Option<String>,
+    pub last_modified_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -38,10 +39,10 @@ impl PgClient {
                 metadata_hash,
                 metadata_url,
                 etag,
-                last_modified,
+                last_modified_at,
                 mutability,
                 next_try_at,
-                status,
+                task_status
             ) ",
         );
 
@@ -59,6 +60,7 @@ impl PgClient {
         query_builder.push("ON CONFLICT DO NOTHING;");
 
         let query = query_builder.build();
+
         query.execute(&self.pool).await?;
 
         Ok(())
@@ -100,9 +102,9 @@ impl PgClient {
             "
             UPDATE tasks 
             SET 
-                status = tmp.status, 
+                task_status = tmp.task_status, 
                 etag = tmp.etag, 
-                last_modified = tmp.last_modified, 
+                last_modified_at = tmp.last_modified_at, 
                 mutability = tmp.mutability, 
                 next_refresh_at = NOW + INTERVAL '1 day' 
                 FROM (
@@ -118,7 +120,7 @@ impl PgClient {
             b.push_bind(task.mutability);
         });
 
-        query_builder.push(") as tmp (status, etag, last_modified, mutability) WHERE tasks.metadata_hash = tmp.metadata_hash;");
+        query_builder.push(") as tmp (task_status, etag, last_modified_at, mutability) WHERE tasks.metadata_hash = tmp.metadata_hash;");
 
         let query = query_builder.build();
         query.execute(&self.pool).await?;
@@ -156,7 +158,7 @@ impl PgClient {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "WITH selected_tasks AS (
                                     SELECT t.metadata_hash FROM tasks AS t
-                                    WHERE t.status = 'pending' AND NOW() > t.next_try_at
+                                    WHERE t.task_status = 'pending' AND NOW() > t.next_try_at
                                     FOR UPDATE
                                     LIMIT ",
         );
@@ -168,7 +170,8 @@ impl PgClient {
             SET next_try_at = NOW() + INTERVAL '1 day'
             FROM selected_tasks
             WHERE t.metadata_hash = selected_tasks.metadata_hash
-            RETURNING t.metadata_hash, t.metadata_url, t.status, t.attempts, t.max_attempts, t.error;");
+            RETURNING t.metadata_url, t.task_status, t.etag, t.last_modified_at;",
+        );
 
         let query = query_builder.build();
         let rows = query.fetch_all(&self.pool).await?;
@@ -194,7 +197,7 @@ impl PgClient {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "WITH selected_tasks AS (
                                     SELECT t.metadata_hash FROM tasks AS t
-                                    WHERE t.status = 'refresh' AND NOW() > t.next_try_at AND t.mutability = 'mutable'
+                                    WHERE t.task_status = 'refresh' AND NOW() > t.next_try_at AND t.mutability = 'mutable'
                                     FOR UPDATE
                                     LIMIT ",
         );
@@ -206,7 +209,7 @@ impl PgClient {
             SET next_try_at = NOW() + INTERVAL '1 day'
             FROM selected_tasks
             WHERE t.metadata_hash = selected_tasks.metadata_hash
-            RETURNING t.metadata_hash, t.metadata_url, t.status, t.attempts, t.max_attempts, t.error;");
+            RETURNING t.metadata_hash, t.metadata_url, t.task_status, t.attempts, t.max_attempts, t.error;");
 
         let query = query_builder.build();
         let rows = query.fetch_all(&self.pool).await?;
@@ -242,7 +245,7 @@ impl PgClient {
             SELECT
                 metadata_hash,
                 metadata_url,
-                status
+                task_status
             FROM tasks",
         );
 
@@ -265,7 +268,7 @@ impl PgClient {
         for row in rows {
             let metadata_hash: Vec<u8> = row.get("metadata_hash");
             let metadata_url: String = row.get("metadata_url");
-            let status: TaskStatus = row.get("status");
+            let status: TaskStatus = row.get("task_status");
 
             tasks.push(JsonTask { metadata_hash, metadata_url, status });
         }

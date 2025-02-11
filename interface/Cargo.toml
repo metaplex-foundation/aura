@@ -24,3 +24,4 @@ serde_derive = { workspace = true }
 tokio = { workspace = true }
 jsonrpc-core = { workspace = true }
 bubblegum-batch-sdk = { workspace = true }
+chrono = { workspace = true }
