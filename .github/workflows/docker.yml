@@ -54,7 +54,7 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             VERSION_INFO: ${{ env.VERSION_INFO }}
-            ORG: ${{ github.repository_owner }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -121,7 +121,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BINARY: ${{ matrix.binary-name }}
-            ORG: ${{ github.repository_owner }}
 
   dispatch:
     runs-on: ubuntu-latest
