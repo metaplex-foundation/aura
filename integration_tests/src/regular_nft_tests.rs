@@ -488,18 +488,27 @@ async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processin
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
-    // let request: SearchAssets = serde_json::from_str(request).unwrap();
-    // let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
-    // let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
-    //
-    // // API shouldn't return zero NonFungible accounts ("3rzjtWZc"). "showZeroBalance": true is working only for Fungible tokens
-    // assert_eq!(res_obj.items.is_empty(), false);
-    // assert_eq!(res_obj.items.len(), 3);
-    // assert_eq!(res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", " Hxro (Wormhole) Fungible token account");
-    // assert_eq!(res_obj.items[1].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", "Degen Ape NFT account");
-    // assert_eq!(res_obj.items[2].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m", "MPLX Fungible token account");
-    //
-    // insta::assert_json_snapshot!(format!("{}_token_type_all", name), response);
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    // API shouldn't return zero NonFungible accounts ("3rzjtWZc"). "showZeroBalance": true is working only for Fungible tokens
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 3);
+    assert_eq!(
+        res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+        " Hxro (Wormhole) Fungible token account"
+    );
+    assert_eq!(
+        res_obj.items[1].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+        "Degen Ape NFT account"
+    );
+    assert_eq!(
+        res_obj.items[2].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
+        "MPLX Fungible token account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_all", name), response);
 
     let request = r#"
     {
@@ -604,16 +613,16 @@ async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_pro
 
     let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
-    // let request: SearchAssets = serde_json::from_str(request).unwrap();
-    // let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
-    // let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
-    //
-    // assert_eq!(res_obj.items.is_empty(), false);
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
     // assert_eq!(res_obj.items.len(), 2);
     // assert_eq!(res_obj.items[0].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", "Degen Ape NFT account");
     // assert_eq!(res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m", "MPLX Fungible token account");
     //
-    // insta::assert_json_snapshot!(format!("{}_token_type_all", name), response);
+    insta::assert_json_snapshot!(format!("{}_token_type_all", name), response);
 
     let request = r#"
     {
@@ -685,7 +694,15 @@ async fn test_search_assets_by_owner_with_pages() {
         "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
         "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH",
     ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
+    let seeds: Vec<SeedEvent> = seed_accounts([
+      "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
+      "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
+      "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
+      "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
+      "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
+    ]);
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let request = r#"
@@ -819,17 +836,6 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
     )
     .await;
 
-    let seeds: Vec<SeedEvent> = seed_accounts([
-        "7qfEt4otpcr1LHPVZ2hjCB1d77wSZJfSDgwiXcUCneaT",
-        "9cyPkra7ANoDmMM4Abw8rYKxv3aWC3jZUjz8NtWaYo6D",
-        "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
-        "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
-        "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
-        "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
-        "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
-    ]);
-    index_seed_events(&setup, seeds.iter().collect_vec()).await;
-
     let seeds = seed_token_mints([
         "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ",
         "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom",
@@ -839,7 +845,17 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
         "87K3PtGNihT6dKjxULK25MVapZKXQWN4zXqC1BEshHKd",
         "LaihKXA47apnS599tyEyasY2REfEzBNe4heunANhsMx", // Fungible
     ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
+    let seeds: Vec<SeedEvent> = seed_accounts([
+      "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
+      "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
+      "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
+      "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
+      "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
+      "CJL5wC5ouAhnQ7jkCPkfKSyjHJQAHNWPJKDHB5VojSug",
+      "Ar5YKeZgzEG1RxosWJuS1BWVX7odSdkS6CBVpwqef7fo"
+    ]);
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let request = r#"

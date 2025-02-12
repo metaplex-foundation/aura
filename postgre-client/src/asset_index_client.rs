@@ -659,7 +659,14 @@ impl PgClient {
             ast_metadata_url_id,
             ast_slot_updated) ",
         );
+
         query_builder.push_values(asset_indexes, |mut builder, asset_index| {
+            let owner: Option<Pubkey> = match asset_index.owner_type.clone() {
+                Some(entities::enums::OwnerType::Token) => None,
+                Some(_) => asset_index.owner,
+                None => None,
+            };
+
             let metadata_id = asset_index.metadata_url.as_ref().map(|u| u.get_metadata_id());
             builder
                 .push_bind(asset_index.pubkey.to_bytes().to_vec())
@@ -669,7 +676,7 @@ impl PgClient {
                 .push_bind(asset_index.royalty_amount)
                 .push_bind(asset_index.slot_created)
                 .push_bind(asset_index.owner_type.map(OwnerType::from))
-                .push_bind(asset_index.owner.map(|owner| owner.to_bytes().to_vec()))
+                .push_bind(owner.map(|owner| owner.to_bytes().to_vec()))
                 .push_bind(asset_index.delegate.map(|k| k.to_bytes().to_vec()))
                 .push_bind(if let Some(collection) = asset_index.collection {
                     if asset_index.update_authority.is_some() {

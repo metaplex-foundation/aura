@@ -672,11 +672,10 @@ async fn index_account_with_ordered_slot(setup: &TestSetup, account: Pubkey) {
     process_and_save_accounts_to_rocks(setup, account_bytes).await;
 }
 
-/// Add
 async fn index_token_mint(setup: &TestSetup, mint: Pubkey) {
-    // let token_account = cached_fetch_largest_token_account_id(&setup.client, mint).await;
     index_account(setup, mint).await;
-    // index_account(setup, token_account).await;
+
+    let token_account = cached_fetch_largest_token_account_id(&setup.client, mint).await;
 
     // If we used different slots for accounts, then it becomes harder to test updates of related
     // accounts because we need to factor the fact that some updates can be disregarded because
