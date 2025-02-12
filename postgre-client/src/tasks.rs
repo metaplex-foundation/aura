@@ -197,7 +197,7 @@ impl PgClient {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "WITH selected_tasks AS (
                                     SELECT t.metadata_hash FROM tasks AS t
-                                    WHERE t.task_status = 'refresh' AND NOW() > t.next_try_at AND t.mutability = 'mutable'
+                                    WHERE t.task_status = 'success' AND NOW() > t.next_try_at AND t.mutability = 'mutable'
                                     FOR UPDATE
                                     LIMIT ",
         );
@@ -209,7 +209,8 @@ impl PgClient {
             SET next_try_at = NOW() + INTERVAL '1 day'
             FROM selected_tasks
             WHERE t.metadata_hash = selected_tasks.metadata_hash
-            RETURNING t.metadata_hash, t.metadata_url, t.task_status, t.attempts, t.max_attempts, t.error;");
+            RETURNING t.metadata_url, t.task_status, t.etag, t.last_modified_at;",
+        );
 
         let query = query_builder.build();
         let rows = query.fetch_all(&self.pool).await?;
