@@ -3,7 +3,7 @@ use std::sync::Arc;
 use entities::models::MetadataDownloadTask;
 use interface::{
     error::JsonDownloaderError,
-    json::{JsonDownloader, MetadataDownloadResult},
+    json_metadata::{JsonDownloader, MetadataDownloadResult},
 };
 use tokio::{
     sync::{

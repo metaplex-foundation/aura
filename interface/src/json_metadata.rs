@@ -1,8 +1,9 @@
-use std::time::Duration;
-
+use crate::error::JsonDownloaderError;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use entities::models::MetadataDownloadTask;
 use mockall::automock;
+use std::time::Duration;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JsonDownloadResult {
@@ -33,9 +34,9 @@ impl MetadataDownloadResult {
 pub trait JsonDownloader {
     async fn download_file(
         &self,
-        metadata_download_task: &entities::models::MetadataDownloadTask,
+        metadata_download_task: &MetadataDownloadTask,
         timeout: Duration,
-    ) -> Result<MetadataDownloadResult, crate::error::JsonDownloaderError>;
+    ) -> Result<MetadataDownloadResult, JsonDownloaderError>;
     fn skip_refresh(&self) -> bool;
 }
 
@@ -44,6 +45,6 @@ pub trait JsonDownloader {
 pub trait JsonPersister {
     async fn persist_response(
         &self,
-        results: Vec<(String, Result<MetadataDownloadResult, crate::error::JsonDownloaderError>)>,
-    ) -> Result<(), crate::error::JsonDownloaderError>;
+        results: Vec<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
+    ) -> Result<(), JsonDownloaderError>;
 }

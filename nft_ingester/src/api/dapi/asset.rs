@@ -8,7 +8,7 @@ use entities::{
 use futures::{stream, StreamExt};
 use interface::{
     asset_sigratures::AssetSignaturesGetter,
-    json::{JsonDownloadResult, JsonDownloader, JsonPersister, MetadataDownloadResult},
+    json_metadata::{JsonDownloadResult, JsonDownloader, JsonPersister, MetadataDownloadResult},
     price_fetcher::TokenPriceFetcher,
     processing_possibility::ProcessingPossibilityChecker,
 };
