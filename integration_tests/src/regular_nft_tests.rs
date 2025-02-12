@@ -697,11 +697,11 @@ async fn test_search_assets_by_owner_with_pages() {
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let seeds: Vec<SeedEvent> = seed_accounts([
-      "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
-      "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
-      "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
-      "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
-      "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
+        "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
+        "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
+        "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
+        "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
+        "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
     ]);
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
@@ -848,13 +848,13 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let seeds: Vec<SeedEvent> = seed_accounts([
-      "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
-      "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
-      "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
-      "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
-      "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
-      "CJL5wC5ouAhnQ7jkCPkfKSyjHJQAHNWPJKDHB5VojSug",
-      "Ar5YKeZgzEG1RxosWJuS1BWVX7odSdkS6CBVpwqef7fo"
+        "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
+        "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
+        "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
+        "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
+        "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
+        "CJL5wC5ouAhnQ7jkCPkfKSyjHJQAHNWPJKDHB5VojSug",
+        "Ar5YKeZgzEG1RxosWJuS1BWVX7odSdkS6CBVpwqef7fo",
     ]);
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
