@@ -16,7 +16,6 @@ permissions:
 env:
   PUSH_CONDITION: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["refs/head/main", "refs/head/develop"]'), github.event.workflow_dispatch.ref)) }}
 
-
 jobs:
   build-base-image:
     runs-on: ubuntu-latest
@@ -43,9 +42,11 @@ jobs:
             echo "EOF" >> "$GITHUB_ENV"
             echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Build and export
+      # Build base image for local use only (no push)
+      - name: Build and export base image
         uses: docker/build-push-action@v6
         with:
+          context: .
           file: docker/base.Dockerfile
           push: false
           tags: ghcr.io/${{ github.repository_owner }}/aura-base:latest
@@ -53,7 +54,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VERSION_INFO: ${{ env.VERSION_INFO }}
+            VERSION_INFO=${{ env.VERSION_INFO }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -77,6 +78,7 @@ jobs:
             rocksdb_backup,
           ]
     steps:
+      - uses: actions/checkout@v4  # Need to checkout code for Dockerfile
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -115,12 +117,13 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
+          context: .
           file: docker/app.Dockerfile
           push: ${{ env.PUSH_CONDITION }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            BINARY: ${{ matrix.binary-name }}
+            BINARY=${{ matrix.binary-name }}
 
   dispatch:
     runs-on: ubuntu-latest
