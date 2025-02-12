@@ -51,7 +51,7 @@ impl PgClient {
             b.push_bind(task.get_metadata_id());
             b.push_bind(task.metadata_url);
             b.push_bind(offchain_data.etag.clone());
-            b.push_bind(offchain_data.last_modified_at.clone());
+            b.push_bind(offchain_data.last_modified_at);
             b.push_bind(offchain_data.mutability);
             b.push_bind(offchain_data.next_try_at);
             b.push_bind(offchain_data.status);
@@ -116,7 +116,7 @@ impl PgClient {
             b.push_bind(url.metadata_url);
             b.push_bind(task.status);
             b.push_bind(task.etag.clone());
-            b.push_bind(task.last_modified_at.clone());
+            b.push_bind(task.last_modified_at);
             b.push_bind(task.mutability);
         });
 

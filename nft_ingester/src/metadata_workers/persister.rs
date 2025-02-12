@@ -46,9 +46,7 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
                 _ = async {
                     loop {
                         tokio::select! {
-                            _ = async {
-                                sleep(Duration::from_secs(WIPE_PERIOD_SEC))
-                            } => {
+                            _ = sleep(Duration::from_secs(WIPE_PERIOD_SEC)) => {
                                 if let Err(e) = persister.persist_response(std::mem::take(&mut buffer)).await {
                                     error!("Could not save JSONs to the storage: {:?}", e);
                                 } else {
@@ -70,7 +68,7 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
                                     error!("Could not get JSON data to save from the channel because it was closed");
                                     break;
                                 }
-                                tokio::time::sleep(Duration::from_secs(SLEEP_TIME)).await;
+                                sleep(Duration::from_secs(SLEEP_TIME)).await;
                             }
                         }
                     }
