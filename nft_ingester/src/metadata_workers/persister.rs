@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use interface::{
     error::JsonDownloaderError,
-    json::{JsonPersister, MetadataDownloadResult},
+    json_metadata::{JsonPersister, MetadataDownloadResult},
 };
 use tokio::{
     sync::mpsc::Receiver,

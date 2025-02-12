@@ -6,7 +6,7 @@ use entities::{
 };
 use interface::{
     account_balance::AccountBalanceGetter,
-    json::{JsonDownloader, JsonPersister},
+    json_metadata::{JsonDownloader, JsonPersister},
     price_fetcher::TokenPriceFetcher,
     processing_possibility::ProcessingPossibilityChecker,
 };

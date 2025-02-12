@@ -34,7 +34,9 @@ mod tests {
     };
     use interface::{
         account_balance::MockAccountBalanceGetter,
-        json::{JsonDownloadResult, MetadataDownloadResult, MockJsonDownloader, MockJsonPersister},
+        json_metadata::{
+            JsonDownloadResult, MetadataDownloadResult, MockJsonDownloader, MockJsonPersister,
+        },
     };
     use metrics_utils::{ApiMetricsConfig, IngesterMetricsConfig, SynchronizerMetricsConfig};
     use mockall::predicate;
@@ -2039,7 +2041,7 @@ mod tests {
             metadata_url: url.clone(),
             etag: None,
             last_modified_at: None,
-            status: TaskStatus::Pending,
+            status: TaskStatus::Success,
         };
 
         let mut mock_middleware = MockJsonDownloader::new();
