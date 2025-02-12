@@ -54,7 +54,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VERSION_INFO=${{ env.VERSION_INFO }}
+            "VERSION_INFO=${{ env.VERSION_INFO }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
