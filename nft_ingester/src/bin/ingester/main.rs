@@ -488,15 +488,12 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let (pending_tasks_sender, pending_tasks_receiver) = mpsc::channel(JSON_BATCH);
     let (refresh_tasks_sender, refresh_tasks_receiver) = mpsc::channel(JSON_BATCH);
-    let (tasks_sender, tasks_receiver) = broadcast::channel(JSON_BATCH);
-    let tasks_receiver = Arc::new(Mutex::new(tasks_receiver));
 
     let metadata_streamer = TasksStreamer::new(
         json_worker.db_client.clone(),
         shutdown_rx.resubscribe(),
         pending_tasks_sender,
         refresh_tasks_sender,
-        tasks_receiver,
     );
 
     let (metadata_to_persists_sender, metadata_to_persists_receiver) = mpsc::channel(JSON_BATCH);
