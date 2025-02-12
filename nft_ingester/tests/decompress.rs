@@ -36,10 +36,7 @@ mod tests {
         raydium_price_fetcher::RaydiumTokenPriceFetcher,
         transaction_ingester,
     };
-    use rocks_db::{
-        batch_savers::BatchSaveStorage, columns::offchain_data::OffChainData,
-        migrator::MigrationState, Storage,
-    };
+    use rocks_db::{batch_savers::BatchSaveStorage, columns::offchain_data::OffChainData, Storage};
     use solana_sdk::pubkey::Pubkey;
     use testcontainers::clients::Cli;
     use tokio::{
@@ -75,11 +72,26 @@ mod tests {
         zip_extract::extract(storage_archieve, tx_storage_dir.path(), false).unwrap();
 
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
-        let transactions_storage = Storage::open(
+        let transactions_storage = Storage::open_cfs(
             &format!("{}{}", tx_storage_dir.path().to_str().unwrap(), "/test_rocks"),
+            vec![
+                "BUBBLEGUM_SLOTS",
+                "ASSET_OWNER",
+                "ASSET_AUTHORITY",
+                "RAW_BLOCK_CBOR_ENCODED",
+                "ASSET_DYNAMIC",
+                "ASSET_COLLECTION",
+                "ASSET_STATIC",
+                "SIGNATURE_IDX",
+                "CL_LEAF",
+                "CL_ITEMS",
+                "ASSETS_UPDATED_IN_SLOT_IDX",
+                "ASSET_LEAF",
+                "SLOT_ASSET_IDX",
+                "OFFCHAIN_DATA",
+            ],
             mutexed_tasks.clone(),
             red_metrics.clone(),
-            MigrationState::Last,
         )
         .unwrap();
 
@@ -200,7 +212,6 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
-    #[ignore = "FIXME: column families not open error (probably outdated)"]
     async fn test_decompress_ideal_flow() {
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -292,7 +303,6 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
-    #[ignore = "FIXME: column families not open error (probably outdated)"]
     async fn test_decompress_first_mint_then_decompress_same_slot() {
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -384,7 +394,6 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
-    #[ignore = "FIXME: column families not open error (probably outdated)"]
     async fn test_decompress_first_mint_then_decompress_diff_slots() {
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));
@@ -476,7 +485,6 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
-    #[ignore = "FIXME: column families not open error (probably outdated)"]
     async fn test_decompress_first_decompress_then_mint_diff_slots() {
         let tasks = JoinSet::new();
         let mutexed_tasks = Arc::new(Mutex::new(tasks));

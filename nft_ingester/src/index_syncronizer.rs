@@ -285,6 +285,9 @@ where
         num_shards: u64,
     ) -> Result<(), IngesterError> {
         let base_path = std::path::Path::new(self.dump_path.as_str());
+        let _ = std::fs::create_dir_all(base_path).inspect_err(|e| {
+            tracing::debug!(error = %e, "Base path already exists");
+        });
         self.pg_index_storage.destructive_prep_to_batch_nft_load().await?;
 
         let shards = shard_pubkeys(num_shards);
@@ -395,6 +398,10 @@ where
         num_shards: u64,
     ) -> Result<(), IngesterError> {
         let base_path = std::path::Path::new(self.dump_path.as_str());
+        let _ = std::fs::create_dir_all(base_path).inspect_err(|e| {
+            tracing::debug!(error = %e, "Base path already exists");
+        });
+
         self.pg_index_storage.destructive_prep_to_batch_fungible_load().await?;
 
         let shards = shard_pubkeys(num_shards);

@@ -43,7 +43,11 @@
         "ownership_model": "single",
         "owner": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM"
     },
-    "supply": null,
+    "supply": {
+	"print_max_supply": 0,
+	"print_current_supply": 0,
+	"edition_nonce": 255
+    },
     "mutable": true,
     "burnt": false
 }

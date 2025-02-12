@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
+    use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 
     use base64::{engine::general_purpose, Engine};
     use blockbuster::{
@@ -72,7 +72,7 @@ mod tests {
         Storage, ToFlatbuffersConverter,
     };
     use serde_json::{json, Value};
-    use setup::rocks::{RocksTestEnvironment, RocksTestEnvironmentSetup};
+    use setup::rocks::RocksTestEnvironmentSetup;
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
     use spl_pod::{
@@ -787,7 +787,6 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
-    #[ignore = "FIXME: owner returned is not empty"]
     async fn test_fungible_asset() {
         let cnt = 20;
         let cli = Cli::default();
@@ -895,8 +894,8 @@ mod tests {
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
-        assert_eq!(response["ownership"]["owner"], "");
-        assert_eq!(response["interface"], "FungibleToken".to_string());
+        assert_eq!(response["ownership"]["owner"], owner_key.to_string());
+        assert_eq!(response["interface"], "V1_NFT".to_string());
 
         let mint_acc = Mint {
             pubkey: mint_key,
@@ -1083,7 +1082,6 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
-    #[ignore = "FIXME: owner returned is non-empty"]
     async fn test_burnt() {
         let cnt = 20;
         let cli = Cli::default();
@@ -1208,8 +1206,8 @@ mod tests {
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
-        assert_eq!(response["ownership"]["owner"], "");
-        assert_eq!(response["interface"], "FungibleToken".to_string());
+        assert_eq!(response["ownership"]["owner"], owner_key.to_string());
+        assert_eq!(response["interface"], "V1_NFT".to_string());
         assert_eq!(response["burnt"], true);
 
         env.teardown().await;
@@ -3380,17 +3378,25 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "FIXME: non fungible count is not reset"]
     async fn test_idx_cleaner() {
         let cnt = 100;
         let cli = Cli::default();
 
-        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let _synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let _ = std::fs::create_dir_all("./tmp/test_idx_cleaner_dump");
+        let pg_mount =
+            PathBuf::from_str("./tmp/test_idx_cleaner_dump").unwrap().canonicalize().unwrap();
+        let (env, generated_assets) = setup::TestEnvironment::create_with_pg_mount(
+            &cli,
+            cnt,
+            100,
+            pg_mount.to_str().unwrap(),
+        )
+        .await;
+        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200_000,
-            "./tmp/test_idx_cleaner_dump".to_string(),
+            pg_mount.to_str().unwrap().to_owned(),
             Arc::new(SynchronizerMetricsConfig::new()),
             1,
         );
@@ -3446,7 +3452,11 @@ mod tests {
         assert_eq!(idx_fungible_asset_iter.count(), 1);
         assert_eq!(idx_non_fungible_asset_iter.count(), cnt + 2);
 
+        let (_, rx) = tokio::sync::broadcast::channel(1);
+
         for asset_type in ASSET_TYPES {
+            let rx = rx.resubscribe();
+            synchronizer.full_syncronize(&rx, asset_type).await.expect("sync");
             clean_syncronized_idxs(
                 env.pg_env.client.clone(),
                 env.rocks_env.storage.clone(),
@@ -3535,29 +3545,32 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_idx_cleaner_erases_updates_partially() {
-        let rocks_env: RocksTestEnvironment = RocksTestEnvironment::new(&[]);
-        let number_of_assets = 1;
-        let slot = 0;
-        let generated_assets = rocks_env.generate_assets(number_of_assets, slot).await;
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let temp_dir_path = temp_dir.path();
+        let cnt = 1;
+        let cli = Cli::default();
 
-        let cli: Cli = Cli::default();
-        let pg_env =
-            setup::pg::TestEnvironment::new_with_mount(&cli, temp_dir_path.to_str().unwrap()).await;
-        let syncronizer = Arc::new(nft_ingester::index_syncronizer::Synchronizer::new(
-            rocks_env.storage.clone(),
-            pg_env.client.clone(),
+        let _ = std::fs::create_dir_all("./tmp");
+        let temp_dir = TempDir::new_in("./tmp").expect("Failed to create a temporary directory");
+        let temp_dir_path = temp_dir.path();
+        let (env, generated_assets) = setup::TestEnvironment::create_with_pg_mount(
+            &cli,
+            cnt,
+            1,
+            temp_dir_path.to_str().unwrap(),
+        )
+        .await;
+        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
             10,
-            temp_dir_path.to_str().unwrap().to_string(),
+            temp_dir_path.to_str().unwrap().to_owned(),
             Arc::new(SynchronizerMetricsConfig::new()),
             1,
-        ));
+        );
 
         let nft_token_mint = generated_assets.pubkeys[0];
         let owner: Pubkey = generated_assets.owners[0].owner.value.unwrap();
         let mut batch_storage = BatchSaveStorage::new(
-            rocks_env.storage.clone(),
+            env.rocks_env.storage.clone(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -3590,7 +3603,7 @@ mod tests {
         }
         let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         for asset_type in ASSET_TYPES {
-            syncronizer.full_syncronize(&rx, asset_type).await.unwrap();
+            synchronizer.full_syncronize(&rx, asset_type).await.unwrap();
         }
 
         // receive 5 more updates for the same asset
@@ -3618,20 +3631,24 @@ mod tests {
         }
 
         // full story of idxs is stored
-        let idx_fungible_asset_iter = rocks_env.storage.fungible_assets_update_idx.iter_start();
-        let idx_non_fungible_asset_iter = rocks_env.storage.assets_update_idx.iter_start();
+        let idx_fungible_asset_iter = env.rocks_env.storage.fungible_assets_update_idx.iter_start();
+        let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
         assert_eq!(idx_fungible_asset_iter.count(), 10);
         assert_eq!(idx_non_fungible_asset_iter.count(), 11);
 
         for asset_type in ASSET_TYPES {
-            clean_syncronized_idxs(pg_env.client.clone(), rocks_env.storage.clone(), asset_type)
-                .await
-                .unwrap();
+            clean_syncronized_idxs(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                asset_type,
+            )
+            .await
+            .unwrap();
         }
 
         // after sync idxs should be half cleaned
-        let idx_fungible_asset_iter = rocks_env.storage.fungible_assets_update_idx.iter_start();
-        let idx_non_fungible_asset_iter = rocks_env.storage.assets_update_idx.iter_start();
+        let idx_fungible_asset_iter = env.rocks_env.storage.fungible_assets_update_idx.iter_start();
+        let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
         assert_eq!(idx_fungible_asset_iter.count(), 6);
         assert_eq!(idx_non_fungible_asset_iter.count(), 6);
     }
