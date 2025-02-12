@@ -40,7 +40,11 @@ jobs:
             echo "VERSION_INFO<<EOF" >> "$GITHUB_ENV"
             ./docker/version.sh | sed -e '$a\' >> "$GITHUB_ENV"
             echo "EOF" >> "$GITHUB_ENV"
-            echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            ver=$( [[ "$GITHUB_REF" == refs/tags/* ]] \
+                  && echo "${GITHUB_REF#refs/tags/}" \
+                  || (branch="${GITHUB_REF#refs/heads/}"; sha=$(git rev-parse --short HEAD); echo "${branch}-${sha}") )
+            echo "Version: $ver"
+            echo "version=${ver}" >> "$GITHUB_OUTPUT"
 
       # Build base image for local use only (no push)
       - name: Build and export base image
@@ -101,18 +105,27 @@ jobs:
         run: |
           docker load --input ${{ runner.temp }}/base.tar
 
-      - name: Docker meta
-        id: meta
+      - name: Docker metadata for tag
+        if: startsWith(github.ref, 'refs/tags/')
+        id: meta_tag
         uses: docker/metadata-action@v5
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/aura-${{ matrix.binary-name }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=ref,event=branch
-            type=sha
+            type=semver,pattern=v{{version}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Docker metadata for branch
+        if: startsWith(github.ref, 'refs/heads/')
+        id: meta_branch
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository_owner }}/aura-${{ matrix.binary-name }}
+          tags: |
+            type=sha,event=branch,prefix={{branch}}-
+            type=raw,event=branch,value={{branch}}-latest
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -120,7 +133,7 @@ jobs:
           context: .
           file: docker/app.Dockerfile
           push: ${{ env.PUSH_CONDITION }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ startsWith(github.ref, 'refs/tags/') && steps.meta_tag.outputs.tags || steps.meta_branch.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BINARY=${{ matrix.binary-name }}
