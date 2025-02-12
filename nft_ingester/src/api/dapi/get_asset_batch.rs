@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use entities::api_req_params::Options;
 use interface::{
-    json::{JsonDownloader, JsonPersister},
+    json_metadata::{JsonDownloader, JsonPersister},
     price_fetcher::TokenPriceFetcher,
     processing_possibility::ProcessingPossibilityChecker,
 };

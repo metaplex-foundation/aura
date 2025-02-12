@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use entities::{enums::TaskStatus, models::MetadataDownloadTask};
 use interface::{
     error::JsonDownloaderError,
-    json::{JsonDownloadResult, JsonDownloader, JsonPersister, MetadataDownloadResult},
+    json_metadata::{JsonDownloadResult, JsonDownloader, JsonPersister, MetadataDownloadResult},
 };
 use metrics_utils::{red::RequestErrorDurationMetrics, JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::{tasks::UpdatedTask, PgClient};

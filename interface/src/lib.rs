@@ -6,7 +6,7 @@ pub mod batch_mint;
 pub mod consistency_check;
 pub mod error;
 pub mod fork_cleaner;
-pub mod json;
+pub mod json_metadata;
 pub mod message_handler;
 pub mod migration_version_manager;
 pub mod price_fetcher;
