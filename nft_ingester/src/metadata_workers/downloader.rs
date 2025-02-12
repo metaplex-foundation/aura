@@ -1,11 +1,10 @@
-use crate::metadata_workers::json_worker::JsonWorker;
-use crate::metadata_workers::TaskType;
+use std::sync::Arc;
+
 use entities::models::MetadataDownloadTask;
 use interface::{
     error::JsonDownloaderError,
     json::{JsonDownloader, MetadataDownloadResult},
 };
-use std::sync::Arc;
 use tokio::{
     sync::{
         broadcast::Receiver as ShutdownReceiver,
@@ -16,6 +15,8 @@ use tokio::{
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
+
+use crate::metadata_workers::{json_worker::JsonWorker, TaskType};
 
 pub const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
 pub const PENDING_TASKS_WORKERS_RATIO: i32 = 5;

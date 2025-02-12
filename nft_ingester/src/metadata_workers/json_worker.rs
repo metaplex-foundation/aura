@@ -7,7 +7,6 @@ use interface::{
     error::JsonDownloaderError,
     json::{JsonDownloadResult, JsonDownloader, JsonPersister, MetadataDownloadResult},
 };
-
 use metrics_utils::{red::RequestErrorDurationMetrics, JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::{tasks::UpdatedTask, PgClient};
 use reqwest::ClientBuilder;
