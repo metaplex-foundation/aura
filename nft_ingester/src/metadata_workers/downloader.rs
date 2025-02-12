@@ -98,10 +98,10 @@ impl MetadataDownloader {
                                     );
                                 }
                             },
-                            Err(err) if err == TryRecvError::Disconnected => {
+                            Err(TryRecvError::Disconnected) => {
                                 error!("Could not get JSON task from the channel because it was closed");
                             },
-                            Err(_) => {},
+                            Err(TryRecvError::Empty) => {},
                         }
                     }} => {},
                 }
