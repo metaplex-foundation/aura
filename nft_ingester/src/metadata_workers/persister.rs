@@ -5,7 +5,7 @@ use interface::{
     json_metadata::{JsonPersister, MetadataDownloadResult},
 };
 use tokio::{
-    sync::mpsc::Receiver,
+    sync::{mpsc::Receiver, Mutex},
     task::JoinSet,
     time::{sleep, Duration},
 };
@@ -30,8 +30,8 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
         Self { persister, json_receiver, shutdown_rx }
     }
 
-    pub async fn run(mut self, tasks: &mut JoinSet<()>) {
-        tasks.spawn(async move {
+    pub async fn run(mut self, tasks: Arc<Mutex<JoinSet<()>>>) {
+        tasks.lock().await.spawn(async move {
             let mut buffer = vec![];
             let persister = self.persister.clone();
 
@@ -43,37 +43,43 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
                         debug!("Saved metadata successfully...");
                     }
                 }
-                _ = async {
-                    loop {
-                        tokio::select! {
-                            _ = sleep(Duration::from_secs(WIPE_PERIOD_SEC)) => {
-                                if let Err(e) = persister.persist_response(std::mem::take(&mut buffer)).await {
-                                    error!("Could not save JSONs to the storage: {:?}", e);
-                                } else {
-                                    debug!("Saved metadata successfully...");
-                                }
-                            }
-                            received_metadata = self.json_receiver.recv() => {
-                                if let Some(data_to_persist) = received_metadata {
-                                    buffer.push(data_to_persist);
-
-                                    if buffer.len() > JSON_BATCH {
-                                        if let Err(e) = persister.persist_response(std::mem::take(&mut buffer)).await {
-                                            error!("Could not save JSONs to the storage: {:?}", e);
-                                        } else {
-                                            debug!("Saved metadata successfully...");
-                                        }
-                                    }
-                                } else {
-                                    error!("Could not get JSON data to save from the channel because it was closed");
-                                    break;
-                                }
-                                sleep(Duration::from_secs(SLEEP_TIME)).await;
-                            }
-                        }
-                    }
-                } => {}
+                _ = Self::process_persisting(persister, self.json_receiver, &mut buffer) => {}
             }
         });
+    }
+
+    async fn process_persisting(
+        persister: Arc<T>,
+        mut json_receiver: Receiver<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
+        buffer: &mut Vec<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
+    ) {
+        loop {
+            tokio::select! {
+                _ = sleep(Duration::from_secs(WIPE_PERIOD_SEC)) => {
+                    if let Err(e) = persister.persist_response(std::mem::take(buffer)).await {
+                        error!("Could not save JSONs to the storage: {:?}", e);
+                    } else {
+                        debug!("Saved metadata successfully...");
+                    }
+                }
+                received_metadata = json_receiver.recv() => {
+                    if let Some(data_to_persist) = received_metadata {
+                        buffer.push(data_to_persist);
+
+                        if buffer.len() > JSON_BATCH {
+                            if let Err(e) = persister.persist_response(std::mem::take(buffer)).await {
+                                error!("Could not save JSONs to the storage: {:?}", e);
+                            } else {
+                                debug!("Saved metadata successfully...");
+                            }
+                        }
+                    } else {
+                        error!("Could not get JSON data to save from the channel because it was closed");
+                        break;
+                    }
+                    sleep(Duration::from_secs(SLEEP_TIME)).await;
+                }
+            }
+        }
     }
 }
