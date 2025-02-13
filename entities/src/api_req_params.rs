@@ -576,7 +576,10 @@ impl From<GetAssetsByGroupV0> for GetAssetsByGroup {
             before: value.before,
             after: value.after,
             cursor: None,
-            options: Default::default(),
+            options: GetByMethodsOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            },
         }
     }
 }
