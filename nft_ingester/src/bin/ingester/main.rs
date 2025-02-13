@@ -513,11 +513,14 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_rx.resubscribe(),
     );
 
-    let mut workers_pool = JoinSet::new();
+    let metadata_workers_pool = Arc::new(Mutex::new(JoinSet::new()));
     mutexed_tasks.lock().await.spawn(async move {
-        metadata_streamer.run(json_worker.num_of_parallel_workers, &mut workers_pool).await;
-        metadata_dowloader.run(&mut workers_pool).await;
-        metadata_persister.run(&mut workers_pool).await;
+        tokio::join!(
+            metadata_streamer
+                .run(json_worker.num_of_parallel_workers, metadata_workers_pool.clone()),
+            metadata_dowloader.run(metadata_workers_pool.clone()),
+            metadata_persister.run(metadata_workers_pool.clone()),
+        );
 
         Ok(())
     });

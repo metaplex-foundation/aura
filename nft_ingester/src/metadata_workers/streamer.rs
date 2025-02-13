@@ -3,7 +3,7 @@ use std::sync::Arc;
 use entities::models::MetadataDownloadTask;
 use postgre_client::PgClient;
 use tokio::{
-    sync::{broadcast::Receiver, mpsc::Sender},
+    sync::{broadcast::Receiver, mpsc::Sender, Mutex},
     task::JoinSet,
     time::{sleep, Duration},
 };
@@ -30,12 +30,19 @@ impl TasksStreamer {
         Self { db_conn, shutdown_rx, pending_tasks_sender, refresh_tasks_sender }
     }
 
-    pub async fn run(self, num_of_tasks: i32, tasks: &mut JoinSet<()>) {
-        self.stream_tasks(TaskType::Pending, num_of_tasks, tasks).await;
-        self.stream_tasks(TaskType::Refresh, num_of_tasks, tasks).await;
+    pub async fn run(self, num_of_tasks: i32, tasks: Arc<Mutex<JoinSet<()>>>) {
+        tokio::join!(
+            self.stream_tasks(TaskType::Pending, num_of_tasks, tasks.clone()),
+            self.stream_tasks(TaskType::Refresh, num_of_tasks, tasks)
+        );
     }
 
-    async fn stream_tasks(&self, task_type: TaskType, num_of_tasks: i32, tasks: &mut JoinSet<()>) {
+    async fn stream_tasks(
+        &self,
+        task_type: TaskType,
+        num_of_tasks: i32,
+        tasks: Arc<Mutex<JoinSet<()>>>,
+    ) {
         let mut shutdown_rx = self.shutdown_rx.resubscribe();
         let db_conn = self.db_conn.clone();
         let tasks_sender = match task_type {
@@ -43,7 +50,7 @@ impl TasksStreamer {
             TaskType::Refresh => self.refresh_tasks_sender.clone(),
         };
 
-        tasks.spawn(async move {
+        tasks.lock().await.spawn(async move {
             tokio::select! {
                 _ = async move {
                     loop {

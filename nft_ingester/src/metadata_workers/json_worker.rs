@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use entities::{enums::TaskStatus, models::MetadataDownloadTask};
 use interface::{
     error::JsonDownloaderError,
@@ -21,6 +20,7 @@ use rocks_db::{
 };
 use serde_json::Value;
 use tokio::time::Duration;
+use tokio_util::either::Either;
 use tracing::error;
 use url::Url;
 
@@ -98,19 +98,13 @@ impl JsonDownloader for JsonWorker {
         let host = parsed_url.host_str().unwrap_or("no_host");
 
         let mut request_builder = client.get(parsed_url.clone());
-        match (download_task.etag.clone(), download_task.last_modified_at.clone()) {
-            (Some(etag), Some(last_modified_at)) => {
-                request_builder = request_builder.header("If-None-Match", etag);
-                request_builder = request_builder.header("If-Modified-Since", last_modified_at);
-            },
-            (Some(etag), _) => {
-                request_builder = request_builder.header("If-None-Match", etag);
-            },
-            (_, Some(last_modified_at)) => {
-                request_builder = request_builder.header("If-Modified-Since", last_modified_at);
-            },
-            _ => {},
-        }
+
+        if let Some(etag) = &download_task.etag {
+            request_builder = request_builder.header("If-None-Match", etag);
+        };
+        if let Some(last_modified_at) = &download_task.last_modified_at {
+            request_builder = request_builder.header("If-Modified-Since", last_modified_at);
+        };
 
         self.red_metrics.observe_request("json_downloader", "download_file", host, start_time);
         let response = request_builder.send().await.map_err(|e| {
@@ -123,10 +117,11 @@ impl JsonDownloader for JsonWorker {
             .headers()
             .get("etag")
             .and_then(|etag| etag.to_str().ok().map(ToString::to_string));
-        let last_modified: Option<DateTime<Utc>> =
-            response.headers().get("last-modified").and_then(|ct| {
-                ct.to_str().ok().map(|date| date.parse().expect("Wasn't able to parse the date"))
-            });
+        let last_modified = response
+            .headers()
+            .get("last-modified")
+            .and_then(|ct| ct.to_str().ok())
+            .and_then(|date| date.parse().ok());
 
         if response.status() == reqwest::StatusCode::NOT_MODIFIED {
             return Ok(MetadataDownloadResult::new(
@@ -318,21 +313,27 @@ impl JsonPersister for JsonWorker {
             }
         }
 
-        if !pg_updates.is_empty() {
-            self.db_client
-                .update_tasks(pg_updates)
-                .await
-                .map_err(|e| JsonDownloaderError::IndexStorageError(e.to_string()))?;
-        }
+        let process_regular_updates_fut = if pg_updates.is_empty() {
+            Either::Left(async { Ok(()) })
+        } else {
+            Either::Right(self.db_client.update_tasks(pg_updates))
+        };
 
-        if pg_update_attempt_time.is_empty() {
-            self.db_client
-                .update_tasks_attempt_time(pg_update_attempt_time)
-                .await
-                .map_err(|e| JsonDownloaderError::IndexStorageError(e.to_string()))?;
-        }
+        let process_not_modified_assets_fut = if pg_update_attempt_time.is_empty() {
+            Either::Left(async { Ok(()) })
+        } else {
+            Either::Right(self.db_client.update_tasks_attempt_time(pg_update_attempt_time))
+        };
 
-        if !rocks_updates.is_empty() {
+        let process_offchain_data_fut = if rocks_updates.is_empty() {
+            Either::Left(async { Ok(()) })
+        } else {
+            Either::Right(self.rocks_db.asset_offchain_data.put_batch(rocks_updates.clone()))
+        };
+
+        let process_urls_to_download_fut = if rocks_updates.is_empty() {
+            Either::Left(async { Ok(()) })
+        } else {
             let urls_to_download = rocks_updates
                 .values()
                 .filter(|data| {
@@ -344,17 +345,30 @@ impl JsonPersister for JsonWorker {
                 .map(|uri| (uri, UrlToDownload::default()))
                 .collect::<HashMap<_, _>>();
 
-            self.rocks_db
-                .asset_offchain_data
-                .put_batch(rocks_updates)
-                .await
-                .map_err(|e| JsonDownloaderError::MainStorageError(e.to_string()))?;
+            Either::Right(self.rocks_db.urls_to_download.put_batch(urls_to_download))
+        };
 
-            if let Err(e) = self.rocks_db.urls_to_download.put_batch(urls_to_download).await {
-                error!("Unable to persist URLs to download: {e}");
-            };
+        let (
+            regular_updates_upd_result,
+            not_modified_upd_result,
+            offchain_data_upd_result,
+            urls_to_download_upd_result,
+        ) = tokio::join!(
+            process_regular_updates_fut,
+            process_not_modified_assets_fut,
+            process_offchain_data_fut,
+            process_urls_to_download_fut
+        );
+
+        for res in [regular_updates_upd_result, not_modified_upd_result] {
+            res.map_err(|e| JsonDownloaderError::IndexStorageError(e.to_string()))?;
         }
 
+        offchain_data_upd_result
+            .map_err(|e| JsonDownloaderError::MainStorageError(e.to_string()))?;
+        if let Err(e) = urls_to_download_upd_result {
+            error!("Unable to persist URLs to download: {e}");
+        };
         Ok(())
     }
 }
