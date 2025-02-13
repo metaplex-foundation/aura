@@ -661,7 +661,7 @@ impl PgClient {
         );
 
         query_builder.push_values(asset_indexes, |mut builder, asset_index| {
-            let owner: Option<Pubkey> = match asset_index.owner_type.clone() {
+            let owner: Option<Pubkey> = match asset_index.owner_type {
                 Some(entities::enums::OwnerType::Token) => None,
                 Some(_) => asset_index.owner,
                 None => None,
