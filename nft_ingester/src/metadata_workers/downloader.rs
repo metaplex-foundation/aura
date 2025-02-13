@@ -50,21 +50,23 @@ impl MetadataDownloader {
         }
     }
 
-    pub async fn run(self, tasks: &mut JoinSet<()>) {
+    pub async fn run(self, tasks: Arc<Mutex<JoinSet<()>>>) {
         let parallel_tasks_for_refresh =
             self.worker.num_of_parallel_workers / PENDING_TASKS_WORKERS_RATIO + 1;
         let parallel_tasks_for_pending =
             self.worker.num_of_parallel_workers - parallel_tasks_for_refresh + 1;
 
-        self.download_tasks(parallel_tasks_for_pending, TaskType::Pending, tasks).await;
-        self.download_tasks(parallel_tasks_for_refresh, TaskType::Refresh, tasks).await;
+        tokio::join!(
+            self.download_tasks(parallel_tasks_for_pending, TaskType::Pending, tasks.clone()),
+            self.download_tasks(parallel_tasks_for_refresh, TaskType::Refresh, tasks),
+        );
     }
 
     pub async fn download_tasks(
         &self,
         parallel_tasks: i32,
         task_type: TaskType,
-        tasks: &mut JoinSet<()>,
+        tasks: Arc<Mutex<JoinSet<()>>>,
     ) {
         let task_receiver = match task_type {
             TaskType::Pending => self.pending_metadata_tasks_rx.clone(),
@@ -76,36 +78,48 @@ impl MetadataDownloader {
             let task_receiver = task_receiver.clone();
             let metadata_to_persist_tx = self.metadata_to_persist_tx.clone();
             let worker = self.worker.clone();
-            tasks.spawn(async move {
+            tasks.lock().await.spawn(async move {
                 tokio::select! {
                     _ = shutdown_rx.recv() => {
                         debug!("Shutting down metadata downloader worker");
                     },
-                    _ = async move {
-                        loop {
-                            match task_receiver.lock().await.try_recv() {
-                            Ok(task) => {
-                                let begin_processing = Instant::now();
-                                let response = worker.download_file(&task, CLIENT_TIMEOUT).await;
-                                worker.metrics.set_latency_task_executed(
-                                    "json_downloader",
-                                    begin_processing.elapsed().as_millis() as f64,
-                                );
-                                if let Err(err) = metadata_to_persist_tx.send((task.metadata_url, response)).await {
-                                    error!(
-                                        "Error during sending JSON download result to the channel: {}",
-                                        err.to_string()
-                                    );
-                                }
-                            },
-                            Err(TryRecvError::Disconnected) => {
-                                error!("Could not get JSON task from the channel because it was closed");
-                            },
-                            Err(TryRecvError::Empty) => {},
-                        }
-                    }} => {},
+                    _ = Self::process_downloading(task_receiver, metadata_to_persist_tx, worker) => {},
                 }
             });
+        }
+    }
+
+    async fn process_downloading(
+        tasks_receiver: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
+        metadata_to_persist_tx: Sender<(
+            String,
+            Result<MetadataDownloadResult, JsonDownloaderError>,
+        )>,
+        worker: Arc<JsonWorker>,
+    ) {
+        loop {
+            match tasks_receiver.lock().await.try_recv() {
+                Ok(task) => {
+                    let begin_processing = Instant::now();
+                    let response = worker.download_file(&task, CLIENT_TIMEOUT).await;
+                    worker.metrics.set_latency_task_executed(
+                        "json_downloader",
+                        begin_processing.elapsed().as_millis() as f64,
+                    );
+                    if let Err(err) =
+                        metadata_to_persist_tx.send((task.metadata_url, response)).await
+                    {
+                        error!(
+                            "Error during sending JSON download result to the channel: {}",
+                            err.to_string()
+                        );
+                    }
+                },
+                Err(TryRecvError::Disconnected) => {
+                    error!("Could not get JSON task from the channel because it was closed");
+                },
+                Err(TryRecvError::Empty) => {},
+            }
         }
     }
 }
