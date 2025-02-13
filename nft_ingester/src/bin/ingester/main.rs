@@ -123,8 +123,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 ),
             )
             .expect("invalid rocks backup archives dir"),
-            &PathBuf::from_str(&args.rocks_db_path)
-                .expect("invalid rocks backup archives dir"),
+            &PathBuf::from_str(&args.rocks_db_path).expect("invalid rocks backup archives dir"),
         )
         .await?;
     }
