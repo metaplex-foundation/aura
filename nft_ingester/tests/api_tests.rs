@@ -3123,7 +3123,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_mint_extentions() {
+    async fn test_mint_extensions() {
         let cnt = 100;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
@@ -3141,7 +3141,6 @@ mod tests {
             extensions: Some(MintAccountExtensions {
                 default_account_state: None,
                 confidential_transfer_mint: None,
-                confidential_transfer_account: None,
                 confidential_transfer_fee_config: None,
                 interest_bearing_config: Some(ShadowInterestBearingConfig {
                     rate_authority: OptionalNonZeroPubkey::try_from(Some(
@@ -3183,6 +3182,8 @@ mod tests {
                 token_group: None,
                 group_member_pointer: None,
                 token_group_member: None,
+                non_transferable: None,
+                immutable_owner: None,
             }),
         };
 

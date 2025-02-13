@@ -1463,7 +1463,7 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 [[package]]
 name = "blockbuster"
 version = "2.4.0"
-source = "git+https://github.com/metaplex-foundation/blockbuster?rev=0aa1878#0aa18784bf0e09d4ff43c9bc04b91b44c0a5a4ac"
+source = "git+https://github.com/metaplex-foundation/blockbuster?rev=35a2e84#35a2e84e6b0484460f517a722b61a51c69390857"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
@@ -1671,12 +1671,12 @@ dependencies = [
 [[package]]
 name = "bubblegum-batch-sdk"
 version = "0.1.0"
-source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=27ecf48#27ecf486d86daaa4474ef96695f69a2ba8769c6e"
+source = "git+https://github.com/metaplex-foundation/bubblegum-batch-sdk.git?rev=c9d3ad4#c9d3ad4fc8167fdc9a3838f31af32531980d355c"
 dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
  "blockbuster",
- "borsh 0.10.3",
+ "borsh 0.9.3",
  "bytemuck",
  "chrono",
  "mpl-bubblegum",
@@ -4636,12 +4636,13 @@ source = "git+https://github.com/adm-metaex/mpl-common-constants.git?branch=main
 
 [[package]]
 name = "mpl-core"
-version = "0.8.0-beta.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1178d8a405352e2a2478abf5b62e2a4d6a91ed6f0470307ab6732614662dbf85"
+checksum = "dcef44f3d345b5b28c7584b1d86c3212ccc54f1611b27748bbbaabfe588ae83a"
 dependencies = [
  "base64 0.22.1",
  "borsh 0.10.3",
+ "kaigan",
  "modular-bitfield",
  "num-derive 0.3.3",
  "num-traits",

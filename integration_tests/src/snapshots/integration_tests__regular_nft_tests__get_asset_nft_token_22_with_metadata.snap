@@ -1,8 +1,6 @@
 ---
 source: integration_tests/src/regular_nft_tests.rs
-assertion_line: 226
 expression: response
-snapshot_kind: text
 ---
 {
   "interface": "V1_NFT",
@@ -64,6 +62,9 @@ snapshot_kind: text
   "executable": false,
   "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
   "rent_epoch": 18446744073709551615,
+  "mint_extensions": {
+    "non_transferable": true
+  },
   "token_info": {
     "supply": 1,
     "decimals": 0,
