@@ -505,6 +505,7 @@ pub async fn main() -> Result<(), IngesterError> {
         pending_tasks_receiver,
         refresh_tasks_receiver,
         shutdown_rx.resubscribe(),
+        mutexed_tasks.clone(),
     );
 
     let metadata_persister = TasksPersister::new(
@@ -513,13 +514,11 @@ pub async fn main() -> Result<(), IngesterError> {
         shutdown_rx.resubscribe(),
     );
 
-    let metadata_workers_pool = Arc::new(Mutex::new(JoinSet::new()));
     mutexed_tasks.lock().await.spawn(async move {
         tokio::join!(
-            metadata_streamer
-                .run(json_worker.num_of_parallel_workers, metadata_workers_pool.clone()),
-            metadata_dowloader.run(metadata_workers_pool.clone()),
-            metadata_persister.run(metadata_workers_pool.clone()),
+            metadata_streamer.run(json_worker.num_of_parallel_workers),
+            metadata_dowloader.run(),
+            metadata_persister.run(),
         );
 
         Ok(())

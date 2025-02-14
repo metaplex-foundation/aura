@@ -11,7 +11,7 @@ use tokio::{
         mpsc::{error::TryRecvError, Receiver, Sender},
         Mutex,
     },
-    task::JoinSet,
+    task::{JoinError, JoinSet},
     time::{Duration, Instant},
 };
 use tracing::{debug, error};
@@ -22,17 +22,18 @@ pub const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
 pub const PENDING_TASKS_WORKERS_RATIO: i32 = 5;
 
 pub struct MetadataDownloader {
-    pub worker: Arc<JsonWorker>,
+    pub json_worker: Arc<JsonWorker>,
     pub metadata_to_persist_tx:
         Sender<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
     pub pending_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
     pub refresh_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
     pub shutdown_rx: ShutdownReceiver<()>,
+    pub worker_pool: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 }
 
 impl MetadataDownloader {
     pub fn new(
-        worker: Arc<JsonWorker>,
+        json_worker: Arc<JsonWorker>,
         metadata_to_persist_tx: Sender<(
             String,
             Result<MetadataDownloadResult, JsonDownloaderError>,
@@ -40,34 +41,31 @@ impl MetadataDownloader {
         pending_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
         refresh_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
         shutdown_rx: ShutdownReceiver<()>,
+        worker_pool: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Self {
         Self {
-            worker,
+            json_worker,
             metadata_to_persist_tx,
             pending_metadata_tasks_rx,
             refresh_metadata_tasks_rx,
             shutdown_rx,
+            worker_pool,
         }
     }
 
-    pub async fn run(self, tasks: Arc<Mutex<JoinSet<()>>>) {
+    pub async fn run(self) {
         let parallel_tasks_for_refresh =
-            self.worker.num_of_parallel_workers / PENDING_TASKS_WORKERS_RATIO + 1;
+            self.json_worker.num_of_parallel_workers / PENDING_TASKS_WORKERS_RATIO + 1;
         let parallel_tasks_for_pending =
-            self.worker.num_of_parallel_workers - parallel_tasks_for_refresh + 1;
+            self.json_worker.num_of_parallel_workers - parallel_tasks_for_refresh + 1;
 
         tokio::join!(
-            self.download_tasks(parallel_tasks_for_pending, TaskType::Pending, tasks.clone()),
-            self.download_tasks(parallel_tasks_for_refresh, TaskType::Refresh, tasks),
+            self.download_tasks(parallel_tasks_for_pending, TaskType::Pending),
+            self.download_tasks(parallel_tasks_for_refresh, TaskType::Refresh),
         );
     }
 
-    pub async fn download_tasks(
-        &self,
-        parallel_tasks: i32,
-        task_type: TaskType,
-        tasks: Arc<Mutex<JoinSet<()>>>,
-    ) {
+    pub async fn download_tasks(&self, parallel_tasks: i32, task_type: TaskType) {
         let task_receiver = match task_type {
             TaskType::Pending => self.pending_metadata_tasks_rx.clone(),
             TaskType::Refresh => self.refresh_metadata_tasks_rx.clone(),
@@ -77,14 +75,16 @@ impl MetadataDownloader {
             let mut shutdown_rx = self.shutdown_rx.resubscribe();
             let task_receiver = task_receiver.clone();
             let metadata_to_persist_tx = self.metadata_to_persist_tx.clone();
-            let worker = self.worker.clone();
-            tasks.lock().await.spawn(async move {
+            let json_worker = self.json_worker.clone();
+            self.worker_pool.lock().await.spawn(async move {
                 tokio::select! {
                     _ = shutdown_rx.recv() => {
                         debug!("Shutting down metadata downloader worker");
                     },
-                    _ = Self::process_downloading(task_receiver, metadata_to_persist_tx, worker) => {},
+                    _ = Self::process_downloading(task_receiver, metadata_to_persist_tx, json_worker) => {},
                 }
+
+                Ok(())
             });
         }
     }
@@ -95,14 +95,14 @@ impl MetadataDownloader {
             String,
             Result<MetadataDownloadResult, JsonDownloaderError>,
         )>,
-        worker: Arc<JsonWorker>,
+        json_worker: Arc<JsonWorker>,
     ) {
         loop {
             match tasks_receiver.lock().await.try_recv() {
                 Ok(task) => {
                     let begin_processing = Instant::now();
-                    let response = worker.download_file(&task, CLIENT_TIMEOUT).await;
-                    worker.metrics.set_latency_task_executed(
+                    let response = json_worker.download_file(&task, CLIENT_TIMEOUT).await;
+                    json_worker.metrics.set_latency_task_executed(
                         "json_downloader",
                         begin_processing.elapsed().as_millis() as f64,
                     );

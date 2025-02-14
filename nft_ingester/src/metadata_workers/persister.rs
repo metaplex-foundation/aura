@@ -5,8 +5,7 @@ use interface::{
     json_metadata::{JsonPersister, MetadataDownloadResult},
 };
 use tokio::{
-    sync::{mpsc::Receiver, Mutex},
-    task::JoinSet,
+    sync::mpsc::Receiver,
     time::{sleep, Duration},
 };
 use tracing::{debug, error};
@@ -30,22 +29,20 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
         Self { persister, json_receiver, shutdown_rx }
     }
 
-    pub async fn run(mut self, tasks: Arc<Mutex<JoinSet<()>>>) {
-        tasks.lock().await.spawn(async move {
-            let mut buffer = vec![];
-            let persister = self.persister.clone();
+    pub async fn run(mut self) {
+        let mut buffer = vec![];
+        let persister = self.persister.clone();
 
-            tokio::select! {
-                _ = self.shutdown_rx.recv() => {
-                    if let Err(e) = self.persister.persist_response(buffer).await {
-                        error!("Could not save JSONs to the storage: {:?}", e);
-                    } else {
-                        debug!("Saved metadata successfully...");
-                    }
+        tokio::select! {
+            _ = self.shutdown_rx.recv() => {
+                if let Err(e) = self.persister.persist_response(buffer).await {
+                    error!("Could not save JSONs to the storage: {:?}", e);
+                } else {
+                    debug!("Saved metadata successfully...");
                 }
-                _ = Self::process_persisting(persister, self.json_receiver, &mut buffer) => {}
             }
-        });
+            _ = Self::process_persisting(persister, self.json_receiver, &mut buffer) => {}
+        }
     }
 
     async fn process_persisting(
