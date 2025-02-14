@@ -298,7 +298,6 @@ impl JsonPersister for JsonWorker {
                         self.metrics.inc_tasks("json", MetricStatus::FAILURE);
                     },
                     JsonDownloaderError::ErrorDownloading(_err) => {
-                        // Revert to pending status to retry until max attempts
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Failed,
                             metadata_url: metadata_url.clone(),
