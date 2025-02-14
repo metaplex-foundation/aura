@@ -4,7 +4,9 @@ use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
 use entities::models::RawBlock;
 use futures::future::join_all;
-use interface::{signature_persistence::BlockProducer, slot_getter::FinalizedSlotGetter};
+use interface::{
+    error::StorageError, signature_persistence::BlockProducer, slot_getter::FinalizedSlotGetter,
+};
 use metrics_utils::{utils::start_metrics, MetricState, MetricsTrait};
 use nft_ingester::{backfiller::BackfillSource, inmemory_slots_dumper::InMemorySlotsDumper};
 use rocks_db::{column::TypedColumn, SlotStorage};
@@ -15,7 +17,10 @@ use tokio::{
 use tokio_retry::{strategy::ExponentialBackoff, RetryIf};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
+use usecase::{
+    bigtable::{get_blocks, BigTableClient},
+    slots_collector::SlotsCollector,
+};
 
 const MAX_RETRIES: usize = 5;
 const INITIAL_DELAY_MS: u64 = 100;
@@ -313,74 +318,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[tokio::test]
-// #[tracing_test::traced_test]
-pub async fn tst_fill() {
-    let bt_client = Arc::new(
-        BigTableClient::connect_new_with(
-            "../creds.json"
-                .to_string(),
-            1000,
-        )
-        .await
-        .expect("expected to connect to big table"),
-    );
-    let backfill_source = Arc::new(BackfillSource::Bigtable(bt_client.clone()));
-    let metrics_state = MetricState::new();
-
-    let in_mem_dumper = Arc::new(InMemorySlotsDumper::new());
-    let slots_collector = SlotsCollector::new(
-        in_mem_dumper.clone(),
-        backfill_source.clone(),
-        metrics_state.backfiller_metrics.clone(),
-    );
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    println!("Starting to collect slots...");
-    let top_collected_slot = slots_collector
-        .collect_slots(&blockbuster::programs::bubblegum::ID, 317021823, 316975306, &shutdown_rx)
-        .await;
-    let slots = in_mem_dumper.get_sorted_keys().await;
-    println!("Collected {} slots to persist", slots.len());
-    let mut js = JoinSet::new();
-    let mut cnt = 0;
-    let start_time = std::time::Instant::now();
-
-    for batch in slots.chunks(200) {
-        let start_time = std::time::Instant::now();
-        let bt_client = bt_client.clone();
-        let batch = batch.to_vec();
-        js.spawn(async move {
-        let start_time = std::time::Instant::now();
-        // let bt_client1 = Arc::new(
-        //     BigTableClient::connect_new_with(
-        //         "/Users/stanislavcherviakov/src/everstake/metaplex/utility-chain/creds.json"
-        //             .to_string(),
-        //         1000,
-        //     )
-        //     .await
-        //     .expect("expected to connect to big table"),
-        // );
-        // let blocks = bt_client.get_blocks(&batch).await.expect("should be able to get");
-        let blocks2 =
-            usecase::bigtable::get_blocks_op(&bt_client.big_table_inner_client.clone(), &batch)
-                .await
-                .expect("should get blocks");
-        let elapsed = start_time.elapsed();
-        println!("Elapsed time inside: {:?}", elapsed);
-        });
-        let elapsed = start_time.elapsed();
-        println!("Total Elapsed time to setup: {:?}", elapsed);
-        // assert_eq!(blocks, blocks2);
-        cnt += 1;
-        if cnt > 4 {
-            break;
-        }
-    }
-    while js.join_next().await.is_some() {}
-    let elapsed = start_time.elapsed();
-    println!("Total Elapsed time: {:?}", elapsed);
-}
-
 async fn process_slots(
     slots: Vec<u64>,
     backfill_source: Arc<BackfillSource>,
@@ -438,10 +375,23 @@ async fn process_slots(
                         let bigtable_client = bigtable_client.clone();
                         let shutdown_token = shutdown_token.clone();
                         js.spawn(async move {
+                            if shutdown_token.is_cancelled() {
+                                 error!(
+                                     "Failed to fetch sub-chunk of slots (from {:?} to {:?}) due to cancellation",
+                                     sub_slots.first(),
+                                     sub_slots.last()
+                                 );
+                                (sub_slots.clone(), Err(StorageError::Common("shutdown".to_owned())))
+                            } else {
                             (
                                 sub_slots.clone(),
-                                bigtable_client.get_blocks(sub_slots.as_slice()).await,
+                                get_blocks(
+                                    &bigtable_client.big_table_inner_client,
+                                    sub_slots.as_slice(),
+                                )
+                                .await,
                             )
+                            }
                         });
                     });
                     while let Some(result) = js.join_next().await {

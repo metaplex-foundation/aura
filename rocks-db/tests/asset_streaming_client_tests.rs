@@ -2,11 +2,10 @@
 mod tests {
     use std::collections::HashSet;
 
-    use entities::models::RawBlock;
+    use entities::models::{RawBlock, RawBlockWithTransactions};
     use interface::asset_streaming_and_discovery::{AssetDetailsStreamer, RawBlocksStreamer};
     use setup::rocks::*;
     use solana_sdk::pubkey::Pubkey;
-    use solana_transaction_status::UiConfirmedBlock;
     use tokio_stream::StreamExt;
 
     #[tokio::test]
@@ -112,15 +111,12 @@ mod tests {
                 slot,
                 RawBlock {
                     slot,
-                    block: UiConfirmedBlock {
+                    block: RawBlockWithTransactions {
                         previous_blockhash: "".to_string(),
                         blockhash: blockhash.to_string(),
                         parent_slot: 0,
-                        transactions: None,
-                        signatures: None,
-                        rewards: None,
+                        transactions: Default::default(),
                         block_time: None,
-                        block_height: None,
                     },
                 },
             )

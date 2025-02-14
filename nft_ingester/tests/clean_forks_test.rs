@@ -1,6 +1,6 @@
 use bincode::deserialize;
 use blockbuster::{instruction::InstructionBundle, programs::bubblegum::BubblegumInstruction};
-use entities::models::{RawBlock, SignatureWithSlot};
+use entities::models::{RawBlock, RawBlockWithTransactions, SignatureWithSlot};
 use metrics_utils::MetricState;
 use mpl_bubblegum::{
     types::{BubblegumEventType, LeafSchema, Version},
@@ -31,10 +31,9 @@ async fn test_clean_forks() {
         str::FromStr,
     };
 
-    use entities::models::{UpdateVersion, Updated};
+    use entities::models::{RawBlockWithTransactions, UpdateVersion, Updated};
     use metrics_utils::{utils::start_metrics, MetricsTrait};
     use rocks_db::columns::{cl_items::ClItemKey, leaf_signatures::LeafSignature};
-    use solana_transaction_status::UiConfirmedBlock;
 
     let RocksTestEnvironment { storage, slot_storage, .. } = RocksTestEnvironment::new(&[]);
     let first_tree_key =
@@ -421,15 +420,12 @@ async fn test_clean_forks() {
             10000,
             RawBlock {
                 slot: 10000,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -441,15 +437,12 @@ async fn test_clean_forks() {
             10001,
             RawBlock {
                 slot: 10001,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -461,15 +454,12 @@ async fn test_clean_forks() {
             10002,
             RawBlock {
                 slot: 10002,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -481,15 +471,12 @@ async fn test_clean_forks() {
             10005,
             RawBlock {
                 slot: 10000,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -501,15 +488,12 @@ async fn test_clean_forks() {
             10006,
             RawBlock {
                 slot: 10000,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -522,15 +506,12 @@ async fn test_clean_forks() {
             30000,
             RawBlock {
                 slot: 30000,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -830,15 +811,12 @@ async fn test_process_forked_transaction() {
             slot_normal_tx,
             RawBlock {
                 slot: slot_normal_tx,
-                block: solana_transaction_status::UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "previousBlockHash".to_string(),
                     blockhash: "blockHash".to_string(),
                     parent_slot: slot_normal_tx,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -852,15 +830,12 @@ async fn test_process_forked_transaction() {
             slot_normal_tx + 16000,
             RawBlock {
                 slot: slot_normal_tx + 16000,
-                block: solana_transaction_status::UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "previousBlockHash".to_string(),
                     blockhash: "blockHash".to_string(),
                     parent_slot: slot_normal_tx + 16000,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )

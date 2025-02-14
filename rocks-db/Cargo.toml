@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { workspace = true }
 rocksdb = { workspace = true }
 solana-sdk = { workspace = true }
 bincode = { workspace = true }
@@ -75,3 +76,6 @@ name = "fork_detector"
 
 [[bin]]
 name = "leaf_checker"
+
+[[bin]]
+name = "migrate_slots_db"

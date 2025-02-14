@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use entities::models::{BufferedTransaction, BufferedTxWithID, SignatureWithSlot};
+use entities::models::{
+    BufferedTransaction, BufferedTxWithID, RawBlockWithTransactions, SignatureWithSlot,
+};
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
 
@@ -47,7 +49,7 @@ pub trait BlockConsumer: Send + Sync + 'static {
     async fn consume_block(
         &self,
         slot: u64,
-        block: solana_transaction_status::UiConfirmedBlock,
+        block: RawBlockWithTransactions,
     ) -> Result<(), BlockConsumeError>;
     async fn already_processed_slot(&self, slot: u64) -> Result<bool, BlockConsumeError>;
 }
@@ -59,5 +61,5 @@ pub trait BlockProducer: Send + Sync + 'static {
         &self,
         slot: u64,
         backup_provider: Option<Arc<impl BlockProducer>>,
-    ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError>;
+    ) -> Result<RawBlockWithTransactions, StorageError>;
 }

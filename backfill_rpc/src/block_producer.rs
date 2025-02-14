@@ -1,10 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
+use entities::{
+    models::{RawBlockWithTransactions, TransactionInfo},
+    utils::decode_encoded_transaction_with_status_meta,
+};
 use interface::{error::StorageError, signature_persistence::BlockProducer};
 use solana_client::rpc_config::RpcBlockConfig;
 use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
-use solana_transaction_status::{TransactionDetails, UiConfirmedBlock};
+use solana_transaction_status::TransactionDetails;
 use tracing::error;
 use usecase::bigtable::is_bubblegum_transaction_encoded;
 
@@ -18,7 +22,7 @@ impl BlockProducer for BackfillRPC {
         &self,
         slot: u64,
         _backup_provider: Option<Arc<impl BlockProducer>>,
-    ) -> Result<UiConfirmedBlock, StorageError> {
+    ) -> Result<RawBlockWithTransactions, StorageError> {
         let mut counter = MAX_RPC_RETRIES;
 
         loop {
@@ -52,8 +56,24 @@ impl BlockProducer for BackfillRPC {
             if let Some(ref mut txs) = encoded_block.transactions {
                 txs.retain(is_bubblegum_transaction_encoded);
             }
+            let raw_block = RawBlockWithTransactions {
+                blockhash: encoded_block.blockhash,
+                previous_blockhash: encoded_block.previous_blockhash,
+                parent_slot: encoded_block.parent_slot,
+                transactions: encoded_block
+                    .transactions
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|t| {
+                        decode_encoded_transaction_with_status_meta(t).and_then(|t| {
+                            TransactionInfo::from_transaction_with_status_meta_and_slot(t, slot)
+                        })
+                    })
+                    .collect(),
+                block_time: encoded_block.block_time.and_then(|t| t.try_into().ok()),
+            };
 
-            return Ok(encoded_block);
+            return Ok(raw_block);
         }
     }
 }

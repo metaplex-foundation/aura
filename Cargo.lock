@@ -4781,7 +4781,7 @@ dependencies = [
 
 [[package]]
 name = "nft_ingester"
-version = "0.8.0"
+version = "0.7.2"
 dependencies = [
  "anchor-lang 0.30.1",
  "arweave-rs",
@@ -6528,6 +6528,7 @@ dependencies = [
  "bincode",
  "bubblegum-batch-sdk",
  "chrono",
+ "clap 4.5.26",
  "criterion",
  "csv",
  "entities",
@@ -6542,7 +6543,6 @@ dependencies = [
  "lz4",
  "metrics-utils",
  "mockall 0.13.0",
- "mpl-bubblegum",
  "mpl-token-metadata",
  "num-traits",
  "num_cpus",
@@ -6563,7 +6563,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-subscriber",
  "tracing-test",
  "usecase",
 ]

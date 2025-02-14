@@ -1,12 +1,35 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use entities::models::RawBlock;
+use entities::models::{RawBlock, RawBlockDeprecated, RawBlockWithTransactions};
 use interface::{
     error::StorageError as InterfaceStorageError, signature_persistence::BlockProducer,
 };
 
 use crate::{column::TypedColumn, errors::StorageError, key_encoders, SlotStorage};
+
+impl TypedColumn for RawBlockDeprecated {
+    type KeyType = u64;
+
+    type ValueType = Self;
+    const NAME: &'static str = "RAW_BLOCK_CBOR_ENCODED";
+
+    fn encode_key(slot: u64) -> Vec<u8> {
+        key_encoders::encode_u64(slot)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
+        key_encoders::decode_u64(bytes)
+    }
+
+    fn decode(bytes: &[u8]) -> crate::Result<Self::ValueType> {
+        serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string()))
+    }
+
+    fn encode(v: &Self::ValueType) -> crate::Result<Vec<u8>> {
+        serde_cbor::to_vec(&v).map_err(|e| StorageError::Common(e.to_string()))
+    }
+}
 
 impl TypedColumn for RawBlock {
     type KeyType = u64;
@@ -37,7 +60,7 @@ impl BlockProducer for SlotStorage {
         &self,
         slot: u64,
         backup_provider: Option<Arc<impl BlockProducer>>,
-    ) -> Result<solana_transaction_status::UiConfirmedBlock, InterfaceStorageError> {
+    ) -> Result<RawBlockWithTransactions, InterfaceStorageError> {
         let raw_block = self
             .raw_blocks_cbor
             .get_async(slot)

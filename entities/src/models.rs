@@ -12,7 +12,13 @@ use mpl_token_metadata::accounts::Metadata;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
+use solana_sdk::{
+    hash::Hash, instruction::CompiledInstruction, message::v0::LoadedAddresses, pubkey::Pubkey,
+    signature::Signature,
+};
+use solana_transaction_status::{
+    EncodedConfirmedBlock, InnerInstructions, TransactionWithStatusMeta,
+};
 use sqlx::types::chrono;
 
 use crate::enums::{
@@ -418,10 +424,89 @@ pub struct Task {
     pub ofd_status: TaskStatus,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RawBlock {
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct RawBlockDeprecated {
     pub slot: u64,
     pub block: solana_transaction_status::UiConfirmedBlock,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RawBlock {
+    pub slot: u64,
+    pub block: RawBlockWithTransactions,
+}
+
+impl From<RawBlockDeprecated> for RawBlock {
+    fn from(value: RawBlockDeprecated) -> Self {
+        let encoded: EncodedConfirmedBlock = value.block.into();
+
+        Self {
+            slot: value.slot,
+            block: RawBlockWithTransactions {
+                blockhash: encoded.blockhash,
+                previous_blockhash: encoded.previous_blockhash,
+                parent_slot: encoded.parent_slot,
+                block_time: encoded.block_time.and_then(|t| t.try_into().ok()),
+                transactions: encoded
+                    .transactions
+                    .into_iter()
+                    .filter_map(|t| {
+                        crate::utils::decode_encoded_transaction_with_status_meta(t).and_then(
+                            |tx| {
+                                TransactionInfo::from_transaction_with_status_meta_and_slot(
+                                    tx, value.slot,
+                                )
+                            },
+                        )
+                    })
+                    .collect(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RawBlockWithTransactions {
+    pub blockhash: String,
+    pub previous_blockhash: String,
+    pub parent_slot: u64,
+    pub block_time: Option<u64>,
+    pub transactions: Vec<TransactionInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransactionInfo {
+    pub slot: u64,
+    pub signature: Signature,
+    pub account_keys: Vec<Pubkey>,
+    pub message_instructions: Vec<CompiledInstruction>,
+    pub meta_inner_instructions: Vec<InnerInstructions>,
+}
+
+impl TransactionInfo {
+    pub fn from_transaction_with_status_meta_and_slot(
+        tx: TransactionWithStatusMeta,
+        slot: u64,
+    ) -> Option<Self> {
+        let meta = tx.get_status_meta()?;
+        let tx = tx.get_transaction();
+        let atl_keys = tx.message.address_table_lookups();
+        let inner_instructions = meta.inner_instructions.unwrap_or_default();
+        let mut account_keys = tx.message.static_account_keys().to_vec();
+        if atl_keys.is_some() {
+            let LoadedAddresses { writable, readonly } = meta.loaded_addresses;
+            account_keys.extend(writable);
+            account_keys.extend(readonly);
+        }
+
+        Some(Self {
+            slot,
+            signature: tx.signatures[0],
+            account_keys,
+            message_instructions: tx.message.instructions().to_vec(),
+            meta_inner_instructions: inner_instructions,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]

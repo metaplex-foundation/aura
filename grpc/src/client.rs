@@ -1,6 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
+use entities::models::RawBlockWithTransactions;
 use futures::StreamExt;
 use interface::{
     asset_streaming_and_discovery::{
@@ -94,7 +95,7 @@ impl BlockProducer for Client {
         &self,
         slot: u64,
         backup_provider: Option<Arc<impl BlockProducer>>,
-    ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError> {
+    ) -> Result<RawBlockWithTransactions, StorageError> {
         if let Ok(block) = self
             .inner
             .clone()

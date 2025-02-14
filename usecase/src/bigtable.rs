@@ -1,6 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
+use entities::models::{RawBlockWithTransactions, TransactionInfo};
+use futures::{stream, StreamExt, TryStreamExt};
 use interface::{
     error::{StorageError, UsecaseError},
     signature_persistence::BlockProducer,
@@ -8,8 +10,7 @@ use interface::{
 use solana_bigtable_connection::{bigtable::BigTableConnection, CredentialType};
 use solana_storage_bigtable::{LedgerStorage, DEFAULT_APP_PROFILE_ID, DEFAULT_INSTANCE_NAME};
 use solana_transaction_status::{
-    BlockEncodingOptions, ConfirmedBlock, EncodedTransactionWithStatusMeta, TransactionDetails,
-    TransactionWithStatusMeta,
+    ConfirmedBlock, EncodedTransactionWithStatusMeta, TransactionWithStatusMeta,
 };
 use tracing::{error, warn};
 
@@ -40,7 +41,7 @@ impl BigTableClient {
                 credential_type: solana_storage_bigtable::CredentialType::Filepath(Some(
                     big_table_creds.to_string(),
                 )),
-                max_message_size: 1 * 1024 * 1024 * 1024,
+                max_message_size: 1024 * 1024 * 1024, // 1 * 1024 * 1024 * 1024
                 ..solana_storage_bigtable::LedgerStorageConfig::default()
             })
             .await?;
@@ -65,7 +66,7 @@ impl BlockProducer for BigTableClient {
         &self,
         slot: u64,
         _backup_provider: Option<Arc<impl BlockProducer>>,
-    ) -> Result<solana_transaction_status::UiConfirmedBlock, StorageError> {
+    ) -> Result<RawBlockWithTransactions, StorageError> {
         let mut counter = GET_DATA_FROM_BG_RETRIES;
 
         loop {
@@ -85,18 +86,7 @@ impl BlockProducer for BigTableClient {
             };
             block.transactions.retain(is_bubblegum_transaction);
 
-            let encoded: solana_transaction_status::UiConfirmedBlock = block
-                .clone()
-                .encode_with_options(
-                    solana_transaction_status::UiTransactionEncoding::Base58,
-                    BlockEncodingOptions {
-                        transaction_details: TransactionDetails::Full,
-                        show_rewards: false,
-                        max_supported_transaction_version: Some(u8::MAX),
-                    },
-                )
-                .map_err(|e| StorageError::Common(e.to_string()))?;
-            return Ok(encoded);
+            return Ok(confirmed_block_to_raw(slot, block));
         }
     }
 }
@@ -118,57 +108,7 @@ fn key_to_slot(key: &str) -> Option<u64> {
 pub async fn get_blocks(
     connection: &BigTableConnection,
     slots: &[u64],
-) -> Result<Vec<(u64, solana_transaction_status::UiConfirmedBlock)>, StorageError> {
-    let row_keys = slots.iter().map(|slot| slot_to_key(*slot)).collect::<Vec<_>>();
-    let mut client = connection.client();
-    let data = client
-        // 15 sec each batch for 200 slots in batch and 5 batches, all done in 15 sec in parallel
-        .get_multi_row_data("blocks", row_keys.as_slice())
-        // .get_protobuf_or_bincode_cells("blocks", row_keys)
-        .await
-        .map_err(|e| StorageError::Common(e.to_string()))?
-        .iter()
-        .filter_map(|(row_key, block_cell_data)| {
-            let key = key_to_slot(&row_key).expect("key_to_slot failed");
-            let value = &block_cell_data
-                .iter()
-                .find(|(name, _)| name == "proto")
-                .ok_or_else(|| panic!("not proto for key {}", key))
-                .expect("not proto")
-                .1;
-            let data = solana_bigtable_connection::compression::decompress(value)
-                .expect("decompress failed");
-            // now we have a pro data we can decode
-            // use prost_derive::Message;
-            let block: solana_storage_proto::convert::generated::ConfirmedBlock =
-                prost::Message::decode(&data[..]).expect("decode failed");
-            let mut confirmed_block: ConfirmedBlock = block.try_into().expect("try_into failed");
-            confirmed_block.transactions.retain(is_bubblegum_transaction);
-
-            let encoded = confirmed_block
-                .encode_with_options(
-                    solana_transaction_status::UiTransactionEncoding::Base58,
-                    BlockEncodingOptions {
-                        transaction_details: TransactionDetails::Full,
-                        show_rewards: false,
-                        max_supported_transaction_version: Some(u8::MAX),
-                    },
-                )
-                .map_err(|e| StorageError::Common(e.to_string()))
-                .expect("encode_with_options failed");
-
-            Some((key, encoded))
-        })
-        .collect();
-    Ok(data)
-}
-
-use futures::{stream, StreamExt, TryStreamExt}; // for buffer_unordered, try_collect
-
-pub async fn get_blocks_op(
-    connection: &BigTableConnection,
-    slots: &[u64],
-) -> Result<Vec<(u64, solana_transaction_status::UiConfirmedBlock)>, StorageError> {
+) -> Result<Vec<(u64, RawBlockWithTransactions)>, StorageError> {
     // 1) Fetch raw data from Bigtable (same as before)
     let row_keys = slots.iter().map(|slot| slot_to_key(*slot)).collect::<Vec<_>>();
     let mut client = connection.client();
@@ -211,29 +151,12 @@ pub async fn get_blocks_op(
                     StorageError::Common(format!("Protobuf decode failed for slot={slot}: {e}"))
                 })?;
 
-            let mut confirmed_block: ConfirmedBlock = block_proto.try_into().map_err(|e| {
+            let confirmed_block: ConfirmedBlock = block_proto.try_into().map_err(|e| {
                 StorageError::Common(format!("try_into failed for slot={slot}: {e}"))
             })?;
 
-            // Filter out non-bubblegum transactions
-            confirmed_block.transactions.retain(is_bubblegum_transaction);
-
-            // Now encode into UiConfirmedBlock with base58
-            let encoded = confirmed_block
-                .encode_with_options(
-                    solana_transaction_status::UiTransactionEncoding::Base58,
-                    BlockEncodingOptions {
-                        transaction_details: TransactionDetails::Full,
-                        show_rewards: false,
-                        max_supported_transaction_version: Some(u8::MAX),
-                    },
-                )
-                .map_err(|e| {
-                    StorageError::Common(format!("encode_with_options failed for slot={slot}: {e}"))
-                })?;
-
             // If we get here, success
-            Ok::<_, StorageError>((slot, encoded))
+            Ok::<_, StorageError>((slot, confirmed_block_to_raw(slot, confirmed_block)))
         })
         // 3) Run up to `concurrency_limit` tasks in parallel.
         .buffer_unordered(concurrency_limit);
@@ -244,32 +167,23 @@ pub async fn get_blocks_op(
     Ok(blocks)
 }
 
-impl BigTableClient {
-    pub async fn get_blocks(
-        &self,
-        slots: &[u64],
-    ) -> Result<Vec<(u64, solana_transaction_status::UiConfirmedBlock)>, StorageError> {
-        let mut counter = GET_DATA_FROM_BG_RETRIES;
-
-        loop {
-            let blocks_iter = match self
-                .big_table_client
-                .get_confirmed_blocks_with_data(slots)
-                .await
-            {
-                Ok(blocks_iter) => blocks_iter, // `blocks_iter` implements Iterator<Item = (u64, ConfirmedBlock)>
-                Err(err) => {
-                    warn!("Error getting blocks: {}, retrying", err);
-                    counter -= 1;
-                    if counter == 0 {
-                        return Err(StorageError::Common(format!("Error getting block: {}", err)));
-                    }
-                    tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_GET_DATA_FROM_BG))
-                        .await;
-                    continue;
-                },
-            };
-        }
+fn confirmed_block_to_raw(
+    slot: u64,
+    mut confirmed_block: ConfirmedBlock,
+) -> RawBlockWithTransactions {
+    // Filter out non-bubblegum transactions
+    confirmed_block.transactions.retain(is_bubblegum_transaction);
+    let transactions = confirmed_block
+        .transactions
+        .into_iter()
+        .filter_map(|t| TransactionInfo::from_transaction_with_status_meta_and_slot(t, slot))
+        .collect();
+    RawBlockWithTransactions {
+        blockhash: confirmed_block.blockhash,
+        parent_slot: confirmed_block.parent_slot,
+        previous_blockhash: confirmed_block.previous_blockhash,
+        transactions,
+        block_time: confirmed_block.block_time.and_then(|t| t.try_into().ok()),
     }
 }
 
@@ -334,4 +248,8 @@ pub fn is_bubblegum_transaction_encoded(tx: &EncodedTransactionWithStatusMeta) -
         }
     }
     false
+}
+
+pub fn is_bubblegum_transaction_from_info(tx: &TransactionInfo) -> bool {
+    tx.account_keys.iter().any(|p| *p == mpl_bubblegum::programs::MPL_BUBBLEGUM_ID)
 }

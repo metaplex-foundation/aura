@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use entities::models::{AssetCompleteDetailsGrpc, Updated};
+use entities::models::{AssetCompleteDetailsGrpc, RawBlockWithTransactions, Updated};
 use futures::stream;
 use interface::asset_streaming_and_discovery::{
     AsyncError, MockAssetDetailsConsumer, MockRawBlocksConsumer,
@@ -12,7 +12,6 @@ use rocks_db::{
     generated::asset_generated::asset as fb, migrator::MigrationState, SlotStorage, Storage,
 };
 use solana_sdk::pubkey::Pubkey;
-use solana_transaction_status::UiConfirmedBlock;
 use tempfile::TempDir;
 use tokio::{sync::Mutex, task::JoinSet};
 
@@ -96,15 +95,12 @@ async fn test_process_raw_blocks_stream() {
     let blockhash = "blockhash";
     let block = entities::models::RawBlock {
         slot,
-        block: UiConfirmedBlock {
+        block: RawBlockWithTransactions {
             previous_blockhash: "".to_string(),
             blockhash: blockhash.to_string(),
             parent_slot: 0,
-            transactions: None,
-            signatures: None,
-            rewards: None,
+            transactions: Default::default(),
             block_time: None,
-            block_height: None,
         },
     };
     let mut mock = MockRawBlocksConsumer::new();
