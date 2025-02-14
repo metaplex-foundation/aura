@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use clap::Parser;
 use entities::{
@@ -80,7 +80,36 @@ fn convert_asset_to_complete_details(asset: Asset) -> AssetCompleteDetails {
         created_at: 0,
         edition_address: None,
     });
+    // Populate onchain_data.
+    let mut onchain_data = None;
+    if let Some(content) = &asset.content {
+        let metadata = &content.metadata;
+        let mut onchain_data_map = HashMap::new();
 
+        if let Some(name_value) = metadata.get_item("name") {
+            if let Some(name) = name_value.as_str() {
+                onchain_data_map.insert("name".to_string(), name.to_string());
+            }
+        }
+        if let Some(symbol_value) = metadata.get_item("symbol") {
+            if let Some(symbol) = symbol_value.as_str() {
+                onchain_data_map.insert("symbol".to_string(), symbol.to_string());
+            }
+        }
+        if let Some(token_standard_value) = metadata.get_item("token_standard") {
+            if let Some(token_standard) = token_standard_value.as_str() {
+                onchain_data_map.insert("token_standard".to_string(), token_standard.to_string());
+            }
+        }
+
+        if !onchain_data_map.is_empty() {
+            onchain_data = Some(Updated {
+                value: serde_json::to_string(&onchain_data_map).unwrap_or_default(),
+                update_version: None,
+                slot_updated: 0,
+            });
+        }
+    }
     // Convert dynamic details
     let dynamic_details = Some(AssetDynamicDetails {
         pubkey,
@@ -103,7 +132,7 @@ fn convert_asset_to_complete_details(asset: Asset) -> AssetCompleteDetails {
         seq: None,
         is_burnt: Updated { value: asset.burnt, update_version: None, slot_updated: 0 },
         was_decompressed: None,
-        onchain_data: None,
+        onchain_data,
         creators: Updated {
             value: asset
                 .creators
@@ -194,7 +223,7 @@ fn convert_asset_to_complete_details(asset: Asset) -> AssetCompleteDetails {
             .as_ref()
             .map(|p| Updated { value: p.to_string(), update_version: None, slot_updated: 0 }),
         mint_extensions: asset.mint_extensions.as_ref().map(|m| Updated {
-            value: m.to_string(),
+            value: serde_json::to_string(m).unwrap_or_default(), // Use to_string and handle errors
             update_version: None,
             slot_updated: 0,
         }),
@@ -449,5 +478,43 @@ mod tests {
             "DCufBcekqKYyxM5ZGu77zWGtqCv7Vb9wFzhRvsgXDSPy"
         );
         assert_eq!(collection.is_collection_verified.value, true);
+    }
+
+    #[test]
+    fn test_convert_asset_with_token_standard() {
+        let asset_json = json!({
+            "interface": "V1_NFT",
+            "id": "GaNdwU8gJu2z9W2n4v3d7fq2xsiKv2MaVHAUaK4t6V1P",
+            "content": {
+                "$schema": "https://schema.metaplex.com/nft1.0.json",
+                "json_uri": "https://metadata.tinys.pl/v2/collection?id=DEEZyno8D9RCCghEWkTNarZrCW7HvvWE9z64tiqvQKpH&amount=100000000",
+                "files": [{"uri": "https://metadata.tinys.pl/tx?id=41JP4i5hwPm3c8k39EH9jS4S1hunPDoP8wueAVFMTx8k9XD4TJYB29DCzLjVLJKqiDim8puGYUEnjWbptudjTznX&contentType=image%2Fwebp", "mime": "image/png"}],
+                "metadata": {"attributes": [{"value": "1", "trait_type": "Amount"}, {"value": "Deez Nuts", "trait_type": "Token name"}, {"value": "DEEZyno8D9RCCghEWkTNarZrCW7HvvWE9z64tiqvQKpH", "trait_type": "Token mint"}], "description": "Suck on deez compressed nuts 🥜🥜🥜", "name": "1 NUTS", "symbol": "NUTS", "token_standard": "NonFungible"},
+                "links": {"image": "https://metadata.tinys.pl/tx?id=41JP4i5hwPm3c8k39EH9jS4S1hunPDoP8wueAVFMTx8k9XD4TJYB29DCzLjVLJKqiDim8puGYUEnjWbptudjTznX&contentType=image%2Fwebp"}
+            },
+            "authorities": [],
+            "compression": {"eligible": false, "compressed": false, "data_hash": "", "creator_hash": "", "asset_hash": "7nehb5VAmteWgq1QMLU8PBLZfahCUoNc7oBDLHTz5vCG", "tree": "tReeB6PqRnvzcKprWQhSjBzLRzG7zX6AAF2kQdy3Y3f", "seq": 4384180, "leaf_id": 129021},
+            "grouping": [],
+            "royalty": {"royalty_model": "creators", "target": null, "percent": 0.01, "basis_points": 100, "primary_sale_happened": false, "locked": false},
+            "creators": [{"address": "EzGv9FqDepT6winVNWGiLVrTKjPD5KgB2jTiHhmFR4X6", "share": 100, "verified": true}],
+            "ownership": {"frozen": false, "delegated": false, "delegate": null, "ownership_model": "single", "owner": "4itZY1MQq9BRFg1SnhQsvfsvsqJ8cQmjZTHHRaJpGbDV"},
+            "supply": {"print_max_supply": 0, "print_current_supply": 0, "edition_nonce": null},
+            "mutable": true,
+            "burnt": true
+        });
+
+        let asset: Asset = serde_json::from_value(asset_json).unwrap();
+        let result = convert_asset_to_complete_details(asset);
+
+        assert_eq!(result.pubkey.to_string(), "GaNdwU8gJu2z9W2n4v3d7fq2xsiKv2MaVHAUaK4t6V1P");
+
+        let dynamic_details = result.dynamic_details.unwrap();
+        let onchain_data = dynamic_details.onchain_data.unwrap();
+        let onchain_data_value: HashMap<String, String> =
+            serde_json::from_str(&onchain_data.value).unwrap();
+
+        assert_eq!(onchain_data_value.get("name"), Some(&"1 NUTS".to_string()));
+        assert_eq!(onchain_data_value.get("symbol"), Some(&"NUTS".to_string()));
+        assert_eq!(onchain_data_value.get("token_standard"), Some(&"NonFungible".to_string()));
     }
 }
