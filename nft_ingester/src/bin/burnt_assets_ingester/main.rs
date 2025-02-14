@@ -43,36 +43,37 @@ fn convert_asset_to_complete_details(asset: Asset) -> AssetCompleteDetails {
     let pubkey = Pubkey::try_from(asset.id.as_str()).expect("Invalid pubkey in asset id");
 
     // Convert ownership data
-    let owner = AssetOwner {
-        pubkey,
-        owner: Updated {
-            value: if asset.ownership.owner.is_empty() {
-                None
-            } else {
-                Some(Pubkey::try_from(asset.ownership.owner.as_str()).expect(
-                    format!("Invalid owner pubkey: {}", asset.ownership.owner).as_str(),
-                ))
+    let owner =
+        AssetOwner {
+            pubkey,
+            owner: Updated {
+                value: if asset.ownership.owner.is_empty() {
+                    None
+                } else {
+                    Some(Pubkey::try_from(asset.ownership.owner.as_str()).expect(
+                        format!("Invalid owner pubkey: {}", asset.ownership.owner).as_str(),
+                    ))
+                },
+                update_version: None,
+                slot_updated: 0,
             },
-            update_version: None,
-            slot_updated: 0,
-        },
-        delegate: Updated {
-            value: asset
-                .ownership
-                .delegate
-                .as_ref()
-                .map(|d| Pubkey::try_from(d.as_str()).expect("Invalid delegate pubkey")),
-            update_version: None,
-            slot_updated: 0,
-        },
-        owner_type: Updated {
-            value: OwnerType::from(asset.ownership.ownership_model),
-            update_version: None,
-            slot_updated: 0,
-        },
-        owner_delegate_seq: Updated { value: None, update_version: None, slot_updated: 0 },
-        is_current_owner: Updated { value: true, update_version: None, slot_updated: 0 },
-    };
+            delegate: Updated {
+                value: asset
+                    .ownership
+                    .delegate
+                    .as_ref()
+                    .map(|d| Pubkey::try_from(d.as_str()).expect("Invalid delegate pubkey")),
+                update_version: None,
+                slot_updated: 0,
+            },
+            owner_type: Updated {
+                value: OwnerType::from(asset.ownership.ownership_model),
+                update_version: None,
+                slot_updated: 0,
+            },
+            owner_delegate_seq: Updated { value: None, update_version: None, slot_updated: 0 },
+            is_current_owner: Updated { value: true, update_version: None, slot_updated: 0 },
+        };
 
     // Convert static details
     let static_details = Some(AssetStaticDetails {
@@ -548,10 +549,7 @@ mod tests {
         let asset: Asset = serde_json::from_value(asset_json).unwrap();
         let result = convert_asset_to_complete_details(asset);
 
-        assert_eq!(
-            result.pubkey.to_string(),
-            "G5JZtppkjvFwrE3uXSaje3b8q1vhNpx3oUyb3LARSnBq"
-        );
+        assert_eq!(result.pubkey.to_string(), "G5JZtppkjvFwrE3uXSaje3b8q1vhNpx3oUyb3LARSnBq");
 
         let owner = result.owner.unwrap();
         assert!(owner.owner.value.is_none()); // Check that owner is None.
