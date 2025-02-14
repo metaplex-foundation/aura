@@ -1,91 +1,52 @@
-# AURA 
+# AURA
 
-The Metaplex Aura Network is a decentralized indexing and data availability network that extends Solana and the Solana Virtual Machine (SVM). 
+The Metaplex Aura Network is a decentralized indexing and data availability network that extends Solana and the Solana Virtual Machine (SVM).
 
 The Metaplex Aura Network has three main components:
-- Data Availability for Digital Assets: decentralized data storage and retrieval, ensuring that digital assets and media content are always accessible without relying on a single point of failure
-- Multi-Program Consistent Indexing across any SVM: enhanced Digital Asset Standard (DAS) API for performant indexing across any protocols on Solana and the broader SVM. 
-- Elastic State Management: ability to transition assets between SVM account space and different levels of state compression on demand, increasing flexibility and optimizing asset performance and scalability.
+
+*   **Data Availability for Digital Assets:** Decentralized data storage and retrieval, ensuring that digital assets and media content are always accessible without relying on a single point of failure.
+*   **Multi-Program Consistent Indexing across any SVM:** Enhanced Digital Asset Standard (DAS) API for performant indexing across any protocols on Solana and the broader SVM.
+*   **Elastic State Management:** Ability to transition assets between SVM account space and different levels of state compression on demand, increasing flexibility and optimizing asset performance and scalability.
 
 For more background information, please see [our blog](http://www.metaplex.com/posts/aura-network).
 
 ## Aura Infrastructure
-This repo houses the Multi-Program Consistent Indexer, API and Types of the Metaplex Aura. Together these 
-components are responsible for the aggregation of Solana Validator Data into an extremely fast and well typed DAS API. This 
-api provides a nice interface on top of the Metaplex programs. It abstracts the byte layout on chain, allows for 
-super-fast querying and searching, as well as serves the merkle proofs needed to operate over compressed nfts. 
 
-See the [application main flow](doc/flow.md).
+This repo houses the Multi-Program Consistent Indexer, API, and Types of the Metaplex Aura.  These components aggregate Solana Validator Data into an extremely fast and well-typed DAS API. This API provides a user-friendly interface on top of Metaplex programs, abstracting on-chain byte layouts, enabling super-fast querying and searching, and serving the Merkle proofs necessary for compressed NFTs.
 
-## Aura index
-Aura index consists of 2 major components:
-- primary Digital Asset data stored in a RocksDB - a performant key-value storage holding complete info
-- lookup index stored in a relational DB - Postgres. It's used to fetch the keys of the assets that match a complex search criteria.
+**For a detailed overview of the system architecture, components, and databases, please refer to the [Architecture Document](doc/architecture.md).**
 
-In order to keep the lookup index in sync with the primary storage a [Synchronizer](./nft_ingester/src/index_syncronizer.rs) is being run in the background.
+## Key Features
 
-Aura primary storage holds the following components:
-- raw data used to recreate a full index of compressed assets
-- digital assets data
-- change logs for the compressed assets
-- downloaded and indexed metadata for assets
-- indexes used for consistency checks
+*   **Fast and Efficient Indexing:**  Optimized for both write-heavy ingestion and read-heavy API access.
+*   **Data Consistency:**  Robust mechanisms to ensure data integrity, including validation and gap filling.
+*   **Scalability:** Designed to handle large data volumes and high transaction throughput.
+*   **Extensibility:** Modular design allows for future additions and modifications.
+*   **Compressed NFT Support:**  Provides Merkle proofs required for operating with compressed NFTs.
+*   **Clean Architecture:** Based on Clean Architecture principles for maintainability and testability.
 
-## Aura architecture
+## Getting Started
 
-The project is based on the [Clean Architecture Principles](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
+### Contributing
 
-The project's structure is a reflection of the following clean architecture principles:
-
-- Framework Independence: The architecture is built to be independent of any specific framework or library.
-- Testability: Business rules can be independently tested without UI, Database, or external interfaces.
-- UI Independence: Changes in the UI do not impact the core application logic.
-- Database Independence: Business logic is not tightly coupled with the database technology.
-- External Agency Independence: Business rules are unaware of anything outside their scope.
-
-### Project structure
-
-- entities. Contains business models that represent the domain and are used across various layers of the application.
-- interface. Stores traits that define public-facing interfaces, segregating the layers and ensuring loose coupling.
-- usecase. The domain-centric heart of the application, containing use cases that encapsulate business rules.
-- grpc. Houses gRPC service definitions and their implementation.
-- nft_injester. meant for API implementation; it currently includes indexing, synchronization and additional logic that should be refactored in line with clean architecture.
-- data layer spread across
-  - rocks-db. Primary data source for the application. It contains the implementation of the database client and should be used for all persistent data storage, retrieval, and data manipulations.
-  - postgre-client. Secondary data source used exclusively for search indexes. The implementation here should focus on indexing and search-related operations to optimize query performance. Potentially this may be replaced with any relational DB.
-
-### Components
-1. Ingester -> A background processing system that gets messages from a [Messenger](https://github.com/metaplex-foundation/digital-asset-validator-plugin), and uses [BlockBuster](https://github.com/metaplex-foundation/blockbuster) Parsers to store the canonical representation of Metaplex types in a storage system for all the supported programs.
-2. Ingester -> Api -> A JSON Rpc api that serves Metaplex objects. This api allows filtering, pagination and searching over Metaplex data. This data includes serving the merkle proofs for the compressed NFTs system. It is intended to be run right alongside the Solana RPC and works in much the same way. Just like the solana RPC takes data from the validator and serves it in a new format, so this api takes data off the validator and serves it.
-
-The API specification is compatible with the standard DAS specification here https://github.com/metaplex-foundation/api-specifications
-
-### Developing and running
-
-#### Contributing
 Please read our [contribution guidelines](CONTRIBUTING.md) for details on our GitFlow process and how to submit pull requests to us.
 
+### Building
 
-To build all docker images locally, just run:
+To build all Docker images locally, run:
+
 ```sh
 make ci
 ```
 
-This will produce several images corresponding to the binary names, e.g. ingester, api, and others. This script
-will tag them as `ghcr.io/metaplex-foundation/aura-<binary name>:latest` so you can run the containers independently.
+This will produce several images corresponding to the binary names (e.g., `ingester`, `api`, etc.).  The images will be tagged as `ghcr.io/metaplex-foundation/aura-<binary name>:latest`, allowing you to run the containers independently.
 
-#### Run Integration Tests
+### Running Integration Tests
 
 ```bash
 cargo t -F integration_tests
 ```
 
-#### Note on profiling
+### Profiling (Advanced)
 
-In the previous versions, profiling binaries were available to run using the main `docker-compose.yaml`. However,
-it was since then removed, and to run profiling of any of the binaries, one has to replace `dockerfile` parameter
-in any of the services listed in `docker-compose.yaml` to `docker/profiling/app.Dockerfile`. This will build the
-required binary using the `profiling` feature and thus allow for profiling of the binary.
-
-
-Full documentation and contribution guidelines coming soon…
+To profile any of the binaries, replace the `dockerfile` parameter in the relevant service within `docker-compose.yaml` with `docker/profiling/app.Dockerfile`. This builds the binary with the `profiling` feature enabled.

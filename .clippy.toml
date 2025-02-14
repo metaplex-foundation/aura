@@ -1,0 +1,6 @@
+# .clippy.toml - Minimal configuration, mirroring CI settings
+
+# Allow deprecated code (as per CI workflow)
+deprecated = "allow"
+
+# All other lints are at their default levels. 
