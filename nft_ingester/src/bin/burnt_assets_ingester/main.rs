@@ -46,9 +46,13 @@ fn convert_asset_to_complete_details(asset: Asset) -> AssetCompleteDetails {
     let owner = AssetOwner {
         pubkey,
         owner: Updated {
-            value: Some(
-                Pubkey::try_from(asset.ownership.owner.as_str()).expect("Invalid owner pubkey"),
-            ),
+            value: if asset.ownership.owner.is_empty() {
+                None
+            } else {
+                Some(Pubkey::try_from(asset.ownership.owner.as_str()).expect(
+                    format!("Invalid owner pubkey: {}", asset.ownership.owner).as_str(),
+                ))
+            },
             update_version: None,
             slot_updated: 0,
         },
@@ -516,5 +520,40 @@ mod tests {
         assert_eq!(onchain_data_value.get("name"), Some(&"1 NUTS".to_string()));
         assert_eq!(onchain_data_value.get("symbol"), Some(&"NUTS".to_string()));
         assert_eq!(onchain_data_value.get("token_standard"), Some(&"NonFungible".to_string()));
+    }
+
+    #[test]
+    fn test_convert_asset_with_empty_owner() {
+        let asset_json = json!({
+            "interface": "V1_NFT",
+            "id": "G5JZtppkjvFwrE3uXSaje3b8q1vhNpx3oUyb3LARSnBq",
+            "content": {
+                "$schema": "https://schema.metaplex.com/nft1.0.json",
+                "json_uri": "https://gateway.irys.xyz/8e-8Lbv79VcQQ8J2sPZk-CYBph1uHq3YU30nulMAFIE/1931.json",
+                "files": [],
+                "metadata": {"name": "KONG #1931", "symbol": "KONG", "token_standard": "NonFungible"},
+                "links": {}
+            },
+            "authorities": [],
+            "compression": {"eligible": false, "compressed": false, "data_hash": "", "creator_hash": "", "asset_hash": "8DXMDruEvYfKAcBr4yryFcSkBXUGx9WeSB2rnVP7YRKL", "tree": "A3oH612gvqP9RFmQFWX57bu18GD3ABTvBMDkQHZ4e676", "seq": 1295941, "leaf_id": 476395},
+            "grouping": [],
+            "royalty": {"royalty_model": "creators", "target": null, "percent": 0.05, "basis_points": 500, "primary_sale_happened": true, "locked": false},
+            "creators": [{"address": "74CpEk34i8xfZBepst83T6ymovX1QsisRuAP6VJW1vYG", "share": 100, "verified": false}, {"address": "EHDiop237Fsm6kgUGvRje6YbWFfPJzHo5Dukes3Kmqp1", "share": 0, "verified": true}],
+            "ownership": {"frozen": false, "delegated": false, "delegate": null, "ownership_model": "single", "owner": ""},
+            "supply": {"print_max_supply": 0, "print_current_supply": 0, "edition_nonce": null},
+            "mutable": true,
+            "burnt": true
+        });
+
+        let asset: Asset = serde_json::from_value(asset_json).unwrap();
+        let result = convert_asset_to_complete_details(asset);
+
+        assert_eq!(
+            result.pubkey.to_string(),
+            "G5JZtppkjvFwrE3uXSaje3b8q1vhNpx3oUyb3LARSnBq"
+        );
+
+        let owner = result.owner.unwrap();
+        assert!(owner.owner.value.is_none()); // Check that owner is None.
     }
 }
