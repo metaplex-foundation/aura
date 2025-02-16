@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use borsh::BorshSerialize;
@@ -116,7 +117,7 @@ async fn test_account_updates() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None, clear_db: true, wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
     let mint = Pubkey::try_from("843gdpsTE4DoJz3ZoBsEjAqT8UgAcyF5YojygGgGZE1f").unwrap();

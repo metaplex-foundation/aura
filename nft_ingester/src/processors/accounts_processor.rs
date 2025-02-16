@@ -71,6 +71,7 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
     rpc_client: Arc<RpcClient>,
     join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     processor_name: Option<String>,
+    wellknown_fungible_accounts: HashMap<String, String>,
 ) {
     mutexed_tasks.lock().await.spawn(async move {
         let account_processor = loop {
@@ -84,6 +85,7 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
             rpc_client.clone(),
             join_set.clone(),
             processor_name.clone(),
+            wellknown_fungible_accounts.clone()
         )
         .await {
                 Ok(processor) => break processor,
@@ -111,6 +113,7 @@ pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
     metrics: Arc<IngesterMetricsConfig>,
     message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
     processor_name: String,
+    wellknown_fungible_accounts: HashMap<String, String>,
 }
 
 // AccountsProcessor responsible for processing all account updates received
@@ -130,6 +133,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         rpc_client: Arc<RpcClient>,
         join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
         processor_name: Option<String>,
+        wellknown_fungible_accounts: HashMap<String, String>,
     ) -> Result<Self, IngesterError> {
         let mplx_accounts_processor = MplxAccountsProcessor::new(metrics.clone());
         let token_accounts_processor = TokenAccountsProcessor::new(metrics.clone());
@@ -151,6 +155,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             metrics,
             message_process_metrics,
             processor_name: processor_name.unwrap_or_else(|| Uuid::new_v4().to_string()),
+            wellknown_fungible_accounts,
         })
     }
 
@@ -215,10 +220,14 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                         batch_storage,
                         unprocessed_account.key,
                         metadata_info,
+                        &self.wellknown_fungible_accounts,
                     )
                 },
                 UnprocessedAccount::Token(token_account) => {
-                    if POPULAR_FUNGIBLE_TOKENS.contains(&token_account.mint) {
+                    if self
+                        .wellknown_fungible_accounts
+                        .contains_key(&token_account.mint.to_string())
+                    {
                         self.token_accounts_processor.transform_and_save_fungible_token_account(
                             batch_storage,
                             unprocessed_account.key,

@@ -5,7 +5,7 @@ use interface::{error::UsecaseError, price_fetcher::TokenPriceFetcher};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use moka::future::Cache;
 
-use crate::error::IngesterError;
+use crate::{consts::wellknown_fungible_tokens_map, error::IngesterError};
 
 pub const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 
@@ -49,9 +49,12 @@ impl RaydiumTokenPriceFetcher {
             mint_list: Vec<MintListItem>,
         }
         // returns well-known token infos
+        for (address, symbol) in wellknown_fungible_tokens_map() {
+            self.symbol_cache.insert(address.clone(), symbol.clone()).await;
+        }
+
         let req = "mint/list";
         let response = self.get(req).await.map_err(|e| UsecaseError::Reqwest(e.to_string()))?;
-
         let tokens_data = response
             .get("data")
             .and_then(|mint_list| {
@@ -65,12 +68,25 @@ impl RaydiumTokenPriceFetcher {
             })?;
 
         for MintListItem { address, symbol } in tokens_data.mint_list {
-            self.symbol_cache.insert(address.clone(), symbol.clone()).await;
+            if !self.symbol_cache.contains_key(&address) {
+                self.symbol_cache.insert(address.clone(), symbol.clone()).await;
+            }
         }
 
         self.symbol_cache.run_pending_tasks().await;
 
         Ok(())
+    }
+
+    pub async fn get_all_token_symbols(&self) -> Result<HashMap<String, String>, UsecaseError> {
+        let mut hashmap: HashMap<String, String> = HashMap::new();
+        let mut iter = self.symbol_cache.iter();
+
+        while let Some((key, value)) = iter.next() {
+            hashmap.insert((*key).clone(), value.clone());
+        }
+
+        Ok(hashmap)
     }
 
     async fn get(&self, endpoint: &str) -> Result<serde_json::Value, IngesterError> {
@@ -112,7 +128,7 @@ impl TokenPriceFetcher for RaydiumTokenPriceFetcher {
             symbol: String,
         }
         let token_ids_str: Vec<String> = token_ids.iter().map(ToString::to_string).collect();
-        let mut result = HashMap::with_capacity(token_ids.len());
+        let mut result = HashMap::with_capacity(token_ids.len() * 2);
         let mut missing_token_ids = Vec::new();
 
         for token_id in &token_ids_str {

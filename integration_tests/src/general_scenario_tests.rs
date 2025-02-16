@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use entities::{
@@ -22,7 +23,7 @@ async fn test_asset_parsing() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None, clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -50,7 +51,7 @@ async fn test_get_different_assets_by_owner() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 

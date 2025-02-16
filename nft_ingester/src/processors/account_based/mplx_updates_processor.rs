@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use blockbuster::token_metadata::types::TokenStandard;
 use entities::{
@@ -51,8 +51,10 @@ impl MplxAccountsProcessor {
         storage: &mut BatchSaveStorage,
         key: Pubkey,
         metadata_info: &MetadataInfo,
+        wellknown_fungible_accounts: &HashMap<String, String>,
     ) -> Result<(), StorageError> {
-        let metadata_models = self.create_rocks_metadata_models(key, metadata_info);
+        let metadata_models =
+            self.create_rocks_metadata_models(key, metadata_info, &wellknown_fungible_accounts);
 
         let begin_processing = Instant::now();
         let asset = AssetCompleteDetails::from(&metadata_models);
@@ -86,6 +88,7 @@ impl MplxAccountsProcessor {
         &self,
         key: Pubkey,
         metadata_info: &MetadataInfo,
+        wellknown_fungible_accounts: &HashMap<String, String>,
     ) -> MetadataModels {
         let mut models = MetadataModels::default();
 
@@ -96,6 +99,7 @@ impl MplxAccountsProcessor {
         let data = metadata.clone();
         let authority = metadata.update_authority;
         let uri = data.uri.trim().replace('\0', "");
+
         let class = match metadata.token_standard {
             Some(TokenStandard::NonFungible) => SpecificationAssetClass::Nft,
             Some(TokenStandard::FungibleAsset) => SpecificationAssetClass::FungibleAsset,
@@ -107,7 +111,13 @@ impl MplxAccountsProcessor {
             Some(TokenStandard::ProgrammableNonFungibleEdition) => {
                 SpecificationAssetClass::ProgrammableNft
             },
-            _ => SpecificationAssetClass::Unknown,
+            _ => {
+                if wellknown_fungible_accounts.contains_key(&mint.to_string()) {
+                    SpecificationAssetClass::FungibleToken
+                } else {
+                    SpecificationAssetClass::Unknown
+                }
+            },
         };
 
         models.asset_static = Some(AssetStaticDetails {

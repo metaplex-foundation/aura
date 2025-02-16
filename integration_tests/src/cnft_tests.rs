@@ -1,5 +1,5 @@
 use std::{str::FromStr, sync::Arc};
-
+use std::collections::HashMap;
 use entities::api_req_params::{GetAsset, Options, SearchAssets};
 use function_name::named;
 use itertools::Itertools;
@@ -44,7 +44,7 @@ async fn test_asset_decompress() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None, clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
     let asset_id = "Az9QTysJj1LW1F7zkYF21HgBj3FRpq3zpxTFdPnAJYm8";
@@ -79,7 +79,7 @@ async fn test_cnft_scenario_mint_update_metadata() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -109,7 +109,7 @@ async fn test_cnft_scenario_mint_update_metadata_remove_creators() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -141,7 +141,7 @@ async fn test_cnft_owners_table() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None, clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -189,7 +189,7 @@ async fn test_mint_no_json_uri() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None, clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
     let seeds = vec![seed_txn(
@@ -212,7 +212,7 @@ async fn test_mint_delegate_transfer() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -241,7 +241,7 @@ async fn test_mint_redeem_cancel_redeem() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -270,7 +270,7 @@ async fn test_mint_redeem() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None, clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -304,7 +304,7 @@ async fn test_mint_transfer_burn() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -333,7 +333,7 @@ async fn test_mint_transfer_noop() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None, clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -362,7 +362,7 @@ async fn test_mint_transfer_transfer() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -391,7 +391,7 @@ async fn test_mint_verify_creator() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -419,7 +419,7 @@ async fn test_mint_verify_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -447,7 +447,7 @@ async fn test_mint_transfer_mpl_programs() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -476,7 +476,7 @@ async fn test_mint_to_collection_unverify_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 
@@ -509,7 +509,7 @@ async fn test_mint_verify_collection_unverify_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new()  },
     )
     .await;
 

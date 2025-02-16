@@ -227,6 +227,7 @@ mod tests {
                 &mut batch_storage,
                 first_mint,
                 &first_metadata_to_save,
+                &HashMap::new(),
             )
             .unwrap();
         mplx_accs_parser
@@ -234,6 +235,7 @@ mod tests {
                 &mut batch_storage,
                 second_mint,
                 &second_metadata_to_save,
+                &HashMap::new(),
             )
             .unwrap();
         mplx_accs_parser

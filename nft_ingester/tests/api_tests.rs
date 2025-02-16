@@ -884,7 +884,12 @@ mod tests {
             .unwrap();
 
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                mint_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -1055,7 +1060,12 @@ mod tests {
         }
         for (key, metadata) in metadata_info.iter() {
             mplx_updates_processor
-                .transform_and_store_metadata_account(&mut batch_storage, *key, metadata)
+                .transform_and_store_metadata_account(
+                    &mut batch_storage,
+                    *key,
+                    metadata,
+                    &HashMap::new(),
+                )
                 .unwrap();
         }
         batch_storage.flush().unwrap();
@@ -1175,7 +1185,12 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
         );
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, metadata_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                metadata_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         // save metadata_mint map
         batch_storage.flush().unwrap();
@@ -3831,7 +3846,12 @@ mod tests {
             .unwrap();
 
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                mint_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -3856,7 +3876,12 @@ mod tests {
         };
 
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                mint_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         batch_storage.flush().unwrap();
         let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
@@ -3875,7 +3900,12 @@ mod tests {
         };
 
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                mint_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         batch_storage.flush().unwrap();
         let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();

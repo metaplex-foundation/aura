@@ -56,7 +56,6 @@ pub async fn start_api(
     rocks_db: Arc<Storage>,
     rx: Receiver<()>,
     metrics: Arc<ApiMetricsConfig>,
-    red_metrics: Option<Arc<RequestErrorDurationMetrics>>,
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
     tree_gaps_checker: Option<Arc<Storage>>,
@@ -73,6 +72,7 @@ pub async fn start_api(
     account_balance_getter: Arc<AccountBalanceGetterImpl>,
     storage_service_base_url: Option<String>,
     native_mint_pubkey: String,
+    token_price_fetcher: Arc<RaydiumTokenPriceFetcher>,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -111,20 +111,7 @@ pub async fn start_api(
     }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let token_price_fetcher = Arc::new(RaydiumTokenPriceFetcher::new(
-        crate::consts::RAYDIUM_API_HOST.to_string(),
-        crate::raydium_price_fetcher::CACHE_TTL,
-        red_metrics,
-    ));
-    let tpf = token_price_fetcher.clone();
-    tasks.lock().await.spawn(async move {
-        if let Err(e) = tpf.warmup().await {
-            warn!(error = %e, "Failed to warm up Raydium token price fetcher, cache is empty: {:?}", e);
-        }
-        let (symbol_cache_size, _) = tpf.get_cache_sizes();
-        info!(%symbol_cache_size, "Warmed up Raydium token price fetcher with {} symbols", symbol_cache_size);
-        Ok(())
-    });
+
     let api = DasApi::new(
         pg_client.clone(),
         rocks_db,

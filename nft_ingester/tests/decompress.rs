@@ -25,6 +25,7 @@ mod tests {
         backfiller::DirectBlockParser,
         buffer::Buffer,
         config::JsonMiddlewareConfig,
+        consts::wellknown_fungible_tokens_map,
         json_worker::JsonWorker,
         processors::{
             account_based::{
@@ -206,7 +207,12 @@ mod tests {
         };
 
         mplx_accs_parser
-            .transform_and_store_metadata_account(storage, *mint, &decompressed_token_data)
+            .transform_and_store_metadata_account(
+                storage,
+                *mint,
+                &decompressed_token_data,
+                &wellknown_fungible_tokens_map(),
+            )
             .unwrap();
     }
 

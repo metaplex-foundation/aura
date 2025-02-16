@@ -1,6 +1,6 @@
 ---
 source: integration_tests/src/regular_nft_tests.rs
-assertion_line: 266
+assertion_line: 277
 expression: response
 snapshot_kind: text
 ---
@@ -10,7 +10,7 @@ snapshot_kind: text
   "page": 1,
   "items": [
     {
-      "interface": "Custom",
+      "interface": "FungibleToken",
       "id": "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
       "content": {
         "$schema": "https://schema.metaplex.com/nft1.0.json",
@@ -57,11 +57,7 @@ snapshot_kind: text
         "ownership_model": "token",
         "owner": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM"
       },
-      "supply": {
-        "print_max_supply": 0,
-        "print_current_supply": 0,
-        "edition_nonce": 252
-      },
+      "supply": null,
       "mutable": true,
       "burnt": false,
       "lamports": 5616720,

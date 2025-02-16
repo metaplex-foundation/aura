@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::ptr::with_exposed_provenance;
 use std::sync::Arc;
 
 use entities::{
@@ -13,7 +15,9 @@ use tokio::{
     sync::{broadcast, Mutex},
     task::JoinSet,
 };
-
+use tracing::{info, warn};
+use nft_ingester::consts::RAYDIUM_API_HOST;
+use nft_ingester::raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL};
 use super::common::*;
 
 #[tokio::test]
@@ -23,7 +27,7 @@ async fn test_reg_get_asset() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None,  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -51,7 +55,7 @@ async fn test_reg_get_asset_batch() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None,  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -108,7 +112,7 @@ async fn test_reg_get_asset_by_group() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None,  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -147,7 +151,7 @@ async fn test_reg_search_assets() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions { network: None,  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -180,7 +184,7 @@ async fn test_regular_nft_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Mainnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -206,9 +210,13 @@ async fn test_regular_nft_collection() {
 #[named]
 async fn test_search_by_owner_with_show_zero_balance() {
     let name = trim_test_name(function_name!());
+    let mut wellknown_fungible_accounts = HashMap::new();
+    wellknown_fungible_accounts.insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
+    wellknown_fungible_accounts.insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
+
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Mainnet),  clear_db: true , wellknown_fungible_accounts },
     )
     .await;
 
@@ -312,18 +320,11 @@ async fn test_search_by_owner_with_show_zero_balance() {
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
-    assert_eq!(res_obj.items.len(), 1);
-    assert_eq!(
-        res_obj.items[0].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
-        "MPLX Fungible token account"
-    );
+    assert_eq!(res_obj.items.len(), 2);
+    assert_eq!(res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", " Hxro (Wormhole) Fungible token account");
+    assert_eq!(res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m", "MPLX Fungible token account");
 
-    // todo replace after fix MTG-1276
-    // assert_eq!(res_obj.items.len(), 2);
-    // assert_eq!(res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", " Hxro (Wormhole) Fungible token account");
-    // assert_eq!(res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m", "MPLX Fungible token account");
-
-    // insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
+    insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
 }
 
 #[tokio::test]
@@ -331,9 +332,16 @@ async fn test_search_by_owner_with_show_zero_balance() {
 #[named]
 async fn test_search_by_owner_with_show_zero_balance_false() {
     let name = trim_test_name(function_name!());
+    let mut wellknown_fungible_accounts = HashMap::new();
+    wellknown_fungible_accounts.insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
+    wellknown_fungible_accounts.insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
+
+
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true,
+            wellknown_fungible_accounts
+        },
     )
     .await;
 
@@ -446,9 +454,13 @@ async fn test_search_by_owner_with_show_zero_balance_false() {
 #[named]
 async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processing_sequence() {
     let name = trim_test_name(function_name!());
+    let mut wellknown_fungible_accounts = HashMap::new();
+    wellknown_fungible_accounts.insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
+    wellknown_fungible_accounts.insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
+
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Mainnet),  clear_db: true , wellknown_fungible_accounts },
     )
     .await;
 
@@ -552,18 +564,11 @@ async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processin
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
-    assert_eq!(res_obj.items.len(), 1);
-    assert_eq!(
-        res_obj.items[0].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
-        "MPLX Fungible token account"
-    );
+    assert_eq!(res_obj.items.len(), 2);
+    assert_eq!(res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", " Hxro (Wormhole) Fungible token account");
+    assert_eq!(res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m", "MPLX Fungible token account");
 
-    // todo replace after fix MTG-1276
-    // assert_eq!(res_obj.items.len(), 2);
-    // assert_eq!(res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", " Hxro (Wormhole) Fungible token account");
-    // assert_eq!(res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m", "MPLX Fungible token account");
-
-    // insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
+    insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
 }
 
 #[tokio::test]
@@ -573,7 +578,7 @@ async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_pro
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Mainnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -618,10 +623,10 @@ async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_pro
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
-    // assert_eq!(res_obj.items.len(), 2);
-    // assert_eq!(res_obj.items[0].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", "Degen Ape NFT account");
-    // assert_eq!(res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m", "MPLX Fungible token account");
-    //
+    assert_eq!(res_obj.items.len(), 2);
+    assert_eq!(res_obj.items[0].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", "Degen Ape NFT account");
+    assert_eq!(res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m", "MPLX Fungible token account");
+
     insta::assert_json_snapshot!(format!("{}_token_type_all", name), response);
 
     let request = r#"
@@ -683,7 +688,7 @@ async fn test_search_assets_by_owner_with_pages() {
 
     let setup = TestSetup::new_with_options(
         test_name.clone(),
-        TestSetupOptions { network: Some(Network::EclipseMainnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::EclipseMainnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -803,7 +808,7 @@ async fn get_asset_nft_token_22_with_metadata() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -832,7 +837,7 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::EclipseMainnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::EclipseMainnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -894,7 +899,7 @@ async fn test_requested_fungibles_are_fungibles() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::EclipseMainnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::EclipseMainnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
     )
     .await;
 
@@ -941,3 +946,54 @@ async fn test_requested_fungibles_are_fungibles() {
 
     insta::assert_json_snapshot!(name, response);
 }
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_recognise_popular_fungible_tokens() {
+    let name = trim_test_name(function_name!());
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let token_price_fetcher = RaydiumTokenPriceFetcher::new(
+        RAYDIUM_API_HOST.to_string(),
+        CACHE_TTL,
+        None
+    );
+    token_price_fetcher.warmup().await.unwrap();
+    let wellknown_fungible_accounts = token_price_fetcher.get_all_token_symbols().await.unwrap();
+    assert!(wellknown_fungible_accounts.len() > 0);
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::Mainnet),  clear_db: true , wellknown_fungible_accounts },
+    )
+        .await;
+
+    // Add Asset Hxro (Wormhole)
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // Fungible token USDC
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+         {
+            "ids": [
+                "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+                "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            ]
+        }"#;
+
+    let request = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response.as_array().unwrap().len(), 2);
+    response.as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "FungibleToken");
+        true
+    });
+
+    insta::assert_json_snapshot!(name, response);
+}
+
