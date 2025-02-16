@@ -1884,6 +1884,10 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
                         ) {
                             specification_asset_class = Some(new_class);
                         }
+
+                        if existing_class == fb::SpecificationAssetClass::Unknown {
+                            specification_asset_class = Some(new_class);
+                        }
                     }
                 },
                 None => {
