@@ -43,37 +43,36 @@ fn convert_asset_to_complete_details(asset: Asset) -> AssetCompleteDetails {
     let pubkey = Pubkey::try_from(asset.id.as_str()).expect("Invalid pubkey in asset id");
 
     // Convert ownership data
-    let owner =
-        AssetOwner {
-            pubkey,
-            owner: Updated {
-                value: if asset.ownership.owner.is_empty() {
-                    None
-                } else {
-                    Some(Pubkey::try_from(asset.ownership.owner.as_str()).expect(
-                        format!("Invalid owner pubkey: {}", asset.ownership.owner).as_str(),
-                    ))
-                },
-                update_version: None,
-                slot_updated: 0,
+    let owner = AssetOwner {
+        pubkey,
+        owner: Updated {
+            value: if asset.ownership.owner.is_empty() {
+                None
+            } else {
+                Some(
+                    Pubkey::try_from(asset.ownership.owner.as_str()).expect("Invalid owner pubkey"),
+                )
             },
-            delegate: Updated {
-                value: asset
-                    .ownership
-                    .delegate
-                    .as_ref()
-                    .map(|d| Pubkey::try_from(d.as_str()).expect("Invalid delegate pubkey")),
-                update_version: None,
-                slot_updated: 0,
-            },
-            owner_type: Updated {
-                value: OwnerType::from(asset.ownership.ownership_model),
-                update_version: None,
-                slot_updated: 0,
-            },
-            owner_delegate_seq: Updated { value: None, update_version: None, slot_updated: 0 },
-            is_current_owner: Updated { value: true, update_version: None, slot_updated: 0 },
-        };
+            update_version: None,
+            slot_updated: 0,
+        },
+        delegate: Updated {
+            value: asset
+                .ownership
+                .delegate
+                .as_ref()
+                .map(|d| Pubkey::try_from(d.as_str()).expect("Invalid delegate pubkey")),
+            update_version: None,
+            slot_updated: 0,
+        },
+        owner_type: Updated {
+            value: OwnerType::from(asset.ownership.ownership_model),
+            update_version: None,
+            slot_updated: 0,
+        },
+        owner_delegate_seq: Updated { value: None, update_version: None, slot_updated: 0 },
+        is_current_owner: Updated { value: true, update_version: None, slot_updated: 0 },
+    };
 
     // Convert static details
     let static_details = Some(AssetStaticDetails {
@@ -260,11 +259,18 @@ fn convert_asset_to_complete_details(asset: Asset) -> AssetCompleteDetails {
 
     // Convert authority if present
     let authority = asset.authorities.as_ref().and_then(|auths| {
-        auths.first().map(|auth| AssetAuthority {
-            pubkey,
-            authority: Pubkey::try_from(auth.address.as_str()).expect("Invalid authority pubkey"),
-            slot_updated: 0,
-            write_version: None,
+        auths.first().and_then(|auth| {
+            if auth.address.is_empty() {
+                None // Return None if the address is empty
+            } else {
+                Some(AssetAuthority {
+                    pubkey,
+                    authority: Pubkey::try_from(auth.address.as_str())
+                        .expect("Invalid authority pubkey"),
+                    slot_updated: 0,
+                    write_version: None,
+                })
+            }
         })
     });
 
@@ -553,5 +559,71 @@ mod tests {
 
         let owner = result.owner.unwrap();
         assert!(owner.owner.value.is_none()); // Check that owner is None.
+    }
+
+    #[test]
+    fn test_convert_asset_with_empty_authority() {
+        let asset_json = json!({
+            "interface": "MplCoreAsset",
+            "id": "Hr6WewFtSw2UJJv5q3KGTewautsMYVWMijnG7Kt3xCkQ",
+            "content": {
+                "$schema": "https://schema.metaplex.com/nft1.0.json",
+                "json_uri": "https://storage.googleapis.com/squadgames2/redcircle.json",
+                "files": [
+                    {
+                        "uri": "https://storage.googleapis.com/gamepass2/redcircle.png",
+                        "mime": "image/png"
+                    }
+                ],
+                "metadata": {
+                    "attributes": [{"value": "By Circle", "trait_type": "Death"}],
+                    "description": "Squad Game S2 - Round 2",
+                    "name": "Red Circle",
+                    "symbol": ""
+                },
+                "links": {"external_url": "https://sendarcade.fun", "image": "https://storage.googleapis.com/gamepass2/redcircle.png"}
+            },
+            "authorities": [{"address": "", "scopes": ["full"]}],
+            "compression": {
+                "eligible": false,
+                "compressed": false,
+                "data_hash": "",
+                "creator_hash": "",
+                "asset_hash": "",
+                "tree": "",
+                "seq": 0,
+                "leaf_id": 0
+            },
+            "grouping": [
+                {"group_key": "collection", "group_value": "GtZkZKt3TyPmynkY2nY6A7f6LfRNFhVVVFB7BdnJpaai", "verified": true}
+            ],
+            "royalty": {"royalty_model": "creators", "target": null, "percent": 0.069, "basis_points": 690, "primary_sale_happened": false, "locked": false},
+            "creators": [{"address": "8V1KppU5f2LH6sZk5pruZTSD3wQYckVcSK24BaB7b4CG", "share": 100, "verified": true}],
+            "ownership": {"frozen": false, "delegated": false, "delegate": null, "ownership_model": "single", "owner": "8V1KppU5f2LH6sZk5pruZTSD3wQYckVcSK24BaB7b4CG"},
+            "supply": null,
+            "mutable": true,
+            "burnt": true,
+            "plugins": {
+                "royalties": {
+                    "data": {"creators": [{"address": "8V1KppU5f2LH6sZk5pruZTSD3wQYckVcSK24BaB7b4CG", "percentage": 100}], "rule_set": "None", "basis_points": 690},
+                    "index": 0,
+                    "offset": 151,
+                    "authority": {"type": "UpdateAuthority", "address": null}
+                },
+                "update_delegate": {"data": {"additional_delegates": []}, "index": 3, "offset": 195, "authority": {"type": "Address", "address": "8V1KppU5f2LH6sZk5pruZTSD3wQYckVcSK24BaB7b4CG"}},
+                "permanent_burn_delegate": {"data": {}, "index": 4, "offset": 200, "authority": {"type": "Address", "address": "8V1KppU5f2LH6sZk5pruZTSD3wQYckVcSK24BaB7b4CG"}},
+                "permanent_freeze_delegate": {"data": {"frozen": false}, "index": 1, "offset": 192, "authority": {"type": "Address", "address": "8V1KppU5f2LH6sZk5pruZTSD3wQYckVcSK24BaB7b4CG"}},
+                "permanent_transfer_delegate": {"data": {}, "index": 2, "offset": 194, "authority": {"type": "Address", "address": "8V1KppU5f2LH6sZk5pruZTSD3wQYckVcSK24BaB7b4CG"}}
+            },
+            "mpl_core_info": {"plugins_json_version": 1},
+            "external_plugins": []
+        });
+
+        let asset: Asset = serde_json::from_value(asset_json).unwrap();
+        let result = convert_asset_to_complete_details(asset);
+
+        assert_eq!(result.pubkey.to_string(), "Hr6WewFtSw2UJJv5q3KGTewautsMYVWMijnG7Kt3xCkQ");
+
+        assert!(result.authority.is_none()); // Check that authority is None.
     }
 }
