@@ -105,3 +105,22 @@ async fn test_get_different_assets_by_owner() {
     let response = setup.das_api.get_assets_by_owner(request, mutexed_tasks.clone()).await.unwrap();
     insta::assert_json_snapshot!(format!("{}_show_unverif_coll", name), response);
 }
+
+// context: this account had an issue with mpl-core < 0.9.0, where
+// it could not be parsed because of a bug in mpl-core.
+#[tokio::test]
+#[named]
+async fn test_process_previously_unparseable_account() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_accounts(["FfYZYTVhCEK3YmZm1is59ove86eiXWU2yizpqRLVGSN"]);
+
+    // it is sufficient to make sure the test does not panic here
+    // and therefore the nft is successfully processed.
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+}
