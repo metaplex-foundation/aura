@@ -11,8 +11,8 @@ use tokio::{
 use tracing::{debug, error};
 
 pub const JSON_BATCH: usize = 300;
-pub const WIPE_PERIOD_SEC: u64 = 60;
-pub const SLEEP_TIME: u64 = 1;
+pub const WIPE_PERIOD_SECS: u64 = 60;
+pub const SLEEP_TIME_SECS: u64 = 1;
 
 pub struct TasksPersister<T: JsonPersister + Send + Sync + 'static> {
     pub persister: Arc<T>,
@@ -52,9 +52,9 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
     ) {
         loop {
             tokio::select! {
-                _ = sleep(Duration::from_secs(WIPE_PERIOD_SEC)) => {
+                _ = sleep(Duration::from_secs(WIPE_PERIOD_SECS)) => {
                     if let Err(e) = persister.persist_response(std::mem::take(buffer)).await {
-                        error!("Could not save JSONs to the storage: {:?}", e);
+                        error!(error = ?e, "Could not save JSONs to the storage: {:?}", e);
                     } else {
                         debug!("Saved metadata successfully...");
                     }
@@ -74,7 +74,7 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
                         error!("Could not get JSON data to save from the channel because it was closed");
                         break;
                     }
-                    sleep(Duration::from_secs(SLEEP_TIME)).await;
+                    sleep(Duration::from_secs(SLEEP_TIME_SECS)).await;
                 }
             }
         }

@@ -10,7 +10,7 @@ use tracing::error;
 
 use crate::metadata_workers::TaskType;
 
-pub const SLEEP_TIME: u64 = 1;
+pub const SLEEP_TIME_SECS: u64 = 1;
 
 pub struct TasksStreamer {
     pub db_conn: Arc<PgClient>,
@@ -69,7 +69,7 @@ impl TasksStreamer {
                         }
                     }
 
-                sleep(Duration::from_secs(SLEEP_TIME)).await;
+                sleep(Duration::from_secs(SLEEP_TIME_SECS)).await;
                 }
             } => {},
             _ = shutdown_rx.recv() => {},
