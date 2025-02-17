@@ -366,7 +366,7 @@ impl JsonPersister for JsonWorker {
         offchain_data_upd_result
             .map_err(|e| JsonDownloaderError::MainStorageError(e.to_string()))?;
         if let Err(e) = urls_to_download_upd_result {
-            error!("Unable to persist URLs to download: {e}");
+            error!(error = %e, "Unable to persist URLs to download: {e}");
         };
         Ok(())
     }
