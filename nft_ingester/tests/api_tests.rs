@@ -16,10 +16,11 @@ mod tests {
     };
     use entities::{
         api_req_params::{
-            AssetSortBy, AssetSortDirection, AssetSorting, DisplayOptions, GetAsset, GetAssetProof,
-            GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup,
-            GetAssetsByOwner, GetByMethodsOptions, GetCoreFees, GetTokenAccounts, Options,
-            SearchAssets, SearchAssetsOptions,
+            AssetSortBy, AssetSortDirection, AssetSorting, DisplayOptions, GetAsset, GetAssetBatch,
+            GetAssetBatchV0, GetAssetProof, GetAssetSignatures, GetAssetV0, GetAssetsByAuthority,
+            GetAssetsByAuthorityV0, GetAssetsByCreator, GetAssetsByCreatorV0, GetAssetsByGroup,
+            GetAssetsByGroupV0, GetAssetsByOwner, GetAssetsByOwnerV0, GetByMethodsOptions,
+            GetCoreFees, GetTokenAccounts, Options, SearchAssets, SearchAssetsOptions,
         },
         enums::{
             AssetType, ChainMutability, Interface, OwnerType, OwnershipModel, RoyaltyModel,
@@ -4186,6 +4187,118 @@ mod tests {
             res.items.len(),
             2,
             "SearchAssets by token_type: NonFungible, show_zero_balance: false"
+        );
+    }
+
+    #[test]
+    fn v1_payloads_are_parsed_correctly_from_v0_payloads() {
+        // getAssetsByAuthority
+        let request_params =
+            r#"["DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz",null,null,null,null,null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByAuthorityV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByAuthority");
+        assert_eq!(
+            Into::<GetAssetsByAuthority>::into(params_deserialized),
+            GetAssetsByAuthority {
+                authority_address: "DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz".to_owned(),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: Default::default(),
+                cursor: None
+            }
+        );
+        // getAssetsByGroup
+        let request_params = r#"["something","else",null,null,null,null,null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByGroupV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByGroup");
+        assert_eq!(
+            Into::<GetAssetsByGroup>::into(params_deserialized),
+            GetAssetsByGroup {
+                group_key: "something".to_owned(),
+                group_value: "else".to_owned(),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: Default::default(),
+                cursor: None
+            }
+        );
+        // getAssetsByOwner
+        let request_params = r#"["owner",null,null,null,null,null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByOwnerV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+        assert_eq!(
+            Into::<GetAssetsByOwner>::into(params_deserialized),
+            GetAssetsByOwner {
+                owner_address: "owner".to_owned(),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: Default::default(),
+                cursor: None
+            }
+        );
+        // getAssetsByCreator
+        let request_params = r#"["creator_address",false,null,null,null,null,null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByCreatorV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+        assert_eq!(
+            Into::<GetAssetsByCreator>::into(params_deserialized),
+            GetAssetsByCreator {
+                creator_address: "creator_address".to_owned(),
+                only_verified: Some(false),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: Default::default(),
+                cursor: None
+            }
+        );
+        // getAssets
+        let request_params = r#"[["asset1","asset2"]]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetBatchV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+        assert_eq!(
+            Into::<GetAssetBatch>::into(params_deserialized),
+            GetAssetBatch {
+                ids: vec!["asset1".to_owned(), "asset2".to_owned()],
+                options: Default::default(),
+            }
+        );
+        // getAsset
+        let request_params = r#"["asset"]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+        assert_eq!(
+            Into::<GetAsset>::into(params_deserialized),
+            GetAsset { id: "asset".to_owned(), options: Default::default() }
         );
     }
 }
