@@ -49,4 +49,4 @@ cargo t -F integration_tests
 
 ### Profiling (Advanced)
 
-To profile any of the binaries, replace the `dockerfile` parameter in the relevant service within `docker-compose.yaml` with `docker/profiling/app.Dockerfile`. This builds the binary with the `profiling` feature enabled.
+To profile any of the binaries, replace the `dockerfile` parameter in the relevant service within `docker-compose.yaml` with `docker/profiling/app.Dockerfile`. This builds the binary with the `profiling` feature enabled. Make sure to rebuild the containers after changing the required Dockerfile.
