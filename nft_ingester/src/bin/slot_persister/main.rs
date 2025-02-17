@@ -452,7 +452,7 @@ async fn process_slots(
                     successful_blocks.len()
                 );
 
-                match target_db.raw_blocks_cbor.put_batch(successful_blocks.clone()).await {
+                match target_db.raw_blocks.put_batch(successful_blocks.clone()).await {
                     Ok(_) => {
                         let last_slot = successful_blocks.keys().max().cloned().unwrap_or(0);
                         info!(

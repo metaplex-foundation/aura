@@ -106,7 +106,7 @@ mod tests {
         let slot = 153;
         let blockhash = "blockhash";
         slot_storage
-            .raw_blocks_cbor
+            .raw_blocks
             .put(
                 slot,
                 RawBlock {

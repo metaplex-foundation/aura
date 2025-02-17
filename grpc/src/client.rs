@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
-use entities::models::RawBlockWithTransactions;
+use entities::models::{RawBlock, RawBlockWithTransactions};
 use futures::StreamExt;
 use interface::{
     asset_streaming_and_discovery::{
@@ -11,6 +11,7 @@ use interface::{
     error::StorageError,
     signature_persistence::BlockProducer,
 };
+use rocks_db::column::TypedColumn;
 use tonic::{
     transport::{Channel, Uri},
     Code, Status,
@@ -103,11 +104,9 @@ impl BlockProducer for Client {
             .await
             .map_err(|e| StorageError::Common(e.to_string()))
             .and_then(|response| {
-                serde_cbor::from_slice::<entities::models::RawBlock>(
-                    response.into_inner().block.as_slice(),
-                )
-                .map_err(|e| StorageError::Common(e.to_string()))
-                .map(|raw_block| raw_block.block)
+                RawBlock::decode(response.into_inner().block.as_slice())
+                    .map_err(|e| StorageError::Common(e.to_string()))
+                    .map(|raw_block| raw_block.block)
             })
         {
             return Ok(block);

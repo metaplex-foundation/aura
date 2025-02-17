@@ -112,6 +112,6 @@ async fn test_process_raw_blocks_stream() {
 
     // process_raw_blocks_stream(rx, storage.clone(), 100, 200, mock).await;
 
-    let selected_data = storage.raw_blocks_cbor.get_async(slot).await.unwrap().unwrap();
+    let selected_data = storage.raw_blocks.get_async(slot).await.unwrap().unwrap();
     assert_eq!(selected_data.block.blockhash, blockhash.to_string());
 }

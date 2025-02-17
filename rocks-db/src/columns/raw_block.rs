@@ -35,7 +35,7 @@ impl TypedColumn for RawBlock {
     type KeyType = u64;
 
     type ValueType = Self;
-    const NAME: &'static str = "RAW_BLOCK_CBOR_ENCODED";
+    const NAME: &'static str = "RAW_BLOCK";
 
     fn encode_key(slot: u64) -> Vec<u8> {
         key_encoders::encode_u64(slot)
@@ -43,14 +43,6 @@ impl TypedColumn for RawBlock {
 
     fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
         key_encoders::decode_u64(bytes)
-    }
-
-    fn decode(bytes: &[u8]) -> crate::Result<Self::ValueType> {
-        serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string()))
-    }
-
-    fn encode(v: &Self::ValueType) -> crate::Result<Vec<u8>> {
-        serde_cbor::to_vec(&v).map_err(|e| StorageError::Common(e.to_string()))
     }
 }
 
@@ -62,7 +54,7 @@ impl BlockProducer for SlotStorage {
         backup_provider: Option<Arc<impl BlockProducer>>,
     ) -> Result<RawBlockWithTransactions, InterfaceStorageError> {
         let raw_block = self
-            .raw_blocks_cbor
+            .raw_blocks
             .get_async(slot)
             .await
             .map_err(|e| InterfaceStorageError::Common(e.to_string()))?;

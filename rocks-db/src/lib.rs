@@ -66,7 +66,7 @@ pub type Result<T> = std::result::Result<T, StorageError>;
 
 const ROCKS_COMPONENT: &str = "rocks_db";
 const DROP_ACTION: &str = "drop";
-const RAW_BLOCKS_CBOR_ENDPOINT: &str = "raw_blocks_cbor";
+const RAW_BLOCKS_ENDPOINT: &str = "raw_blocks";
 const FULL_ITERATION_ACTION: &str = "full_iteration";
 const BATCH_ITERATION_ACTION: &str = "batch_iteration";
 const BATCH_GET_ACTION: &str = "batch_get";
@@ -74,7 +74,7 @@ const ITERATOR_TOP_ACTION: &str = "iterator_top";
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 pub struct SlotStorage {
     pub db: Arc<DB>,
-    pub raw_blocks_cbor: Column<RawBlock>,
+    pub raw_blocks: Column<RawBlock>,
     join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
 }
@@ -85,8 +85,8 @@ impl SlotStorage {
         join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Self {
-        let raw_blocks_cbor = Storage::column(db.clone(), red_metrics.clone());
-        Self { db, raw_blocks_cbor, red_metrics, join_set }
+        let raw_blocks = Storage::column(db.clone(), red_metrics.clone());
+        Self { db, raw_blocks, red_metrics, join_set }
     }
 
     pub fn cf_names() -> Vec<&'static str> {

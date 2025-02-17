@@ -415,7 +415,7 @@ async fn test_clean_forks() {
         .unwrap();
 
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10000,
             RawBlock {
@@ -432,7 +432,7 @@ async fn test_clean_forks() {
         .await
         .unwrap();
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10001,
             RawBlock {
@@ -449,7 +449,7 @@ async fn test_clean_forks() {
         .await
         .unwrap();
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10002,
             RawBlock {
@@ -466,7 +466,7 @@ async fn test_clean_forks() {
         .await
         .unwrap();
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10005,
             RawBlock {
@@ -483,7 +483,7 @@ async fn test_clean_forks() {
         .await
         .unwrap();
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10006,
             RawBlock {
@@ -501,7 +501,7 @@ async fn test_clean_forks() {
         .unwrap();
     // Need for SLOT_CHECK_OFFSET
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             30000,
             RawBlock {
@@ -806,7 +806,7 @@ async fn test_process_forked_transaction() {
     //
     // for this test all we need is key from Rocks raw_blocks_cbor column family, so RawBlock data could be arbitrary
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put(
             slot_normal_tx,
             RawBlock {
@@ -825,7 +825,7 @@ async fn test_process_forked_transaction() {
     // Required for SLOT_CHECK_OFFSET
     // 16000 is arbitrary number
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put(
             slot_normal_tx + 16000,
             RawBlock {

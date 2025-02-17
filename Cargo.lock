@@ -3314,12 +3314,13 @@ name = "grpc"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bincode",
  "entities",
  "futures",
  "interface",
  "mockall 0.13.0",
  "prost 0.12.6",
- "serde_cbor",
+ "rocks-db",
  "solana-sdk",
  "solana-transaction-status",
  "thiserror",

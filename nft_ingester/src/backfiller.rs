@@ -189,7 +189,7 @@ where
         if let Some((key, raw_block_data)) = it.item() {
             let slot = RawBlock::decode_key(key.to_vec())?;
             // Process the slot
-            let raw_block: RawBlock = match serde_cbor::from_slice(raw_block_data) {
+            let raw_block: RawBlock = match RawBlock::decode(raw_block_data) {
                 Ok(rb) => rb,
                 Err(e) => {
                     error!("Failed to decode the value for slot {}: {}", slot, e);
