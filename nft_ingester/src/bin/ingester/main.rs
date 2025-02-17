@@ -496,12 +496,12 @@ pub async fn main() -> Result<(), IngesterError> {
         refresh_tasks_sender,
     );
 
-    let (metadata_to_persists_sender, metadata_to_persists_receiver) = mpsc::channel(JSON_BATCH);
+    let (metadata_to_persist_sender, metadata_to_persist_receiver) = mpsc::channel(JSON_BATCH);
     let pending_tasks_receiver = Arc::new(Mutex::new(pending_tasks_receiver));
     let refresh_tasks_receiver = Arc::new(Mutex::new(refresh_tasks_receiver));
     let metadata_dowloader = MetadataDownloader::new(
         json_worker.clone(),
-        metadata_to_persists_sender,
+        metadata_to_persist_sender,
         pending_tasks_receiver,
         refresh_tasks_receiver,
         shutdown_rx.resubscribe(),
@@ -510,7 +510,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let metadata_persister = TasksPersister::new(
         json_worker.clone(),
-        metadata_to_persists_receiver,
+        metadata_to_persist_receiver,
         shutdown_rx.resubscribe(),
     );
 
