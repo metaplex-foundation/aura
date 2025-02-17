@@ -4208,10 +4208,7 @@ mod tests {
                 page: None,
                 before: None,
                 after: None,
-                options: GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                options: Default::default(),
                 cursor: None
             }
         );
@@ -4232,10 +4229,7 @@ mod tests {
                 page: None,
                 before: None,
                 after: None,
-                options: GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                options: Default::default(),
                 cursor: None
             }
         );
@@ -4255,10 +4249,7 @@ mod tests {
                 page: None,
                 before: None,
                 after: None,
-                options: GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                options: Default::default(),
                 cursor: None
             }
         );
@@ -4279,10 +4270,7 @@ mod tests {
                 page: None,
                 before: None,
                 after: None,
-                options: GetByMethodsOptions {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                options: Default::default(),
                 cursor: None
             }
         );
@@ -4297,10 +4285,7 @@ mod tests {
             Into::<GetAssetBatch>::into(params_deserialized),
             GetAssetBatch {
                 ids: vec!["asset1".to_owned(), "asset2".to_owned()],
-                options: entities::api_req_params::Options {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
+                options: Default::default(),
             }
         );
         // getAsset
@@ -4312,13 +4297,7 @@ mod tests {
             .expect("params provided deserialize correctly into GetAssetsByOwner");
         assert_eq!(
             Into::<GetAsset>::into(params_deserialized),
-            GetAsset {
-                id: "asset".to_owned(),
-                options: entities::api_req_params::Options {
-                    show_unverified_collections: true,
-                    ..Default::default()
-                },
-            }
+            GetAsset { id: "asset".to_owned(), options: Default::default() }
         );
     }
 }
