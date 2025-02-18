@@ -21,11 +21,11 @@ ALTER TABLE tasks
     DROP COLUMN tsk_error,
     DROP COLUMN tsk_status,
     DROP COLUMN tsk_locked_until,
-    ADD COLUMN next_try_at timestamptz DEFAULT NULL,
-    ADD COLUMN etag text DEFAULT NULL,
-    ADD COLUMN last_modified_at timestamptz DEFAULT NULL,
-    ADD COLUMN mutability mutability NOT NULL DEFAULT 'mutable',
-    ADD COLUMN task_status task_status NOT NULL DEFAULT 'pending';
+    ADD COLUMN tasks_next_try_at timestamptz DEFAULT NULL,
+    ADD COLUMN tasks_etag text DEFAULT NULL,
+    ADD COLUMN tasks_last_modified_at timestamptz DEFAULT NULL,
+    ADD COLUMN tasks_mutability mutability NOT NULL DEFAULT 'mutable',
+    ADD COLUMN tasks_task_status task_status NOT NULL DEFAULT 'pending';
 
 ALTER TABLE assets_v3 DROP CONSTRAINT assets_v3_ast_metadata_url_id_fkey;
 ALTER TABLE assets_v3 ADD FOREIGN KEY (ast_metadata_url_id) REFERENCES tasks(metadata_hash) ON DELETE CASCADE;
@@ -37,3 +37,4 @@ WHERE metadata_url = ''
    OR metadata_url LIKE 'https://ipfs%'
    OR metadata_url LIKE 'https://arweave%'
    OR metadata_url LIKE 'https://www.arweave%';
+   

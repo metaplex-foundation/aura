@@ -1,9 +1,11 @@
-use crate::error::JsonDownloaderError;
+use std::time::Duration;
+
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use entities::models::MetadataDownloadTask;
+use entities::{enums::OffchainDataMutability, models::MetadataDownloadTask};
 use mockall::automock;
-use std::time::Duration;
+
+use crate::error::JsonDownloaderError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JsonDownloadResult {
@@ -16,16 +18,25 @@ pub enum JsonDownloadResult {
 pub struct MetadataDownloadResult {
     pub etag: Option<String>,
     pub last_modified_at: Option<DateTime<Utc>>,
+    pub cache_control: Option<CacheControlResponse>,
     pub result: JsonDownloadResult,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CacheControlResponse {
+    pub publicity: Option<String>,
+    pub max_age: Option<u64>,
+    pub mutability: Option<OffchainDataMutability>,
 }
 
 impl MetadataDownloadResult {
     pub fn new(
         etag: Option<String>,
         last_modified_at: Option<DateTime<Utc>>,
+        cache_control: Option<CacheControlResponse>,
         result: JsonDownloadResult,
     ) -> Self {
-        Self { etag, last_modified_at, result }
+        Self { etag, last_modified_at, cache_control, result }
     }
 }
 
