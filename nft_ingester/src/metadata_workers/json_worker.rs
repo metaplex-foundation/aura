@@ -1,14 +1,23 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use entities::{enums::TaskStatus, models::MetadataDownloadTask};
+use entities::{
+    enums::{OffchainDataMutability, TaskStatus},
+    models::MetadataDownloadTask,
+};
 use interface::{
-    error::JsonDownloaderError,
-    json_metadata::{JsonDownloadResult, JsonDownloader, JsonPersister, MetadataDownloadResult},
+    error::{JsonDownloadErrors, JsonDownloaderError},
+    json_metadata::{
+        CacheControlResponse, JsonDownloadResult, JsonDownloader, JsonPersister,
+        MetadataDownloadResult,
+    },
 };
 use metrics_utils::{red::RequestErrorDurationMetrics, JsonDownloaderMetricsConfig, MetricStatus};
 use postgre_client::{tasks::UpdatedTask, PgClient};
-use reqwest::ClientBuilder;
+use reqwest::{
+    header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED},
+    ClientBuilder,
+};
 use reqwest_middleware::ClientBuilder as MiddlewareClientBuilder;
 use reqwest_retry::{policies::ExponentialBackoffBuilder, RetryTransientMiddleware};
 use rocks_db::{
@@ -21,7 +30,7 @@ use rocks_db::{
 use serde_json::Value;
 use tokio::time::Duration;
 use tokio_util::either::Either;
-use tracing::error;
+use tracing::{error, info};
 use url::Url;
 
 use crate::api::dapi::rpc_asset_convertors::parse_files;
@@ -72,7 +81,7 @@ impl JsonDownloader for JsonWorker {
             .build_with_max_retries(MAX_RETRIES);
 
         let client = ClientBuilder::new().timeout(timeout).build().map_err(|e| {
-            JsonDownloaderError::ErrorDownloading(format!("Failed to create client: {:?}", e))
+            JsonDownloaderError::ErrorDownloading(JsonDownloadErrors::FailedToCreateClient(e))
         })?;
         let client = MiddlewareClientBuilder::new(client)
             .with(RetryTransientMiddleware::new_with_policy(retry_policy))
@@ -86,12 +95,12 @@ impl JsonDownloader for JsonWorker {
             let gateway_url = format!("https://ipfs.io/ipfs/{}", ipfs_path);
             // Parse the rewritten URL
             Url::parse(&gateway_url).map_err(|e| {
-                JsonDownloaderError::ErrorDownloading(format!("Failed to parse IPFS URL: {:?}", e))
+                JsonDownloaderError::ErrorDownloading(JsonDownloadErrors::FailedToParseIpfsUrl(e))
             })?
         } else {
             // Parse the original URL
             Url::parse(&download_task.metadata_url).map_err(|e| {
-                JsonDownloaderError::ErrorDownloading(format!("Failed to parse URL: {:?}", e))
+                JsonDownloaderError::ErrorDownloading(JsonDownloadErrors::FailedToParseUrl(e))
             })?
         };
 
@@ -100,51 +109,53 @@ impl JsonDownloader for JsonWorker {
         let mut request_builder = client.get(parsed_url.clone());
 
         if let Some(etag) = &download_task.etag {
-            request_builder = request_builder.header("If-None-Match", etag);
+            request_builder = request_builder.header(IF_NONE_MATCH, etag);
         };
         if let Some(last_modified_at) = &download_task.last_modified_at {
-            request_builder = request_builder.header("If-Modified-Since", last_modified_at);
+            request_builder = request_builder.header(IF_MODIFIED_SINCE, last_modified_at);
         };
 
-        self.red_metrics.observe_request("json_downloader", "download_file", host, start_time);
         let response = request_builder.send().await.map_err(|e| {
-            let msg = format!("Failed to make request: {:?}", e);
             self.red_metrics.observe_error("json_downloader", "download_file", host);
-            JsonDownloaderError::ErrorDownloading(msg)
+            JsonDownloaderError::ErrorDownloading(JsonDownloadErrors::FailedToMakeRequest(e))
         })?;
+        self.red_metrics.observe_request("json_downloader", "download_file", host, start_time);
 
         let etag = response
             .headers()
-            .get("etag")
+            .get(ETAG)
             .and_then(|etag| etag.to_str().ok().map(ToString::to_string));
         let last_modified = response
             .headers()
-            .get("last-modified")
+            .get(LAST_MODIFIED)
             .and_then(|ct| ct.to_str().ok())
             .and_then(|date| date.parse().ok());
+        let cache_control = response.headers().get(CACHE_CONTROL).and_then(|cache_control| {
+            let cache_control = cache_control.to_str().ok().map(ToString::to_string);
+            cache_control.map(|cache_control| parse_cache_control_response(&cache_control))
+        });
 
         if response.status() == reqwest::StatusCode::NOT_MODIFIED {
             return Ok(MetadataDownloadResult::new(
                 etag,
                 last_modified,
+                cache_control,
                 JsonDownloadResult::NotModified,
             ));
         }
 
         if response.status() != reqwest::StatusCode::OK {
-            return Err(JsonDownloaderError::ErrorStatusCode(
-                response.status().as_str().to_string(),
-            ));
+            return Err(JsonDownloaderError::ErrorStatusCode(response.status()));
         }
 
         // Get the Content-Type header
         let content_type =
-            response.headers().get("Content-Type").and_then(|ct| ct.to_str().ok()).unwrap_or("");
+            response.headers().get(CONTENT_TYPE).and_then(|ct| ct.to_str().ok()).unwrap_or("");
 
         // Excluded content types that are definitely not JSON
         let excluded_types = ["audio/", "application/octet-stream"];
         if excluded_types.iter().any(|&t| content_type.starts_with(t)) {
-            return Err(JsonDownloaderError::GotNotJsonFile);
+            return Err(JsonDownloaderError::GotNoJsonFile);
         }
 
         // Check if the content type is image or video
@@ -154,6 +165,7 @@ impl JsonDownloader for JsonWorker {
             return Ok(MetadataDownloadResult::new(
                 etag,
                 last_modified,
+                cache_control,
                 JsonDownloadResult::MediaUrlAndMimeType {
                     url: download_task.metadata_url.clone(),
                     mime_type: content_type.to_string(),
@@ -168,6 +180,7 @@ impl JsonDownloader for JsonWorker {
                 return Ok(MetadataDownloadResult::new(
                     etag,
                     last_modified,
+                    cache_control,
                     JsonDownloadResult::JsonContent(metadata),
                 ));
             } else {
@@ -203,6 +216,7 @@ impl JsonPersister for JsonWorker {
                 Ok(MetadataDownloadResult {
                     etag,
                     last_modified_at,
+                    cache_control,
                     result: JsonDownloadResult::JsonContent(json_file),
                 }) => {
                     let mutability: StorageMutability = metadata_url.as_str().into();
@@ -229,6 +243,7 @@ impl JsonPersister for JsonWorker {
                 Ok(MetadataDownloadResult {
                     etag,
                     last_modified_at,
+                    cache_control,
                     result: JsonDownloadResult::MediaUrlAndMimeType { url, mime_type },
                 }) => {
                     let mutability: StorageMutability = metadata_url.as_str().into();
@@ -255,7 +270,7 @@ impl JsonPersister for JsonWorker {
                     self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
                 },
                 Err(json_err) => match json_err {
-                    JsonDownloaderError::GotNotJsonFile => {
+                    JsonDownloaderError::GotNoJsonFile => {
                         pg_updates.push(UpdatedTask {
                             status: TaskStatus::Failed,
                             metadata_url: metadata_url.clone(),
@@ -286,26 +301,36 @@ impl JsonPersister for JsonWorker {
                         self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
                     },
                     //TODO: should we log the error status code?
-                    JsonDownloaderError::ErrorStatusCode(_err) => {
-                        pg_updates.push(UpdatedTask {
-                            status: TaskStatus::Failed,
-                            metadata_url: metadata_url.clone(),
-                            etag: None,
-                            last_modified_at: None,
-                            mutability: metadata_url.as_str().into(),
-                        });
+                    JsonDownloaderError::ErrorStatusCode(err) => {
+                        if err == reqwest::StatusCode::TOO_MANY_REQUESTS
+                            || err == reqwest::StatusCode::REQUEST_TIMEOUT
+                        {
+                            info!("Rate limited: {}", metadata_url);
+                        } else {
+                            pg_updates.push(UpdatedTask {
+                                status: TaskStatus::Failed,
+                                metadata_url: metadata_url.clone(),
+                                etag: None,
+                                last_modified_at: None,
+                                mutability: metadata_url.as_str().into(),
+                            });
+                        }
 
                         self.metrics.inc_tasks("json", MetricStatus::FAILURE);
                     },
-                    JsonDownloaderError::ErrorDownloading(_err) => {
-                        pg_updates.push(UpdatedTask {
-                            status: TaskStatus::Failed,
-                            metadata_url: metadata_url.clone(),
-                            etag: None,
-                            last_modified_at: None,
-                            mutability: metadata_url.as_str().into(),
-                        });
-                        self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
+                    JsonDownloaderError::ErrorDownloading(err) => {
+                        if let JsonDownloadErrors::FailedToMakeRequest(err) = err {
+                            info!("Wasn't able to download: {:?}", err);
+                        } else {
+                            pg_updates.push(UpdatedTask {
+                                status: TaskStatus::Failed,
+                                metadata_url: metadata_url.clone(),
+                                etag: None,
+                                last_modified_at: None,
+                                mutability: metadata_url.as_str().into(),
+                            });
+                            self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
+                        }
                     },
                     _ => {}, // No additional processing needed
                 },
@@ -370,4 +395,33 @@ impl JsonPersister for JsonWorker {
         };
         Ok(())
     }
+}
+
+fn parse_cache_control_response(cache_control: &str) -> CacheControlResponse {
+    let mut publicity = None;
+    let mut max_age = None;
+    let mut mutability = None;
+
+    for directive in cache_control.split(',') {
+        let directive = directive.trim();
+        if directive.starts_with("publicity=") {
+            publicity = directive.trim_start_matches("publicity=").parse().ok();
+        }
+        if directive.starts_with("max-age=") {
+            max_age = directive.trim_start_matches("max-age=").parse().ok();
+        }
+        if directive.starts_with("mutability=") {
+            let mutability_word: Option<String> =
+                directive.trim_start_matches("mutability=").parse().ok();
+            if let Some(mutability_word) = mutability_word {
+                match mutability_word.as_str() {
+                    "immutable" => mutability = Some(OffchainDataMutability::Immutable),
+                    "mutable" => mutability = Some(OffchainDataMutability::Mutable),
+                    _ => {},
+                }
+            }
+        }
+    }
+
+    CacheControlResponse { publicity, max_age, mutability }
 }

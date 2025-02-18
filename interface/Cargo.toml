@@ -24,3 +24,5 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 jsonrpc-core = { workspace = true }
 chrono = { workspace = true }
+url = { workspace = true }
+reqwest-middleware = { workspace = true }

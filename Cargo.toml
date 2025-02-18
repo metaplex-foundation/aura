@@ -93,6 +93,7 @@ anyhow = "1.0"
 # Clients
 arweave-rs = { version = "0.2", git = "https://github.com/RequescoS/arweave-rs.git", rev = "d8f5ef76f06c96afdf013fe5b62301790631b33f" }
 reqwest = { version = "0.11", features = ["json", "stream"] }
+reqwest-middleware = "0.2"
 coingecko = "1.0"
 # Time
 chrono = "0.4"

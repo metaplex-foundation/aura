@@ -119,7 +119,7 @@ pub enum ChainMutability {
     Mutable,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy, PartialEq, sqlx::Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Copy, PartialEq, sqlx::Type, Eq)]
 #[sqlx(type_name = "mutability", rename_all = "lowercase")]
 pub enum OffchainDataMutability {
     Immutable,
