@@ -3929,6 +3929,7 @@ dependencies = [
  "mockall 0.13.0",
  "plerkle_serialization",
  "reqwest",
+ "reqwest-middleware",
  "serde_derive",
  "serde_json",
  "solana-client",
@@ -3938,6 +3939,7 @@ dependencies = [
  "solana-transaction-status",
  "thiserror",
  "tokio",
+ "url",
 ]
 
 [[package]]
