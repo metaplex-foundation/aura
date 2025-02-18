@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use clap::Parser;
 use entities::models::{RawBlock, RawBlockDeprecated};
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::{column::TypedColumn, SlotStorage};
+use rocks_db::{column::TypedColumn, SlotStorage, Storage};
 use tokio::{
     sync::Mutex,
     task::{JoinError, JoinSet},
@@ -17,14 +17,26 @@ struct Args {
 }
 
 const WRITE_BATCH_SIZE: usize = 10_000;
-
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
     let tasks = Arc::new(Mutex::new(JoinSet::<Result<(), JoinError>>::new()));
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
-    let slot_storage = SlotStorage::open(args.slots_db_path.clone(), tasks, red_metrics)
-        .expect("open slots db in primary mode for migration");
+    let cf_descriptors = Storage::cfs_to_column_families(
+        SlotStorage::cf_names()
+            .into_iter()
+            .chain(std::iter::once(RawBlockDeprecated::NAME))
+            .collect(),
+    );
+    let db = Arc::new(
+        rocksdb::DB::open_cf_descriptors(
+            &Storage::get_db_options(),
+            args.slots_db_path.clone(),
+            cf_descriptors,
+        )
+        .expect("open rocks slot storage to migrate"),
+    );
+    let slot_storage = SlotStorage::new(db, tasks, red_metrics);
     eprintln!("Opened slots database in primary mode at {}", args.slots_db_path);
     let mut iter = slot_storage.db.raw_iterator_cf(
         &slot_storage.db.cf_handle(RawBlockDeprecated::NAME).expect("get raw blocks cf handle"),
@@ -37,9 +49,8 @@ async fn main() {
         let raw_block_deprecated =
             RawBlockDeprecated::decode(v).expect("decode deprecated raw block value");
         let raw_block: RawBlock = raw_block_deprecated.into();
-        if batch.len() < WRITE_BATCH_SIZE {
-            batch.push((slot, raw_block));
-        } else {
+        batch.push((slot, raw_block));
+        if batch.len() >= WRITE_BATCH_SIZE {
             let ((start_slot, _), (end_slot, _)) = (batch.first().unwrap(), batch.last().unwrap());
             eprintln!("Writing slots {} through {} to rocksdb...", start_slot, end_slot);
             let map: HashMap<u64, RawBlock> = std::mem::take(&mut batch).into_iter().collect();

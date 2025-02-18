@@ -358,7 +358,7 @@ impl Storage {
         Ok(Self::new(db, join_set, red_metrics))
     }
 
-    fn cfs_to_column_families(cfs: Vec<&str>) -> Vec<ColumnFamilyDescriptor> {
+    pub fn cfs_to_column_families(cfs: Vec<&str>) -> Vec<ColumnFamilyDescriptor> {
         cfs.iter()
             .map(|name| ColumnFamilyDescriptor::new(*name, Self::get_default_cf_options()))
             .collect()
@@ -428,7 +428,7 @@ impl Storage {
         Column { backend, column: PhantomData, red_metrics }
     }
 
-    fn get_db_options() -> Options {
+    pub fn get_db_options() -> Options {
         let mut options = Options::default();
 
         // Create missing items to support a clean start
