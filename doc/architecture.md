@@ -65,7 +65,7 @@ The system is composed of several specialized binaries, each performing a specif
 
 5.  **`api`** (`nft_ingester/src/bin/api/main.rs`):
     *   **Responsibilities**:
-        *   Provides a RESTful API for querying NFT data.
+        *   Provides RPC API for querying NFT data.
         *   Queries both RocksDB and PostgreSQL databases.
         *   Optionally performs checks for gaps in Merkle tree sequences.
         *   Uses a `JsonWorker` to handle JSON metadata fetching and refreshing.
