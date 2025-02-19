@@ -51,7 +51,7 @@ We recommend using VS Code with the Rust Analyzer extension for development. Ins
 
 ## GitFlow Workflow
 
-We follow the GitFlow branching model for our development process. This provides a robust framework for managing larger projects.
+We follow the GitFlow branching model, with specific merge strategies for different branch types (detailed below).
 
 ### Main Branches
 
@@ -142,7 +142,7 @@ We follow the GitFlow branching model for our development process. This provides
 
 ### Commit Messages
 
-We follow [Conventional Commits](https://www.conventionalcommits.org/) specification for our commit messages. This leads to more readable messages that are easy to follow when looking through the project history and enables automatic generation of changelogs.
+We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification for our commit messages. This leads to more readable messages that are easy to follow when looking through the project history and enables automatic generation of changelogs.
 
 Each commit message should be structured as follows:
 
@@ -219,7 +219,16 @@ Note: Direct pushes to `develop` and `main` branches are prohibited. All changes
 4.  Get approval from at least two code reviewers.
 5.  Update your branch with the latest `develop` before merging (`git rebase develop`).
 6.  All CI checks must pass before merging.
-7.  **Merge Strategy:** We use squash merging for all pull requests. This creates a single, clean commit on the `develop` branch, representing the entire feature or fix.
+7.  **Merge Strategy:** The merge strategy depends on the target branch:
+    -   **Feature branches into `develop`:** Squash merge. This creates a single, clean commit representing the feature.
+    -   **Release branches into `main`:** *No squash* merge (a regular merge commit). This preserves the history of the release preparation. Tag the merge commit on `main` with the release version.
+    -   **Release branches into `develop`:** *No squash* merge (a regular merge commit). This ensures the release history is incorporated into `develop`.
+    -   **Hotfix branches into `main`:** *No squash* merge (a regular merge commit). This preserves the history of the hotfix. Tag the merge commit on `main` with the hotfix version.
+    -   **Hotfix branches into `develop`:** *No squash* merge (a regular merge commit). This ensures the hotfix is incorporated into `develop`.
+
+    In summary:
+    - Squash merge: Feature branches into `develop`.
+    - No squash (regular merge): Release and Hotfix branches into `main` and `develop`.
 
 ### Code Review Guidelines
 
@@ -239,9 +248,46 @@ When reviewing code:
 -   Include tests for new functionality.
 -   Keep pull requests focused and reasonably sized.
 
-## Troubleshooting
+### Release Process
 
--   **macOS Build Issues (OpenSSL/protobuf-src):** If you encounter build failures related to C/C++ libraries like OpenSSL or `protobuf-src` on macOS, try reinstalling the command-line tools:
+1.  **Creating a Release Branch:**
+
+    ```bash
+    git checkout develop
+    git pull origin develop
+    git checkout -b release/x.y.z  # e.g., release/1.2.0
+    ```
+
+2.  **Stabilization and Bug Fixes:**
+    -   The release branch is used for final testing and stabilization.
+    -   **Do not add new features to a release branch.**
+    -   If bugs are found during this phase:
+        -   Fix the bug on `develop` (ideally in a feature branch). Create a pull request for this fix, targeting `develop`. Once approved and merged (squash merge), cherry-pick the commit onto the release branch:
+            ```bash
+            git checkout release/x.y.z
+            git cherry-pick <commit_hash_from_develop>
+            ```
+
+3.  **Merging the Release:**
+    -   Once the release is stable, merge it into `main`:
+        ```bash
+        git checkout main
+        git pull origin main
+        git merge --no-ff release/x.y.z  # --no-ff creates a merge commit
+        git tag -a x.y.z -m "Release x.y.z"  # Tag the release
+        git push origin main --tags
+        ```
+    -   Then, merge the release branch into `develop`:
+        ```bash
+        git checkout develop
+        git pull origin develop
+        git merge --no-ff release/x.y.z
+        git push origin develop
+        ```
+
+### Troubleshooting
+
+- **macOS Build Issues (OpenSSL/protobuf-src):** If you encounter build failures related to C/C++ libraries like OpenSSL or `protobuf-src` on macOS, try reinstalling the command-line tools:
 
     ```bash
     sudo rm -rf /Library/Developer/CommandLineTools
