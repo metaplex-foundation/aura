@@ -34,14 +34,14 @@ The system is composed of several specialized binaries, each performing a specif
         *   Manages connections to Redis, RocksDB, and PostgreSQL.
         *   Handles graceful shutdown and metrics reporting.
         *   Performs signature fetching for finalized data validation (critical for Bubblegum tree consistency).
-    *   **Key Dependencies**: `rocks_db::Storage`, `PostgresClient`, `JsonWorker`, `metrics_utils`, `Messenger`, `backfill_rpc`, `transaction_ingester`.
+    *   **Key Dependencies**: RocksDB, PostgreSQL, Redis.
 
 2.  **`synchronizer`** (`nft_ingester/src/bin/synchronizer/main.rs`):
     *   **Responsibilities**:
         *   Ensures data consistency between RocksDB (the primary data store) and PostgreSQL (the indexed, queryable store).
         *   Performs a full synchronization of data, handling different asset types.
         *   Uses a configurable batch size and parallel tasks for efficient data transfer.
-    *   **Key Dependencies**: `rocks_db::Storage`, `PostgresClient`, `metrics_utils`.
+    *   **Key Dependencies**: RocksDB, PostgreSQL.
 
 3.  **`slot_persister`** (`nft_ingester/src/bin/slot_persister/main.rs`):
     *   **Responsibilities**:
@@ -49,7 +49,7 @@ The system is composed of several specialized binaries, each performing a specif
         *   Provides a reliable source of finalized data for backfilling and validation.
         *   Can fetch data from either BigTable (optional) or an RPC source.
         *   Handles retries and error handling, ensure the slots data is consistent and consicuential - that is the slot number is always increasing and never skipped (although it still may miss some slots due to the eventual consistency of bigtable).
-    *   **Key Dependencies**: `rocks_db::Storage`, `BigTableClient`, `backfill_rpc`, `metrics_utils`, `interface::slot_getter::FinalizedSlotGetter`.
+    *   **Key Dependencies**: RocksDB, BigTable (optional), Solana RPC.
 
 4.  **`backfill`** (`nft_ingester/src/bin/backfill/main.rs`):
     *   **Responsibilities**:
@@ -59,7 +59,7 @@ The system is composed of several specialized binaries, each performing a specif
         *   Uses `DirectBlockParser` and `BubblegumTxProcessor` for specific transaction types.
         *   Writes processed data to the main RocksDB database.
         *   Provides progress tracking.
-    *   **Key Dependencies**: `rocks_db::Storage`, `interface::signature_persistence::BlockConsumer`, `metrics_utils`, `transaction_ingester`.
+    *   **Key Dependencies**: RocksDB, Solana RPC.
 
 ### Utility Services
 
@@ -70,7 +70,7 @@ The system is composed of several specialized binaries, each performing a specif
         *   Optionally performs checks for gaps in Merkle tree sequences.
         *   Uses a `JsonWorker` to handle JSON metadata fetching and refreshing.
     *   **Current Status**:  While functional, it's less actively used than the integrated API within the `ingester` due to performance considerations with secondary RocksDB instances.  Future optimization is planned.
-    *   **Key Dependencies**: `rocks_db::Storage`, `PostgresClient`, `JsonWorker`, `metrics_utils`.
+    *   **Key Dependencies**: RocksDB, PostgreSQL, Redis.
 
 6.  **`explorer`** (`nft_ingester/src/bin/explorer/main.rs`):
     *   **Responsibilities**:
@@ -78,51 +78,46 @@ The system is composed of several specialized binaries, each performing a specif
         *   Allows iteration over keys and retrieval of values within specific RocksDB column families.
         *   Useful for debugging and data inspection.
     *   **Key Dependencies**: `rocksdb::DB`, `axum`, `metrics_utils`.
+    *   **Key Dependencies**: RocksDB.
 
-7.  **`explorer_client`** (`nft_ingester/src/bin/explorer_client/main.rs`):
-    *   **Responsibilities**:
-        *   A client for interacting with the `explorer` service.
-        *   Fetches keys and values and filters data based on criteria.
-    *   **Key Dependencies**: `reqwest`, `rocks_db::columns::asset::AssetCompleteDetails`, `solana_sdk::pubkey::Pubkey`.
-
-8.  **`migrator`** (`nft_ingester/src/bin/migrator/main.rs`):
+7.  **`migrator`** (`nft_ingester/src/bin/migrator/main.rs`):
     *   **Responsibilities**:
         *   Handles JSON metadata keys migration from RocksDB to PostgreSQL.
         *   Supports "full" (migrate JSONs and set tasks) and "jsons only" modes.
         *   Is a one-time tool to migrate the data from RocksDB to PostgreSQL.
-    *   **Key Dependencies**: `rocks_db::Storage`, `PostgresClient`, `metrics_utils`.
+    *   **Key Dependencies**: RocksDB, PostgreSQL.
 
-9.  **`rocksdb_backup`** (`nft_ingester/src/bin/rocksdb_backup/main.rs`):
+8.  **`rocksdb_backup`** (`nft_ingester/src/bin/rocksdb_backup/main.rs`):
     *   **Responsibilities**:
         *   Creates backups of the RocksDB database.
         *   Configurable backup and archive directories.
         *   Option to flush RocksDB before backup.
-    *   **Key Dependencies**: `rocks_db::backup_service::RocksDbBackupService`, `rocks_db::Storage`.
+    *   **Key Dependencies**: RocksDB.
 
-10. **`raw_backup`** (`nft_ingester/src/bin/raw_backup/main.rs`):
+9.  **`raw_backup`** (`nft_ingester/src/bin/raw_backup/main.rs`):
     *   **Responsibilities**:
         *   **(Deprecated)** Creates a raw backup of the RocksDB `OffChainData` column family.
-    *   **Key Dependencies**: `rocks_db::Storage`.
+    *   **Key Dependencies**: RocksDB.
 
-11. **`slot_checker`** (`nft_ingester/src/bin/slot_checker/main.rs`):
+10.  **`slot_checker`** (`nft_ingester/src/bin/slot_checker/main.rs`):
     *   **Responsibilities**:
         *   Verifies the consistency of slot data between RocksDB and BigTable (if used) or RPC source.
         *   Identifies missing slots.
-    *   **Key Dependencies**: `rocks_db::Storage`, `BigTableClient`, `metrics_utils`, `interface::slots_dumper::SlotsDumper`.
+    *   **Key Dependencies**: RocksDB, BigTable (optional), Solana RPC.
 
-12. **`synchronizer_utils`** (`nft_ingester/src/bin/synchronizer_utils/main.rs`):
-    *    **Responsibilities**:
+11.  **`synchronizer_utils`** (`nft_ingester/src/bin/synchronizer_utils/main.rs`):
+    *   **Responsibilities**:
         *   Provides utilities for working with the synchronizer, allowing querying of asset indexes.
         *   Useful for debugging and data inspection.
-    *   **Key Dependencies**: `rocks_db::Storage`, `solana_sdk::pubkey::Pubkey`.
+    *   **Key Dependencies**: RocksDB, PostgreSQL.
     
-13. **`dumper`** (`nft_ingester/src/bin/dumper/main.rs`):
+12.  **`dumper`** (`nft_ingester/src/bin/dumper/main.rs`):
      *   **Responsibilities**:
          *   Exports data from RocksDB to CSV files in the same manner as the synchronizer will do for a full sync.
          *   Iterates through RocksDB data (creators, assets, authorities, etc.).
          *   Writes the data to separate CSV files, potentially sharding the output for large datasets.
          *   Dumps last known keys for tracking progress.
-     *   **Key Dependencies**: `rocks_db::Storage`, `metrics_utils`.
+     *   **Key Dependencies**: RocksDB, PostgreSQL, Redis.
 
 ## Data Sources and Flow
 
@@ -130,7 +125,8 @@ The system is composed of several specialized binaries, each performing a specif
 
 1.  **Finalized Data Sources**:
     *   **Slots Database (RocksDB)**: Contains only finalized slot data. Used for backfilling and data validation.
-    *   **Signature Fetching (Integrated in `ingester`)**: Fetches and validates transaction signatures, crucial for Bubblegum tree consistency and resolving fork-related issues.
+    *   **Data Origin**:  The Slots DB can be populated from either BigTable or a Solana RPC node.
+    *   **Signature Fetching (Integrated in `ingester`)**: Fetches and validates transaction signatures, crucial for Bubblegum tree consistency and resolving fork-related issues.  Signatures can be fetched from either BigTable or a Solana RPC node.
 
 2.  **Non-Finalized Data Source**:
     *   **Redis**: Receives real-time account and transaction updates from the Geyser plugin via a Redis queue.
