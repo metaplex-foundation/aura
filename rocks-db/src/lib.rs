@@ -72,6 +72,7 @@ const BATCH_ITERATION_ACTION: &str = "batch_iteration";
 const BATCH_GET_ACTION: &str = "batch_get";
 const ITERATOR_TOP_ACTION: &str = "iterator_top";
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
+#[derive(Clone)]
 pub struct SlotStorage {
     pub db: Arc<DB>,
     pub raw_blocks: Column<RawBlock>,

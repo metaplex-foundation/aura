@@ -34,7 +34,7 @@ pub trait TypedColumn {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Column<C>
 where
     C: TypedColumn,
