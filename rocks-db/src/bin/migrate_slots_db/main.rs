@@ -3,7 +3,8 @@ use std::{collections::HashMap, sync::Arc};
 use clap::Parser;
 use entities::models::{RawBlock, RawBlockDeprecated};
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocks_db::{column::TypedColumn, SlotStorage, Storage};
+use rocks_db::{column::TypedColumn, errors::StorageError, SlotStorage, Storage};
+use rocksdb::DB;
 use tokio::{
     sync::{Mutex, Semaphore},
     task::{JoinError, JoinSet},
@@ -24,6 +25,23 @@ const WRITE_BATCH_SIZE: usize = 10_000;
 /// memory
 const JOINSET_CLEARANCE_CLOCK: u32 = 1_000_000;
 
+fn put_batch_vec<C: TypedColumn>(
+    backend: Arc<DB>,
+    values: &mut Vec<(C::KeyType, C::ValueType)>,
+) -> Result<(), StorageError> {
+    let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
+    for (k, v) in values.drain(..) {
+        let serialized_value = C::encode(&v).map_err(|e| StorageError::Common(e.to_string()))?;
+        batch.put_cf(
+            &backend.cf_handle(C::NAME).unwrap(),
+            C::encode_key(k.clone()),
+            serialized_value,
+        )
+    }
+    backend.write(batch)?;
+    Ok(())
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let args = Args::parse();
@@ -36,7 +54,7 @@ async fn main() {
             .collect(),
     );
     let db = Arc::new(
-        rocksdb::DB::open_cf_descriptors(
+        DB::open_cf_descriptors(
             &Storage::get_db_options(),
             args.slots_db_path.clone(),
             cf_descriptors,
@@ -70,9 +88,9 @@ async fn main() {
                     let ((start_slot, _), (end_slot, _)) =
                         (batch.first().unwrap(), batch.last().unwrap());
                     eprintln!("Writing slots {} through {} to rocksdb...", start_slot, end_slot);
-                    let map: HashMap<u64, RawBlock> =
-                        std::mem::take(&mut *batch).into_iter().collect();
-                    slot_storage.raw_blocks.put_batch(map).await.expect("raw blocks batch");
+                    let db = slot_storage.db.clone();
+                    put_batch_vec::<RawBlock>(db, &mut *batch)
+                        .expect("raw blocks batch to be inserted into rocksdb");
                 }
             }
         }
