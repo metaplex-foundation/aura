@@ -533,7 +533,7 @@ fn parse_json_to_json_middleware_config(s: &str) -> Result<JsonMiddlewareConfig,
     parse_json(s)
 }
 
-fn parse_json_to_big_table_config(s: &str) -> Result<BigTableConfig, String> {
+pub fn parse_json_to_big_table_config(s: &str) -> Result<BigTableConfig, String> {
     parse_json(s)
 }
 
