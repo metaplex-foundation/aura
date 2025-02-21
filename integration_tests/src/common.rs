@@ -74,6 +74,7 @@ pub fn well_known_fungible_tokens() -> HashMap<String, String> {
     let mut map = HashMap::new();
     map.insert("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK".to_string(), "Hxro".to_string());
     map.insert("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(), "USDC".to_string());
+    map.insert("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m".to_string(), "MPLX".to_string());
     map
 }
 

@@ -493,18 +493,12 @@ async fn test_search_by_owner_with_show_zero_balance_false() {
 #[named]
 async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processing_sequence() {
     let name = trim_test_name(function_name!());
-    let mut wellknown_fungible_accounts = HashMap::new();
-    wellknown_fungible_accounts
-        .insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
-    wellknown_fungible_accounts
-        .insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
-
     let setup = TestSetup::new_with_options(
         name.clone(),
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            well_known_fungible_accounts: wellknown_fungible_accounts,
+            well_known_fungible_accounts: well_known_fungible_tokens(),
         },
     )
     .await;
