@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use entities::{
     api_req_params::{
@@ -25,7 +24,11 @@ async fn test_full_sync_core_get_assets_by_authority() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -73,7 +76,11 @@ async fn test_full_sync_core_get_assets_by_group() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -121,7 +128,11 @@ async fn test_full_sync_core_get_assets_by_owner() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -166,7 +177,11 @@ async fn test_full_sync_core_and_regular_nfts_get_assets_by_owner() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 

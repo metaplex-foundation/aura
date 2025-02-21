@@ -1,18 +1,23 @@
 use std::{
     collections::{HashMap, HashSet},
+    str::FromStr,
     sync::Arc,
     time::Duration,
 };
-use std::str::FromStr;
+
 use chrono::Utc;
 use entities::{
-    enums::UnprocessedAccount,
+    enums::{SpecificationAssetClass, UnprocessedAccount},
     models::{CoreAssetFee, UnprocessedAccountMessage},
 };
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
 use metrics_utils::{IngesterMetricsConfig, MessageProcessMetricsConfig};
 use postgre_client::PgClient;
-use rocks_db::{batch_savers::BatchSaveStorage, Storage};
+use rocks_db::{
+    batch_savers::BatchSaveStorage,
+    columns::asset::{AssetCompleteDetails, AssetStaticDetails},
+    Storage,
+};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::pubkey;
@@ -23,8 +28,7 @@ use tokio::{
 };
 use tracing::{debug, error};
 use uuid::Uuid;
-use entities::enums::SpecificationAssetClass;
-use rocks_db::columns::asset::{AssetCompleteDetails, AssetStaticDetails};
+
 use super::account_based::{
     inscriptions_processor::InscriptionsProcessor,
     mpl_core_fee_indexing_processor::MplCoreFeeProcessor, mpl_core_processor::MplCoreProcessor,
@@ -243,10 +247,13 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                         )
                     }
                 },
-                UnprocessedAccount::Mint(mint) => self
-                    .token_accounts_processor
-                    .transform_and_save_mint_account(batch_storage, mint,
-                                                     &self.wellknown_fungible_accounts),
+                UnprocessedAccount::Mint(mint) => {
+                    self.token_accounts_processor.transform_and_save_mint_account(
+                        batch_storage,
+                        mint,
+                        &self.wellknown_fungible_accounts,
+                    )
+                },
                 UnprocessedAccount::Edition(edition) => {
                     self.mplx_accounts_processor.transform_and_store_edition_account(
                         batch_storage,

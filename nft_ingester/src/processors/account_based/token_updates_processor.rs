@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use entities::{
     enums::{OwnerType, SpecificationAssetClass},
@@ -123,7 +122,6 @@ impl TokenAccountsProcessor {
         mint: &Mint,
         wellknown_fungible_accounts: &HashMap<String, String>,
     ) -> Result<(), StorageError> {
-
         let asset_static_details = if let Some(_) = mint.extensions {
             Some(AssetStaticDetails {
                 pubkey: mint.pubkey,

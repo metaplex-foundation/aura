@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use entities::{api_req_params::GetAsset, enums::AssetType};
 use function_name::named;
@@ -26,7 +25,11 @@ async fn test_fungible_token_mint_freeze_authority() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Mainnet),  clear_db: true, wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 

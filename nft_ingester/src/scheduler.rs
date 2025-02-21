@@ -1,24 +1,30 @@
-use crate::api::dapi::rpc_asset_convertors::parse_files;
-use crate::consts::RAYDIUM_API_HOST;
-use crate::error::IngesterError;
-use crate::raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL};
+use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
+
 use async_trait::async_trait;
-use entities::enums::SpecificationAssetClass;
-use entities::schedule::{JobRunState, ScheduledJob};
+use entities::{
+    enums::SpecificationAssetClass,
+    schedule::{JobRunState, ScheduledJob},
+};
 use interface::schedules::SchedulesStore;
-use rocks_db::batch_savers::BatchSaveStorage;
-use rocks_db::columns::asset::{AssetCompleteDetails, AssetStaticDetails};
 use rocks_db::{
-    columns::{asset_previews::UrlToDownload, offchain_data::OffChainData},
+    batch_savers::BatchSaveStorage,
+    columns::{
+        asset::{AssetCompleteDetails, AssetStaticDetails},
+        asset_previews::UrlToDownload,
+        offchain_data::OffChainData,
+    },
     Storage,
 };
 use solana_program::pubkey::Pubkey;
-use std::str::FromStr;
-use std::{collections::HashMap, sync::Arc, time::Duration};
-use tokio::sync::Mutex;
-use tokio::task::JoinSet;
-use tracing::log::error;
-use tracing::{info, warn};
+use tokio::{sync::Mutex, task::JoinSet};
+use tracing::{info, log::error, warn};
+
+use crate::{
+    api::dapi::rpc_asset_convertors::parse_files,
+    consts::RAYDIUM_API_HOST,
+    error::IngesterError,
+    raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
+};
 
 /// Represents a functionality for running background jobs according
 /// to a confgurations stored in DB.
@@ -37,19 +43,21 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
-    pub fn new(rocks_storage: Arc<Storage>, well_known_fungible_accounts: Option<Vec<String>>) -> Scheduler {
-
+    pub fn new(
+        rocks_storage: Arc<Storage>,
+        well_known_fungible_accounts: Option<Vec<String>>,
+    ) -> Scheduler {
         // Here we defined all "scheduled" jobs
         let jobs: Vec<Box<dyn Job + Send>> = vec![
             Box::new(InitUrlsToDownloadJob {
-            storage: rocks_storage.clone(),
-            batch_size: 1000,
-            last_key: None,
-        }),
+                storage: rocks_storage.clone(),
+                batch_size: 1000,
+                last_key: None,
+            }),
             Box::new(UpdateFungibleTokenTypeJob {
                 rocks_storage: rocks_storage.clone(),
                 well_known_fungible_accounts,
-            })
+            }),
         ];
 
         Scheduler { storage: rocks_storage, jobs }
@@ -238,7 +246,6 @@ impl Job for InitUrlsToDownloadJob {
     }
 }
 
-
 pub struct UpdateFungibleTokenTypeJob {
     rocks_storage: Arc<Storage>,
     well_known_fungible_accounts: Option<Vec<String>>,
@@ -265,13 +272,16 @@ impl Job for UpdateFungibleTokenTypeJob {
     async fn run(&mut self) -> JobRunResult {
         info!("Job UpdateFungibleTokenTypeJob started.");
 
-        update_fungible_token_static_details(&self.rocks_storage, self.well_known_fungible_accounts.clone().unwrap())
-            .expect("Error updating fungible assets.");
+        update_fungible_token_static_details(
+            &self.rocks_storage,
+            self.well_known_fungible_accounts.clone().unwrap(),
+        )
+        .expect("Error updating fungible assets.");
 
+        info!("Job UpdateFungibleTokenTypeJob finish.");
         JobRunResult::Finished(None)
     }
 }
-
 
 pub fn update_fungible_token_static_details(
     rocks_storage: &Arc<Storage>,
@@ -285,7 +295,9 @@ pub fn update_fungible_token_static_details(
 
         if let Ok(Some(asset_complete_data)) = asset_complete_data {
             if let Some(static_details) = &asset_complete_data.static_details {
-                if static_details.specification_asset_class != SpecificationAssetClass::FungibleToken {
+                if static_details.specification_asset_class
+                    != SpecificationAssetClass::FungibleToken
+                {
                     let new_static_details = Some(AssetStaticDetails {
                         specification_asset_class: SpecificationAssetClass::FungibleToken,
                         ..static_details.clone()
@@ -295,7 +307,8 @@ pub fn update_fungible_token_static_details(
                         ..asset_complete_data.clone()
                     };
 
-                    rocks_storage.merge_compete_details_with_batch(&mut batch, &new_asset_complete_data)?;
+                    rocks_storage
+                        .merge_compete_details_with_batch(&mut batch, &new_asset_complete_data)?;
                 }
             }
         }

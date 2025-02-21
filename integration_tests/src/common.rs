@@ -140,7 +140,7 @@ impl TestSetup {
             client.clone(),
             mutexed_tasks.clone(),
             None,
-            opts.wellknown_fungible_accounts
+            opts.wellknown_fungible_accounts,
         )
         .await
         .unwrap();
@@ -219,7 +219,7 @@ impl TestSetup {
 pub struct TestSetupOptions {
     pub network: Option<Network>,
     pub clear_db: bool,
-    pub wellknown_fungible_accounts: HashMap<String, String>
+    pub wellknown_fungible_accounts: HashMap<String, String>,
 }
 
 pub async fn get_transaction(

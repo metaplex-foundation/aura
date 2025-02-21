@@ -49,14 +49,19 @@ use nft_ingester::{
     raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
     redis_receiver::RedisReceiver,
     rocks_db::{receive_last_saved_slot, restore_rocksdb},
-    scheduler::Scheduler,
+    scheduler::{update_fungible_token_static_details, Scheduler},
     transaction_ingester::BackfillTransactionIngester,
 };
 use plerkle_messenger::{ConsumptionType, MessengerConfig, MessengerType};
 use postgre_client::PG_MIGRATIONS_PATH;
 #[cfg(feature = "profiling")]
 use pprof::ProfilerGuardBuilder;
-use rocks_db::{storage_traits::AssetSlotStorage, SlotStorage, Storage};
+use rocks_db::{
+    batch_savers::BatchSaveStorage,
+    columns::asset::{AssetCompleteDetails, AssetStaticDetails},
+    storage_traits::AssetSlotStorage,
+    SlotStorage, Storage,
+};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use tokio::{
@@ -72,9 +77,6 @@ use usecase::{
     signature_fetcher::SignatureFetcher,
 };
 use uuid::Uuid;
-use nft_ingester::scheduler::update_fungible_token_static_details;
-use rocks_db::batch_savers::BatchSaveStorage;
-use rocks_db::columns::asset::{AssetCompleteDetails, AssetStaticDetails};
 
 #[cfg(feature = "profiling")]
 #[global_allocator]
@@ -85,7 +87,6 @@ pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 8;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15 * 60; // 15 minutes
-
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
@@ -590,7 +591,11 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
-    Scheduler::run_in_background(Scheduler::new(primary_rocks_storage.clone(), well_known_fungible_pks.clone())).await;
+    Scheduler::run_in_background(Scheduler::new(
+        primary_rocks_storage.clone(),
+        well_known_fungible_pks.clone(),
+    ))
+    .await;
 
     if let Ok(arweave) = Arweave::from_keypair_path(
         PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),

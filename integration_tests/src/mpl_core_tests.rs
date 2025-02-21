@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use entities::api_req_params::{
     GetAsset, GetAssetsByAuthority, GetAssetsByGroup, GetAssetsByOwner,
@@ -18,7 +17,11 @@ async fn test_mpl_core_get_asset() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -46,7 +49,11 @@ async fn test_mpl_core_get_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -74,7 +81,11 @@ async fn test_mpl_core_get_assets_by_authority() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -114,7 +125,11 @@ async fn test_mpl_core_get_assets_by_group() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -154,7 +169,11 @@ async fn test_mpl_core_get_assets_by_owner() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -191,7 +210,11 @@ async fn test_mpl_core_get_asset_with_edition() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -219,7 +242,11 @@ async fn test_mpl_core_get_asset_with_pubkey_in_rule_set() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -247,7 +274,11 @@ async fn test_mpl_core_get_asset_with_two_oracle_external_plugins() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -275,7 +306,11 @@ async fn test_mpl_core_get_asset_with_oracle_external_plugin_on_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -303,7 +338,11 @@ async fn test_mpl_core_get_asset_with_oracle_multiple_lifecycle_events() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -331,7 +370,11 @@ async fn test_mpl_core_get_asset_with_oracle_custom_offset_and_base_address_conf
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -359,7 +402,11 @@ async fn test_mpl_core_get_asset_with_oracle_no_offset() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -387,7 +434,11 @@ async fn test_mpl_core_get_assets_by_group_with_oracle_and_custom_pda_all_seeds(
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -425,7 +476,11 @@ async fn test_mpl_core_get_asset_with_multiple_internal_and_external_plugins() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -453,7 +508,11 @@ async fn test_mpl_core_autograph_plugin() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -481,7 +540,11 @@ async fn test_mpl_core_autograph_plugin_with_signature() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -509,7 +572,11 @@ async fn test_mpl_core_verified_creators_plugin() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -537,7 +604,11 @@ async fn test_mpl_core_verified_creators_plugin_with_signature() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -565,7 +636,11 @@ async fn test_mpl_core_get_asset_with_app_data_with_binary_data_and_owner_is_dat
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -594,7 +669,11 @@ async fn test_mpl_core_get_asset_with_app_data_with_json_data_and_update_authori
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -622,7 +701,11 @@ async fn test_mpl_core_get_asset_with_app_data_with_msg_pack_data_and_address_is
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -651,7 +734,11 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_binary_data_and_
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -679,7 +766,11 @@ async fn test_mpl_core_get_asset_with_data_section_with_binary_data() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -708,7 +799,11 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_json_data_and_ow
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -736,7 +831,11 @@ async fn test_mpl_core_get_asset_with_data_section_with_json_data() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -765,7 +864,11 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_msg_pack_data_an
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -793,7 +896,11 @@ async fn test_mpl_core_get_asset_with_data_section_with_msg_pack_data() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            wellknown_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
