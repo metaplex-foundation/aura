@@ -20,10 +20,10 @@ export DEVNET_RPC_URL=...
 export MAINNET_RPC_URL=...
 ```
 
-Afterwards, you can simply run the following command to run tests:
+Afterward, you can simply run the following command to run tests:
 ```cargo test```
 
-The tests run migrations from fresh and populates the data. You don't need to any other setup.
+The tests run migrations from fresh and populate the data. You don't need to do any other setup.
 
 ## How do tests work? 
 
