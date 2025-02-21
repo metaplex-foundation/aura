@@ -975,7 +975,7 @@ async fn test_requested_fungibles_are_fungibles() {
         TestSetupOptions {
             network: Some(Network::EclipseMainnet),
             clear_db: true,
-            well_known_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: well_known_fungible_tokens(),
         },
     )
     .await;

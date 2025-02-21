@@ -70,6 +70,13 @@ const SYNCHRONIZER_DUMP_PATH: &str = "./rocks_dump";
 const POSTGRE_MIGRATIONS_PATH: &str = "../migrations";
 const POSTGRE_BASE_DUMP_PATH: &str = "/aura/integration_tests/";
 
+pub fn well_known_fungible_tokens() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    map.insert("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK".to_string(), "Hxro".to_string());
+    map.insert("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(), "USDC".to_string());
+    map
+}
+
 pub struct TestSetup {
     pub name: String,
     pub client: Arc<RpcClient>,
