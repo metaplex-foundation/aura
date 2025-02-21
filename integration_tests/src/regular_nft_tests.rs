@@ -34,7 +34,7 @@ async fn test_reg_get_asset() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -66,7 +66,7 @@ async fn test_reg_get_asset_batch() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -127,7 +127,7 @@ async fn test_reg_get_asset_by_group() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -170,7 +170,7 @@ async fn test_reg_search_assets() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -207,7 +207,7 @@ async fn test_regular_nft_collection() {
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -245,7 +245,7 @@ async fn test_search_by_owner_with_show_zero_balance() {
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts,
+            well_known_fungible_accounts: wellknown_fungible_accounts,
         },
     )
     .await;
@@ -379,7 +379,7 @@ async fn test_search_by_owner_with_show_zero_balance_false() {
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts,
+            well_known_fungible_accounts: wellknown_fungible_accounts,
         },
     )
     .await;
@@ -504,7 +504,7 @@ async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processin
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts,
+            well_known_fungible_accounts: wellknown_fungible_accounts,
         },
     )
     .await;
@@ -632,7 +632,7 @@ async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_pro
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -752,7 +752,7 @@ async fn test_search_assets_by_owner_with_pages() {
         TestSetupOptions {
             network: Some(Network::EclipseMainnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -876,7 +876,7 @@ async fn get_asset_nft_token_22_with_metadata() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -909,7 +909,7 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
         TestSetupOptions {
             network: Some(Network::EclipseMainnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -975,7 +975,7 @@ async fn test_requested_fungibles_are_fungibles() {
         TestSetupOptions {
             network: Some(Network::EclipseMainnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -1042,7 +1042,7 @@ async fn test_recognise_popular_fungible_tokens() {
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts,
+            well_known_fungible_accounts: wellknown_fungible_accounts,
         },
     )
     .await;
@@ -1092,7 +1092,7 @@ async fn test_update_well_known_fungible_tokens() {
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -1157,7 +1157,7 @@ async fn test_update_fungible_token_static_details_job() {
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;

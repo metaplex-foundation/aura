@@ -140,7 +140,7 @@ impl TestSetup {
             client.clone(),
             mutexed_tasks.clone(),
             None,
-            opts.wellknown_fungible_accounts,
+            opts.well_known_fungible_accounts,
         )
         .await
         .unwrap();
@@ -219,7 +219,7 @@ impl TestSetup {
 pub struct TestSetupOptions {
     pub network: Option<Network>,
     pub clear_db: bool,
-    pub wellknown_fungible_accounts: HashMap<String, String>,
+    pub well_known_fungible_accounts: HashMap<String, String>,
 }
 
 pub async fn get_transaction(
@@ -676,8 +676,6 @@ async fn index_account_with_ordered_slot(setup: &TestSetup, account: Pubkey) {
 
 async fn index_token_mint(setup: &TestSetup, mint: Pubkey) {
     index_account(setup, mint).await;
-
-    // let token_account = cached_fetch_largest_token_account_id(&setup.client, mint).await;
 
     // If we used different slots for accounts, then it becomes harder to test updates of related
     // accounts because we need to factor the fact that some updates can be disregarded because

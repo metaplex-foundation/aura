@@ -28,7 +28,7 @@ async fn test_fungible_token_mint_freeze_authority() {
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;

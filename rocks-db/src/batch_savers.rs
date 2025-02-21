@@ -111,10 +111,10 @@ impl BatchSaveStorage {
         self.store_complete(asset)
     }
 
-    pub fn store_static(&mut self, asset_dynamic: &AssetStaticDetails) -> Result<()> {
+    pub fn store_static(&mut self, asset_static: &AssetStaticDetails) -> Result<()> {
         let asset = &AssetCompleteDetails {
-            pubkey: asset_dynamic.pubkey,
-            static_details: Some(asset_dynamic.clone()),
+            pubkey: asset_static.pubkey,
+            static_details: Some(asset_static.clone()),
             ..Default::default()
         };
         self.store_complete(asset)

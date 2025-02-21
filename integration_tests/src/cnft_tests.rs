@@ -47,7 +47,7 @@ async fn test_asset_decompress() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -86,7 +86,7 @@ async fn test_cnft_scenario_mint_update_metadata() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -120,7 +120,7 @@ async fn test_cnft_scenario_mint_update_metadata_remove_creators() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -156,7 +156,7 @@ async fn test_cnft_owners_table() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -208,7 +208,7 @@ async fn test_mint_no_json_uri() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -235,7 +235,7 @@ async fn test_mint_delegate_transfer() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -268,7 +268,7 @@ async fn test_mint_redeem_cancel_redeem() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -301,7 +301,7 @@ async fn test_mint_redeem() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -339,7 +339,7 @@ async fn test_mint_transfer_burn() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -372,7 +372,7 @@ async fn test_mint_transfer_noop() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -405,7 +405,7 @@ async fn test_mint_transfer_transfer() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -438,7 +438,7 @@ async fn test_mint_verify_creator() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -470,7 +470,7 @@ async fn test_mint_verify_collection() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -502,7 +502,7 @@ async fn test_mint_transfer_mpl_programs() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -535,7 +535,7 @@ async fn test_mint_to_collection_unverify_collection() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -572,7 +572,7 @@ async fn test_mint_verify_collection_unverify_collection() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;

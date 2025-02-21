@@ -20,7 +20,7 @@ async fn test_mpl_core_get_asset() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -52,7 +52,7 @@ async fn test_mpl_core_get_collection() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -84,7 +84,7 @@ async fn test_mpl_core_get_assets_by_authority() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -128,7 +128,7 @@ async fn test_mpl_core_get_assets_by_group() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -172,7 +172,7 @@ async fn test_mpl_core_get_assets_by_owner() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -213,7 +213,7 @@ async fn test_mpl_core_get_asset_with_edition() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -245,7 +245,7 @@ async fn test_mpl_core_get_asset_with_pubkey_in_rule_set() {
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -277,7 +277,7 @@ async fn test_mpl_core_get_asset_with_two_oracle_external_plugins() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -309,7 +309,7 @@ async fn test_mpl_core_get_asset_with_oracle_external_plugin_on_collection() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -341,7 +341,7 @@ async fn test_mpl_core_get_asset_with_oracle_multiple_lifecycle_events() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -373,7 +373,7 @@ async fn test_mpl_core_get_asset_with_oracle_custom_offset_and_base_address_conf
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -405,7 +405,7 @@ async fn test_mpl_core_get_asset_with_oracle_no_offset() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -437,7 +437,7 @@ async fn test_mpl_core_get_assets_by_group_with_oracle_and_custom_pda_all_seeds(
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -479,7 +479,7 @@ async fn test_mpl_core_get_asset_with_multiple_internal_and_external_plugins() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -511,7 +511,7 @@ async fn test_mpl_core_autograph_plugin() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -543,7 +543,7 @@ async fn test_mpl_core_autograph_plugin_with_signature() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -575,7 +575,7 @@ async fn test_mpl_core_verified_creators_plugin() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -607,7 +607,7 @@ async fn test_mpl_core_verified_creators_plugin_with_signature() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -639,7 +639,7 @@ async fn test_mpl_core_get_asset_with_app_data_with_binary_data_and_owner_is_dat
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -672,7 +672,7 @@ async fn test_mpl_core_get_asset_with_app_data_with_json_data_and_update_authori
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -704,7 +704,7 @@ async fn test_mpl_core_get_asset_with_app_data_with_msg_pack_data_and_address_is
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -737,7 +737,7 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_binary_data_and_
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -769,7 +769,7 @@ async fn test_mpl_core_get_asset_with_data_section_with_binary_data() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -802,7 +802,7 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_json_data_and_ow
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -834,7 +834,7 @@ async fn test_mpl_core_get_asset_with_data_section_with_json_data() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -867,7 +867,7 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_msg_pack_data_an
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -899,7 +899,7 @@ async fn test_mpl_core_get_asset_with_data_section_with_msg_pack_data() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;

@@ -25,7 +25,7 @@ async fn test_asset_parsing() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -57,7 +57,7 @@ async fn test_get_different_assets_by_owner() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -122,7 +122,7 @@ async fn test_process_previously_unparseable_account() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions { network: Some(Network::Devnet), clear_db: true, well_known_fungible_accounts: HashMap::new() },
     )
     .await;
 

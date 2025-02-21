@@ -119,7 +119,7 @@ async fn test_account_updates() {
         TestSetupOptions {
             network: None,
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;

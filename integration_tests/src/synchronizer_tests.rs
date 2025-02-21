@@ -27,7 +27,7 @@ async fn test_full_sync_core_get_assets_by_authority() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -79,7 +79,7 @@ async fn test_full_sync_core_get_assets_by_group() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -131,7 +131,7 @@ async fn test_full_sync_core_get_assets_by_owner() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
@@ -180,7 +180,7 @@ async fn test_full_sync_core_and_regular_nfts_get_assets_by_owner() {
         TestSetupOptions {
             network: Some(Network::Devnet),
             clear_db: true,
-            wellknown_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: HashMap::new(),
         },
     )
     .await;
