@@ -39,6 +39,6 @@ There is also the backfill mechanism that is used to load a historical data (met
 Search data part:
 
 7. A client (end user or another service) makes a call to our JSON RPC endpoint specifying field he wants to search by.
-8. The server first goes to the PostgreSQL inxed to find an ID of the required record.
-9. Using the ID, the server fetches required metadata from the RocksDB and returns to the client.
+8. The server first queries the PostgreSQL index to find an ID of the required record.
+9. Using the ID, the server fetches required metadata from the RocksDB and returns it to the client.
 

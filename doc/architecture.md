@@ -48,7 +48,7 @@ The system is composed of several specialized binaries, each performing a specif
         *   Fetches and persists finalized slot data to the slots RocksDB database.
         *   Provides a reliable source of finalized data for backfilling and validation.
         *   Can fetch data from either BigTable (optional) or an RPC source.
-        *   Handles retries and error handling, ensure the slots data is consistent and consicuential - that is the slot number is always increasing and never skipped (although it still may miss some slots due to the eventual consistency of bigtable).
+        *   Handles retries and error handling, ensuring the slots data is consistent and sequential - that is the slot number is always increasing and never skipped (although it still may miss some slots due to the eventual consistency of bigtable).
     *   **Key Dependencies**: RocksDB, BigTable (optional), Solana RPC.
 
 4.  **`backfill`** (`nft_ingester/src/bin/backfill/main.rs`):
