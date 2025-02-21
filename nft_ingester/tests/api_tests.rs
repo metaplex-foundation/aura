@@ -877,7 +877,7 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
         );
         token_updates_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc, &Default::default())
             .unwrap();
         token_updates_processor
             .transform_and_save_token_account(&mut batch_storage, token_acc.pubkey, &token_acc)
@@ -921,7 +921,7 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
         );
         token_updates_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -1046,7 +1046,7 @@ mod tests {
         );
         for mint in mint_accs.iter() {
             token_updates_processor
-                .transform_and_save_mint_account(&mut batch_storage, mint)
+                .transform_and_save_mint_account(&mut batch_storage, mint, &Default::default())
                 .unwrap();
         }
         for token_account in token_accs.iter() {
@@ -1208,7 +1208,7 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc, &Default::default())
             .unwrap();
         token_updates_processor
             .transform_and_save_token_account(&mut batch_storage, token_acc.pubkey, &token_acc)
@@ -2801,7 +2801,7 @@ mod tests {
             .unwrap();
 
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint)
+            .transform_and_save_mint_account(&mut batch_storage, &mint, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
@@ -3017,10 +3017,10 @@ mod tests {
             )
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .transform_and_save_mint_account(&mut batch_storage, &mint1, &Default::default())
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .transform_and_save_mint_account(&mut batch_storage, &mint2, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
@@ -3211,7 +3211,7 @@ mod tests {
         let token_accounts_processor =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .transform_and_save_mint_account(&mut batch_storage, &mint1, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -3351,10 +3351,10 @@ mod tests {
             )
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .transform_and_save_mint_account(&mut batch_storage, &mint1, &Default::default())
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .transform_and_save_mint_account(&mut batch_storage, &mint2, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -3485,7 +3485,7 @@ mod tests {
             )
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint)
+            .transform_and_save_mint_account(&mut batch_storage, &mint, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -3839,7 +3839,7 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
         );
         token_updates_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc, &Default::default())
             .unwrap();
         token_updates_processor
             .transform_and_save_token_account(&mut batch_storage, token_acc.pubkey, &token_acc)
@@ -4078,10 +4078,10 @@ mod tests {
             )
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .transform_and_save_mint_account(&mut batch_storage, &mint1, &Default::default())
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .transform_and_save_mint_account(&mut batch_storage, &mint2, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);

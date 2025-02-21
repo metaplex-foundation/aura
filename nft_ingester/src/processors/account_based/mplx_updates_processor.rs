@@ -51,10 +51,10 @@ impl MplxAccountsProcessor {
         storage: &mut BatchSaveStorage,
         key: Pubkey,
         metadata_info: &MetadataInfo,
-        wellknown_fungible_accounts: &HashMap<String, String>,
+        well_known_fungible_accounts: &HashMap<String, String>,
     ) -> Result<(), StorageError> {
         let metadata_models =
-            self.create_rocks_metadata_models(key, metadata_info, &wellknown_fungible_accounts);
+            self.create_rocks_metadata_models(key, metadata_info, well_known_fungible_accounts);
 
         let begin_processing = Instant::now();
         let asset = AssetCompleteDetails::from(&metadata_models);

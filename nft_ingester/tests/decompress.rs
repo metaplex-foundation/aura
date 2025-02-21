@@ -158,7 +158,9 @@ mod tests {
             .transform_and_save_token_account(storage, token_acc.pubkey, &token_acc)
             .unwrap();
 
-        spl_token_accs_parser.transform_and_save_mint_account(storage, &mint_acc).unwrap();
+        spl_token_accs_parser
+            .transform_and_save_mint_account(storage, &mint_acc, &Default::default())
+            .unwrap();
 
         let decompressed_token_data = MetadataInfo {
             metadata: Metadata {

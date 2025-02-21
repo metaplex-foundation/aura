@@ -18,7 +18,7 @@ pub fn wellknown_fungible_tokens_map() -> HashMap<String, String> {
         for item in arr {
             if let Value::Array(pair) = item {
                 if let (Some(Value::String(address)), Some(Value::String(symbol))) =
-                    (pair.get(0), pair.get(1))
+                    (pair.first(), pair.get(1))
                 {
                     map.insert(address.clone(), symbol.clone());
                 }

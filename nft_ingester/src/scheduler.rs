@@ -7,7 +7,6 @@ use entities::{
 };
 use interface::schedules::SchedulesStore;
 use rocks_db::{
-    batch_savers::BatchSaveStorage,
     columns::{
         asset::{AssetCompleteDetails, AssetStaticDetails},
         asset_previews::UrlToDownload,
@@ -16,15 +15,9 @@ use rocks_db::{
     Storage,
 };
 use solana_program::pubkey::Pubkey;
-use tokio::{sync::Mutex, task::JoinSet};
-use tracing::{info, log::error, warn};
+use tracing::{info, log::error};
 
-use crate::{
-    api::dapi::rpc_asset_convertors::parse_files,
-    consts::RAYDIUM_API_HOST,
-    error::IngesterError,
-    raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
-};
+use crate::{api::dapi::rpc_asset_convertors::parse_files, error::IngesterError};
 
 /// Represents a functionality for running background jobs according
 /// to a confgurations stored in DB.
@@ -267,7 +260,7 @@ impl Job for UpdateFungibleTokenTypeJob {
         }
     }
 
-    fn init_with_state(&mut self, prev_state: Option<Vec<u8>>) {}
+    fn init_with_state(&mut self, _prev_state: Option<Vec<u8>>) {}
 
     async fn run(&mut self) -> JobRunResult {
         info!("Job UpdateFungibleTokenTypeJob started.");

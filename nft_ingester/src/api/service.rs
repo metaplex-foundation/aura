@@ -8,7 +8,7 @@ use jsonrpc_http_server::{
     hyper::service::{make_service_fn, service_fn},
     AccessControlAllowOrigin, DomainsValidation, ServerBuilder,
 };
-use metrics_utils::{red::RequestErrorDurationMetrics, ApiMetricsConfig};
+use metrics_utils::ApiMetricsConfig;
 use multer::Multipart;
 use postgre_client::PgClient;
 use rocks_db::Storage;
@@ -18,7 +18,7 @@ use tokio::{
     sync::{broadcast::Receiver, Mutex},
     task::{JoinError, JoinSet},
 };
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 

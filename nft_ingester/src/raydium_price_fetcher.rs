@@ -80,9 +80,9 @@ impl RaydiumTokenPriceFetcher {
 
     pub async fn get_all_token_symbols(&self) -> Result<HashMap<String, String>, UsecaseError> {
         let mut hashmap: HashMap<String, String> = HashMap::new();
-        let mut iter = self.symbol_cache.iter();
+        let iter = self.symbol_cache.iter();
 
-        while let Some((key, value)) = iter.next() {
+        for (key, value) in iter {
             hashmap.insert((*key).clone(), value.clone());
         }
 

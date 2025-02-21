@@ -13,7 +13,7 @@ use std::{
 use arweave_rs::{consts::ARWEAVE_BASE_URL, Arweave};
 use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
-use entities::enums::{SpecificationAssetClass, ASSET_TYPES};
+use entities::enums::ASSET_TYPES;
 use futures::FutureExt;
 use grpc::{
     asseturls::asset_url_service_server::AssetUrlServiceServer,
@@ -21,7 +21,6 @@ use grpc::{
     gapfiller::gap_filler_service_server::GapFillerServiceServer,
     service::PeerGapFillerServiceImpl,
 };
-use interface::price_fetcher::TokenPriceFetcher;
 use metrics_utils::{
     utils::start_metrics, BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait,
 };
@@ -49,21 +48,15 @@ use nft_ingester::{
     raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
     redis_receiver::RedisReceiver,
     rocks_db::{receive_last_saved_slot, restore_rocksdb},
-    scheduler::{update_fungible_token_static_details, Scheduler},
+    scheduler::Scheduler,
     transaction_ingester::BackfillTransactionIngester,
 };
 use plerkle_messenger::{ConsumptionType, MessengerConfig, MessengerType};
 use postgre_client::PG_MIGRATIONS_PATH;
 #[cfg(feature = "profiling")]
 use pprof::ProfilerGuardBuilder;
-use rocks_db::{
-    batch_savers::BatchSaveStorage,
-    columns::asset::{AssetCompleteDetails, AssetStaticDetails},
-    storage_traits::AssetSlotStorage,
-    SlotStorage, Storage,
-};
+use rocks_db::{storage_traits::AssetSlotStorage, SlotStorage};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_program::pubkey::Pubkey;
 use tokio::{
     sync::{broadcast, Mutex},
     task::JoinSet,
@@ -193,7 +186,6 @@ pub async fn main() -> Result<(), IngesterError> {
     });
     let well_known_fungible_accounts =
         token_price_fetcher.get_all_token_symbols().await.unwrap_or_else(|_| HashMap::new());
-    let well_known_fungible_pks = well_known_fungible_accounts.keys().clone().collect();
 
     info!("Init Redis ....");
     let cloned_rx = shutdown_rx.resubscribe();
@@ -390,7 +382,6 @@ pub async fn main() -> Result<(), IngesterError> {
         };
 
         let cloned_index_storage = index_pg_storage.clone();
-        let red_metrics = metrics_state.red_metrics.clone();
 
         mutexed_tasks.lock().await.spawn(async move {
             match start_api(
@@ -593,7 +584,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     Scheduler::run_in_background(Scheduler::new(
         primary_rocks_storage.clone(),
-        well_known_fungible_pks.clone(),
+        Some(well_known_fungible_accounts.keys().cloned().collect()),
     ))
     .await;
 

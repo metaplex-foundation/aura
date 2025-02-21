@@ -158,10 +158,18 @@ mod tests {
             )
             .unwrap();
         spl_token_accs_parser
-            .transform_and_save_mint_account(&mut batch_storage, &first_mint_to_save)
+            .transform_and_save_mint_account(
+                &mut batch_storage,
+                &first_mint_to_save,
+                &Default::default(),
+            )
             .unwrap();
         spl_token_accs_parser
-            .transform_and_save_mint_account(&mut batch_storage, &second_mint_to_save)
+            .transform_and_save_mint_account(
+                &mut batch_storage,
+                &second_mint_to_save,
+                &Default::default(),
+            )
             .unwrap();
         batch_storage.flush().unwrap();
 

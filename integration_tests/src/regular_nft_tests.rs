@@ -1112,7 +1112,7 @@ async fn test_update_well_known_fungible_tokens() {
             ]
         }"#;
 
-    let request = serde_json::from_str(request_str.clone()).unwrap();
+    let request = serde_json::from_str(request_str).unwrap();
     let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
 
     assert_eq!(response.as_array().unwrap().len(), 2);
@@ -1132,7 +1132,7 @@ async fn test_update_well_known_fungible_tokens() {
     setup.synchronizer.full_syncronize(&shutdown_rx, Fungible).await.unwrap();
     setup.synchronizer.full_syncronize(&shutdown_rx, NonFungible).await.unwrap();
 
-    let request = serde_json::from_str(request_str.clone()).unwrap();
+    let request = serde_json::from_str(request_str).unwrap();
     let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
 
     assert_eq!(response.as_array().unwrap().len(), 2);
@@ -1177,7 +1177,7 @@ async fn test_update_fungible_token_static_details_job() {
             ]
         }"#;
 
-    let request = serde_json::from_str(request_str.clone()).unwrap();
+    let request = serde_json::from_str(request_str).unwrap();
     let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
 
     assert_eq!(response.as_array().unwrap().len(), 2);
@@ -1199,7 +1199,7 @@ async fn test_update_fungible_token_static_details_job() {
     setup.synchronizer.full_syncronize(&shutdown_rx, Fungible).await.unwrap();
     setup.synchronizer.full_syncronize(&shutdown_rx, NonFungible).await.unwrap();
 
-    let request_2 = serde_json::from_str(request_str.clone()).unwrap();
+    let request_2 = serde_json::from_str(request_str).unwrap();
     let response_2 = setup.das_api.get_asset_batch(request_2, mutexed_tasks.clone()).await.unwrap();
 
     assert_eq!(response_2.as_array().unwrap().len(), 2);

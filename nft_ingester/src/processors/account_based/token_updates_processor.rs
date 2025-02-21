@@ -120,9 +120,9 @@ impl TokenAccountsProcessor {
         &self,
         storage: &mut BatchSaveStorage,
         mint: &Mint,
-        wellknown_fungible_accounts: &HashMap<String, String>,
+        well_known_fungible_accounts: &HashMap<String, String>,
     ) -> Result<(), StorageError> {
-        let asset_static_details = if let Some(_) = mint.extensions {
+        let asset_static_details = if mint.extensions.is_some() {
             Some(AssetStaticDetails {
                 pubkey: mint.pubkey,
                 specification_asset_class: SpecificationAssetClass::FungibleToken,
@@ -130,7 +130,7 @@ impl TokenAccountsProcessor {
                 royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
                 edition_address: None,
             })
-        } else if wellknown_fungible_accounts.contains_key(&mint.pubkey.to_string()) {
+        } else if well_known_fungible_accounts.contains_key(&mint.pubkey.to_string()) {
             Some(AssetStaticDetails {
                 pubkey: mint.pubkey,
                 specification_asset_class: SpecificationAssetClass::FungibleToken,

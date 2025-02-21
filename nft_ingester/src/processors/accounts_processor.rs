@@ -1,26 +1,20 @@
 use std::{
     collections::{HashMap, HashSet},
-    str::FromStr,
     sync::Arc,
     time::Duration,
 };
 
 use chrono::Utc;
 use entities::{
-    enums::{SpecificationAssetClass, UnprocessedAccount},
+    enums::UnprocessedAccount,
     models::{CoreAssetFee, UnprocessedAccountMessage},
 };
 use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
 use metrics_utils::{IngesterMetricsConfig, MessageProcessMetricsConfig};
 use postgre_client::PgClient;
-use rocks_db::{
-    batch_savers::BatchSaveStorage,
-    columns::asset::{AssetCompleteDetails, AssetStaticDetails},
-    Storage,
-};
+use rocks_db::{batch_savers::BatchSaveStorage, Storage};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use solana_sdk::pubkey;
 use tokio::{
     sync::{broadcast::Receiver, Mutex},
     task::{JoinError, JoinSet},
