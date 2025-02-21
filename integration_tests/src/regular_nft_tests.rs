@@ -1,18 +1,26 @@
-use std::sync::Arc;
+use std::{collections::HashMap, ptr::with_exposed_provenance, sync::Arc};
 
 use entities::{
     api_req_params::{GetAsset, GetAssetBatch, GetAssetsByGroup, SearchAssets},
-    enums::AssetType,
+    enums::{AssetType, AssetType::Fungible},
 };
 use function_name::named;
 use itertools::Itertools;
-use nft_ingester::api::dapi::response::AssetList;
-use rocks_db::storage_traits::AssetIndexReader;
+use metrics_utils::IngesterMetricsConfig;
+use nft_ingester::{
+    api::dapi::response::AssetList,
+    consts::RAYDIUM_API_HOST,
+    raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
+    scheduler::{update_fungible_token_static_details, Scheduler},
+};
+use rocks_db::{batch_savers::BatchSaveStorage, storage_traits::AssetIndexReader};
 use serial_test::serial;
 use tokio::{
     sync::{broadcast, Mutex},
     task::JoinSet,
 };
+use tracing::{info, warn};
+use AssetType::NonFungible;
 
 use super::common::*;
 
@@ -23,7 +31,11 @@ async fn test_reg_get_asset() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions {
+            network: None,
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -51,7 +63,11 @@ async fn test_reg_get_asset_batch() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions {
+            network: None,
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -108,7 +124,11 @@ async fn test_reg_get_asset_by_group() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions {
+            network: None,
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -147,7 +167,11 @@ async fn test_reg_search_assets() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions {
+            network: None,
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -180,7 +204,11 @@ async fn test_regular_nft_collection() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -206,29 +234,42 @@ async fn test_regular_nft_collection() {
 #[named]
 async fn test_search_by_owner_with_show_zero_balance() {
     let name = trim_test_name(function_name!());
+    let mut wellknown_fungible_accounts = HashMap::new();
+    wellknown_fungible_accounts
+        .insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
+    wellknown_fungible_accounts
+        .insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
+
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true },
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: wellknown_fungible_accounts,
+        },
     )
     .await;
 
+    // Add Asset Hxro (Wormhole)
     let seeds: Vec<SeedEvent> = seed_token_mints([
-        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // mint for fungible acc
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",  // Fungible token MPLX
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts([
+        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG", // Super Sweet NFT Collection
+        "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", // Super Degen Ape Collection
     ]);
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let seeds: Vec<SeedEvent> = seed_accounts([
-        "3rzjtWZcZyvADaT5rrkRwGKWjnuzvK3PDedGMUwpnrrP", // empty token acc from NFT (3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG)
-        "94eSnb5qBWTvxj3gqP6Ukq8bPhRTNNVZrE7zR5yTZd9E", // fungible token with zero balance
+        "3rzjtWZcZyvADaT5rrkRwGKWjnuzvK3PDedGMUwpnrrP", // empty token acc from NFT ( Super Sweet NFT Collection )
+        "3oiDhCQMDzxj8NcLfRBCQj3R9mQkE1DnDZfrNbAgruQk", // Existing NFT for current owner (Degen Ape Collection)
+        "8Tf7Pj7UnF7KMcsQNUrr3MqYZjvPuRUrPeQRc8Dkr9pA", // MPLX Fungible token with non zero balance.
+        "94eSnb5qBWTvxj3gqP6Ukq8bPhRTNNVZrE7zR5yTZd9E", // Hxro (Wormhole) Fungible token with zero balance.
+        "sFxPHhiQWptvrc2YA2HyfNjCvqxpsEtmjmREBvWf7NJ",  // Super Sweet NFT with another owner.
     ]);
-
-    index_seed_events(&setup, seeds.iter().collect_vec()).await;
-
-    let seeds: Vec<SeedEvent> = seed_nfts([
-        "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", // NFT wallet has
-        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG", // NFT wallet used to have
-    ]);
-
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let request = r#"
@@ -247,7 +288,451 @@ async fn test_search_by_owner_with_show_zero_balance() {
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
     let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
-    insta::assert_json_snapshot!(name, response);
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    // API shouldn't return zero NonFungible accounts ("3rzjtWZc"). "showZeroBalance": true is working only for Fungible tokens
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 3);
+    assert_eq!(
+        res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+        " Hxro (Wormhole) Fungible token account"
+    );
+    assert_eq!(
+        res_obj.items[1].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+        "Degen Ape NFT account"
+    );
+    assert_eq!(
+        res_obj.items[2].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
+        "MPLX Fungible token account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_all", name), response);
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "nonFungible",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": true
+        }
+    }
+    "#;
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 1);
+    assert_eq!(
+        res_obj.items[0].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+        "Degen Ape NFT account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_non_fungible", name), response);
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "fungible",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": true
+        }
+    }
+    "#;
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 2);
+    assert_eq!(
+        res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+        " Hxro (Wormhole) Fungible token account"
+    );
+    assert_eq!(
+        res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
+        "MPLX Fungible token account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
+}
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_search_by_owner_with_show_zero_balance_false() {
+    let name = trim_test_name(function_name!());
+    let mut wellknown_fungible_accounts = HashMap::new();
+    wellknown_fungible_accounts
+        .insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
+    wellknown_fungible_accounts
+        .insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: wellknown_fungible_accounts,
+        },
+    )
+    .await;
+
+    // Add Asset Hxro (Wormhole)
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",  // Fungible token MPLX
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts([
+        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG", // Super Sweet NFT Collection
+        "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", // Super Degen Ape Collection
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let seeds: Vec<SeedEvent> = seed_accounts([
+        "3rzjtWZcZyvADaT5rrkRwGKWjnuzvK3PDedGMUwpnrrP", // empty token acc from NFT ( Super Sweet NFT Collection )
+        "3oiDhCQMDzxj8NcLfRBCQj3R9mQkE1DnDZfrNbAgruQk", // Existing NFT for current owner (Degen Ape Collection)
+        "8Tf7Pj7UnF7KMcsQNUrr3MqYZjvPuRUrPeQRc8Dkr9pA", // MPLX Fungible token with non zero balance.
+        "94eSnb5qBWTvxj3gqP6Ukq8bPhRTNNVZrE7zR5yTZd9E", // Hxro (Wormhole) Fungible token with zero balance.
+        "sFxPHhiQWptvrc2YA2HyfNjCvqxpsEtmjmREBvWf7NJ",  // Super Sweet NFT with another owner.
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "all",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": false
+        }
+    }
+    "#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 2);
+    assert_eq!(
+        res_obj.items[0].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+        "Degen Ape NFT account"
+    );
+    assert_eq!(
+        res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
+        "MPLX Fungible token account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_all", name), response);
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "nonFungible",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": false
+        }
+    }
+    "#;
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 1);
+    assert_eq!(
+        res_obj.items[0].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+        "Degen Ape NFT account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_non_fungible", name), response);
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "fungible",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": false
+        }
+    }
+    "#;
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 1);
+    assert_eq!(
+        res_obj.items[0].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
+        "MPLX Fungible token account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
+}
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processing_sequence() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: well_known_fungible_tokens(),
+        },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_accounts([
+        "3rzjtWZcZyvADaT5rrkRwGKWjnuzvK3PDedGMUwpnrrP", // empty token acc from NFT ( Super Sweet NFT Collection )
+        "3oiDhCQMDzxj8NcLfRBCQj3R9mQkE1DnDZfrNbAgruQk", // Existing NFT for current owner (Degen Ape Collection)
+        "8Tf7Pj7UnF7KMcsQNUrr3MqYZjvPuRUrPeQRc8Dkr9pA", // MPLX Fungible token with non zero balance.
+        "94eSnb5qBWTvxj3gqP6Ukq8bPhRTNNVZrE7zR5yTZd9E", // Hxro (Wormhole) Fungible token with zero balance.
+        "sFxPHhiQWptvrc2YA2HyfNjCvqxpsEtmjmREBvWf7NJ",  // Super Sweet NFT with another owner.
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    // Add Asset Hxro (Wormhole)
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",  // Fungible token MPLX
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts([
+        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG", // Super Sweet NFT Collection
+        "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", // Super Degen Ape Collection
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "all",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": true
+        }
+    }
+    "#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    // API shouldn't return zero NonFungible accounts ("3rzjtWZc"). "showZeroBalance": true is working only for Fungible tokens
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 3);
+    assert_eq!(
+        res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+        " Hxro (Wormhole) Fungible token account"
+    );
+    assert_eq!(
+        res_obj.items[1].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+        "Degen Ape NFT account"
+    );
+    assert_eq!(
+        res_obj.items[2].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
+        "MPLX Fungible token account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_all", name), response);
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "nonFungible",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": true
+        }
+    }
+    "#;
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 1);
+    assert_eq!(
+        res_obj.items[0].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+        "Degen Ape NFT account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_non_fungible", name), response);
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "fungible",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": true
+        }
+    }
+    "#;
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 2);
+    assert_eq!(
+        res_obj.items[0].id, "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+        " Hxro (Wormhole) Fungible token account"
+    );
+    assert_eq!(
+        res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
+        "MPLX Fungible token account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
+}
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_processing_sequence() {
+    let name = trim_test_name(function_name!());
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_accounts([
+        "3rzjtWZcZyvADaT5rrkRwGKWjnuzvK3PDedGMUwpnrrP", // empty token acc from NFT ( Super Sweet NFT Collection )
+        "3oiDhCQMDzxj8NcLfRBCQj3R9mQkE1DnDZfrNbAgruQk", // Existing NFT for current owner (Degen Ape Collection)
+        "8Tf7Pj7UnF7KMcsQNUrr3MqYZjvPuRUrPeQRc8Dkr9pA", // MPLX Fungible token with non zero balance.
+        "94eSnb5qBWTvxj3gqP6Ukq8bPhRTNNVZrE7zR5yTZd9E", // Hxro (Wormhole) Fungible token with zero balance.
+        "sFxPHhiQWptvrc2YA2HyfNjCvqxpsEtmjmREBvWf7NJ",  // Super Sweet NFT with another owner.
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    // Add Asset Hxro (Wormhole)
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",  // Fungible token MPLX
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts([
+        "3yMfqHsajYFw2Yw6C4kwrvHRESMg9U7isNVJuzNETJKG", // Super Sweet NFT Collection
+        "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj", // Super Degen Ape Collection
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "all",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": false
+        }
+    }
+    "#;
+
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 2);
+    assert_eq!(
+        res_obj.items[0].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+        "Degen Ape NFT account"
+    );
+    assert_eq!(
+        res_obj.items[1].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
+        "MPLX Fungible token account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_all", name), response);
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "nonFungible",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": false
+        }
+    }
+    "#;
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 1);
+    assert_eq!(
+        res_obj.items[0].id, "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+        "Degen Ape NFT account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_non_fungible", name), response);
+
+    let request = r#"
+    {
+        "page": 1,
+        "limit": 500,
+        "ownerAddress": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+        "tokenType": "fungible",
+        "options": {
+            "showNativeBalance": true, "showZeroBalance": false
+        }
+    }
+    "#;
+
+    let request: SearchAssets = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
+
+    assert_eq!(res_obj.items.is_empty(), false);
+    assert_eq!(res_obj.items.len(), 1);
+    assert_eq!(
+        res_obj.items[0].id, "METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m",
+        "MPLX Fungible token account"
+    );
+
+    insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
 }
 
 #[tokio::test]
@@ -258,7 +743,11 @@ async fn test_search_assets_by_owner_with_pages() {
 
     let setup = TestSetup::new_with_options(
         test_name.clone(),
-        TestSetupOptions { network: Some(Network::EclipseMainnet), clear_db: true },
+        TestSetupOptions {
+            network: Some(Network::EclipseMainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -269,7 +758,15 @@ async fn test_search_assets_by_owner_with_pages() {
         "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB",
         "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH",
     ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
+    let seeds: Vec<SeedEvent> = seed_accounts([
+        "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
+        "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
+        "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
+        "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
+        "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
+    ]);
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let request = r#"
@@ -370,7 +867,11 @@ async fn get_asset_nft_token_22_with_metadata() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -399,20 +900,13 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::EclipseMainnet), clear_db: true },
+        TestSetupOptions {
+            network: Some(Network::EclipseMainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
-
-    let seeds: Vec<SeedEvent> = seed_accounts([
-        "7qfEt4otpcr1LHPVZ2hjCB1d77wSZJfSDgwiXcUCneaT",
-        "9cyPkra7ANoDmMM4Abw8rYKxv3aWC3jZUjz8NtWaYo6D",
-        "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
-        "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
-        "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
-        "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
-        "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
-    ]);
-    index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let seeds = seed_token_mints([
         "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ",
@@ -423,7 +917,17 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
         "87K3PtGNihT6dKjxULK25MVapZKXQWN4zXqC1BEshHKd",
         "LaihKXA47apnS599tyEyasY2REfEzBNe4heunANhsMx", // Fungible
     ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
+    let seeds: Vec<SeedEvent> = seed_accounts([
+        "4pRQs1xZdASeL65PHTa1C8GnYCWtX18Lx98ofJB3SZNC",
+        "5ok1Zv557DAnichMsWE4cfURYbr1D2yWfcaqehydHo9R",
+        "JCnRA9ALhDYC5SWhBrw19JVWnDxnrGMYTmkfLsLkbpzV",
+        "2TQDwULQDdpisGssKZeRw2qcCTiZnsAmi6cnR89YYxSg",
+        "44vjE7bDpwA2nFp5KbjWHjG2RHBWi5z1pP5ehY9t6p8V",
+        "CJL5wC5ouAhnQ7jkCPkfKSyjHJQAHNWPJKDHB5VojSug",
+        "Ar5YKeZgzEG1RxosWJuS1BWVX7odSdkS6CBVpwqef7fo",
+    ]);
     index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
     let request = r#"
@@ -462,7 +966,11 @@ async fn test_requested_fungibles_are_fungibles() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::EclipseMainnet), clear_db: true },
+        TestSetupOptions {
+            network: Some(Network::EclipseMainnet),
+            clear_db: true,
+            well_known_fungible_accounts: well_known_fungible_tokens(),
+        },
     )
     .await;
 
@@ -502,6 +1010,194 @@ async fn test_requested_fungibles_are_fungibles() {
     assert_eq!(response["items"].as_array().unwrap().len(), 1);
 
     response["items"].as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "FungibleToken");
+        true
+    });
+
+    insta::assert_json_snapshot!(name, response);
+}
+
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_recognise_popular_fungible_tokens() {
+    let name = trim_test_name(function_name!());
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let token_price_fetcher =
+        RaydiumTokenPriceFetcher::new(RAYDIUM_API_HOST.to_string(), CACHE_TTL, None);
+    token_price_fetcher.warmup().await.unwrap();
+    let wellknown_fungible_accounts = token_price_fetcher.get_all_token_symbols().await.unwrap();
+    assert!(wellknown_fungible_accounts.len() > 0);
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: wellknown_fungible_accounts,
+        },
+    )
+    .await;
+
+    // Add Asset Hxro (Wormhole)
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // Fungible token USDC
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request = r#"
+         {
+            "ids": [
+                "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+                "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            ]
+        }"#;
+
+    let request = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response.as_array().unwrap().len(), 2);
+    response.as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "FungibleToken");
+        true
+    });
+
+    insta::assert_json_snapshot!(name, response);
+}
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_update_well_known_fungible_tokens() {
+    let name = trim_test_name(function_name!());
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let token_price_fetcher =
+        RaydiumTokenPriceFetcher::new(RAYDIUM_API_HOST.to_string(), CACHE_TTL, None);
+    token_price_fetcher.warmup().await.unwrap();
+    let well_known_fungible_accounts = token_price_fetcher.get_all_token_symbols().await.unwrap();
+    assert!(well_known_fungible_accounts.len() > 0);
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
+    )
+    .await;
+
+    // Add Asset Hxro (Wormhole)
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // Fungible token USDC
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request_str = r#"
+         {
+            "ids": [
+                "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+                "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            ]
+        }"#;
+
+    let request = serde_json::from_str(request_str).unwrap();
+    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response.as_array().unwrap().len(), 2);
+    response.as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "Custom");
+        true
+    });
+
+    update_fungible_token_static_details(
+        &setup.rocks_db,
+        well_known_fungible_accounts.keys().cloned().collect(),
+    );
+
+    // sync data to Postgre
+    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+    setup.synchronizer.full_syncronize(&shutdown_rx, Fungible).await.unwrap();
+    setup.synchronizer.full_syncronize(&shutdown_rx, NonFungible).await.unwrap();
+
+    let request = serde_json::from_str(request_str).unwrap();
+    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response.as_array().unwrap().len(), 2);
+    response.as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "FungibleToken");
+        true
+    });
+
+    insta::assert_json_snapshot!(name, response);
+}
+
+#[named]
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_update_fungible_token_static_details_job() {
+    let name = trim_test_name(function_name!());
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
+    )
+    .await;
+
+    // Add Asset Hxro (Wormhole)
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // Fungible token USDC
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request_str = r#"
+         {
+            "ids": [
+                "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+                "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            ]
+        }"#;
+
+    let request = serde_json::from_str(request_str).unwrap();
+    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response.as_array().unwrap().len(), 2);
+    response.as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "Custom");
+        true
+    });
+
+    let well_known_fungible_pks = vec![
+        String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"),
+        String::from("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+    ];
+    let sut = Scheduler::new(setup.rocks_db.clone(), Some(well_known_fungible_pks));
+    Scheduler::run_in_background(sut).await;
+
+    // sync data to Postgre
+    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+    setup.synchronizer.full_syncronize(&shutdown_rx, Fungible).await.unwrap();
+    setup.synchronizer.full_syncronize(&shutdown_rx, NonFungible).await.unwrap();
+
+    let request_2 = serde_json::from_str(request_str).unwrap();
+    let response_2 = setup.das_api.get_asset_batch(request_2, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response_2.as_array().unwrap().len(), 2);
+    response_2.as_array().unwrap().iter().all(|i| {
         let interface = i["interface"].as_str().unwrap();
         assert_eq!(interface, "FungibleToken");
         true

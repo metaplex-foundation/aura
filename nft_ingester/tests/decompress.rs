@@ -25,6 +25,7 @@ mod tests {
         backfiller::DirectBlockParser,
         buffer::Buffer,
         config::JsonMiddlewareConfig,
+        consts::wellknown_fungible_tokens_map,
         json_worker::JsonWorker,
         processors::{
             account_based::{
@@ -157,7 +158,9 @@ mod tests {
             .transform_and_save_token_account(storage, token_acc.pubkey, &token_acc)
             .unwrap();
 
-        spl_token_accs_parser.transform_and_save_mint_account(storage, &mint_acc).unwrap();
+        spl_token_accs_parser
+            .transform_and_save_mint_account(storage, &mint_acc, &Default::default())
+            .unwrap();
 
         let decompressed_token_data = MetadataInfo {
             metadata: Metadata {
@@ -206,7 +209,12 @@ mod tests {
         };
 
         mplx_accs_parser
-            .transform_and_store_metadata_account(storage, *mint, &decompressed_token_data)
+            .transform_and_store_metadata_account(
+                storage,
+                *mint,
+                &decompressed_token_data,
+                &wellknown_fungible_tokens_map(),
+            )
             .unwrap();
     }
 

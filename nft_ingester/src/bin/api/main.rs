@@ -5,9 +5,11 @@ use metrics_utils::{utils::setup_metrics, ApiMetricsConfig, JsonDownloaderMetric
 use nft_ingester::{
     api::{account_balance::AccountBalanceGetterImpl, service::start_api},
     config::{init_logger, ApiClapArgs},
+    consts::RAYDIUM_API_HOST,
     error::IngesterError,
     init::graceful_stop,
     json_worker::JsonWorker,
+    raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
 };
 use prometheus_client::registry::Registry;
 use rocks_db::{migrator::MigrationState, Storage};
@@ -16,7 +18,7 @@ use tokio::{
     sync::{broadcast, Mutex},
     task::JoinSet,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use usecase::proofs::MaybeProofChecker;
 
 #[cfg(feature = "profiling")]
@@ -128,13 +130,31 @@ pub async fn main() -> Result<(), IngesterError> {
     let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
     let cloned_tasks = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
+
+    info!("Init token/price information...");
+    let token_price_fetcher = Arc::new(RaydiumTokenPriceFetcher::new(
+        RAYDIUM_API_HOST.to_string(),
+        CACHE_TTL,
+        Some(red_metrics.clone()),
+    ));
+    let tpf = token_price_fetcher.clone();
+    let tasks_clone = mutexed_tasks.clone();
+
+    tasks_clone.lock().await.spawn(async move {
+        if let Err(e) = tpf.warmup().await {
+            warn!(error = %e, "Failed to warm up Raydium token price fetcher, cache is empty: {:?}", e);
+        }
+        let (symbol_cache_size, _) = tpf.get_cache_sizes();
+        info!(%symbol_cache_size, "Warmed up Raydium token price fetcher with {} symbols", symbol_cache_size);
+        Ok(())
+    });
+
     mutexed_tasks.lock().await.spawn(async move {
         match start_api(
             pg_client.clone(),
             cloned_rocks_storage.clone(),
             cloned_rx,
             metrics.clone(),
-            Some(red_metrics.clone()),
             args.server_port,
             proof_checker,
             tree_gaps_checker,
@@ -151,6 +171,7 @@ pub async fn main() -> Result<(), IngesterError> {
             account_balance_getter,
             args.storage_service_base_url,
             args.native_mint_pubkey,
+            token_price_fetcher,
         )
         .await
         {

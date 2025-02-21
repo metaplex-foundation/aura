@@ -1,15 +1,23 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use entities::schedule::{JobRunState, ScheduledJob};
+use entities::{
+    enums::SpecificationAssetClass,
+    schedule::{JobRunState, ScheduledJob},
+};
 use interface::schedules::SchedulesStore;
 use rocks_db::{
-    columns::{asset_previews::UrlToDownload, offchain_data::OffChainData},
+    columns::{
+        asset::{AssetCompleteDetails, AssetStaticDetails},
+        asset_previews::UrlToDownload,
+        offchain_data::OffChainData,
+    },
     Storage,
 };
-use tracing::log::error;
+use solana_program::pubkey::Pubkey;
+use tracing::{info, log::error};
 
-use crate::api::dapi::rpc_asset_convertors::parse_files;
+use crate::{api::dapi::rpc_asset_convertors::parse_files, error::IngesterError};
 
 /// Represents a functionality for running background jobs according
 /// to a confgurations stored in DB.
@@ -28,15 +36,24 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
-    pub fn new(storage: Arc<Storage>) -> Scheduler {
+    pub fn new(
+        rocks_storage: Arc<Storage>,
+        well_known_fungible_accounts: Option<Vec<String>>,
+    ) -> Scheduler {
         // Here we defined all "scheduled" jobs
-        let jobs: Vec<Box<dyn Job + Send>> = vec![Box::new(InitUrlsToDownloadJob {
-            storage: storage.clone(),
-            batch_size: 1000,
-            last_key: None,
-        })];
+        let jobs: Vec<Box<dyn Job + Send>> = vec![
+            Box::new(InitUrlsToDownloadJob {
+                storage: rocks_storage.clone(),
+                batch_size: 1000,
+                last_key: None,
+            }),
+            Box::new(UpdateFungibleTokenTypeJob {
+                rocks_storage: rocks_storage.clone(),
+                well_known_fungible_accounts,
+            }),
+        ];
 
-        Scheduler { storage, jobs }
+        Scheduler { storage: rocks_storage, jobs }
     }
 
     pub async fn run_in_background(mut scheduler: Scheduler) {
@@ -190,6 +207,8 @@ impl Job for InitUrlsToDownloadJob {
     }
 
     async fn run(&mut self) -> JobRunResult {
+        info!("Job InitUrlsToDownloadJob started.");
+
         let data = match &self.last_key {
             Some(v) => self.storage.asset_offchain_data.get_after(v.clone(), self.batch_size),
             None => self.storage.asset_offchain_data.get_from_start(self.batch_size),
@@ -218,4 +237,78 @@ impl Job for InitUrlsToDownloadJob {
         // If somehow the rocks key cannot be serialized, then it's probably better to crash?
         JobRunResult::NotFinished(self.last_key.clone().map(|s| bincode::serialize(&s).unwrap()))
     }
+}
+
+pub struct UpdateFungibleTokenTypeJob {
+    rocks_storage: Arc<Storage>,
+    well_known_fungible_accounts: Option<Vec<String>>,
+}
+
+#[async_trait]
+impl Job for UpdateFungibleTokenTypeJob {
+    fn id(&self) -> String {
+        "update_well_known_fungible_token_types".to_string()
+    }
+
+    fn initial_config(&self) -> ScheduledJob {
+        ScheduledJob {
+            job_id: self.id(),
+            run_interval_sec: None, // one-time job
+            last_run_epoch_time: 0,
+            last_run_status: JobRunState::NotRun,
+            state: None,
+        }
+    }
+
+    fn init_with_state(&mut self, _prev_state: Option<Vec<u8>>) {}
+
+    async fn run(&mut self) -> JobRunResult {
+        info!("Job UpdateFungibleTokenTypeJob started.");
+
+        update_fungible_token_static_details(
+            &self.rocks_storage,
+            self.well_known_fungible_accounts.clone().unwrap(),
+        )
+        .expect("Error updating fungible assets.");
+
+        info!("Job UpdateFungibleTokenTypeJob finish.");
+        JobRunResult::Finished(None)
+    }
+}
+
+pub fn update_fungible_token_static_details(
+    rocks_storage: &Arc<Storage>,
+    well_known_fungible_accounts: Vec<String>,
+) -> Result<(), IngesterError> {
+    let mut batch = rocksdb::WriteBatch::default();
+
+    for key in well_known_fungible_accounts {
+        let pk = Pubkey::from_str(&key)?;
+        let asset_complete_data = rocks_storage.get_complete_asset_details(pk);
+
+        if let Ok(Some(asset_complete_data)) = asset_complete_data {
+            if let Some(static_details) = &asset_complete_data.static_details {
+                if static_details.specification_asset_class
+                    != SpecificationAssetClass::FungibleToken
+                {
+                    let new_static_details = Some(AssetStaticDetails {
+                        specification_asset_class: SpecificationAssetClass::FungibleToken,
+                        ..static_details.clone()
+                    });
+                    let new_asset_complete_data = AssetCompleteDetails {
+                        static_details: new_static_details.clone(),
+                        ..asset_complete_data.clone()
+                    };
+
+                    rocks_storage
+                        .merge_compete_details_with_batch(&mut batch, &new_asset_complete_data)?;
+                }
+            }
+        }
+    }
+
+    rocks_storage.db.write(std::mem::take(&mut batch)).expect("Error writing to rocksdb.");
+    rocks_storage.db.flush().expect("Error flushing rocksdb.");
+
+    Ok(())
 }

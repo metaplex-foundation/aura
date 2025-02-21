@@ -1871,17 +1871,22 @@ pub fn merge_complete_details_fb_simple_raw<'a>(
             match static_details {
                 Some(existing_static_details) => {
                     if let Some(new_static_details) = new_val.static_details() {
-                        if (existing_static_details.specification_asset_class()
-                            == fb::SpecificationAssetClass::FungibleToken
-                            || existing_static_details.specification_asset_class()
-                                == fb::SpecificationAssetClass::FungibleAsset)
-                            && (new_static_details.specification_asset_class()
-                                == fb::SpecificationAssetClass::Nft
-                                || new_static_details.specification_asset_class()
-                                    == fb::SpecificationAssetClass::ProgrammableNft)
-                        {
-                            specification_asset_class =
-                                Some(new_static_details.specification_asset_class());
+                        let existing_class = existing_static_details.specification_asset_class();
+                        let new_class = new_static_details.specification_asset_class();
+                        if matches!(
+                            existing_class,
+                            fb::SpecificationAssetClass::FungibleToken
+                                | fb::SpecificationAssetClass::FungibleAsset
+                        ) && matches!(
+                            new_class,
+                            fb::SpecificationAssetClass::Nft
+                                | fb::SpecificationAssetClass::ProgrammableNft
+                        ) {
+                            specification_asset_class = Some(new_class);
+                        }
+
+                        if existing_class == fb::SpecificationAssetClass::Unknown {
+                            specification_asset_class = Some(new_class);
                         }
                     }
                 },

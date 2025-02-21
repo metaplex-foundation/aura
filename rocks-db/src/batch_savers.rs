@@ -111,6 +111,15 @@ impl BatchSaveStorage {
         self.store_complete(asset)
     }
 
+    pub fn store_static(&mut self, asset_static: &AssetStaticDetails) -> Result<()> {
+        let asset = &AssetCompleteDetails {
+            pubkey: asset_static.pubkey,
+            static_details: Some(asset_static.clone()),
+            ..Default::default()
+        };
+        self.store_complete(asset)
+    }
+
     fn store_metadata_mint(&mut self, metadata_mint_map: &MetadataMintMap) -> Result<()> {
         store_assets!(
             self,

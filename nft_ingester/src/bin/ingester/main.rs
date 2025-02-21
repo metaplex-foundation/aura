@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     panic,
     path::PathBuf,
     str::FromStr,
@@ -33,6 +34,7 @@ use nft_ingester::{
     },
     cleaners::indexer_cleaner::clean_syncronized_idxs,
     config::{init_logger, IngesterClapArgs},
+    consts::RAYDIUM_API_HOST,
     error::IngesterError,
     gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller},
     init::{graceful_stop, init_index_storage_with_migration, init_primary_storage},
@@ -43,6 +45,7 @@ use nft_ingester::{
         transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
         transaction_processor::run_transaction_processor,
     },
+    raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
     redis_receiver::RedisReceiver,
     rocks_db::{receive_last_saved_slot, restore_rocksdb},
     scheduler::Scheduler,
@@ -163,6 +166,26 @@ pub async fn main() -> Result<(), IngesterError> {
     ));
     let rpc_client = Arc::new(RpcClient::new(args.rpc_host.clone()));
 
+    info!("Init token/price information...");
+    let token_price_fetcher = Arc::new(RaydiumTokenPriceFetcher::new(
+        RAYDIUM_API_HOST.to_string(),
+        CACHE_TTL,
+        Some(metrics_state.red_metrics.clone()),
+    ));
+    let tpf = token_price_fetcher.clone();
+    let tasks_clone = mutexed_tasks.clone();
+
+    tasks_clone.lock().await.spawn(async move {
+        if let Err(e) = tpf.warmup().await {
+            warn!(error = %e, "Failed to warm up Raydium token price fetcher, cache is empty: {:?}", e);
+        }
+        let (symbol_cache_size, _) = tpf.get_cache_sizes();
+        info!(%symbol_cache_size, "Warmed up Raydium token price fetcher with {} symbols", symbol_cache_size);
+        Ok(())
+    });
+    let well_known_fungible_accounts =
+        token_price_fetcher.get_all_token_symbols().await.unwrap_or_else(|_| HashMap::new());
+
     info!("Init Redis ....");
     let cloned_rx = shutdown_rx.resubscribe();
     let message_config = MessengerConfig {
@@ -215,6 +238,7 @@ pub async fn main() -> Result<(), IngesterError> {
             rpc_client.clone(),
             mutexed_tasks.clone(),
             Some(account_consumer_worker_name.clone()),
+            well_known_fungible_accounts.clone(),
         )
         .await;
     }
@@ -335,7 +359,6 @@ pub async fn main() -> Result<(), IngesterError> {
         args.check_proofs_probability,
         args.check_proofs_commitment,
     )));
-    let tasks_clone = mutexed_tasks.clone();
     let cloned_rx = shutdown_rx.resubscribe();
     let file_storage_path = args.file_storage_path_container.clone();
 
@@ -358,7 +381,6 @@ pub async fn main() -> Result<(), IngesterError> {
         };
 
         let cloned_index_storage = index_pg_storage.clone();
-        let red_metrics = metrics_state.red_metrics.clone();
 
         mutexed_tasks.lock().await.spawn(async move {
             match start_api(
@@ -366,7 +388,6 @@ pub async fn main() -> Result<(), IngesterError> {
                 cloned_rocks_storage.clone(),
                 cloned_rx,
                 cloned_api_metrics,
-                Some(red_metrics),
                 args.server_port,
                 proof_checker,
                 tree_gaps_checker,
@@ -383,6 +404,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 account_balance_getter,
                 args.storage_service_base_url,
                 args.native_mint_pubkey,
+                token_price_fetcher,
             )
             .await
             {
@@ -559,7 +581,11 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
-    Scheduler::run_in_background(Scheduler::new(primary_rocks_storage.clone())).await;
+    Scheduler::run_in_background(Scheduler::new(
+        primary_rocks_storage.clone(),
+        Some(well_known_fungible_accounts.keys().cloned().collect()),
+    ))
+    .await;
 
     if let Ok(arweave) = Arweave::from_keypair_path(
         PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),

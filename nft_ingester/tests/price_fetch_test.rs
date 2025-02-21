@@ -56,4 +56,29 @@ mod tests {
         // check that the cache was pre-filled by some token symbols
         assert!(token_price_fetcher.get_cache_sizes().0 > 0);
     }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_token_price_get_list_of_tokens() {
+        let token_price_fetcher = RaydiumTokenPriceFetcher::default();
+        token_price_fetcher.warmup().await.expect("warmup must succeed");
+
+        pub const USDC_MINT_BYTES: [u8; 32] = [
+            198, 250, 122, 243, 190, 219, 173, 58, 61, 101, 243, 106, 171, 201, 116, 49, 177, 187,
+            228, 194, 210, 246, 224, 228, 124, 166, 2, 3, 69, 47, 93, 97,
+        ];
+        let usdc_pk = Pubkey::new_from_array(USDC_MINT_BYTES);
+
+        assert!(token_price_fetcher.get_all_token_symbols().await.unwrap().len() > 0);
+        assert!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".eq(&usdc_pk.to_string()));
+        assert!(token_price_fetcher
+            .get_all_token_symbols()
+            .await
+            .unwrap()
+            .contains_key("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"));
+        assert!(token_price_fetcher
+            .get_all_token_symbols()
+            .await
+            .unwrap()
+            .contains_key(&usdc_pk.to_string()));
+    }
 }
