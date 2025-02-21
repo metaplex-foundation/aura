@@ -72,7 +72,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
     let storage = Storage::open_secondary(
-        &args.rocks_db_path_container,
+        &args.rocks_db_path,
         &args.rocks_db_secondary_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
