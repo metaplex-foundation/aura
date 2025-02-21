@@ -13,7 +13,7 @@ use std::{
 use arweave_rs::{consts::ARWEAVE_BASE_URL, Arweave};
 use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
-use entities::enums::ASSET_TYPES;
+use entities::enums::{SpecificationAssetClass, ASSET_TYPES};
 use futures::FutureExt;
 use grpc::{
     asseturls::asset_url_service_server::AssetUrlServiceServer,
@@ -56,8 +56,9 @@ use plerkle_messenger::{ConsumptionType, MessengerConfig, MessengerType};
 use postgre_client::PG_MIGRATIONS_PATH;
 #[cfg(feature = "profiling")]
 use pprof::ProfilerGuardBuilder;
-use rocks_db::{storage_traits::AssetSlotStorage, SlotStorage};
+use rocks_db::{storage_traits::AssetSlotStorage, SlotStorage, Storage};
 use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_program::pubkey::Pubkey;
 use tokio::{
     sync::{broadcast, Mutex},
     task::JoinSet,
@@ -71,6 +72,9 @@ use usecase::{
     signature_fetcher::SignatureFetcher,
 };
 use uuid::Uuid;
+use nft_ingester::scheduler::update_fungible_token_static_details;
+use rocks_db::batch_savers::BatchSaveStorage;
+use rocks_db::columns::asset::{AssetCompleteDetails, AssetStaticDetails};
 
 #[cfg(feature = "profiling")]
 #[global_allocator]
@@ -81,6 +85,7 @@ pub const ARWEAVE_WALLET_PATH: &str = "./arweave_wallet.json";
 pub const DEFAULT_MIN_POSTGRES_CONNECTIONS: u32 = 8;
 pub const DEFAULT_MAX_POSTGRES_CONNECTIONS: u32 = 100;
 pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15 * 60; // 15 minutes
+
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
@@ -185,8 +190,9 @@ pub async fn main() -> Result<(), IngesterError> {
         info!(%symbol_cache_size, "Warmed up Raydium token price fetcher with {} symbols", symbol_cache_size);
         Ok(())
     });
-    let wellknown_fungible_accounts =
+    let well_known_fungible_accounts =
         token_price_fetcher.get_all_token_symbols().await.unwrap_or_else(|_| HashMap::new());
+    let well_known_fungible_pks = well_known_fungible_accounts.keys().clone().collect();
 
     info!("Init Redis ....");
     let cloned_rx = shutdown_rx.resubscribe();
@@ -240,7 +246,7 @@ pub async fn main() -> Result<(), IngesterError> {
             rpc_client.clone(),
             mutexed_tasks.clone(),
             Some(account_consumer_worker_name.clone()),
-            wellknown_fungible_accounts.clone(),
+            well_known_fungible_accounts.clone(),
         )
         .await;
     }
@@ -584,7 +590,7 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
 
-    Scheduler::run_in_background(Scheduler::new(primary_rocks_storage.clone())).await;
+    Scheduler::run_in_background(Scheduler::new(primary_rocks_storage.clone(), well_known_fungible_pks.clone())).await;
 
     if let Ok(arweave) = Arweave::from_keypair_path(
         PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),

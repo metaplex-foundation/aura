@@ -16,8 +16,11 @@ use tokio::{
     task::JoinSet,
 };
 use tracing::{info, warn};
+use metrics_utils::IngesterMetricsConfig;
 use nft_ingester::consts::RAYDIUM_API_HOST;
 use nft_ingester::raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL};
+use nft_ingester::scheduler::{update_fungible_token_static_details, Scheduler};
+use rocks_db::batch_savers::BatchSaveStorage;
 use super::common::*;
 
 #[tokio::test]
@@ -996,4 +999,117 @@ async fn test_recognise_popular_fungible_tokens() {
 
     insta::assert_json_snapshot!(name, response);
 }
+#[tokio::test]
+#[serial]
+#[named]
+async fn test_update_well_known_fungible_tokens() {
+    let name = trim_test_name(function_name!());
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
+    let token_price_fetcher = RaydiumTokenPriceFetcher::new(
+        RAYDIUM_API_HOST.to_string(),
+        CACHE_TTL,
+        None
+    );
+    token_price_fetcher.warmup().await.unwrap();
+    let well_known_fungible_accounts = token_price_fetcher.get_all_token_symbols().await.unwrap();
+    assert!(well_known_fungible_accounts.len() > 0);
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::Mainnet),  clear_db: true , wellknown_fungible_accounts: HashMap::new() },
+    )
+        .await;
+
+    // Add Asset Hxro (Wormhole)
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // Fungible token USDC
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request_str = r#"
+         {
+            "ids": [
+                "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+                "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            ]
+        }"#;
+
+    let request = serde_json::from_str(request_str.clone()).unwrap();
+    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response.as_array().unwrap().len(), 2);
+    response.as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "Custom");
+        true
+    });
+
+    update_fungible_token_static_details(&setup.rocks_db, well_known_fungible_accounts.keys().cloned().collect());
+
+    let request = serde_json::from_str(request_str.clone()).unwrap();
+    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response.as_array().unwrap().len(), 2);
+    response.as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "FungibleToken");
+        true
+    });
+
+    insta::assert_json_snapshot!(name, response);
+}
+
+#[named]
+#[tokio::test]
+#[tracing_test::traced_test]
+async fn test_update_fungible_token_static_details_job() {
+    let name = trim_test_name(function_name!());
+    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions { network: Some(Network::Mainnet), clear_db: true, wellknown_fungible_accounts: HashMap::new() },
+    )
+        .await;
+
+    // Add Asset Hxro (Wormhole)
+    let seeds: Vec<SeedEvent> = seed_token_mints([
+        "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK", // Fungible token Hxro (Wormhole)
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // Fungible token USDC
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let request_str = r#"
+         {
+            "ids": [
+                "HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK",
+                "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+            ]
+        }"#;
+
+    let request = serde_json::from_str(request_str.clone()).unwrap();
+    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response.as_array().unwrap().len(), 2);
+    response.as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "Custom");
+        true
+    });
+
+    let well_known_fungible_pks = vec![String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")];
+    let sut = Scheduler::new(setup.rocks_db.clone(), Some(well_known_fungible_pks));
+    Scheduler::run_in_background(sut).await;
+
+    let request_2 = serde_json::from_str(request_str.clone()).unwrap();
+    let response_2 = setup.das_api.get_asset_batch(request_2, mutexed_tasks.clone()).await.unwrap();
+
+    assert_eq!(response_2.as_array().unwrap().len(), 2);
+    response_2.as_array().unwrap().iter().all(|i| {
+        let interface = i["interface"].as_str().unwrap();
+        assert_eq!(interface, "FungibleToken");
+        true
+    });
+}
