@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use entities::{
     enums::{OwnerType, SpecificationAssetClass},
@@ -120,14 +120,22 @@ impl TokenAccountsProcessor {
         &self,
         storage: &mut BatchSaveStorage,
         mint: &Mint,
+        well_known_fungible_accounts: &HashMap<String, String>,
     ) -> Result<(), StorageError> {
-        let asset_static_details = mint.extensions.as_ref().map(|_| AssetStaticDetails {
-            pubkey: mint.pubkey,
-            specification_asset_class: SpecificationAssetClass::FungibleToken,
-            created_at: mint.slot_updated,
-            royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
-            edition_address: None,
-        });
+        let asset_static_details = if mint.extensions.is_some()
+            || well_known_fungible_accounts.contains_key(&mint.pubkey.to_string())
+        {
+            Some(AssetStaticDetails {
+                pubkey: mint.pubkey,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
+                created_at: mint.slot_updated,
+                royalty_target_type: entities::enums::RoyaltyTargetType::Creators,
+                edition_address: None,
+            })
+        } else {
+            None
+        };
+
         let mint_extensions = mint
             .extensions
             .as_ref()

@@ -1,0 +1,81 @@
+---
+source: integration_tests/src/regular_nft_tests.rs
+assertion_line: 619
+expression: response
+snapshot_kind: text
+---
+{
+  "total": 1,
+  "limit": 500,
+  "page": 1,
+  "items": [
+    {
+      "interface": "V1_NFT",
+      "id": "BFjgKzLNKZEbZoDrESi79ai8jXgyBth1HXCJPXBGs8sj",
+      "content": {
+        "$schema": "https://schema.metaplex.com/nft1.0.json",
+        "json_uri": "",
+        "files": [],
+        "metadata": {
+          "name": "Degen Ape",
+          "symbol": "DAPE",
+          "token_standard": "NonFungible"
+        },
+        "links": {}
+      },
+      "authorities": [
+        {
+          "address": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM",
+          "scopes": [
+            "full"
+          ]
+        }
+      ],
+      "compression": {
+        "eligible": false,
+        "compressed": false,
+        "data_hash": "",
+        "creator_hash": "",
+        "asset_hash": "",
+        "tree": "",
+        "seq": 0,
+        "leaf_id": 0
+      },
+      "grouping": [],
+      "royalty": {
+        "royalty_model": "creators",
+        "target": null,
+        "percent": 0.0,
+        "basis_points": 0,
+        "primary_sale_happened": false,
+        "locked": false
+      },
+      "creators": [],
+      "ownership": {
+        "frozen": false,
+        "delegated": false,
+        "delegate": null,
+        "ownership_model": "single",
+        "owner": "3VvLDXqJbw3heyRwFxv8MmurPznmDVUJS9gPMX2BDqfM"
+      },
+      "supply": {
+        "print_max_supply": 0,
+        "print_current_supply": 0,
+        "edition_nonce": 255
+      },
+      "mutable": true,
+      "burnt": false,
+      "lamports": 5616720,
+      "executable": false,
+      "metadata_owner": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+      "rent_epoch": 18446744073709551615,
+      "token_info": {
+        "supply": 1,
+        "decimals": 0,
+        "token_program": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+        "mint_authority": "565tK79EKhQSYybx52awrrFhD4m2ty198rrUBmiqq7xo",
+        "freeze_authority": "565tK79EKhQSYybx52awrrFhD4m2ty198rrUBmiqq7xo"
+      }
+    }
+  ]
+}

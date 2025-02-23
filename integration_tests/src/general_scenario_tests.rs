@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use entities::{
     api_req_params::{GetAsset, GetAssetsByOwner, SearchAssets},
@@ -11,8 +11,8 @@ use serial_test::serial;
 use tokio::{sync::Mutex, task::JoinSet};
 
 use crate::common::{
-    index_seed_events, seed_accounts, seed_nfts, trim_test_name, Network, SeedEvent, TestSetup,
-    TestSetupOptions,
+    index_seed_events, seed_accounts, seed_nfts, trim_test_name, well_known_fungible_tokens,
+    Network, SeedEvent, TestSetup, TestSetupOptions,
 };
 
 #[tokio::test]
@@ -22,7 +22,11 @@ async fn test_asset_parsing() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: None, clear_db: true },
+        TestSetupOptions {
+            network: None,
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -50,7 +54,11 @@ async fn test_get_different_assets_by_owner() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 
@@ -114,7 +122,11 @@ async fn test_process_previously_unparseable_account() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
         name.clone(),
-        TestSetupOptions { network: Some(Network::Devnet), clear_db: true },
+        TestSetupOptions {
+            network: Some(Network::Devnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
     )
     .await;
 

@@ -70,6 +70,14 @@ const SYNCHRONIZER_DUMP_PATH: &str = "./rocks_dump";
 const POSTGRE_MIGRATIONS_PATH: &str = "../migrations";
 const POSTGRE_BASE_DUMP_PATH: &str = "/aura/integration_tests/";
 
+pub fn well_known_fungible_tokens() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    map.insert("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK".to_string(), "Hxro".to_string());
+    map.insert("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(), "USDC".to_string());
+    map.insert("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m".to_string(), "MPLX".to_string());
+    map
+}
+
 pub struct TestSetup {
     pub name: String,
     pub client: Arc<RpcClient>,
@@ -140,6 +148,7 @@ impl TestSetup {
             client.clone(),
             mutexed_tasks.clone(),
             None,
+            opts.well_known_fungible_accounts,
         )
         .await
         .unwrap();
@@ -214,10 +223,11 @@ impl TestSetup {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct TestSetupOptions {
     pub network: Option<Network>,
     pub clear_db: bool,
+    pub well_known_fungible_accounts: HashMap<String, String>,
 }
 
 pub async fn get_transaction(
@@ -673,9 +683,7 @@ async fn index_account_with_ordered_slot(setup: &TestSetup, account: Pubkey) {
 }
 
 async fn index_token_mint(setup: &TestSetup, mint: Pubkey) {
-    let token_account = cached_fetch_largest_token_account_id(&setup.client, mint).await;
     index_account(setup, mint).await;
-    index_account(setup, token_account).await;
 
     // If we used different slots for accounts, then it becomes harder to test updates of related
     // accounts because we need to factor the fact that some updates can be disregarded because
