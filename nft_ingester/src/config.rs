@@ -46,7 +46,7 @@ pub struct IngesterClapArgs {
     #[clap(long, env = "INGESTER_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "120")]
     pub pg_max_query_statement_timeout_secs: u32,
 
-    #[clap(short('r'), long, env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
+    #[clap(short('r'), long, env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json::<Result<Dict, String>>)]
     pub redis_connection_config: Dict,
 
     #[clap(long, env, default_value = "5")]
@@ -106,7 +106,7 @@ pub struct IngesterClapArgs {
     )]
     pub run_profiling: bool,
 
-    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json::<Result<JsonMiddlewareConfig, String>>,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
 
     // Group: Rocks DB Configuration
@@ -221,7 +221,7 @@ pub struct IngesterClapArgs {
     pub backfill_rpc_address: Option<String>,
     #[clap(long, env, default_value = "rpc", help = "#backfiller Backfill source mode.")]
     pub backfiller_source_mode: BackfillerSourceMode,
-    #[clap(long, env, value_parser = parse_json_to_big_table_config, help ="#backfiller Big table config")]
+    #[clap(long, env, value_parser = parse_json::<Result<BigTableConfig, String>>, help ="#backfiller Big table config")]
     pub big_table_config: Option<BigTableConfig>,
 
     #[clap(
@@ -510,7 +510,7 @@ pub struct ApiClapArgs {
     #[clap(long, env, help = "#api Storage service base url")]
     pub storage_service_base_url: Option<String>,
 
-    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json::<Result<JsonMiddlewareConfig, String>>,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     #[clap(long, env, default_value = "100")]
     pub parallel_json_downloaders: i32,
@@ -525,19 +525,7 @@ pub struct ApiClapArgs {
     pub log_level: String,
 }
 
-fn parse_json_to_dict(s: &str) -> Result<Dict, String> {
-    parse_json(s)
-}
-
-fn parse_json_to_json_middleware_config(s: &str) -> Result<JsonMiddlewareConfig, String> {
-    parse_json(s)
-}
-
-pub fn parse_json_to_big_table_config(s: &str) -> Result<BigTableConfig, String> {
-    parse_json(s)
-}
-
-fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
+pub fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
     serde_json::from_str(s).map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 

@@ -8,7 +8,7 @@ use interface::{signature_persistence::BlockProducer, slot_getter::FinalizedSlot
 use metrics_utils::{utils::start_metrics, MetricState, MetricsTrait};
 use nft_ingester::{
     backfiller::BackfillSource,
-    config::{parse_json_to_big_table_config, BigTableConfig},
+    config::{parse_json, BigTableConfig},
     inmemory_slots_dumper::InMemorySlotsDumper,
 };
 use rocks_db::{column::TypedColumn, SlotStorage};
@@ -47,7 +47,7 @@ struct Args {
     start_slot: Option<u64>,
 
     /// Big table config (best passed from env)
-    #[arg(short, long, env, value_parser = parse_json_to_big_table_config)]
+    #[arg(short, long, env, value_parser = parse_json::<Result<BigTableConfig, String>>)]
     big_table_config: Option<BigTableConfig>,
 
     /// Metrics port
