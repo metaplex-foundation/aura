@@ -7,15 +7,22 @@ version = "0.6.1-dev"
 [dependencies]
 anyhow = { workspace = true }
 borsh = { workspace = true }
+entities = { workspace = true }
+env_logger = { workspace = true }
 flatbuffers = { workspace = true }
 function_name = { workspace = true }
 futures = { workspace = true }
-insta = { workspace = true, features = ["json"] }
 itertools = { workspace = true }
-tracing = { workspace = true }
+insta = { workspace = true, features = ["json"] }
+interface = { workspace = true }
+metrics-utils = { workspace = true }
 mpl-token-metadata = { workspace = true }
+nft_ingester = { workspace = true }
 once_cell = { workspace = true }
 plerkle_serialization = { workspace = true }
+postgre-client = { workspace = true, features = ["integration_tests"] }
+rocksdb = { workspace = true }
+rocks-db = { workspace = true, features = ["integration_tests"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serial_test = { workspace = true }
@@ -25,18 +32,10 @@ solana-sdk = { workspace = true }
 solana-transaction-status = { workspace = true }
 spl-token = { workspace = true, features = ["no-entrypoint"] }
 sqlx = { workspace = true }
+tempfile = {workspace = true}
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
-rocksdb = { workspace = true }
-tempfile = {workspace = true}
-env_logger = { workspace = true }
+tracing = { workspace = true }
 tracing-test = { workspace = true }
-
-nft_ingester = { path = "../nft_ingester" }
-postgre-client = { path = "../postgre-client", features = ["integration_tests"] }
-metrics-utils = { path = "../metrics_utils" }
-rocks-db = { path = "../rocks-db", features = ["integration_tests"] }
-usecase = { path = "../usecase" }
-entities = { path = "../entities" }
-interface = { path = "../interface" }
+usecase = { workspace = true }

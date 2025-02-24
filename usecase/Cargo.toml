@@ -7,11 +7,11 @@ edition = "2021"
 
 [dependencies]
 async-trait = { workspace = true }
-entities = { path = "../entities" }
-interface = { path = "../interface" }
+entities = { workspace = true }
+interface = { workspace = true }
 tracing = { workspace = true }
 solana-sdk = { workspace = true }
-metrics-utils = { path = "../metrics_utils" }
+metrics-utils = { workspace = true }
 tokio = { workspace = true }
 solana-storage-bigtable = { workspace = true }
 solana-bigtable-connection = { workspace = true }
@@ -31,6 +31,6 @@ plerkle_serialization = { workspace = true }
 async-recursion = { workspace = true }
 thiserror = { workspace = true }
 solana-storage-proto = { workspace = true }
-prost = "0.11.9"
+prost = { workspace = true }
 futures = { workspace = true }
 tokio-util = { workspace = true }

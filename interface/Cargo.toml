@@ -10,7 +10,7 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 mockall = { workspace = true }
 thiserror = { workspace = true }
-entities = { path = "../entities" }
+entities = { workspace = true }
 solana-sdk = { workspace = true }
 solana-client = { workspace = true }
 plerkle_serialization = { workspace = true }

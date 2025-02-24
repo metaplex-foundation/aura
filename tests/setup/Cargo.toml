@@ -6,11 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rocks-db = { path = "../../rocks-db" }
-entities = { path = "../../entities" }
-postgre-client = { path = "../../postgre-client" }
-nft_ingester = { path = "../../nft_ingester" }
-metrics-utils = { path = "../../metrics_utils" }
+rocks-db = { workspace = true }
+entities = { workspace = true }
+postgre-client = { workspace = true }
+nft_ingester = { workspace = true }
+metrics-utils = { workspace = true }
 solana-sdk = { workspace = true }
 tempfile = { workspace = true }
 rand = { workspace = true }
@@ -22,4 +22,4 @@ testcontainers-modules = { workspace = true }
 uuid = { workspace = true }
 tracing = { workspace = true }
 rocksdb = { workspace = true }
-flatbuffers = { version="24.3.25", features = ["serialize"]}
+flatbuffers = { workspace = true, features = ["serialize"] }
