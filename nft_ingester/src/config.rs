@@ -46,7 +46,7 @@ pub struct IngesterClapArgs {
     #[clap(long, env = "INGESTER_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "120")]
     pub pg_max_query_statement_timeout_secs: u32,
 
-    #[clap(short('r'), long, env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
+    #[clap(short('r'), long, env, help="example: {\"redis_connection_str\": \"redis://127.0.0.1:6379/0\"}", value_parser = parse_json::<Dict>)]
     pub redis_connection_config: Dict,
 
     #[clap(long, env, default_value = "5")]
@@ -106,7 +106,7 @@ pub struct IngesterClapArgs {
     )]
     pub run_profiling: bool,
 
-    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json::<JsonMiddlewareConfig>,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
 
     // Group: Rocks DB Configuration
@@ -221,7 +221,7 @@ pub struct IngesterClapArgs {
     pub backfill_rpc_address: Option<String>,
     #[clap(long, env, default_value = "rpc", help = "#backfiller Backfill source mode.")]
     pub backfiller_source_mode: BackfillerSourceMode,
-    #[clap(long, env, value_parser = parse_json_to_big_table_config, help ="#backfiller Big table config")]
+    #[clap(long, env, value_parser = parse_json::<Result<BigTableConfig, String>>, help ="#backfiller Big table config")]
     pub big_table_config: Option<BigTableConfig>,
 
     #[clap(
@@ -510,7 +510,7 @@ pub struct ApiClapArgs {
     #[clap(long, env, help = "#api Storage service base url")]
     pub storage_service_base_url: Option<String>,
 
-    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json::<Result<JsonMiddlewareConfig, String>>,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     #[clap(long, env, default_value = "100")]
     pub parallel_json_downloaders: i32,
@@ -525,19 +525,7 @@ pub struct ApiClapArgs {
     pub log_level: String,
 }
 
-fn parse_json_to_dict(s: &str) -> Result<Dict, String> {
-    parse_json(s)
-}
-
-fn parse_json_to_json_middleware_config(s: &str) -> Result<JsonMiddlewareConfig, String> {
-    parse_json(s)
-}
-
-pub fn parse_json_to_big_table_config(s: &str) -> Result<BigTableConfig, String> {
-    parse_json(s)
-}
-
-fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
+pub fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
     serde_json::from_str(s).map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
@@ -568,7 +556,7 @@ pub const DATABASE_URL_KEY: &str = "url";
 pub const MAX_POSTGRES_CONNECTIONS: &str = "max_postgres_connections";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct BigTableConfig(Dict);
+pub struct BigTableConfig(serde_json::Value);
 
 pub const BIG_TABLE_CREDS_KEY: &str = "creds";
 pub const BIG_TABLE_TIMEOUT_KEY: &str = "timeout";
@@ -586,7 +574,7 @@ impl BigTableConfig {
     }
 
     pub fn get_big_table_timeout_key(&self) -> Result<u32, IngesterError> {
-        Ok(self.0.get(BIG_TABLE_TIMEOUT_KEY).and_then(|v| v.to_u128()).ok_or(
+        Ok(self.0.get(BIG_TABLE_TIMEOUT_KEY).and_then(|v| v.as_u64()).ok_or(
             IngesterError::ConfigurationError { msg: "BIG_TABLE_TIMEOUT_KEY missing".to_string() },
         )? as u32)
     }
@@ -612,7 +600,7 @@ mod tests {
             "--rpc-host",
             "https://mainnet-aura.metaplex.com",
             "--redis-connection-config",
-            "{}",
+            r#"{"redis_connection_str": "foo"}"#,
         ]);
 
         assert_eq!(args.rocks_db_path, "./my_rocksdb");
