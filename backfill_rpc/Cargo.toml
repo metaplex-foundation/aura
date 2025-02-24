@@ -8,17 +8,17 @@ edition = "2021"
 [dependencies]
 async-trait = { workspace = true }
 futures = { workspace = true }
-entities = { path = "../entities" }
+entities = { workspace = true }
 solana-sdk = { workspace = true }
 solana-client = { workspace = true }
 solana-program = { workspace = true }
 solana-transaction-status = { workspace = true }
-interface = { path = "../interface" }
+interface = { workspace = true }
 tokio = { workspace = true }
 plerkle_serialization = { workspace = true }
 flatbuffers = { workspace = true }
 tracing = { workspace = true }
-usecase = { path = "../usecase" }
+usecase = { workspace = true }
 tokio-retry = { workspace = true }
 
 [features]
@@ -26,4 +26,4 @@ rpc_tests = []
 
 [dev-dependencies]
 serde_json = { workspace = true }
-warp = "0.3.7"
+warp = { workspace = true }

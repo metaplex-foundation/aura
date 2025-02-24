@@ -1286,7 +1286,7 @@ version = "0.6.1-dev"
 dependencies = [
  "async-trait",
  "entities",
- "flatbuffers 23.5.26",
+ "flatbuffers 24.3.25",
  "futures",
  "interface",
  "plerkle_serialization",
@@ -1481,7 +1481,7 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "solana-zk-token-sdk",
- "spl-account-compression 0.4.2",
+ "spl-account-compression",
  "spl-noop",
  "spl-pod 0.1.1",
  "spl-token 4.0.0",
@@ -1694,8 +1694,8 @@ dependencies = [
  "solana-program",
  "solana-rpc-client-api",
  "solana-sdk",
- "spl-account-compression 0.4.2",
- "spl-concurrent-merkle-tree 0.4.1",
+ "spl-account-compression",
+ "spl-concurrent-merkle-tree",
  "spl-merkle-tree-reference",
  "spl-noop",
  "thiserror",
@@ -2102,7 +2102,7 @@ dependencies = [
  "solana-frozen-abi-macro",
  "solana-runtime",
  "solana-sdk",
- "spl-concurrent-merkle-tree 0.4.1",
+ "spl-concurrent-merkle-tree",
  "tar",
  "tempfile",
  "thiserror",
@@ -2777,7 +2777,7 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "solana-transaction-status",
- "spl-account-compression 0.4.2",
+ "spl-account-compression",
  "sqlx",
 ]
 
@@ -3849,7 +3849,7 @@ dependencies = [
  "borsh 0.10.3",
  "entities",
  "env_logger 0.10.2",
- "flatbuffers 23.5.26",
+ "flatbuffers 24.3.25",
  "function_name",
  "futures",
  "insta",
@@ -3905,8 +3905,8 @@ dependencies = [
  "solana-client",
  "solana-program",
  "solana-sdk",
- "spl-account-compression 0.3.0",
- "spl-concurrent-merkle-tree 0.2.0",
+ "spl-account-compression",
+ "spl-concurrent-merkle-tree",
  "thiserror",
  "tokio",
  "tokio-util 0.7.13",
@@ -4615,7 +4615,7 @@ dependencies = [
  "bytemuck",
  "mpl-noop",
  "solana-program",
- "spl-concurrent-merkle-tree 0.4.1",
+ "spl-concurrent-merkle-tree",
 ]
 
 [[package]]
@@ -4806,7 +4806,7 @@ dependencies = [
  "criterion",
  "entities",
  "figment",
- "flatbuffers 23.5.26",
+ "flatbuffers 24.3.25",
  "futures",
  "grpc",
  "heck 0.5.0",
@@ -4848,8 +4848,8 @@ dependencies = [
  "solana-sdk",
  "solana-storage-bigtable",
  "solana-transaction-status",
- "spl-account-compression 0.4.2",
- "spl-concurrent-merkle-tree 0.4.1",
+ "spl-account-compression",
+ "spl-concurrent-merkle-tree",
  "spl-pod 0.1.1",
  "spl-token 4.0.0",
  "spl-token-2022 1.0.0",
@@ -4867,7 +4867,6 @@ dependencies = [
  "tracing-test",
  "url",
  "usecase",
- "utils",
  "uuid 1.8.0",
  "xxhash-rust",
  "zip-extract",
@@ -6560,7 +6559,7 @@ dependencies = [
  "setup",
  "solana-sdk",
  "solana-transaction-status",
- "spl-account-compression 0.4.2",
+ "spl-account-compression",
  "tar",
  "tempfile",
  "thiserror",
@@ -8547,18 +8546,6 @@ dependencies = [
 
 [[package]]
 name = "spl-account-compression"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85c43bd4455d9fb29b9e4f83c087ccffa2f6f41fecfc0549932ae391d00f3378"
-dependencies = [
- "anchor-lang 0.29.0",
- "bytemuck",
- "spl-concurrent-merkle-tree 0.2.0",
- "spl-noop",
-]
-
-[[package]]
-name = "spl-account-compression"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2785042005954aec5d5db7fcb99a78754b222be906a89d10a3d66ebdbc8e9548"
@@ -8566,7 +8553,7 @@ dependencies = [
  "anchor-lang 0.29.0",
  "bytemuck",
  "solana-program",
- "spl-concurrent-merkle-tree 0.4.1",
+ "spl-concurrent-merkle-tree",
  "spl-noop",
 ]
 
@@ -8615,17 +8602,6 @@ dependencies = [
  "solana-program",
  "spl-token 4.0.0",
  "spl-token-2022 3.0.4",
- "thiserror",
-]
-
-[[package]]
-name = "spl-concurrent-merkle-tree"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "141eaea58588beae81b71d101373a53f096737739873de42d6b1368bc2b8fc30"
-dependencies = [
- "bytemuck",
- "solana-program",
  "thiserror",
 ]
 
@@ -10386,7 +10362,7 @@ dependencies = [
  "mockall 0.13.0",
  "mpl-bubblegum",
  "plerkle_serialization",
- "prost 0.11.9",
+ "prost 0.12.6",
  "rand 0.8.5",
  "serde",
  "serde_derive",
@@ -10398,8 +10374,8 @@ dependencies = [
  "solana-storage-bigtable",
  "solana-storage-proto",
  "solana-transaction-status",
- "spl-account-compression 0.4.2",
- "spl-concurrent-merkle-tree 0.4.1",
+ "spl-account-compression",
+ "spl-concurrent-merkle-tree",
  "thiserror",
  "tokio",
  "tokio-util 0.7.13",
@@ -10419,24 +10395,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
-name = "utils"
-version = "0.1.8"
-source = "git+https://github.com/extrnode/solana-geyser-zmq#8d8cee57af31b0bbc61af6be392f2a663c9472a8"
-dependencies = [
- "anyhow",
- "bincode",
- "bs58 0.4.0",
- "flatbuffers 23.5.26",
- "log",
- "parking_lot 0.12.3",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "uuid 1.8.0",
-]
-
-[[package]]
 name = "uuid"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10453,7 +10411,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a183cf7feeba97b4dd1c0d46788634f6221d87fa961b305bed08c851829efcc0"
 dependencies = [
  "getrandom 0.2.15",
- "rand 0.8.5",
 ]
 
 [[package]]

@@ -6,11 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-metrics-utils = { path = "../metrics_utils" }
-usecase = { path = "../usecase" }
-postgre-client = { path = "../postgre-client" }
-entities = { path = "../entities" }
-interface = { path = "../interface" }
+metrics-utils = { workspace = true }
+usecase = { workspace = true }
+postgre-client = { workspace = true }
+entities = { workspace = true }
+interface = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 clap = { workspace = true }
@@ -27,10 +27,10 @@ tokio-util = { workspace = true }
 assert-json-diff = { workspace = true }
 regex = { workspace = true }
 async-trait = { workspace = true }
-spl-account-compression = "0.3.0"
+spl-account-compression = { workspace = true }
 solana-client = { workspace = true }
 solana-program = { workspace = true }
-spl-concurrent-merkle-tree = "0.2.0"
+spl-concurrent-merkle-tree = { workspace = true }
 anchor-lang = { workspace = true }
 solana-sdk = { workspace = true }
 
