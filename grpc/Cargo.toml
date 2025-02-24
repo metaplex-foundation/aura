@@ -12,8 +12,8 @@ tonic = { workspace = true }
 prost = { workspace = true }
 futures = { workspace = true }
 solana-sdk = { workspace = true }
-interface = { path = "../interface" }
-entities = { path = "../entities" }
+interface = { workspace = true }
+entities = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 solana-transaction-status = { workspace = true }
