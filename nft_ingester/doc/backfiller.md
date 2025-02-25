@@ -84,7 +84,7 @@ The producer is the **BackfillSource** (BigTable or RPC).
 
 From the BubblegumSlots Rocks CF, slots are extracted, and then the block is downloaded with the help of the **BackfillSource**.
 
-Once the block is downloaded and saved, the slot is dropped from the BubblegumSlots CF and also this slot is added to the IngestableSlots CF so the next worker could parse it.
+Once the block is downloaded and saved, the slot is dropped from the BubblegumSlots CF and also this slot is added to the IngestableSlots CF so the next worker can parse it.
 
 ### Perpetual Block Ingestion
 
@@ -92,6 +92,6 @@ The consumer is the **DirectBlockParser**, which is a struct with a Bubblegum tr
 
 The producer is RocksDB.
 
-The **IngestableSlotGetter** returns slots from the IngestableSlots CF, then blocks are extracted from the Rocks.
+The **IngestableSlotGetter** returns slots from the IngestableSlots CF, and then blocks are extracted from the Rocks.
 
 Once a block is received, it’s parsed, and the slot is dropped from the IngestableSlots CF.
