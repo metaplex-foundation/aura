@@ -1,9 +1,7 @@
-version: "3.9"
 services:
   ingester:
     container_name: ingester
     restart: always
-    entrypoint: sh -c "./ingester --rocks-slots-db-path $$ROCKS_SLOTS_DB_PATH --rocks-secondary-slots-db-path $$ROCKS_SECONDARY_SLOTS_DB_PATH"
     env_file:
       - .env
     network_mode: host
@@ -12,7 +10,6 @@ services:
       - ${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:rw
       - ${ROCKS_BACKUP_DIR}:${ROCKS_BACKUP_DIR}:rw
       - ${ROCKS_BACKUP_ARCHIVES_DIR}:${ROCKS_BACKUP_ARCHIVES_DIR}:rw
-      - ${PROFILING_FILE_PATH}:${PROFILING_FILE_PATH_CONTAINER}:rw
       - ${FILE_STORAGE_PATH}:${FILE_STORAGE_PATH_CONTAINER}:rw
       - ${ROCKS_MIGRATION_STORAGE_PATH}:${ROCKS_MIGRATION_STORAGE_PATH}:rw
       - ${ROCKS_SLOTS_DB_PATH}:${ROCKS_SLOTS_DB_PATH}:ro
@@ -20,12 +17,16 @@ services:
       - ./creds.json:/usr/src/app/creds.json
       - ./migrations:/usr/src/app/migrations
       - ./arweave_wallet.json:/usr/src/app/arweave_wallet.json
-      - ./heaps:/usr/src/app/heaps:rw
+      # Only exists for profiling - uncomment if needed
+      # - ./heaps:/usr/src/app/heaps:rw
+      # - ${PROFILING_FILE_PATH}:${PROFILING_FILE_PATH_CONTAINER}:rw
     depends_on:
       - db
     build:
       context: .
       dockerfile: docker/app.Dockerfile
+      # Replace for profiling:
+      # dockerfile: docker/profiling/app.Dockerfile
       args:
         BINARY: ingester
     stop_grace_period: 10m
@@ -44,7 +45,8 @@ services:
       - ${ROCKS_DB_SECONDARY_PATH}/api:${ROCKS_DB_SECONDARY_PATH}:rw
       - ${ROCKS_ARCHIVES_DIR}:${ROCKS_ARCHIVES_DIR}:ro
       - ${FILE_STORAGE_PATH}:${FILE_STORAGE_PATH_CONTAINER}:rw
-      - ./heaps:/usr/src/app/heaps:rw
+      # Only exists for profiling - uncomment if needed
+      # - ./heaps:/usr/src/app/heaps:rw
     depends_on:
       - db
     build:
@@ -67,8 +69,9 @@ services:
       - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:rw
       - ${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:rw
       - ${ROCKS_DB_SECONDARY_PATH}/synchronizer:${ROCKS_DB_SECONDARY_PATH}:rw
-      - ./heaps:/usr/src/app/heaps:rw
       - ./migrations:/usr/src/app/migrations
+      # Only exists for profiling - uncomment if needed
+      # - ./heaps:/usr/src/app/heaps:rw
     depends_on:
       - db
     build:
@@ -127,16 +130,10 @@ services:
   slot-persister:
     container_name: slot-persister
     restart: always
-    entrypoint: >
-      sh -c "if [ -f /usr/src/app/creds.json ]; then
-        export BIG_TABLE_CREDENTIALS=/usr/src/app/creds.json;
-      fi;
-      exec ./slot_persister"
     env_file:
       - .env
     environment:
       SLOTS_DB_PRIMARY_PATH: ${ROCKS_SLOTS_DB_PATH}
-      # BIG_TABLE_CREDENTIALS: /usr/src/app/creds.json # refactored this to account for the file doesn't exist case
       METRICS_PORT: 9090
     network_mode: host
     volumes:
@@ -164,7 +161,7 @@ services:
       POSTGRES_PASSWORD: solana # The PostgreSQL password (useful to connect to the database)
       POSTGRES_DB: solana
     volumes:
-      - ${POSTGRE_DB_PATH:-./db-data}:/var/lib/postgresql/data/:rw
+      - ${POSTGRE_DB_PATH}:/var/lib/postgresql/data/:rw
       - ${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:ro
     logging:
       options:

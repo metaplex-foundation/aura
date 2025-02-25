@@ -8,7 +8,11 @@ use interface::{
     error::StorageError, signature_persistence::BlockProducer, slot_getter::FinalizedSlotGetter,
 };
 use metrics_utils::{utils::start_metrics, MetricState, MetricsTrait};
-use nft_ingester::{backfiller::BackfillSource, inmemory_slots_dumper::InMemorySlotsDumper};
+use nft_ingester::{
+    backfiller::BackfillSource,
+    config::{parse_json, BigTableConfig},
+    inmemory_slots_dumper::InMemorySlotsDumper,
+};
 use rocks_db::{column::TypedColumn, SlotStorage};
 use tokio::{
     sync::{broadcast, Semaphore},
@@ -50,13 +54,9 @@ struct Args {
     #[arg(short, long)]
     start_slot: Option<u64>,
 
-    /// Big table credentials file path
-    #[arg(short, long, env = "BIG_TABLE_CREDENTIALS")]
-    big_table_credentials: Option<String>,
-
-    /// Optional big table timeout (default: 1000)
-    #[arg(short = 'B', long, default_value_t = 1000)]
-    big_table_timeout: u32,
+    /// Big table config (best passed from env)
+    #[arg(short, long, env, value_parser = parse_json::<Result<BigTableConfig, String>>)]
+    big_table_config: Option<BigTableConfig>,
 
     /// Metrics port
     /// Default: 9090
@@ -195,11 +195,14 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host.clone()));
 
     let backfill_source = {
-        if let Some(ref bg_creds) = args.big_table_credentials {
+        if let Some(ref big_table_config) = args.big_table_config {
             Arc::new(BackfillSource::Bigtable(Arc::new(
-                BigTableClient::connect_new_with(bg_creds.clone(), args.big_table_timeout)
-                    .await
-                    .expect("expected to connect to big table"),
+                BigTableClient::connect_new_with(
+                    big_table_config.get_big_table_creds_key().expect("get big table greds"),
+                    big_table_config.get_big_table_timeout_key().expect("get big table timeout"),
+                )
+                .await
+                .expect("expected to connect to big table"),
             )))
         } else {
             Arc::new(BackfillSource::Rpc(rpc_client.clone()))
