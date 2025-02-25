@@ -778,7 +778,7 @@ impl TryFrom<entities::models::RawBlock> for RawBlock {
     type Error = GrpcError;
 
     fn try_from(value: entities::models::RawBlock) -> Result<Self, Self::Error> {
-        Ok(Self { block: serde_cbor::to_vec(&value).map_err(Into::<GrpcError>::into)? })
+        Ok(Self { block: bincode::serialize(&value).map_err(Into::<GrpcError>::into)? })
     }
 }
 
@@ -786,7 +786,7 @@ impl TryFrom<RawBlock> for entities::models::RawBlock {
     type Error = GrpcError;
 
     fn try_from(value: RawBlock) -> Result<Self, Self::Error> {
-        serde_cbor::from_slice(value.block.as_slice()).map_err(Into::<GrpcError>::into)
+        bincode::deserialize(value.block.as_slice()).map_err(Into::<GrpcError>::into)
     }
 }
 

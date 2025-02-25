@@ -151,7 +151,7 @@ async fn check_assets_signatures(
         let higher_seq_slot =
             if last_sig.1 > before_last_sig.1 { last_sig.2 } else { before_last_sig.2 };
 
-        match slots_db.raw_blocks_cbor.has_key(higher_seq_slot).await {
+        match slots_db.raw_blocks.has_key(higher_seq_slot).await {
             Ok(has_block) => {
                 if !has_block {
                     // only block check is not enough because was found out that during forks

@@ -21,7 +21,7 @@ use entities::{
     },
     models::{
         BatchMintToVerify, BufferedTransaction, ChainDataV1, Creator, SignatureWithSlot,
-        UpdateVersion, Updated, Uses,
+        TransactionInfo, UpdateVersion, Updated, Uses,
     },
 };
 use lazy_static::lazy_static;
@@ -49,8 +49,7 @@ use tracing::{debug, error};
 use usecase::save_metrics::result_to_metrics;
 
 use crate::{
-    error::IngesterError, flatbuffer_mapper::FlatbufferMapper, plerkle,
-    plerkle::PlerkleTransactionInfo,
+    error::IngesterError, flatbuffer_mapper::FlatbufferMapper, plerkle::PlerkleTransactionInfo,
 };
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
@@ -82,9 +81,7 @@ impl BubblegumTxProcessor {
         }
     }
 
-    pub fn break_transaction(
-        tx_info: &plerkle::TransactionInfo,
-    ) -> VecDeque<(IxPair, Option<Vec<IxPair>>)> {
+    pub fn break_transaction(tx_info: &TransactionInfo) -> VecDeque<(IxPair, Option<Vec<IxPair>>)> {
         order_instructions(
             &KEY_SET,
             tx_info.account_keys.as_slice(),
@@ -102,10 +99,10 @@ impl BubblegumTxProcessor {
             return Ok(());
         }
         let begin_processing = Instant::now();
-        let result = Self::get_process_transaction_results(
-            data,
+        let data = Self::parse_transaction_info_from_fb(data, self.transaction_parser.clone())?;
+        let result = Self::get_handle_transaction_results(
             self.instruction_parser.clone(),
-            self.transaction_parser.clone(),
+            data,
             self.metrics.clone(),
         )?;
 
@@ -120,33 +117,6 @@ impl BubblegumTxProcessor {
             .set_latency("process_transaction", begin_processing.elapsed().as_millis() as f64);
 
         res
-    }
-
-    pub fn get_process_transaction_results(
-        data: BufferedTransaction,
-        instruction_parser: Arc<BubblegumParser>,
-        transaction_parser: Arc<FlatbufferMapper>,
-        metrics: Arc<IngesterMetricsConfig>,
-    ) -> Result<TransactionResult, IngesterError> {
-        let seen_at = Utc::now();
-
-        let mut transaction_info_bytes = data.transaction.clone();
-
-        if data.map_flatbuffer {
-            let tx_update =
-                    utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
-                        &data.transaction,
-                    ).unwrap();
-            transaction_info_bytes =
-                transaction_parser.map_tx_fb_bytes(tx_update, seen_at).unwrap();
-        }
-        let transaction_info =
-            plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())
-                .unwrap();
-        let transaction_info: plerkle::TransactionInfo =
-            PlerkleTransactionInfo(transaction_info).try_into()?;
-
-        Self::get_handle_transaction_results(instruction_parser, transaction_info, metrics)
     }
 
     fn instruction_name_to_string(ix: &InstructionName) -> &'static str {
@@ -185,10 +155,31 @@ impl BubblegumTxProcessor {
         result[..4].copy_from_slice(&bytes);
         result
     }
+    pub fn parse_transaction_info_from_fb(
+        data: BufferedTransaction,
+        transaction_parser: Arc<FlatbufferMapper>,
+    ) -> Result<TransactionInfo, IngesterError> {
+        let seen_at = Utc::now();
 
+        let mut transaction_info_bytes = data.transaction.clone();
+
+        if data.map_flatbuffer {
+            let tx_update =
+                    utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
+                        &data.transaction,
+                    ).unwrap();
+            transaction_info_bytes =
+                transaction_parser.map_tx_fb_bytes(tx_update, seen_at).unwrap();
+        }
+        let transaction_info =
+            plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())
+                .unwrap();
+
+        Ok(PlerkleTransactionInfo(transaction_info).try_into()?)
+    }
     pub fn get_handle_transaction_results(
         instruction_parser: Arc<BubblegumParser>,
-        tx: plerkle::TransactionInfo,
+        tx: TransactionInfo,
         metrics: Arc<IngesterMetricsConfig>,
     ) -> Result<TransactionResult, IngesterError> {
         let sig = tx.signature;

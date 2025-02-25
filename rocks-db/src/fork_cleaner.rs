@@ -13,7 +13,7 @@ use crate::{
     column::TypedColumn,
     columns::{cl_items::ClItemV2, leaf_signatures::LeafSignature},
     SlotStorage, Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION,
-    RAW_BLOCKS_CBOR_ENDPOINT, ROCKS_COMPONENT,
+    RAW_BLOCKS_ENDPOINT, ROCKS_COMPONENT,
 };
 
 #[async_trait]
@@ -126,7 +126,7 @@ impl ForkChecker for SlotStorage {
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
             FULL_ITERATION_ACTION,
-            RAW_BLOCKS_CBOR_ENDPOINT,
+            RAW_BLOCKS_ENDPOINT,
             start_time,
         );
 
@@ -141,7 +141,7 @@ impl ForkChecker for SlotStorage {
             self.red_metrics.observe_request(
                 ROCKS_COMPONENT,
                 ITERATOR_TOP_ACTION,
-                RAW_BLOCKS_CBOR_ENDPOINT,
+                RAW_BLOCKS_ENDPOINT,
                 start_time,
             );
             // if there are no saved blocks - we can not do any checks
@@ -150,7 +150,7 @@ impl ForkChecker for SlotStorage {
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
             ITERATOR_TOP_ACTION,
-            RAW_BLOCKS_CBOR_ENDPOINT,
+            RAW_BLOCKS_ENDPOINT,
             start_time,
         );
         it.key().and_then(|b| RawBlock::decode_key(b.to_vec()).ok()).unwrap_or_default()
