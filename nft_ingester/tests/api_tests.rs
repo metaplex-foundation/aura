@@ -2076,6 +2076,7 @@ mod tests {
                 Ok(MetadataDownloadResult {
                     etag: None,
                     last_modified_at: None,
+                    cache_control: None,
                     result: JsonDownloadResult::JsonContent(offchain_data.to_string()),
                 })
             });
