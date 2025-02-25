@@ -243,10 +243,10 @@ impl JsonPersister for JsonWorker {
                 Ok(MetadataDownloadResult {
                     etag,
                     last_modified_at,
-                    cache_control,
                     result: JsonDownloadResult::MediaUrlAndMimeType { url, mime_type },
+                    cache_control: _,
                 }) => {
-                    let mutability: StorageMutability = metadata_url.as_str().into();
+                    let mutability = StorageMutability::Immutable;
                     rocks_updates.insert(
                         metadata_url.clone(),
                         OffChainData {
