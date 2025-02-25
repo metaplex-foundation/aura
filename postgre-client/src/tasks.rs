@@ -109,7 +109,7 @@ impl PgClient {
                 tasks_etag = tmp.etag, 
                 tasks_last_modified_at = tmp.last_modified_at, 
                 tasks_mutability = tmp.mutability, 
-                tasks_next_try_at = NOW + INTERVAL '1 day' 
+                tasks_next_try_at = NOW + INTERVAL '1 day'
                 FROM (
         ",
         );
@@ -162,14 +162,13 @@ impl PgClient {
             "WITH selected_tasks AS (
                                     SELECT t.tasks_metadata_hash FROM tasks AS t
                                     WHERE t.tasks_task_status = 'pending' AND NOW() > t.tasks_next_try_at
-                                    FOR UPDATE
+                                    FOR UPDATE SKIP LOCKED
                                     LIMIT ",
         );
         query_builder.push_bind(tasks_count);
 
         query_builder.push(
-                " FOR UPDATE SKIP LOCKED
-            )
+                ")
             UPDATE tasks t
             SET tasks_next_try_at = NOW() + INTERVAL '1 day'
             FROM selected_tasks
@@ -203,7 +202,7 @@ impl PgClient {
             "WITH selected_tasks AS (
                                     SELECT t.tasks_metadata_hash FROM tasks AS t
                                     WHERE t.tasks_task_status = 'success' AND NOW() > t.tasks_next_try_at AND t.tasks_mutability = 'mutable'
-                                    FOR UPDATE
+                                    FOR UPDATE SKIP LOCKED
                                     LIMIT ",
         );
         query_builder.push_bind(tasks_count);

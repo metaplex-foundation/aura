@@ -216,7 +216,7 @@ impl JsonPersister for JsonWorker {
                 Ok(MetadataDownloadResult {
                     etag,
                     last_modified_at,
-                    cache_control,
+                    cache_control: _,
                     result: JsonDownloadResult::JsonContent(json_file),
                 }) => {
                     let mutability: StorageMutability = metadata_url.as_str().into();
