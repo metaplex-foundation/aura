@@ -3913,7 +3913,7 @@ mod tests {
         assert_eq!(response["interface"], "V1_NFT".to_string());
     }
 
-    /// Cover task changes MTG-947
+    /// More test cases covered in the regular_nft_tests.rs/test_search_by_owner_with_show_zero_balance_false
     #[tokio::test(flavor = "multi_thread")]
     async fn test_determining_non_fungible_tokens() {
         let cnt = 100;
@@ -4161,24 +4161,6 @@ mod tests {
             page: Some(1),
             owner_address: Some(owner.to_string()),
             options: SearchAssetsOptions {
-                show_zero_balance: false,
-                show_unverified_collections: true,
-                ..Default::default()
-            },
-            token_type: Some(TokenType::All),
-            ..Default::default()
-        };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
-        let res: AssetList = serde_json::from_value(res).unwrap();
-
-        // todo FIX MTG-1283 assert value should be 1
-        assert_eq!(res.items.len(), 2, "SearchAssets by token_type:All show_zero_balance: false");
-
-        let payload = SearchAssets {
-            limit: Some(1000),
-            page: Some(1),
-            owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
@@ -4196,30 +4178,9 @@ mod tests {
         );
         assert_eq!(res.items[0].clone().interface, Interface::V1NFT);
         assert_eq!(res.items[1].clone().interface, Interface::V1NFT);
-
-        let payload = SearchAssets {
-            limit: Some(1000),
-            page: Some(1),
-            owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
-                show_zero_balance: false,
-                show_unverified_collections: true,
-                ..Default::default()
-            },
-            token_type: Some(TokenType::NonFungible),
-            ..Default::default()
-        };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
-        let res: AssetList = serde_json::from_value(res).unwrap();
-
-        // todo FIX MTG-1283 assert value should be 1
-        assert_eq!(
-            res.items.len(),
-            2,
-            "SearchAssets by token_type: NonFungible, show_zero_balance: false"
-        );
     }
 
+    /// More test cases covered in the regular_nft_tests.rs/test_search_by_owner_with_show_zero_balance_false
     #[test]
     fn v1_payloads_are_parsed_correctly_from_v0_payloads() {
         // getAssetsByAuthority
