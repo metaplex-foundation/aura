@@ -510,7 +510,7 @@ impl TransactionInfo {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MetadataDownloadTask {
     pub metadata_url: String,
     pub status: TaskStatus,
