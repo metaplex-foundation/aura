@@ -171,8 +171,7 @@ message AssetDetails {
     bytes owner_record_pubkey = 45;
 }
 
-// This field is a cbor encoded object of RawBlock type depending on
-// a "~1.17" version of the solana-transaction-status package
+// This field is a bincode encoded object of RawBlock type defined in `entities`.
 message RawBlock {
     bytes block = 1;
 }

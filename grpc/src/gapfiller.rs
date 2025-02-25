@@ -197,8 +197,7 @@ pub struct AssetDetails {
     #[prost(bytes = "vec", tag = "45")]
     pub owner_record_pubkey: ::prost::alloc::vec::Vec<u8>,
 }
-/// This field is a cbor encoded object of RawBlock type depending on
-/// a "~1.17" version of the solana-transaction-status package
+/// This field is a bincode encoded object of RawBlock type defined in `entities`.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RawBlock {
