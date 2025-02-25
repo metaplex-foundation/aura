@@ -1140,6 +1140,7 @@ async fn test_update_well_known_fungible_tokens() {
 }
 
 #[named]
+#[serial]
 #[tokio::test]
 #[tracing_test::traced_test]
 async fn test_update_fungible_token_static_details_job() {
