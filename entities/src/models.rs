@@ -451,13 +451,14 @@ impl From<RawBlockDeprecated> for RawBlock {
                     .transactions
                     .into_iter()
                     .filter_map(|t| {
-                        crate::utils::decode_encoded_transaction_with_status_meta(t).and_then(
-                            |tx| {
-                                TransactionInfo::from_transaction_with_status_meta_and_slot(
-                                    tx, value.slot,
-                                )
-                            },
+                        crate::transaction_converters::decode_encoded_transaction_with_status_meta(
+                            t,
                         )
+                        .and_then(|tx| {
+                            TransactionInfo::from_transaction_with_status_meta_and_slot(
+                                tx, value.slot,
+                            )
+                        })
                     })
                     .collect(),
             },

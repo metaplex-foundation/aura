@@ -11,7 +11,6 @@ use interface::{
     error::StorageError,
     signature_persistence::BlockProducer,
 };
-use rocks_db::column::TypedColumn;
 use tonic::{
     transport::{Channel, Uri},
     Code, Status,
@@ -104,7 +103,7 @@ impl BlockProducer for Client {
             .await
             .map_err(|e| StorageError::Common(e.to_string()))
             .and_then(|response| {
-                RawBlock::decode(response.into_inner().block.as_slice())
+                bincode::deserialize::<RawBlock>(response.into_inner().block.as_slice())
                     .map_err(|e| StorageError::Common(e.to_string()))
                     .map(|raw_block| raw_block.block)
             })

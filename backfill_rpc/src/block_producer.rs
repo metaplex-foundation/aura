@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use async_trait::async_trait;
 use entities::{
     models::{RawBlockWithTransactions, TransactionInfo},
-    utils::decode_encoded_transaction_with_status_meta,
+    transaction_converters::decode_encoded_transaction_with_status_meta,
 };
 use interface::{error::StorageError, signature_persistence::BlockProducer};
 use solana_client::rpc_config::RpcBlockConfig;

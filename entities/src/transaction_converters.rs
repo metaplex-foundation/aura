@@ -8,7 +8,7 @@ use solana_sdk::{
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, InnerInstruction,
     InnerInstructions, TransactionStatusMeta, TransactionTokenBalance, TransactionWithStatusMeta,
-    UiInstruction, VersionedTransactionWithStatusMeta,
+    UiInstruction, UiTransactionTokenBalance, VersionedTransactionWithStatusMeta,
 };
 
 pub fn decode_encoded_transaction_with_status_meta(
@@ -51,28 +51,10 @@ pub fn decode_encoded_transaction_with_status_meta(
                 post_balances: m.post_balances,
                 inner_instructions,
                 log_messages: get(m.log_messages),
-                pre_token_balances: get(m.pre_token_balances).map(|uttb| {
-                    uttb.into_iter()
-                        .map(|uttb| TransactionTokenBalance {
-                            account_index: uttb.account_index,
-                            mint: uttb.mint,
-                            ui_token_amount: uttb.ui_token_amount,
-                            owner: get(uttb.owner).unwrap_or_default(),
-                            program_id: get(uttb.program_id).unwrap_or_default(),
-                        })
-                        .collect()
-                }),
-                post_token_balances: get(m.post_token_balances).map(|uttb| {
-                    uttb.into_iter()
-                        .map(|uttb| TransactionTokenBalance {
-                            account_index: uttb.account_index,
-                            mint: uttb.mint,
-                            ui_token_amount: uttb.ui_token_amount,
-                            owner: Option::<String>::from(uttb.owner).unwrap_or_default(),
-                            program_id: Option::<String>::from(uttb.program_id).unwrap_or_default(),
-                        })
-                        .collect()
-                }),
+                pre_token_balances: get(m.pre_token_balances)
+                    .map(decode_transaction_token_balances),
+                post_token_balances: get(m.post_token_balances)
+                    .map(decode_transaction_token_balances),
                 rewards: m.rewards.into(),
                 loaded_addresses: get(m.loaded_addresses)
                     .map(|ula| LoadedAddresses {
@@ -104,4 +86,19 @@ pub fn decode_encoded_transaction_with_status_meta(
         },
         None => None,
     }
+}
+
+fn decode_transaction_token_balances(
+    ui_transaction_token_balances: Vec<UiTransactionTokenBalance>,
+) -> Vec<TransactionTokenBalance> {
+    ui_transaction_token_balances
+        .into_iter()
+        .map(|uttb| TransactionTokenBalance {
+            account_index: uttb.account_index,
+            mint: uttb.mint,
+            ui_token_amount: uttb.ui_token_amount,
+            owner: Option::<String>::from(uttb.owner).unwrap_or_default(),
+            program_id: Option::<String>::from(uttb.program_id).unwrap_or_default(),
+        })
+        .collect()
 }

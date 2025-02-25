@@ -452,23 +452,19 @@ async fn process_slots(
                     successful_blocks.len()
                 );
 
-                match target_db.raw_blocks.put_batch(successful_blocks.clone()).await {
+                let projected_last_slot = successful_blocks.keys().max().copied().unwrap_or(0);
+                let successful_blocks_len = successful_blocks.len();
+                match target_db.raw_blocks.put_batch(std::mem::take(&mut successful_blocks)).await {
                     Ok(_) => {
-                        let last_slot = successful_blocks.keys().max().cloned().unwrap_or(0);
                         info!(
                             "Successfully saved {} blocks to RocksDB. Last stored slot: {}",
-                            successful_blocks.len(),
-                            last_slot
+                            successful_blocks_len, projected_last_slot
                         );
                         break; // Move on to next chunk of `slots`
                     },
                     Err(e) => {
                         // DB write failed
-                        error!(
-                            "Failed to save {} blocks to RocksDB: {}",
-                            successful_blocks.len(),
-                            e
-                        );
+                        error!("Failed to save {} blocks to RocksDB: {}", successful_blocks_len, e);
                         batch_retries += 1;
                         if batch_retries >= MAX_BATCH_RETRIES {
                             panic!(
