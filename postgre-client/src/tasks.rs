@@ -168,7 +168,8 @@ impl PgClient {
         query_builder.push_bind(tasks_count);
 
         query_builder.push(
-            ")
+                " FOR UPDATE SKIP LOCKED
+            )
             UPDATE tasks t
             SET tasks_next_try_at = NOW() + INTERVAL '1 day'
             FROM selected_tasks
