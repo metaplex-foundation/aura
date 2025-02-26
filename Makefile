@@ -1,4 +1,4 @@
-.PHONY: ci build start build-integrity-verification start-integrity-verification dev stop clippy test start-backfiller
+.PHONY: ci build start build-integrity-verification start-integrity-verification dev stop clippy test start-backfiller release
 SHELL := /bin/bash
 
 ci:
@@ -47,3 +47,17 @@ clippy:
 test:
 	@cargo clean -p postgre-client -p rocks-db -p interface
 	@cargo test --features integration_tests
+
+# Ensure git-cliff is installed
+ensure-git-cliff:
+	@which git-cliff > /dev/null || cargo install git-cliff
+
+# Generate a changelog using git-cliff
+changelog:
+	@git-cliff --output CHANGELOG.md
+
+# Prepare a release (meant to be run locally)
+release:
+	@echo "Preparing release $(VERSION)"
+	@echo "This will trigger the GitHub Action to prepare a release"
+	@gh workflow run release-prepare.yml -f version=$(VERSION)
