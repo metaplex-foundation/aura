@@ -1,4 +1,4 @@
-.PHONY: ci build start build-integrity-verification start-integrity-verification dev stop clippy test start-backfiller release
+.PHONY: ci build start build-integrity-verification start-integrity-verification dev stop clippy test start-backfiller
 SHELL := /bin/bash
 
 ci:
@@ -55,9 +55,3 @@ ensure-git-cliff:
 # Generate a changelog using git-cliff
 changelog:
 	@git-cliff --output CHANGELOG.md
-
-# Prepare a release (meant to be run locally)
-release:
-	@echo "Preparing release $(VERSION)"
-	@echo "This will trigger the GitHub Action to prepare a release"
-	@gh workflow run release-prepare.yml -f version=$(VERSION)
