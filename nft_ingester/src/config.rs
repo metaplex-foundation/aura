@@ -221,7 +221,7 @@ pub struct IngesterClapArgs {
     pub backfill_rpc_address: Option<String>,
     #[clap(long, env, default_value = "rpc", help = "#backfiller Backfill source mode.")]
     pub backfiller_source_mode: BackfillerSourceMode,
-    #[clap(long, env, value_parser = parse_json::<Result<BigTableConfig, String>>, help ="#backfiller Big table config")]
+    #[clap(long, env, value_parser = parse_json::<BigTableConfig>, help ="#backfiller Big table config")]
     pub big_table_config: Option<BigTableConfig>,
 
     #[clap(
