@@ -83,11 +83,10 @@ jobs:
       # --- Post-Release Version Bump ---
 
       - name: Checkout develop branch for version bump
-        run: |
-          set -e
-          git fetch origin develop
-          git checkout develop
-          git pull origin develop
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for proper tagging
+          ref: develop
 
       - name: Install dependencies for version bump
         run: |
