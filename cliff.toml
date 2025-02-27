@@ -1,0 +1,79 @@
+# Configuration for git-cliff changelog generator
+# See https://git-cliff.org/docs/configuration
+
+[changelog]
+# changelog header
+header = """
+# Changelog\n
+All notable changes to this project will be documented in this file.\n
+"""
+# template for the changelog body
+# https://tera.netlify.app/docs
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [unreleased]
+{% endif %}\
+
+{% if previous %}\
+{% if previous.version %}\
+[{{ version | trim_start_matches(pat="v") }}]: https://github.com/metaplex-foundation/aura/compare/{{ previous.version }}...{{ version }}
+{% else %}\
+[{{ version | trim_start_matches(pat="v") }}]: https://github.com/metaplex-foundation/aura/releases/tag/{{ version }}
+{% endif %}\
+{% endif %}\
+
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}
+- {% if commit.breaking %}**BREAKING**: {% endif %}{{ commit.message | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/metaplex-foundation/aura/commit/{{ commit.id }})){% if commit.footers %} {% for footer in commit.footers %}{{ footer }}{% endfor %}{% endif %}
+{% endfor %}
+{% endfor %}\n
+"""
+# remove the leading and trailing whitespace from the templates
+trim = true
+# changelog footer
+footer = ""
+
+# postprocessors
+postprocessors = [
+  { pattern = '<ANGULAR_BRACKET_LEFT>', replace = "<" }, # needed to escape jinja2 templates
+]
+
+[git]
+# parse the commits based on https://www.conventionalcommits.org
+conventional_commits = true
+# filter out the commits that are not conventional
+filter_unconventional = true
+# process each line of a commit as an individual commit
+split_commits = false
+# regex for parsing and grouping commits
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^style", group = "Styling" },
+  { message = "^test", group = "Testing" },
+  { message = "^chore\\(release\\): prepare for", skip = true },
+  { message = "^chore\\(deps\\)", group = "Dependencies" },
+  { message = "^chore", group = "Miscellaneous Tasks" },
+  { message = "^ci", group = "CI/CD" },
+  { body = ".*security", group = "Security" },
+]
+# filter out the commits that are not matched by commit parsers
+filter_commits = false
+# glob pattern for matching git tags
+tag_pattern = "v[0-9]*.[0-9]*.[0-9]*"
+# regex for skipping tags
+skip_tags = ""
+# regex for ignoring tags
+ignore_tags = ""
+# sort the tags chronologically
+date_order = false
+# sort the commits inside sections by oldest/newest order
+sort_commits = "oldest"
+# limit the number of commits included in the changelog
+limit_commits = 0
