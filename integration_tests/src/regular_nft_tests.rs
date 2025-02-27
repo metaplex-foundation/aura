@@ -234,18 +234,12 @@ async fn test_regular_nft_collection() {
 #[named]
 async fn test_search_by_owner_with_show_zero_balance() {
     let name = trim_test_name(function_name!());
-    let mut wellknown_fungible_accounts = HashMap::new();
-    wellknown_fungible_accounts
-        .insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
-    wellknown_fungible_accounts
-        .insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
-
     let setup = TestSetup::new_with_options(
         name.clone(),
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            well_known_fungible_accounts: wellknown_fungible_accounts,
+            well_known_fungible_accounts: well_known_fungible_tokens(),
         },
     )
     .await;
@@ -368,18 +362,12 @@ async fn test_search_by_owner_with_show_zero_balance() {
 #[named]
 async fn test_search_by_owner_with_show_zero_balance_false() {
     let name = trim_test_name(function_name!());
-    let mut wellknown_fungible_accounts = HashMap::new();
-    wellknown_fungible_accounts
-        .insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
-    wellknown_fungible_accounts
-        .insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
-
     let setup = TestSetup::new_with_options(
         name.clone(),
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            well_known_fungible_accounts: wellknown_fungible_accounts,
+            well_known_fungible_accounts: well_known_fungible_tokens(),
         },
     )
     .await;
@@ -1028,15 +1016,15 @@ async fn test_recognise_popular_fungible_tokens() {
     let token_price_fetcher =
         RaydiumTokenPriceFetcher::new(RAYDIUM_API_HOST.to_string(), CACHE_TTL, None);
     token_price_fetcher.warmup().await.unwrap();
-    let wellknown_fungible_accounts = token_price_fetcher.get_all_token_symbols().await.unwrap();
-    assert!(wellknown_fungible_accounts.len() > 0);
+    let well_known_fungible_accounts = token_price_fetcher.get_all_token_symbols().await.unwrap();
+    assert!(well_known_fungible_accounts.len() > 0);
 
     let setup = TestSetup::new_with_options(
         name.clone(),
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            well_known_fungible_accounts: wellknown_fungible_accounts,
+            well_known_fungible_accounts,
         },
     )
     .await;

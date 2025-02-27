@@ -165,7 +165,7 @@ impl PgClient {
             "asset_creators_v3_creator",
             "assets_authority",
             "assets_v3_authority_fk",
-            "assets_v3_collection_is_collection_verified",
+            "assets_v3_collection_is_collection_verified_supply",
             "assets_v3_delegate",
             "assets_v3_is_burnt",
             "assets_v3_is_compressed",
@@ -203,7 +203,7 @@ impl PgClient {
 
         for (index, on_query_string) in [
                 ("assets_v3_authority_fk", "assets_v3(ast_authority_fk) WHERE ast_authority_fk IS NOT NULL"),
-                ("assets_v3_collection_is_collection_verified", "assets_v3(ast_collection, ast_is_collection_verified) WHERE ast_collection IS NOT NULL"),
+                ("assets_v3_collection_is_collection_verified_supply", "assets_v3(ast_collection, ast_is_collection_verified, ast_supply) WHERE ast_collection IS NOT NULL AND ast_supply IS NOT NULL"),
                 ("assets_v3_delegate", "assets_v3(ast_delegate) WHERE ast_delegate IS NOT NULL"),
                 ("assets_v3_is_burnt", "assets_v3(ast_is_burnt) WHERE ast_is_burnt IS TRUE"),
                 ("assets_v3_is_compressed", "assets_v3(ast_is_compressed)"),
