@@ -84,11 +84,16 @@ jobs:
         id: changelog
         run: |
           set -e
+          # Check if cliff.toml exists
+          if [ ! -f "cliff.toml" ]; then
+            echo "Warning: cliff.toml not found, will use default configuration"
+          fi
+          
           # Generate changelog using git-cliff
-          git-cliff --config cliff.toml --tag "v${{ inputs.version }}" --output CHANGELOG.md
+          git-cliff --tag "v${{ inputs.version }}" --output CHANGELOG.md
           
           # Generate a shorter version for PR description
-          git-cliff --config cliff.toml --tag "v${{ inputs.version }}" --strip header,footer > .changelog_content
+          git-cliff --tag "v${{ inputs.version }}" --strip all > .changelog_content
           
           git add CHANGELOG.md
           git commit -m "docs: add changelog for v${{ inputs.version }}"
