@@ -1,21 +1,16 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
-use entities::{
-    api_req_params::{GetAsset, GetAssetsByOwner, SearchAssets},
-    enums::Interface,
-};
+use entities::api_req_params::{GetAsset, GetAssetsByOwner};
 use function_name::named;
 use itertools::Itertools;
-use nft_ingester::api::dapi::response::AssetList;
 use serial_test::serial;
-use tokio::{sync::Mutex, task::JoinSet};
 
 use crate::common::{
-    index_seed_events, seed_accounts, seed_nfts, trim_test_name, well_known_fungible_tokens,
-    Network, SeedEvent, TestSetup, TestSetupOptions,
+    index_seed_events, seed_accounts, seed_nfts, trim_test_name, Network, SeedEvent, TestSetup,
+    TestSetupOptions,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_asset_parsing() {
@@ -40,14 +35,12 @@ async fn test_asset_parsing() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_get_different_assets_by_owner() {
@@ -88,10 +81,8 @@ async fn test_get_different_assets_by_owner() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByOwner = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_assets_by_owner(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_owner(request).await.unwrap();
     insta::assert_json_snapshot!(name.clone(), response);
 
     let request = r#"
@@ -110,13 +101,13 @@ async fn test_get_different_assets_by_owner() {
     "#;
 
     let request: GetAssetsByOwner = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_assets_by_owner(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_owner(request).await.unwrap();
     insta::assert_json_snapshot!(format!("{}_show_unverif_coll", name), response);
 }
 
 // context: this account had an issue with mpl-core < 0.9.0, where
 // it could not be parsed because of a bug in mpl-core.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[named]
 async fn test_process_previously_unparseable_account() {
     let name = trim_test_name(function_name!());

@@ -1,23 +1,17 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use entities::{
-    api_req_params::{
-        GetAsset, GetAssetBatch, GetAssetsByAuthority, GetAssetsByGroup, GetAssetsByOwner,
-        SearchAssets,
-    },
+    api_req_params::{GetAssetsByAuthority, GetAssetsByGroup, GetAssetsByOwner},
     enums::AssetType,
 };
 use function_name::named;
 use itertools::Itertools;
 use serial_test::serial;
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-};
+use tokio_util::sync::CancellationToken;
 
 use super::common::*;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_full_sync_core_get_assets_by_authority() {
@@ -41,11 +35,9 @@ async fn test_full_sync_core_get_assets_by_authority() {
 
     single_db_index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
     setup
         .synchronizer
-        .full_syncronize(&shutdown_rx.resubscribe(), AssetType::NonFungible)
+        .full_syncronize(CancellationToken::new(), AssetType::NonFungible)
         .await
         .unwrap();
 
@@ -61,15 +53,12 @@ async fn test_full_sync_core_get_assets_by_authority() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByAuthority = serde_json::from_str(request).unwrap();
-    let response =
-        setup.das_api.get_assets_by_authority(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_authority(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_full_sync_core_get_assets_by_group() {
@@ -93,11 +82,9 @@ async fn test_full_sync_core_get_assets_by_group() {
 
     single_db_index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
     setup
         .synchronizer
-        .full_syncronize(&shutdown_rx.resubscribe(), AssetType::NonFungible)
+        .full_syncronize(CancellationToken::new(), AssetType::NonFungible)
         .await
         .unwrap();
 
@@ -114,14 +101,12 @@ async fn test_full_sync_core_get_assets_by_group() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByGroup = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_assets_by_group(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_group(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_full_sync_core_get_assets_by_owner() {
@@ -143,11 +128,9 @@ async fn test_full_sync_core_get_assets_by_owner() {
 
     single_db_index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
     setup
         .synchronizer
-        .full_syncronize(&shutdown_rx.resubscribe(), AssetType::NonFungible)
+        .full_syncronize(CancellationToken::new(), AssetType::NonFungible)
         .await
         .unwrap();
 
@@ -163,14 +146,12 @@ async fn test_full_sync_core_get_assets_by_owner() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByOwner = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_assets_by_owner(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_owner(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_full_sync_core_and_regular_nfts_get_assets_by_owner() {
@@ -197,11 +178,9 @@ async fn test_full_sync_core_and_regular_nfts_get_assets_by_owner() {
 
     single_db_index_seed_events(&setup, seeds.iter().collect_vec()).await;
 
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
     setup
         .synchronizer
-        .full_syncronize(&shutdown_rx.resubscribe(), AssetType::NonFungible)
+        .full_syncronize(CancellationToken::new(), AssetType::NonFungible)
         .await
         .unwrap();
 
@@ -217,9 +196,7 @@ async fn test_full_sync_core_and_regular_nfts_get_assets_by_owner() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByOwner = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_assets_by_owner(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_owner(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }

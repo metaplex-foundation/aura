@@ -6,7 +6,7 @@ use metrics_utils::{BackfillerMetricsConfig, MetricStatus};
 use mockall::automock;
 use solana_bigtable_connection::bigtable::BigTableConnection;
 use solana_sdk::clock::Slot;
-use tokio::sync::broadcast::Receiver;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::bigtable::SECONDS_TO_RETRY_GET_DATA_FROM_BG;
@@ -90,7 +90,7 @@ where
         collected_pubkey: &solana_program::pubkey::Pubkey,
         slot_start_from: u64,
         slot_parse_until: u64,
-        rx: &Receiver<()>,
+        cancellation_token: CancellationToken,
     ) -> Option<u64> {
         let mut start_at_slot = slot_start_from;
         info!(
@@ -98,11 +98,7 @@ where
             collected_pubkey, start_at_slot, slot_parse_until
         );
         let mut top_slot_collected = None;
-        loop {
-            if !rx.is_empty() {
-                info!("Received stop signal, returning");
-                return None;
-            }
+        while !cancellation_token.is_cancelled() {
             let slots = self
                 .row_keys_getter
                 .get_slots_sorted_desc(collected_pubkey, start_at_slot, GET_SIGNATURES_LIMIT)

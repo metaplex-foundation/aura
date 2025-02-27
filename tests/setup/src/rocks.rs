@@ -19,7 +19,6 @@ use rocks_db::{
 use solana_sdk::pubkey::Pubkey;
 use sqlx::types::chrono::Utc;
 use tempfile::TempDir;
-use tokio::{sync::Mutex, task::JoinSet};
 
 const DEFAULT_TEST_URL: &str = "http://example.com";
 
@@ -46,21 +45,16 @@ impl RocksTestEnvironment {
     pub fn new(keys: &[(u64, Pubkey)]) -> Self {
         let storage_temp_dir = TempDir::new().expect("Failed to create a temporary directory");
         let slot_storage_temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let join_set = Arc::new(Mutex::new(JoinSet::new()));
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let storage = Storage::open(
             storage_temp_dir.path().to_str().unwrap(),
-            join_set.clone(),
             red_metrics.clone(),
             MigrationState::Last,
         )
         .expect("Failed to create storage database");
-        let slot_storage = SlotStorage::open(
-            slot_storage_temp_dir.path().to_str().unwrap(),
-            join_set,
-            red_metrics.clone(),
-        )
-        .expect("Failed to create slot storage database");
+        let slot_storage =
+            SlotStorage::open(slot_storage_temp_dir.path().to_str().unwrap(), red_metrics.clone())
+                .expect("Failed to create slot storage database");
 
         for &(slot, ref pubkey) in keys {
             storage.asset_updated(slot, *pubkey).expect("Cannot update assets.");

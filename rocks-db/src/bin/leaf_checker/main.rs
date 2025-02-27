@@ -8,7 +8,7 @@ use rocks_db::{
     Storage,
 };
 use solana_sdk::pubkey::Pubkey;
-use tokio::{sync::Mutex, task::JoinSet};
+use tokio::task::JoinSet;
 
 pub const NUM_OF_THREADS: usize = 2500;
 
@@ -28,15 +28,8 @@ pub async fn main() {
 
     println!("Opening DB...");
 
-    let source_db = Arc::new(
-        Storage::open(
-            source_db_path,
-            Arc::new(Mutex::new(JoinSet::new())),
-            red_metrics.clone(),
-            MigrationState::Last,
-        )
-        .unwrap(),
-    );
+    let source_db =
+        Arc::new(Storage::open(source_db_path, red_metrics.clone(), MigrationState::Last).unwrap());
 
     println!("Opened in {:?}", start.elapsed());
 

@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use entities::models::{AssetIndex, FungibleAssetIndex};
 use mockall::automock;
 use solana_sdk::pubkey::Pubkey;
+use tokio_util::sync::CancellationToken;
 
 pub use crate::Result;
 use crate::Storage;
@@ -66,7 +67,7 @@ pub trait Dumper {
         asset_limit: Option<usize>,
         start_pubkey: Option<Pubkey>,
         end_pubkey: Option<Pubkey>,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
     ) -> core::result::Result<usize, String>;
 
@@ -76,7 +77,7 @@ pub trait Dumper {
         buf_capacity: usize,
         start_pubkey: Option<Pubkey>,
         end_pubkey: Option<Pubkey>,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
     ) -> core::result::Result<usize, String>;
 }
@@ -156,7 +157,7 @@ impl Dumper for MockAssetIndexStorage {
         asset_limit: Option<usize>,
         start_pubkey: Option<Pubkey>,
         end_pubkey: Option<Pubkey>,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
     ) -> core::result::Result<usize, String> {
         self.mock_dumper.dump_nft_csv(
@@ -168,7 +169,7 @@ impl Dumper for MockAssetIndexStorage {
             asset_limit,
             start_pubkey,
             end_pubkey,
-            rx,
+            cancellation_token,
             synchronizer_metrics,
         )
     }
@@ -178,7 +179,7 @@ impl Dumper for MockAssetIndexStorage {
         buf_capacity: usize,
         start_pubkey: Option<Pubkey>,
         end_pubkey: Option<Pubkey>,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         synchronizer_metrics: std::sync::Arc<metrics_utils::SynchronizerMetricsConfig>,
     ) -> core::result::Result<usize, String> {
         self.mock_dumper.dump_fungible_csv(
@@ -186,7 +187,7 @@ impl Dumper for MockAssetIndexStorage {
             buf_capacity,
             start_pubkey,
             end_pubkey,
-            rx,
+            cancellation_token,
             synchronizer_metrics,
         )
     }

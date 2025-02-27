@@ -6,7 +6,7 @@ mod tests {
 
     const RAW_BLOCK_DEPRECATED_CF_NAME: &str = "RAW_BLOCK_CBOR_ENCODED";
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_raw_block_encoding() {
         // case 1: mock data
         let raw_block_deprecated = RawBlockDeprecated {
@@ -51,7 +51,7 @@ mod tests {
         assert_eq!(RawBlock::decode(&encoded).unwrap(), raw_block);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_raw_block_migration() {
         let env1 = RocksTestEnvironment::new(&[]);
         let raw_block_deprecated = RawBlockDeprecated {

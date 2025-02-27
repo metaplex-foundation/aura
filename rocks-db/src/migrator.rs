@@ -9,7 +9,6 @@ use interface::migration_version_manager::PrimaryStorageMigrationVersionManager;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{IteratorMode, DB};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tokio::{sync::Mutex, task::JoinSet};
 use tracing::{error, info};
 
 use crate::{
@@ -196,7 +195,6 @@ impl<'a> MigrationApplier<'a> {
     fn open_migration_storage(db_path: &str, version: u64) -> Result<Storage> {
         Storage::open(
             db_path,
-            Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(version),
         )

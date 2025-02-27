@@ -1,24 +1,17 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
-use entities::{api_req_params::GetAsset, enums::AssetType};
+use entities::api_req_params::GetAsset;
 use function_name::named;
 use itertools::Itertools;
-use nft_ingester::api::dapi::{
-    response::{AssetList, TokenAccountsList},
-    rpc_asset_models::Asset,
-};
+use nft_ingester::api::dapi::rpc_asset_models::Asset;
 use serial_test::serial;
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-};
 
 use crate::common::{
     index_seed_events, seed_token_mints, trim_test_name, well_known_fungible_tokens, Network,
     SeedEvent, TestSetup, TestSetupOptions,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_fungible_token_mint_freeze_authority() {
@@ -44,10 +37,8 @@ async fn test_fungible_token_mint_freeze_authority() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response_value = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response_value = setup.das_api.get_asset(request).await.unwrap();
     let asset: Asset =
         serde_json::from_value::<Asset>(response_value.clone()).expect("Cannot parse 'Asset'.");
 

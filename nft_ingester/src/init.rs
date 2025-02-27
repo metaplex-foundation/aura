@@ -1,6 +1,6 @@
 #[cfg(feature = "profiling")]
 use std::{fs::File, io::Write};
-use std::{ops::DerefMut, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use metrics_utils::{red::RequestErrorDurationMetrics, MetricState};
 use postgre_client::PgClient;
@@ -10,11 +10,6 @@ use rocks_db::{migrator::MigrationState, Storage};
 use tempfile::TempDir;
 #[cfg(feature = "profiling")]
 use tokio::process::Command;
-use tokio::{
-    sync::{broadcast::Sender, Mutex},
-    task::{JoinError, JoinSet},
-};
-use tokio_util::sync::CancellationToken;
 #[cfg(feature = "profiling")]
 use tracing::error;
 
@@ -53,11 +48,9 @@ pub async fn init_primary_storage(
     enable_migration_rocksdb: bool,
     migration_storage_path: &Option<String>,
     metrics_state: &MetricState,
-    mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
 ) -> Result<Storage, IngesterError> {
     Storage::open(
         db_path,
-        mutexed_tasks.clone(),
         metrics_state.red_metrics.clone(),
         MigrationState::CreateColumnFamilies,
     )?;
@@ -67,7 +60,6 @@ pub async fn init_primary_storage(
         let migration_version_manager = Storage::open_secondary(
             db_path,
             migration_version_manager_dir.path().to_str().unwrap(),
-            mutexed_tasks.clone(),
             metrics_state.red_metrics.clone(),
             MigrationState::Last,
         )?;
@@ -82,43 +74,17 @@ pub async fn init_primary_storage(
         .await?;
     }
 
-    Ok(Storage::open(
-        db_path,
-        mutexed_tasks.clone(),
-        metrics_state.red_metrics.clone(),
-        MigrationState::Last,
-    )?)
-}
-
-#[cfg(not(feature = "profiling"))]
-pub async fn graceful_stop(
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-    shutdown_tx: Sender<()>,
-    shutdown_token: Option<CancellationToken>,
-) {
-    usecase::graceful_stop::listen_shutdown().await;
-    let _ = shutdown_tx.send(());
-    if let Some(token) = shutdown_token {
-        token.cancel();
-    }
-
-    usecase::graceful_stop::graceful_stop(tasks.lock().await.deref_mut()).await
+    Ok(Storage::open(db_path, metrics_state.red_metrics.clone(), MigrationState::Last)?)
 }
 
 #[cfg(feature = "profiling")]
 pub async fn graceful_stop(
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-    shutdown_tx: Sender<()>,
-    shutdown_token: Option<CancellationToken>,
+    cancellation_token: tokio_util::sync::CancellationToken,
     guard: Option<ProfilerGuard<'_>>,
     profile_path: Option<String>,
     heap_path: &str,
 ) {
-    usecase::graceful_stop::listen_shutdown().await;
-    let _ = shutdown_tx.send(());
-    if let Some(token) = shutdown_token {
-        token.cancel();
-    }
+    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
 
     if let Some(guard) = guard {
         if let Ok(report) = guard.report().build() {
@@ -133,8 +99,6 @@ pub async fn graceful_stop(
     if std::env::var(MALLOC_CONF_ENV).is_ok() {
         generate_profiling_gif(heap_path).await;
     }
-
-    usecase::graceful_stop::graceful_stop(tasks.lock().await.deref_mut()).await
 }
 
 #[cfg(feature = "profiling")]

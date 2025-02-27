@@ -48,7 +48,7 @@ async fn main() {
     start_metrics(metrics.registry, Some(config.metrics_port)).await;
 
     let mut tasks = JoinSet::new();
-    let cancel_token = CancellationToken::new();
+    let cancellation_token = CancellationToken::new();
     match config.test_source_mode {
         TestSourceMode::File => {
             let diff_checker = DiffChecker::new(
@@ -73,7 +73,7 @@ async fn main() {
                 config.run_assets_tests,
                 diff_checker,
                 metrics.integrity_verification_metrics.clone(),
-                cancel_token.clone(),
+                cancellation_token.clone(),
             )
             .await;
         },
@@ -107,15 +107,13 @@ async fn main() {
                 config.run_assets_tests,
                 diff_checker,
                 metrics.integrity_verification_metrics.clone(),
-                cancel_token.clone(),
+                cancellation_token.clone(),
             )
             .await;
         },
     };
 
-    usecase::graceful_stop::listen_shutdown().await;
-    cancel_token.cancel();
-    usecase::graceful_stop::graceful_stop(&mut tasks).await;
+    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
 }
 
 macro_rules! spawn_test {

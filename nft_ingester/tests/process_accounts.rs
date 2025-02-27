@@ -76,7 +76,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn token_update_process() {
         let first_mint = Pubkey::new_unique();
         let second_mint = Pubkey::new_unique();
@@ -189,7 +189,7 @@ mod tests {
         assert_eq!(second_dynamic_from_db.supply.unwrap().value, 1);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn mplx_update_process() {
         let first_mint = Pubkey::new_unique();
         let second_mint = Pubkey::new_unique();
@@ -297,7 +297,7 @@ mod tests {
         };
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn mpl_core_update_process() {
         let first_mpl_core = Pubkey::new_unique();
         let first_owner = Pubkey::new_unique();
@@ -472,7 +472,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn inscription_process() {
         // real world accounts
         let inscription_account_data = general_purpose::STANDARD_NO_PAD.decode("ZAuXKuQmRbsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAF00JG/taM5xDErn+0mQMBbbBdJuhYeh30FuRLrqWSbfBhAAAABhcHBsaWNhdGlvbi90ZXh0AeOkcaHjppsua2rgJHv2TUkEEClH4Y96jMvvKr1caFZzE7QEAAAAAABDAAAAAUAAAABmNTMyMGVmMjhkNTM3NWQ3YjFhNmFlNzBlYzQzZWRkMTE1ZmQxMmVhOTMzZTAxNjUzMDZhNzg4ZGNiZWVjYTMxAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA").unwrap() ;

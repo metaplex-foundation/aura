@@ -3,11 +3,7 @@ use std::{sync::Arc, time::Duration};
 use chrono::Utc;
 use interface::signature_persistence::UnprocessedTransactionsGetter;
 use metrics_utils::MessageProcessMetricsConfig;
-use tokio::{
-    sync::{broadcast::Receiver, Mutex},
-    task::{JoinError, JoinSet},
-    time::sleep as tokio_sleep,
-};
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use super::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor;
@@ -15,23 +11,24 @@ use crate::{error::IngesterError, redis_receiver::get_timestamp_from_id};
 
 const TRANSACTIONS_GETTER_IDLE_TIMEOUT_MILLIS: u64 = 250;
 
-pub async fn run_transaction_processor<TG>(
-    rx: Receiver<()>,
-    mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+pub fn run_transaction_processor<TG>(
+    cancellation_token: CancellationToken,
     unprocessed_transactions_getter: Arc<TG>,
     geyser_bubblegum_updates_processor: Arc<BubblegumTxProcessor>,
     message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
 ) where
     TG: UnprocessedTransactionsGetter + Send + Sync + 'static,
 {
-    let run_transaction_processor = async move {
-        while rx.is_empty() {
+    usecase::executor::spawn(async move {
+        while !cancellation_token.is_cancelled() {
             let txs = match unprocessed_transactions_getter.next_transactions().await {
                 Ok(txs) => txs,
                 Err(err) => {
                     error!("Get next transactions: {}", err);
-                    tokio_sleep(Duration::from_millis(TRANSACTIONS_GETTER_IDLE_TIMEOUT_MILLIS))
-                        .await;
+                    tokio::time::sleep(Duration::from_millis(
+                        TRANSACTIONS_GETTER_IDLE_TIMEOUT_MILLIS,
+                    ))
+                    .await;
                     continue;
                 },
             };
@@ -62,9 +59,5 @@ pub async fn run_transaction_processor<TG>(
                 }
             }
         }
-
-        Ok(())
-    };
-
-    mutexed_tasks.lock().await.spawn(run_transaction_processor);
+    });
 }

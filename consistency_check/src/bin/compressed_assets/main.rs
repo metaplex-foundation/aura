@@ -21,12 +21,12 @@ use solana_sdk::pubkey::{ParsePubkeyError, Pubkey};
 use spl_concurrent_merkle_tree::hash::recompute;
 use tempfile::TempDir;
 use tokio::{
-    sync::{broadcast, Mutex, OwnedSemaphorePermit, Semaphore},
-    task::{JoinError, JoinSet},
+    sync::{Mutex, OwnedSemaphorePermit, Semaphore},
+    task::JoinError,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use usecase::{graceful_stop::graceful_stop, proofs::MaybeProofChecker};
+use usecase::proofs::MaybeProofChecker;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -72,16 +72,11 @@ pub async fn main() {
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path().to_path_buf();
+    let cancellation_token = CancellationToken::new();
     info!("Opening DB...");
     let db_client = Arc::new(
-        Storage::open_secondary(
-            config.db_path,
-            temp_path,
-            Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
-            red_metrics,
-            MigrationState::Last,
-        )
-        .unwrap(),
+        Storage::open_secondary(config.db_path, temp_path, red_metrics, MigrationState::Last)
+            .unwrap(),
     );
     info!("DB opened");
 
@@ -100,12 +95,6 @@ pub async fn main() {
     let assets_with_failed_proofs = Arc::new(AtomicU64::new(0));
     let assets_with_missed_proofs = Arc::new(AtomicU64::new(0));
 
-    let shutdown_token = CancellationToken::new();
-    let (shutdown_for_file_writer_tx, shutdown_for_file_writer_rx) = broadcast::channel::<()>(1);
-
-    let mut tasks = JoinSet::new();
-    let mut writers = JoinSet::new();
-
     let failed_proofs: Arc<Mutex<HashMap<String, Vec<String>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let failed_check: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
@@ -113,13 +102,13 @@ pub async fn main() {
     let chunk_size = keys.len().div_ceil(config.workers);
 
     for chunk in keys.chunks(chunk_size) {
-        tasks.spawn(verify_tree_batch(
+        usecase::executor::spawn(verify_tree_batch(
             progress_bar.clone(),
             assets_processed.clone(),
             assets_with_failed_proofs.clone(),
             assets_with_missed_proofs.clone(),
             rate.clone(),
-            shutdown_token.clone(),
+            cancellation_token.child_token(),
             chunk.to_vec(),
             rpc_client.clone(),
             db_client.clone(),
@@ -132,45 +121,45 @@ pub async fn main() {
 
     let assets_processed_clone = assets_processed.clone();
     let rate_clone = rate.clone();
-    let shutdown_token_clone = shutdown_token.clone();
-
     // update rate on the background
-    tokio::spawn(update_rate(shutdown_token_clone, assets_processed_clone, rate_clone));
+    usecase::executor::spawn(update_rate(
+        cancellation_token.child_token(),
+        assets_processed_clone,
+        rate_clone,
+    ));
 
     // write found problematic assets to the files
-    writers.spawn(async move {
-        let failed_checks_file =
-            File::create(FAILED_CHECKS_FILE).expect("Failed to create file for failed check trees");
-        let failed_proofs_file =
-            File::create(FAILED_PROOFS_FILE).expect("Failed to create file for failed proofs");
+    usecase::executor::spawn({
+        let cancellation_token = cancellation_token.child_token();
+        async move {
+            let failed_checks_file = File::create(FAILED_CHECKS_FILE)
+                .expect("Failed to create file for failed check trees");
+            let failed_proofs_file =
+                File::create(FAILED_PROOFS_FILE).expect("Failed to create file for failed proofs");
 
-        let mut failed_checks_wrt = csv::Writer::from_writer(failed_checks_file);
-        let mut failed_proofs_wrt = csv::Writer::from_writer(failed_proofs_file);
+            let mut failed_checks_wrt = csv::Writer::from_writer(failed_checks_file);
+            let mut failed_proofs_wrt = csv::Writer::from_writer(failed_proofs_file);
 
-        loop {
-            if let Err(e) = process_failed_checks(&mut failed_checks_wrt, &failed_check).await {
-                error!("Error writing failed checks: {}", e);
+            loop {
+                if let Err(e) = process_failed_checks(&mut failed_checks_wrt, &failed_check).await {
+                    error!("Error writing failed checks: {}", e);
+                }
+
+                if let Err(e) = process_failed_proofs(&mut failed_proofs_wrt, &failed_proofs).await
+                {
+                    error!("Error writing failed proofs: {}", e);
+                }
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tokio::time::sleep(WRITER_SLEEP_TIME).await;
             }
-
-            if let Err(e) = process_failed_proofs(&mut failed_proofs_wrt, &failed_proofs).await {
-                error!("Error writing failed proofs: {}", e);
-            }
-
-            if !shutdown_for_file_writer_rx.is_empty() {
-                break;
-            }
-
-            tokio::time::sleep(WRITER_SLEEP_TIME).await;
         }
-
-        Ok(())
     });
 
-    graceful_stop(&mut tasks).await;
-
-    shutdown_for_file_writer_tx.send(()).unwrap();
-
-    graceful_stop(&mut writers).await;
+    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
 
     progress_bar.finish_with_message("Processing complete");
 }
@@ -182,7 +171,7 @@ async fn verify_tree_batch(
     assets_with_failed_proofs: Arc<AtomicU64>,
     assets_with_missed_proofs: Arc<AtomicU64>,
     rate: Arc<Mutex<f64>>,
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
     trees: Vec<String>,
     rpc: Arc<RpcClient>,
     rocks: Arc<Storage>,
@@ -214,7 +203,7 @@ async fn verify_tree_batch(
                 let mut assets_batch = Vec::new();
 
                 for asset_index in 0..des_data.num_minted {
-                    if shutdown_token.is_cancelled() {
+                    if cancellation_token.is_cancelled() {
                         info!("Received shutdown signal");
                         return Ok(());
                     }
@@ -234,7 +223,7 @@ async fn verify_tree_batch(
                         let progress_bar_cloned = progress_bar.clone();
 
                         let permit = semaphore.clone().acquire_owned().await.unwrap();
-                        tokio::spawn(process_assets_batch(
+                        usecase::executor::spawn(process_assets_batch(
                             rocks_cloned,
                             api_metrics_cloned,
                             failed_proofs_cloned,
@@ -262,7 +251,7 @@ async fn verify_tree_batch(
                     let progress_bar_cloned = progress_bar.clone();
 
                     let permit = semaphore.clone().acquire_owned().await.unwrap();
-                    tokio::spawn(process_assets_batch(
+                    usecase::executor::spawn(process_assets_batch(
                         rocks_cloned,
                         api_metrics_cloned,
                         failed_proofs_cloned,

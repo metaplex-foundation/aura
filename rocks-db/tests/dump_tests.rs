@@ -4,6 +4,7 @@ use metrics_utils::SynchronizerMetricsConfig;
 use rocks_db::storage_traits::Dumper;
 use setup::rocks::*;
 use tempfile::TempDir;
+use tokio_util::sync::CancellationToken;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 #[tracing_test::traced_test]
@@ -12,7 +13,6 @@ async fn test_scv_export_from_rocks() {
     let number_of_assets = 1000;
     let _generated_assets = env.generate_assets(number_of_assets, 25).await;
     let storage = env.storage;
-    let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
     let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
     let assets_path = format!("{}/assets.csv", temp_dir.path().to_str().unwrap());
     let creators_path = format!("{}/creators.csv", temp_dir.path().to_str().unwrap());
@@ -35,7 +35,7 @@ async fn test_scv_export_from_rocks() {
             Some(number_of_assets),
             None,
             None,
-            &rx,
+            CancellationToken::new(),
             Arc::new(SynchronizerMetricsConfig::new()),
         )
         .unwrap();
@@ -46,7 +46,7 @@ async fn test_scv_export_from_rocks() {
             155,
             None,
             None,
-            &rx,
+            CancellationToken::new(),
             Arc::new(SynchronizerMetricsConfig::new()),
         )
         .unwrap();

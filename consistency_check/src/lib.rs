@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 pub async fn update_rate(
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
     assets_processed: Arc<AtomicU64>,
     rate: Arc<Mutex<f64>>,
 ) {
@@ -19,7 +19,7 @@ pub async fn update_rate(
 
         tokio::select! {
             _ = sleep => {}
-            _ = shutdown_token.cancelled() => {break;}
+            _ = cancellation_token.cancelled() => { break; }
         }
 
         let current_time = std::time::Instant::now();

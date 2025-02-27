@@ -21,7 +21,7 @@ impl RawBlocksStreamer for SlotStorage {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         let backend = self.db.clone();
         let metrics = self.red_metrics.clone();
-        self.join_set.lock().await.spawn(tokio::spawn(async move {
+        usecase::executor::spawn(async move {
             let _ = process_raw_blocks_range(
                 backend,
                 start_slot,
@@ -30,7 +30,7 @@ impl RawBlocksStreamer for SlotStorage {
                 tx.clone(),
             )
             .await;
-        }));
+        });
 
         Ok(Box::pin(ReceiverStream::new(rx)) as RawBlocksStream)
     }

@@ -24,7 +24,7 @@ pub fn find_sigs<'a>(
 ) -> Result<(JoinHandle<Result<(), String>>, UnboundedReceiver<String>), String> {
     let mut last_sig = None;
     let (tx, rx) = mpsc::unbounded_channel::<String>();
-    let jh = tokio::spawn(async move {
+    let jh = usecase::executor::spawn(async move {
         loop {
             let before = last_sig;
             let sigs = client

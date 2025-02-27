@@ -5,10 +5,7 @@ use entities::models::{RawBlock, RawBlockDeprecated};
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocks_db::{column::TypedColumn, errors::StorageError, SlotStorage, Storage};
 use rocksdb::DB;
-use tokio::{
-    sync::{Mutex, Semaphore},
-    task::{JoinError, JoinSet},
-};
+use tokio::sync::{Mutex, Semaphore};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -45,7 +42,6 @@ fn put_batch_vec<C: TypedColumn>(
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let args = Args::parse();
-    let tasks = Arc::new(Mutex::new(JoinSet::<Result<(), JoinError>>::new()));
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let cf_descriptors = Storage::cfs_to_column_families(
         SlotStorage::cf_names()
@@ -61,7 +57,7 @@ async fn main() {
         )
         .expect("open rocks slot storage to migrate"),
     );
-    let slot_storage = SlotStorage::new(db, tasks, red_metrics);
+    let slot_storage = SlotStorage::new(db, red_metrics);
     eprintln!("Opened slots database in primary mode at {}", args.slots_db_path);
     let mut iter = slot_storage.db.raw_iterator_cf(
         &slot_storage.db.cf_handle(RawBlockDeprecated::NAME).expect("get raw blocks cf handle"),

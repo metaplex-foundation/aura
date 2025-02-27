@@ -15,11 +15,8 @@ use postgre_client::PgClient;
 use rocks_db::{batch_savers::BatchSaveStorage, Storage};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
-use tokio::{
-    sync::{broadcast::Receiver, Mutex},
-    task::{JoinError, JoinSet},
-    time::Instant,
-};
+use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -58,9 +55,8 @@ lazy_static::lazy_static! {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 'static>(
-    rx: Receiver<()>,
-    mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+pub fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 'static>(
+    cancellation_token: CancellationToken,
     unprocessed_transactions_getter: Arc<AG>,
     rocks_storage: Arc<Storage>,
     account_buffer_size: usize,
@@ -69,36 +65,35 @@ pub async fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send 
     message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
     postgre_client: Arc<PgClient>,
     rpc_client: Arc<RpcClient>,
-    join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     processor_name: Option<String>,
     wellknown_fungible_accounts: HashMap<String, String>,
 ) {
-    mutexed_tasks.lock().await.spawn(async move {
+    usecase::executor::spawn(async move {
         let account_processor = loop {
             match AccountsProcessor::build(
-            rx.resubscribe(),
-            fees_buffer_size,
-            unprocessed_transactions_getter.clone(),
-            metrics.clone(),
-            message_process_metrics.clone(),
-            postgre_client.clone(),
-            rpc_client.clone(),
-            join_set.clone(),
-            processor_name.clone(),
-            wellknown_fungible_accounts.clone()
-        )
-        .await {
+                cancellation_token.child_token(),
+                fees_buffer_size,
+                unprocessed_transactions_getter.clone(),
+                metrics.clone(),
+                message_process_metrics.clone(),
+                postgre_client.clone(),
+                rpc_client.clone(),
+                processor_name.clone(),
+                wellknown_fungible_accounts.clone(),
+            )
+            .await
+            {
                 Ok(processor) => break processor,
                 Err(e) => {
                     error!(%e, "Failed to build accounts processor {:?}, retrying in {} seconds...", processor_name.clone(), ACCOUNT_PROCESSOR_RESTART_INTERVAL.as_secs());
                     tokio::time::sleep(ACCOUNT_PROCESSOR_RESTART_INTERVAL).await;
-                }
+                },
             }
         };
 
-        account_processor.process_accounts(rx, rocks_storage, account_buffer_size).await;
-
-        Ok(())
+        account_processor
+            .process_accounts(cancellation_token.child_token(), rocks_storage, account_buffer_size)
+            .await;
     });
 }
 
@@ -124,14 +119,13 @@ pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
 #[allow(clippy::too_many_arguments)]
 impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
     pub async fn build(
-        rx: Receiver<()>,
+        cancellation_token: CancellationToken,
         fees_batch_size: usize,
         unprocessed_account_getter: Arc<T>,
         metrics: Arc<IngesterMetricsConfig>,
         message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
         postgre_client: Arc<PgClient>,
         rpc_client: Arc<RpcClient>,
-        join_set: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
         processor_name: Option<String>,
         wellknown_fungible_accounts: HashMap<String, String>,
     ) -> Result<Self, IngesterError> {
@@ -140,9 +134,8 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         let mpl_core_processor = MplCoreProcessor::new(metrics.clone());
         let inscription_processor = InscriptionsProcessor::new(metrics.clone());
         let core_fees_processor =
-            MplCoreFeeProcessor::build(postgre_client, metrics.clone(), rpc_client, join_set)
-                .await?;
-        core_fees_processor.update_rent(rx).await;
+            MplCoreFeeProcessor::build(postgre_client, metrics.clone(), rpc_client).await?;
+        core_fees_processor.update_rent(cancellation_token.child_token());
 
         Ok(Self {
             fees_batch_size,
@@ -161,7 +154,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
 
     pub async fn process_accounts(
         &self,
-        rx: Receiver<()>,
+        cancellation_token: CancellationToken,
         storage: Arc<Storage>,
         accounts_batch_size: usize,
     ) {
@@ -172,7 +165,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         let mut interval = tokio::time::interval(FLUSH_INTERVAL);
         let mut batch_fill_instant = Instant::now();
 
-        while rx.is_empty() {
+        while !cancellation_token.is_cancelled() {
             tokio::select! {
                 unprocessed_accounts = self.unprocessed_account_getter.next_accounts(accounts_batch_size) => {
                         let unprocessed_accounts = match unprocessed_accounts {
@@ -193,6 +186,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                     self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_instant);
                     self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
                 }
+                _ = cancellation_token.cancelled() => { break; }
             }
         }
         self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_instant);

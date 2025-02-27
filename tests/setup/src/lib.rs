@@ -10,6 +10,7 @@ use rocks_db::columns::asset::{AssetAuthority, AssetCollection, AssetDynamicDeta
 use solana_sdk::pubkey::Pubkey;
 use testcontainers::clients::Cli;
 use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 
 use crate::rocks::RocksTestEnvironmentSetup;
 
@@ -115,7 +116,7 @@ impl<'a> TestEnvironment<'a> {
         let mut metrics_state = metrics_utils::MetricState::new();
         metrics_state.register_metrics();
 
-        let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200000,
@@ -123,21 +124,21 @@ impl<'a> TestEnvironment<'a> {
             metrics_state.synchronizer_metrics.clone(),
             1,
         );
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        let synchronizer = Arc::new(syncronizer);
+        let synchronizer = Arc::new(synchronizer);
 
         let mut tasks = JoinSet::new();
         for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
-            let rx = rx.resubscribe();
             tasks.spawn(async move {
                 match asset_type {
-                    AssetType::NonFungible => {
-                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap()
-                    },
-                    AssetType::Fungible => {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap()
-                    },
+                    AssetType::NonFungible => synchronizer
+                        .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
+                        .await
+                        .unwrap(),
+                    AssetType::Fungible => synchronizer
+                        .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                        .await
+                        .unwrap(),
                 }
             });
         }
@@ -182,7 +183,7 @@ impl<'a> TestEnvironment<'a> {
         let mut metrics_state = metrics_utils::MetricState::new();
         metrics_state.register_metrics();
 
-        let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200000,
@@ -190,21 +191,21 @@ impl<'a> TestEnvironment<'a> {
             metrics_state.synchronizer_metrics.clone(),
             1,
         );
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-        let synchronizer = Arc::new(syncronizer);
+        let synchronizer = Arc::new(synchronizer);
 
         let mut tasks = JoinSet::new();
         for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
-            let rx = rx.resubscribe();
             tasks.spawn(async move {
                 match asset_type {
-                    AssetType::NonFungible => {
-                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap()
-                    },
-                    AssetType::Fungible => {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap()
-                    },
+                    AssetType::NonFungible => synchronizer
+                        .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
+                        .await
+                        .unwrap(),
+                    AssetType::Fungible => synchronizer
+                        .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                        .await
+                        .unwrap(),
                 }
             });
         }

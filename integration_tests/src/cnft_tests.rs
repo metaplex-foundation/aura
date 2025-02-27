@@ -1,11 +1,10 @@
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr};
 
 use entities::api_req_params::{GetAsset, Options, SearchAssets};
 use function_name::named;
 use itertools::Itertools;
 use serial_test::serial;
 use solana_sdk::signature::Signature;
-use tokio::{sync::Mutex, task::JoinSet};
 
 use super::common::*;
 
@@ -23,18 +22,16 @@ pub async fn run_get_asset_scenario_test(
         Order::Forward => vec![seeds.iter().collect_vec()],
     };
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     for events in seed_permutations {
         index_seed_events(setup, events).await;
         let request = GetAsset { id: asset_id.to_string(), options: options.clone() };
 
-        let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+        let response = setup.das_api.get_asset(request).await.unwrap();
         insta::assert_json_snapshot!(setup.name.clone(), response);
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[tracing_test::traced_test]
 #[serial]
 #[named]
@@ -76,7 +73,7 @@ async fn test_asset_decompress() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_cnft_scenario_mint_update_metadata() {
@@ -110,7 +107,7 @@ async fn test_cnft_scenario_mint_update_metadata() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_cnft_scenario_mint_update_metadata_remove_creators() {
@@ -146,7 +143,7 @@ async fn test_cnft_scenario_mint_update_metadata_remove_creators() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_cnft_owners_table() {
@@ -170,8 +167,6 @@ async fn test_cnft_owners_table() {
         index_transaction(&setup, Signature::from_str(txn).unwrap()).await;
     }
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     for (request, individual_test_name) in [
         (
             SearchAssets {
@@ -192,13 +187,12 @@ async fn test_cnft_owners_table() {
             "with_different_owner",
         ),
     ] {
-        let response =
-            setup.das_api.search_assets(request.clone(), mutexed_tasks.clone()).await.unwrap();
+        let response = setup.das_api.search_assets(request.clone()).await.unwrap();
         insta::assert_json_snapshot!(format!("{}-{}", name, individual_test_name), response);
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_no_json_uri() {
@@ -225,7 +219,7 @@ async fn test_mint_no_json_uri() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_delegate_transfer() {
@@ -258,7 +252,7 @@ async fn test_mint_delegate_transfer() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_redeem_cancel_redeem() {
@@ -291,7 +285,7 @@ async fn test_mint_redeem_cancel_redeem() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_redeem() {
@@ -329,7 +323,7 @@ async fn test_mint_redeem() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_transfer_burn() {
@@ -362,7 +356,7 @@ async fn test_mint_transfer_burn() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_transfer_noop() {
@@ -395,7 +389,7 @@ async fn test_mint_transfer_noop() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_transfer_transfer() {
@@ -428,7 +422,7 @@ async fn test_mint_transfer_transfer() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_verify_creator() {
@@ -460,7 +454,7 @@ async fn test_mint_verify_creator() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_verify_collection() {
@@ -492,7 +486,7 @@ async fn test_mint_verify_collection() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_transfer_mpl_programs() {
@@ -525,7 +519,7 @@ async fn test_mint_transfer_mpl_programs() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_to_collection_unverify_collection() {
@@ -562,7 +556,7 @@ async fn test_mint_to_collection_unverify_collection() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mint_verify_collection_unverify_collection() {

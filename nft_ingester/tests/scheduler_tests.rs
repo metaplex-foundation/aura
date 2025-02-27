@@ -2,6 +2,7 @@ use assertables::{assert_contains, assert_contains_as_result};
 use nft_ingester::scheduler::Scheduler;
 use rocks_db::columns::{asset_previews::UrlToDownload, offchain_data::OffChainData};
 use setup::{await_async_for, rocks::RocksTestEnvironment};
+use tokio_util::sync::CancellationToken;
 
 const NFT_1: (&str, &str) = (
     "https://yra5lrhegorsgx7upcyi5trrfiktyczlq5g3jst3yvgaefab36vq.arweave.net/xEHVxOQzoyNf9Hiwjs4xKhU8CyuHTbTKe8VMAhQB36s",
@@ -48,7 +49,7 @@ const NFT_2: (&str, &str) = (
     "#,
 );
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[tracing_test::traced_test]
 async fn test_collect_urls_to_download() {
     // This test checks that the job that serves for initial population of
@@ -69,7 +70,7 @@ async fn test_collect_urls_to_download() {
         });
 
     let sut = Scheduler::new(rocks_env.storage.clone(), None);
-    Scheduler::run_in_background(sut).await;
+    Scheduler::run_in_background(sut, CancellationToken::new()).await;
 
     await_async_for!(
         rocks_env.storage.urls_to_download.get_from_start(10).len() == 2,

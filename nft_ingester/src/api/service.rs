@@ -12,12 +12,8 @@ use metrics_utils::ApiMetricsConfig;
 use multer::Multipart;
 use postgre_client::PgClient;
 use rocks_db::Storage;
-use tokio::{
-    fs::File,
-    io::AsyncWriteExt,
-    sync::{broadcast::Receiver, Mutex},
-    task::{JoinError, JoinSet},
-};
+use tokio::{fs::File, io::AsyncWriteExt};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
@@ -54,7 +50,7 @@ pub(crate) struct MiddlewaresData {
 pub async fn start_api(
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
-    rx: Receiver<()>,
+    cancellation_token: CancellationToken,
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
     proof_checker: Option<Arc<MaybeProofChecker>>,
@@ -63,7 +59,6 @@ pub async fn start_api(
     json_downloader: Option<Arc<JsonWorker>>,
     json_persister: Option<Arc<JsonWorker>>,
     json_middleware_config: Option<JsonMiddlewareConfig>,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     archives_dir: &str,
     consistence_synchronization_api_threshold: Option<u64>,
     consistence_backfilling_slots_threshold: Option<u64>,
@@ -86,8 +81,7 @@ pub async fn start_api(
             Arc::new(SynchronizationStateConsistencyChecker::new());
         synchronization_state_consistency_checker
             .run(
-                tasks.clone(),
-                rx.resubscribe(),
+                cancellation_token.child_token(),
                 pg_client.clone(),
                 rocks_db.clone(),
                 consistence_synchronization_api_threshold,
@@ -101,8 +95,7 @@ pub async fn start_api(
             Arc::new(BackfillingStateConsistencyChecker::new());
         backfilling_state_consistency_checker
             .run(
-                tasks.clone(),
-                rx.resubscribe(),
+                cancellation_token.child_token(),
                 rocks_db.clone(),
                 consistence_backfilling_slots_threshold,
             )
@@ -132,11 +125,10 @@ pub async fn start_api(
         api,
         Some(MiddlewaresData { response_middleware, request_middleware, consistency_checkers }),
         addr,
-        tasks,
         batch_mint_service_port,
         file_storage_path,
         pg_client,
-        rx,
+        cancellation_token.child_token(),
     )
     .await
 }
@@ -153,16 +145,14 @@ async fn run_api(
     >,
     middlewares_data: Option<MiddlewaresData>,
     addr: SocketAddr,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     batch_mint_service_port: Option<u16>,
     file_storage_path: &str,
     pg_client: Arc<PgClient>,
-    shutdown_rx: Receiver<()>,
+    cancellation_token: CancellationToken,
 ) -> Result<(), DasApiError> {
     let rpc = RpcApiBuilder::build(
         api,
         middlewares_data.clone().map(|m| m.consistency_checkers).unwrap_or_default(),
-        tasks,
     )?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(RUNTIME_WORKER_THREAD_COUNT)
@@ -187,7 +177,7 @@ async fn run_api(
     let server = builder.start_http(&addr);
     if let Some(port) = batch_mint_service_port {
         run_batch_mint_service(
-            shutdown_rx.resubscribe(),
+            cancellation_token.child_token(),
             port,
             file_storage_path.to_string(),
             pg_client,
@@ -199,7 +189,7 @@ async fn run_api(
     info!("API Server Started {}", server.address().to_string());
 
     loop {
-        if !shutdown_rx.is_empty() {
+        if cancellation_token.is_cancelled() {
             info!("Shutting down server");
             runtime.shutdown_background();
             break;
@@ -304,7 +294,7 @@ impl BatchMintService {
 }
 
 async fn run_batch_mint_service(
-    mut shutdown_rx: Receiver<()>,
+    cancellation_token: CancellationToken,
     port: u16,
     file_storage_path: String,
     pg_client: Arc<PgClient>,
@@ -320,7 +310,7 @@ async fn run_batch_mint_service(
         }
     });
     let server = Server::bind(&addr).serve(make_svc).with_graceful_shutdown(async {
-        shutdown_rx.recv().await.unwrap();
+        cancellation_token.cancelled().await;
     });
     if let Err(e) = server.await {
         error!("server error: {}", e);

@@ -15,6 +15,7 @@ use rocks_db::{
     Storage,
 };
 use solana_program::pubkey::Pubkey;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, log::error};
 
 use crate::{api::dapi::rpc_asset_convertors::parse_files, error::IngesterError};
@@ -56,9 +57,15 @@ impl Scheduler {
         Scheduler { storage: rocks_storage, jobs }
     }
 
-    pub async fn run_in_background(mut scheduler: Scheduler) {
-        tokio::spawn(async move {
-            scheduler.run().await;
+    pub async fn run_in_background(
+        mut scheduler: Scheduler,
+        cancellation_token: CancellationToken,
+    ) {
+        usecase::executor::spawn(async move {
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {}
+                _ = scheduler.run() => {}
+            }
         });
     }
 

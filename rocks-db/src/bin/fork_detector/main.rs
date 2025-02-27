@@ -9,7 +9,6 @@ use rocks_db::{
     SlotStorage, Storage,
 };
 use solana_sdk::pubkey::Pubkey;
-use tokio::{sync::Mutex, task::JoinSet};
 
 const BATCH_TO_DROP: usize = 1000;
 
@@ -42,10 +41,8 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
 
     println!("Opening DB...");
 
-    let js = Arc::new(Mutex::new(JoinSet::new()));
-    let source_db =
-        Storage::open(source_path, js.clone(), red_metrics.clone(), MigrationState::Last)
-            .map_err(|e| e.to_string())?;
+    let source_db = Storage::open(source_path, red_metrics.clone(), MigrationState::Last)
+        .map_err(|e| e.to_string())?;
 
     println!("Opened in {:?}", start.elapsed());
 
@@ -53,7 +50,6 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
         SlotStorage::open_secondary(
             source_path, // FIXME: provide correct paths for slots storage
             source_path,
-            js.clone(),
             red_metrics.clone(),
         )
         .expect("should open slots db"),

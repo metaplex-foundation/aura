@@ -40,10 +40,6 @@ mod tests {
     use rocks_db::{batch_savers::BatchSaveStorage, columns::offchain_data::OffChainData, Storage};
     use solana_sdk::pubkey::Pubkey;
     use testcontainers::clients::Cli;
-    use tokio::{
-        sync::{broadcast, Mutex},
-        task::JoinSet,
-    };
     use usecase::proofs::MaybeProofChecker;
 
     // corresponds to So11111111111111111111111111111111111111112
@@ -55,7 +51,6 @@ mod tests {
     // 242856151 slot when decompress happened
 
     async fn process_bubblegum_transactions(
-        mutexed_tasks: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         env_rocks: Arc<rocks_db::Storage>,
         _buffer: Arc<Buffer>,
     ) {
@@ -91,7 +86,6 @@ mod tests {
                 "SLOT_ASSET_IDX",
                 "OFFCHAIN_DATA",
             ],
-            mutexed_tasks.clone(),
             red_metrics.clone(),
         )
         .unwrap();
@@ -111,8 +105,6 @@ mod tests {
             Arc::new(BackfillerMetricsConfig::new()),
         ));
         let _producer = rocks_storage.clone();
-
-        let (_shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
     }
 
     async fn process_accounts(
@@ -218,12 +210,9 @@ mod tests {
             .unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_decompress_ideal_flow() {
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
@@ -268,12 +257,7 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        process_bubblegum_transactions(
-            mutexed_tasks.clone(),
-            env.rocks_env.storage.clone(),
-            buffer.clone(),
-        )
-        .await;
+        process_bubblegum_transactions(env.rocks_env.storage.clone(), buffer.clone()).await;
 
         let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
@@ -295,7 +279,7 @@ mod tests {
             id: mint.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let asset_info = api.get_asset(payload).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -309,12 +293,9 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_decompress_first_mint_then_decompress_same_slot() {
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
@@ -367,12 +348,7 @@ mod tests {
         process_accounts(&mut batch_storage, 242856151, &mint).await;
         batch_storage.flush().unwrap();
 
-        process_bubblegum_transactions(
-            mutexed_tasks.clone(),
-            env.rocks_env.storage.clone(),
-            buffer.clone(),
-        )
-        .await;
+        process_bubblegum_transactions(env.rocks_env.storage.clone(), buffer.clone()).await;
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);
@@ -386,7 +362,7 @@ mod tests {
             id: mint.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let asset_info = api.get_asset(payload).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -400,12 +376,9 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_decompress_first_mint_then_decompress_diff_slots() {
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
@@ -458,12 +431,7 @@ mod tests {
         process_accounts(&mut batch_storage, 252856151, &mint).await;
         batch_storage.flush().unwrap();
 
-        process_bubblegum_transactions(
-            mutexed_tasks.clone(),
-            env.rocks_env.storage.clone(),
-            buffer.clone(),
-        )
-        .await;
+        process_bubblegum_transactions(env.rocks_env.storage.clone(), buffer.clone()).await;
 
         let file = File::open("./tests/artifacts/expected_decompress_result.json").unwrap();
         let mut reader = io::BufReader::new(file);
@@ -477,7 +445,7 @@ mod tests {
             id: mint.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let asset_info = api.get_asset(payload).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);
@@ -491,12 +459,9 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_decompress_first_decompress_then_mint_diff_slots() {
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
         let cnt = 20;
         let cli = Cli::default();
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
@@ -541,12 +506,7 @@ mod tests {
 
         let mint = Pubkey::from_str("7DvMvi5iw8a4ESsd3bArGgduhvUgfD95iQmgucajgMPQ").unwrap();
 
-        process_bubblegum_transactions(
-            mutexed_tasks.clone(),
-            env.rocks_env.storage.clone(),
-            buffer.clone(),
-        )
-        .await;
+        process_bubblegum_transactions(env.rocks_env.storage.clone(), buffer.clone()).await;
 
         let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
@@ -568,7 +528,7 @@ mod tests {
             id: mint.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let asset_info = api.get_asset(payload).await.unwrap();
 
         assert_eq!(asset_info["compression"], expected_results["compression"]);
         assert_eq!(asset_info["grouping"], expected_results["grouping"]);

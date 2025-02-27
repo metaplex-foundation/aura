@@ -57,7 +57,8 @@ use solana_transaction_status::{InnerInstruction, InnerInstructions, Transaction
 use spl_account_compression::ConcurrentMerkleTree;
 use tempfile::TempDir;
 use testcontainers::clients::Cli;
-use tokio::{io::AsyncWriteExt, sync::broadcast};
+use tokio::io::AsyncWriteExt;
+use tokio_util::sync::CancellationToken;
 use usecase::proofs::MaybeProofChecker;
 use uuid::Uuid;
 
@@ -173,7 +174,7 @@ fn generate_merkle_tree_from_batch_mint(batch_mint: &BatchMint) -> ConcurrentMer
     merkle_tree
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn save_batch_mint_to_queue_test() {
     let cnt = 0;
     let cli = Cli::default();
@@ -269,7 +270,7 @@ async fn save_batch_mint_to_queue_test() {
     assert_eq!(r.url, metadata_url);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn batch_mint_with_verified_creators_test() {
     // For this test it's necessary to use Solana mainnet RPC
     let url = "https://api.mainnet-beta.solana.com".to_string();
@@ -368,8 +369,9 @@ async fn batch_mint_with_verified_creators_test() {
     let (batch_mint_to_verify, _) =
         env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
-    let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
+    batch_mint_persister
+        .persist_batch_mint(CancellationToken::new(), batch_mint_to_verify.unwrap(), None)
+        .await;
 
     let api = nft_ingester::api::api_impl::DasApi::<
         MaybeProofChecker,
@@ -401,7 +403,7 @@ async fn batch_mint_with_verified_creators_test() {
     assert_eq!(asset_proof.proof.is_empty(), false);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn batch_mint_with_unverified_creators_test() {
     // For this test it's necessary to use Solana mainnet RPC
     let url = "https://api.mainnet-beta.solana.com".to_string();
@@ -504,8 +506,9 @@ async fn batch_mint_with_unverified_creators_test() {
     let (batch_mint_to_verify, _) =
         env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
-    let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
+    batch_mint_persister
+        .persist_batch_mint(CancellationToken::new(), batch_mint_to_verify.unwrap(), None)
+        .await;
 
     let api = nft_ingester::api::api_impl::DasApi::<
         MaybeProofChecker,
@@ -543,7 +546,7 @@ async fn batch_mint_with_unverified_creators_test() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn batch_mint_persister_test() {
     let cnt = 0;
     let cli = Cli::default();
@@ -590,8 +593,9 @@ async fn batch_mint_persister_test() {
     let (batch_mint_to_verify, _) =
         env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
-    let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
+    batch_mint_persister
+        .persist_batch_mint(CancellationToken::new(), batch_mint_to_verify.unwrap(), None)
+        .await;
 
     let merkle_tree = generate_merkle_tree_from_batch_mint(&test_batch_mint);
 
@@ -681,7 +685,7 @@ async fn batch_mint_persister_test() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn batch_mint_persister_download_fail_test() {
     let cnt = 0;
     let cli = Cli::default();
@@ -729,15 +733,16 @@ async fn batch_mint_persister_download_fail_test() {
     let (batch_mint_to_verify, _) =
         env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
-    let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
+    batch_mint_persister
+        .persist_batch_mint(CancellationToken::new(), batch_mint_to_verify.unwrap(), None)
+        .await;
 
     let r = env.rocks_env.storage.batch_mint_to_verify.get(metadata_hash.clone()).unwrap();
 
     assert_eq!(r.is_none(), true);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn batch_mint_persister_drop_from_queue_after_download_fail_test() {
     let cnt = 0;
     let cli = Cli::default();
@@ -785,8 +790,9 @@ async fn batch_mint_persister_drop_from_queue_after_download_fail_test() {
     let (batch_mint_to_verify, _) =
         env.rocks_env.storage.fetch_batch_mint_for_verifying().await.unwrap();
 
-    let (_, rx) = broadcast::channel::<()>(1);
-    batch_mint_persister.persist_batch_mint(&rx, batch_mint_to_verify.unwrap(), None).await;
+    batch_mint_persister
+        .persist_batch_mint(CancellationToken::new(), batch_mint_to_verify.unwrap(), None)
+        .await;
 
     let r = env.rocks_env.storage.batch_mint_to_verify.get(metadata_hash.clone()).unwrap();
 
@@ -802,7 +808,7 @@ async fn batch_mint_persister_drop_from_queue_after_download_fail_test() {
     assert_eq!(failed_batch_mint.download_attempts, download_attempts + 1);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn xxhash_test() {
     let file_data = vec![43, 2, 5, 4, 76, 34, 123, 42, 73, 81, 47];
 
@@ -826,7 +832,7 @@ async fn save_temp_batch_mint(
     file_name
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn batch_mint_upload_test() {
     let cnt = 0;
     let cli = Cli::default();
@@ -855,10 +861,9 @@ async fn batch_mint_upload_test() {
         Arc::new(BatchMintProcessorMetricsConfig::new()),
     );
 
-    let (_, shutdown_rx) = broadcast::channel::<()>(1);
     let processing_result = batch_mint_processor
         .process_batch_mint(
-            shutdown_rx.resubscribe(),
+            CancellationToken::new(),
             BatchMintWithState {
                 file_name,
                 state: BatchMintState::Uploaded,
@@ -890,7 +895,7 @@ async fn batch_mint_upload_test() {
     let file_name = save_temp_batch_mint(&dir, env.pg_env.client.clone(), &batch_mint).await;
     let processing_result = batch_mint_processor
         .process_batch_mint(
-            shutdown_rx.resubscribe(),
+            CancellationToken::new(),
             BatchMintWithState {
                 file_name,
                 state: BatchMintState::Uploaded,

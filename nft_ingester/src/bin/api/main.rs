@@ -7,17 +7,13 @@ use nft_ingester::{
     config::{init_logger, ApiClapArgs},
     consts::RAYDIUM_API_HOST,
     error::IngesterError,
-    init::graceful_stop,
     json_worker::JsonWorker,
     raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
 };
 use prometheus_client::registry::Registry;
 use rocks_db::{migrator::MigrationState, Storage};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use usecase::proofs::MaybeProofChecker;
 
@@ -47,7 +43,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let json_downloader_metrics = Arc::new(JsonDownloaderMetricsConfig::new());
     json_downloader_metrics.register(&mut registry);
 
-    tokio::spawn(async move {
+    usecase::executor::spawn(async move {
         match setup_metrics(registry, args.metrics_port).await {
             Ok(_) => {
                 info!("Setup metrics successfully")
@@ -68,13 +64,12 @@ pub async fn main() -> Result<(), IngesterError> {
     )
     .await?;
     let pg_client = Arc::new(pg_client);
-    let tasks = JoinSet::new();
-    let mutexed_tasks = Arc::new(Mutex::new(tasks));
+
+    let cancellation_token = CancellationToken::new();
 
     let storage = Storage::open_secondary(
         &args.rocks_db_path,
         &args.rocks_db_secondary_path,
-        mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
     )
@@ -127,10 +122,6 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     };
 
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    let cloned_tasks = mutexed_tasks.clone();
-    let cloned_rx = shutdown_rx.resubscribe();
-
     info!("Init token/price information...");
     let token_price_fetcher = Arc::new(RaydiumTokenPriceFetcher::new(
         RAYDIUM_API_HOST.to_string(),
@@ -138,49 +129,42 @@ pub async fn main() -> Result<(), IngesterError> {
         Some(red_metrics.clone()),
     ));
     let tpf = token_price_fetcher.clone();
-    let tasks_clone = mutexed_tasks.clone();
 
-    tasks_clone.lock().await.spawn(async move {
+    usecase::executor::spawn(async move {
         if let Err(e) = tpf.warmup().await {
             warn!(error = %e, "Failed to warm up Raydium token price fetcher, cache is empty: {:?}", e);
         }
         let (symbol_cache_size, _) = tpf.get_cache_sizes();
         info!(%symbol_cache_size, "Warmed up Raydium token price fetcher with {} symbols", symbol_cache_size);
-        Ok(())
     });
 
-    mutexed_tasks.lock().await.spawn(async move {
-        match start_api(
-            pg_client.clone(),
-            cloned_rocks_storage.clone(),
-            cloned_rx,
-            metrics.clone(),
-            args.server_port,
-            proof_checker,
-            tree_gaps_checker,
-            args.max_page_limit,
-            json_worker,
-            None,
-            args.json_middleware_config.clone(),
-            cloned_tasks,
-            &args.rocks_archives_dir,
-            args.consistence_synchronization_api_threshold,
-            args.consistence_backfilling_slots_threshold,
-            args.batch_mint_service_port,
-            args.file_storage_path_container.as_str(),
-            account_balance_getter,
-            args.storage_service_base_url,
-            args.native_mint_pubkey,
-            token_price_fetcher,
-        )
-        .await
-        {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                error!("Start API: {}", e);
-                // cannot return JointError here
-                Ok(())
-            },
+    usecase::executor::spawn({
+        let cancellation_token = cancellation_token.child_token();
+        async move {
+            let _ = start_api(
+                pg_client.clone(),
+                cloned_rocks_storage.clone(),
+                cancellation_token,
+                metrics.clone(),
+                args.server_port,
+                proof_checker,
+                tree_gaps_checker,
+                args.max_page_limit,
+                json_worker,
+                None,
+                args.json_middleware_config.clone(),
+                &args.rocks_archives_dir,
+                args.consistence_synchronization_api_threshold,
+                args.consistence_backfilling_slots_threshold,
+                args.batch_mint_service_port,
+                args.file_storage_path_container.as_str(),
+                account_balance_getter,
+                args.storage_service_base_url,
+                args.native_mint_pubkey,
+                token_price_fetcher,
+            )
+            .await
+            .inspect_err(|e| error!(error = %e, "Start API: {}", e));
         }
     });
 
@@ -216,29 +200,27 @@ pub async fn main() -> Result<(), IngesterError> {
     // });
 
     // try synchronizing secondary rocksdb instance every config.rocks_sync_interval_seconds
-    let cloned_rx = shutdown_rx.resubscribe();
-    let cloned_rocks_storage = rocks_storage.clone();
     let dur = tokio::time::Duration::from_secs(args.rocks_sync_interval_seconds);
-    mutexed_tasks.lock().await.spawn(async move {
-        while cloned_rx.is_empty() {
-            if let Err(e) = cloned_rocks_storage.db.try_catch_up_with_primary() {
-                error!("Sync rocksdb error: {}", e);
+    usecase::executor::spawn({
+        let cancellation_token = cancellation_token.child_token();
+        let rocks_storage = rocks_storage.clone();
+        async move {
+            while !cancellation_token.is_cancelled() {
+                if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
+                    error!("Sync rocksdb error: {}", e);
+                }
+                tokio::time::sleep(dur).await;
             }
-            tokio::time::sleep(dur).await;
         }
-
-        Ok(())
     });
 
     // --stop
     #[cfg(not(feature = "profiling"))]
-    graceful_stop(mutexed_tasks, shutdown_tx, None).await;
+    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
 
     #[cfg(feature = "profiling")]
-    graceful_stop(
-        mutexed_tasks,
-        shutdown_tx,
-        None,
+    nft_ingester::init::graceful_stop(
+        cancellation_token,
         guard,
         args.profiling_file_path_container,
         &args.heap_path,

@@ -15,9 +15,8 @@ mod tests {
     };
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
-    use tokio::{sync::Mutex, task::JoinSet};
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_migration() {
         let dir = TempDir::new().unwrap();
         let v1 = OffChainDataDeprecated {
@@ -33,7 +32,6 @@ mod tests {
         let path = dir.path().to_str().unwrap();
         let old_storage = Storage::open(
             path,
-            Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(0),
         )
@@ -51,7 +49,6 @@ mod tests {
         let migration_version_manager = Storage::open_secondary(
             path,
             secondary_storage_dir.path().to_str().unwrap(),
-            Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(4),
         )
@@ -68,7 +65,6 @@ mod tests {
 
         let new_storage = Storage::open(
             path,
-            Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(4),
         )
@@ -117,7 +113,7 @@ mod tests {
         assert_eq!(migrated_v2.last_read_at, 0);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_clitems_v2_migration() {
         let dir = TempDir::new().unwrap();
         let node_id = 32782;
@@ -142,7 +138,6 @@ mod tests {
         let path = dir.path().to_str().unwrap();
         let old_storage = Storage::open(
             path,
-            Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(0),
         )
@@ -153,7 +148,6 @@ mod tests {
         let migration_version_manager = Storage::open_secondary(
             path,
             secondary_storage_dir.path().to_str().unwrap(),
-            Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(4),
         )
@@ -170,7 +164,6 @@ mod tests {
 
         let new_storage = Storage::open(
             path,
-            Arc::new(Mutex::new(JoinSet::new())),
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(4),
         )

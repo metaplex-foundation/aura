@@ -10,7 +10,7 @@ mod tests {
     };
     use metrics_utils::{IngesterMetricsConfig, SynchronizerMetricsConfig};
     use nft_ingester::{
-        index_syncronizer::Synchronizer,
+        index_synchronizer::Synchronizer,
         processors::account_based::token_updates_processor::TokenAccountsProcessor,
     };
     use postgre_client::{
@@ -22,6 +22,7 @@ mod tests {
     use solana_program::pubkey::Pubkey;
     use tempfile::TempDir;
     use testcontainers::clients::Cli;
+    use tokio_util::sync::CancellationToken;
 
     // corresponds to So11111111111111111111111111111111111111112
     pub const NATIVE_MINT_PUBKEY: Pubkey = Pubkey::new_from_array([
@@ -61,7 +62,6 @@ mod tests {
         }
         batch_storage.flush().unwrap();
 
-        let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         let temp_dir = TempDir::new_in("./tmp").expect("Failed to create a temporary directory");
         let temp_dir_path = temp_dir.path();
 
@@ -69,7 +69,7 @@ mod tests {
         let cli: Cli = Cli::default();
         let pg_env = setup::pg::TestEnvironment::new_with_mount(&cli, temp_dir_path).await;
         let client = pg_env.client.clone();
-        let syncronizer = Arc::new(Synchronizer::new(
+        let synchronizer = Arc::new(Synchronizer::new(
             storage,
             client.clone(),
             2000,
@@ -78,7 +78,7 @@ mod tests {
             1,
         ));
         for asset_type in ASSET_TYPES {
-            syncronizer.full_syncronize(&rx, asset_type).await.unwrap();
+            synchronizer.full_syncronize(CancellationToken::new(), asset_type).await.unwrap();
         }
 
         assert_eq!(pg_env.count_rows_in_metadata().await.unwrap(), 1);
@@ -138,7 +138,6 @@ mod mtg_441_tests {
     use serde_json::Value;
     use setup::{rocks::RocksTestEnvironmentSetup, TestEnvironment};
     use testcontainers::clients::Cli;
-    use tokio::{sync::Mutex, task::JoinSet};
     use usecase::proofs::MaybeProofChecker;
 
     use crate::tests::NATIVE_MINT_PUBKEY;
@@ -183,7 +182,7 @@ mod mtg_441_tests {
         serde_json::from_value::<Asset>(json).expect("Cannot parse 'Asset'.")
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn authority_none_collection_authority_some() {
         let cli = Cli::default();
@@ -202,15 +201,11 @@ mod mtg_441_tests {
         let first_pubkey =
             generated_assets.static_details.first().expect("Cannot get first pubkey.").pubkey;
 
-        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let api_res = get_das_api(&env)
-            .get_asset(
-                GetAsset {
-                    id: first_pubkey.to_string(),
-                    options: Options { show_unverified_collections: true, ..Default::default() },
-                },
-                mutexed_tasks,
-            )
+            .get_asset(GetAsset {
+                id: first_pubkey.to_string(),
+                options: Options { show_unverified_collections: true, ..Default::default() },
+            })
             .await;
 
         assert!(api_res.is_ok());
@@ -219,7 +214,7 @@ mod mtg_441_tests {
         assert!(res.id.eq(&first_pubkey.to_string()));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn authority_some_collection_authority_none() {
         let cli = Cli::default();
@@ -238,15 +233,11 @@ mod mtg_441_tests {
         let first_pubkey =
             generated_assets.static_details.first().expect("Cannot get first pubkey.").pubkey;
 
-        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let api_res = get_das_api(&env)
-            .get_asset(
-                GetAsset {
-                    id: first_pubkey.to_string(),
-                    options: Options { show_unverified_collections: true, ..Default::default() },
-                },
-                mutexed_tasks,
-            )
+            .get_asset(GetAsset {
+                id: first_pubkey.to_string(),
+                options: Options { show_unverified_collections: true, ..Default::default() },
+            })
             .await;
         assert!(api_res.is_ok());
         let api_res = api_res.expect("Cannot run api call.");
@@ -254,7 +245,7 @@ mod mtg_441_tests {
         assert!(res.id.eq(&first_pubkey.to_string()));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn authority_some_collection_authority_some() {
         let cli = Cli::default();
@@ -273,15 +264,11 @@ mod mtg_441_tests {
         let first_pubkey =
             generated_assets.static_details.first().expect("Cannot get first pubkey.").pubkey;
 
-        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let api_res = get_das_api(&env)
-            .get_asset(
-                GetAsset {
-                    id: first_pubkey.to_string(),
-                    options: Options { show_unverified_collections: true, ..Default::default() },
-                },
-                mutexed_tasks,
-            )
+            .get_asset(GetAsset {
+                id: first_pubkey.to_string(),
+                options: Options { show_unverified_collections: true, ..Default::default() },
+            })
             .await;
         assert!(api_res.is_ok());
         let api_res = api_res.expect("Cannot run api call.");
@@ -289,7 +276,7 @@ mod mtg_441_tests {
         assert!(res.id.eq(&first_pubkey.to_string()));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn authority_none_collection_authority_none() {
         let cli = Cli::default();
@@ -308,15 +295,11 @@ mod mtg_441_tests {
         let first_pubkey =
             generated_assets.static_details.first().expect("Cannot get first pubkey.").pubkey;
 
-        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
         let api_res = get_das_api(&env)
-            .get_asset(
-                GetAsset {
-                    id: first_pubkey.to_string(),
-                    options: Options { show_unverified_collections: true, ..Default::default() },
-                },
-                mutexed_tasks,
-            )
+            .get_asset(GetAsset {
+                id: first_pubkey.to_string(),
+                options: Options { show_unverified_collections: true, ..Default::default() },
+            })
             .await;
         assert!(api_res.is_ok());
         let api_res = api_res.expect("Cannot run api call.");

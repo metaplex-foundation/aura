@@ -5,7 +5,7 @@ mod tests {
 
     #[cfg(feature = "integration_tests")]
     #[tracing_test::traced_test]
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_range_delete() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let first_tree_key = solana_program::pubkey::Pubkey::from_str(
@@ -56,7 +56,7 @@ mod tests {
 
     #[cfg(feature = "rpc_tests")]
     #[tracing_test::traced_test]
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_fill_gap() {
         use std::sync::Arc;
 
