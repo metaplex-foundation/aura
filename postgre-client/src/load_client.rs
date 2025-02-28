@@ -165,6 +165,8 @@ impl PgClient {
             "asset_creators_v3_creator",
             "assets_authority",
             "assets_v3_authority_fk",
+            // For backward compatibility with the current state of the database, it can be removed over time
+            "assets_v3_collection_is_collection_verified",
             "assets_v3_collection_is_collection_verified_supply",
             "assets_v3_delegate",
             "assets_v3_is_burnt",
