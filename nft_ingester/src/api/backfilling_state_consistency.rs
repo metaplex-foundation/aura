@@ -49,7 +49,11 @@ impl BackfillingStateConsistencyChecker {
                     //     Ordering::Relaxed,
                     // );
                     //
-                    tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC)).await;
+                    cancellation_token
+                        .run_until_cancelled(tokio::time::sleep(Duration::from_secs(
+                            CATCH_UP_SEQUENCES_TIMEOUT_SEC,
+                        )))
+                        .await;
                 }
             });
         }

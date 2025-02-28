@@ -165,7 +165,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         let mut interval = tokio::time::interval(FLUSH_INTERVAL);
         let mut batch_fill_instant = Instant::now();
 
-        while !cancellation_token.is_cancelled() {
+        loop {
             tokio::select! {
                 unprocessed_accounts = self.unprocessed_account_getter.next_accounts(accounts_batch_size) => {
                         let unprocessed_accounts = match unprocessed_accounts {

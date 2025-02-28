@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use entities::api_req_params::GetAsset;
 use function_name::named;
 use itertools::Itertools;

@@ -45,15 +45,13 @@ impl MplCoreFeeProcessor {
         let rent = self.rent.clone();
         usecase::executor::spawn(async move {
             loop {
+                if let Err(e) = Self::fetch_actual_rent(rpc_client.clone(), rent.clone()).await {
+                    error!("fetch_actual_rent: {}", e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
                 tokio::select! {
                     _ = cancellation_token.cancelled() => { break; }
-                    result = Self::fetch_actual_rent(rpc_client.clone(), rent.clone()) => {
-                        if let Err(e) = result {
-                            error!("fetch_actual_rent: {}", e);
-                            tokio::time::sleep(Duration::from_secs(5)).await;
-                            continue;
-                        }
-                    }
                     _ = tokio::time::sleep(FETCH_RENT_INTERVAL) => {}
                 }
             }

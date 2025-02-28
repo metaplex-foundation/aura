@@ -62,10 +62,7 @@ impl Scheduler {
         cancellation_token: CancellationToken,
     ) {
         usecase::executor::spawn(async move {
-            tokio::select! {
-                _ = cancellation_token.cancelled() => {}
-                _ = scheduler.run() => {}
-            }
+            cancellation_token.run_until_cancelled(scheduler.run()).await;
         });
     }
 
