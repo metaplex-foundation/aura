@@ -51,6 +51,15 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let cancellation_token = CancellationToken::new();
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            #[cfg(not(feature = "profiling"))]
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+            #[cfg(feature = "profiling")]
+            nft_ingester::init::graceful_stop(cancellation_token, None, None, "").await;
+        }
+    });
 
     let storage = Storage::open(
         args.rocks_json_target_db.clone(),
@@ -81,10 +90,9 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     });
 
-    #[cfg(not(feature = "profiling"))]
-    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
-    #[cfg(feature = "profiling")]
-    nft_ingester::init::graceful_stop(cancellation_token, None, None, "").await;
+    if let Err(_) = stop_handle.await {
+        error!("Error joining graceful shutdown!");
+    }
 
     Ok(())
 }

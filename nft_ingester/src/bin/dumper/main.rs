@@ -10,6 +10,7 @@ use rocks_db::{
 };
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
+use tracing::error;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -62,6 +63,15 @@ pub async fn main() -> Result<(), IngesterError> {
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
 
     let cancellation_token = CancellationToken::new();
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            #[cfg(not(feature = "profiling"))]
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+            #[cfg(feature = "profiling")]
+            nft_ingester::init::graceful_stop(cancellation_token, None, None, "").await;
+        }
+    });
     let rocks_storage = Arc::new(
         Storage::open_secondary(
             &args.source_path,
@@ -210,11 +220,10 @@ pub async fn main() -> Result<(), IngesterError> {
         task.map_err(|e| e.to_string())?.map_err(|e| e.to_string())?;
     }
     tracing::info!("Dumping fungible tokens done");
-    #[cfg(not(feature = "profiling"))]
-    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
-    #[cfg(feature = "profiling")]
-    nft_ingester::init::graceful_stop(cancellation_token, None, None, "").await;
     let keys_file = File::create(base_path.join("keys.csv")).expect("should create keys file");
     Storage::dump_last_keys(keys_file, last_known_key, last_known_fungible_key)?;
+    if let Err(_) = stop_handle.await {
+        error!("Error joining graceful shutdown!");
+    }
     Ok(())
 }

@@ -149,6 +149,12 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     start_metrics(metrics_state.registry, Some(args.metrics_port)).await;
     let cancellation_token = CancellationToken::new();
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+        }
+    });
     // Open target RocksDB
     let target_db = Arc::new(
         SlotStorage::open(&args.target_db_path, metrics_state.red_metrics.clone())
@@ -166,23 +172,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Starting from last persisted slot: {}", last_persisted_slot);
         last_persisted_slot
     };
-
-    // Spawn a task to handle graceful shutdown on Ctrl+C
-    usecase::executor::spawn({
-        let cancellation_token = cancellation_token.clone();
-        async move {
-            // Wait for Ctrl+C signal
-            match tokio::signal::ctrl_c().await {
-                Ok(()) => {
-                    info!("Received Ctrl+C, shutting down gracefully...");
-                    cancellation_token.cancel();
-                },
-                Err(err) => {
-                    error!("Unable to listen for shutdown signal: {}", err);
-                },
-            }
-        }
-    });
 
     let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host.clone()));
 
@@ -314,6 +303,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             },
         };
+    }
+
+    if let Err(_) = stop_handle.await {
+        error!("Error joining graceful shutdown!");
     }
     info!("Slot persister has stopped.");
     Ok(())

@@ -5,7 +5,7 @@ use tokio::{
     task::{AbortHandle, JoinSet},
 };
 
-pub static EXECUTOR: Mutex<OnceLock<JoinSet<()>>> = Mutex::const_new(OnceLock::new());
+static EXECUTOR: Mutex<OnceLock<JoinSet<()>>> = Mutex::const_new(OnceLock::new());
 
 pub fn spawn<T, F: Future<Output = T> + Send + 'static>(future: F) -> AbortHandle {
     tokio::task::block_in_place(|| {
@@ -21,7 +21,7 @@ pub fn spawn<T, F: Future<Output = T> + Send + 'static>(future: F) -> AbortHandl
 
 pub(crate) async fn shutdown() {
     let mut executor_guard = EXECUTOR.lock().await;
-    let executor =
-        executor_guard.get_mut().expect("executor join set to be initialized upon access");
-    while executor.join_next().await.is_some() {}
+    if let Some(executor) = executor_guard.get_mut() {
+        while executor.join_next().await.is_some() {}
+    }
 }

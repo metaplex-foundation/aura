@@ -110,6 +110,25 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let cancellation_token = CancellationToken::new();
 
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+
+    // --stop
+    #[cfg(not(feature = "profiling"))]
+    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+
+    #[cfg(feature = "profiling")]
+    nft_ingester::init::graceful_stop(
+        cancellation_token,
+        guard,
+        args.profiling_file_path_container,
+        &args.heap_path,
+    )
+    .await;
+
+        }
+    });
     // try to restore rocksDB first
     if args.is_restore_rocks_db {
         restore_rocksdb(
@@ -640,19 +659,9 @@ pub async fn main() -> Result<(), IngesterError> {
     }
 
     start_metrics(metrics_state.registry, args.metrics_port).await;
-
-    // --stop
-    #[cfg(not(feature = "profiling"))]
-    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
-
-    #[cfg(feature = "profiling")]
-    nft_ingester::init::graceful_stop(
-        cancellation_token,
-        guard,
-        args.profiling_file_path_container,
-        &args.heap_path,
-    )
-    .await;
+    if let Err(_) = stop_handle.await {
+        error!("Error joining graceful shutdown!");
+    }
 
     Ok(())
 }

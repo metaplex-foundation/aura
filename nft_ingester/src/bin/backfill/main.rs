@@ -63,6 +63,12 @@ async fn main() {
             .expect("Failed to open source RocksDB");
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let cancellation_token = CancellationToken::new();
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+        }
+    });
 
     // Open target RocksDB
     let target_db = Arc::new(
@@ -304,7 +310,9 @@ async fn main() {
         let _ = handle.await;
     }
 
-    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+    if let Err(_) = stop_handle.await {
+        error!("Error joining graceful shutdown!");
+    }
     progress_bar.finish_with_message("Processing complete");
 }
 

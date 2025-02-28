@@ -54,6 +54,26 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     });
 
+    let cancellation_token = CancellationToken::new();
+
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            // --stop
+            #[cfg(not(feature = "profiling"))]
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+
+            #[cfg(feature = "profiling")]
+            nft_ingester::init::graceful_stop(
+                cancellation_token,
+                guard,
+                args.profiling_file_path_container,
+                &args.heap_path,
+            )
+            .await;
+        }
+    });
+
     let pg_client = postgre_client::PgClient::new(
         &args.pg_database_url,
         args.pg_min_db_connections,
@@ -64,8 +84,6 @@ pub async fn main() -> Result<(), IngesterError> {
     )
     .await?;
     let pg_client = Arc::new(pg_client);
-
-    let cancellation_token = CancellationToken::new();
 
     let storage = Storage::open_secondary(
         &args.rocks_db_path,
@@ -214,18 +232,8 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     });
 
-    // --stop
-    #[cfg(not(feature = "profiling"))]
-    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
-
-    #[cfg(feature = "profiling")]
-    nft_ingester::init::graceful_stop(
-        cancellation_token,
-        guard,
-        args.profiling_file_path_container,
-        &args.heap_path,
-    )
-    .await;
-
+    if let Err(_) = stop_handle.await {
+        error!("Error joining graceful shutdown!");
+    }
     Ok(())
 }
