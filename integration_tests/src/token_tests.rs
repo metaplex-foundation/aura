@@ -14,8 +14,8 @@ use tokio::{
 };
 
 use crate::common::{
-    index_seed_events, seed_token_mints, trim_test_name, Network, SeedEvent, TestSetup,
-    TestSetupOptions,
+    index_seed_events, seed_token_mints, trim_test_name, well_known_fungible_tokens, Network,
+    SeedEvent, TestSetup, TestSetupOptions,
 };
 
 #[tokio::test]
@@ -28,7 +28,7 @@ async fn test_fungible_token_mint_freeze_authority() {
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            well_known_fungible_accounts: HashMap::new(),
+            well_known_fungible_accounts: well_known_fungible_tokens(),
         },
     )
     .await;
