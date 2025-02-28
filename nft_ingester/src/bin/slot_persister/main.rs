@@ -55,7 +55,7 @@ struct Args {
     start_slot: Option<u64>,
 
     /// Big table config (best passed from env)
-    #[arg(short, long, env, value_parser = parse_json::<Result<BigTableConfig, String>>)]
+    #[arg(short, long, env, value_parser = parse_json::<BigTableConfig>)]
     big_table_config: Option<BigTableConfig>,
 
     /// Metrics port
