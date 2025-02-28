@@ -102,9 +102,14 @@ pub async fn main() -> Result<(), IngesterError> {
         sync_tasks.spawn({
             let cancellation_token = cancellation_token.child_token();
             async move {
-                if let Ok(SyncStatus::FullSyncRequired(_)) = synchronizer
-                    .get_sync_state(args.dump_sync_threshold, asset_type)
-                    .await
+                if cancellation_token.is_cancelled() { return; }
+                let sync_state_result = tokio::select! {
+                    _ = cancellation_token.cancelled() => return,
+                    sync_state_result = synchronizer
+                        .get_sync_state(args.dump_sync_threshold, asset_type) => sync_state_result
+
+                };
+                if let Ok(SyncStatus::FullSyncRequired(_)) = sync_state_result
                 {
                     tracing::info!("Starting full sync for {:?}", asset_type);
                     let res = synchronizer.full_syncronize(cancellation_token.child_token(), asset_type).await;
@@ -147,7 +152,7 @@ pub async fn main() -> Result<(), IngesterError> {
         })?;
     }
 
-    if let Err(_) = stop_handle.await {
+    if stop_handle.await.is_err() {
         tracing::error!("Error joining graceful shutdown!");
     }
 

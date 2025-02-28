@@ -305,7 +305,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
     }
 
-    if let Err(_) = stop_handle.await {
+    if stop_handle.await.is_err() {
         error!("Error joining graceful shutdown!");
     }
     info!("Slot persister has stopped.");

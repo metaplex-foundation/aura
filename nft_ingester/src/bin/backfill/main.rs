@@ -310,7 +310,7 @@ async fn main() {
         let _ = handle.await;
     }
 
-    if let Err(_) = stop_handle.await {
+    if stop_handle.await.is_err() {
         error!("Error joining graceful shutdown!");
     }
     progress_bar.finish_with_message("Processing complete");

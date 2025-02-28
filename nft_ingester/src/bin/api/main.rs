@@ -232,7 +232,7 @@ pub async fn main() -> Result<(), IngesterError> {
         }
     });
 
-    if let Err(_) = stop_handle.await {
+    if stop_handle.await.is_err() {
         error!("Error joining graceful shutdown!");
     }
     Ok(())

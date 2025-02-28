@@ -222,7 +222,7 @@ pub async fn main() -> Result<(), IngesterError> {
     tracing::info!("Dumping fungible tokens done");
     let keys_file = File::create(base_path.join("keys.csv")).expect("should create keys file");
     Storage::dump_last_keys(keys_file, last_known_key, last_known_fungible_key)?;
-    if let Err(_) = stop_handle.await {
+    if stop_handle.await.is_err() {
         error!("Error joining graceful shutdown!");
     }
     Ok(())
