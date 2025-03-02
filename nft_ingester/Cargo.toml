@@ -81,6 +81,8 @@ axum = { workspace = true }
 rocksdb = { workspace = true }
 num-bigint = "0.4"
 tracing-test = { workspace = true }
+reqwest-middleware = { workspace = true }
+reqwest-retry = "0.4.0"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }

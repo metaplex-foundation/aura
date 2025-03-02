@@ -33,7 +33,7 @@ use crate::{
         DasApi,
     },
     config::JsonMiddlewareConfig,
-    json_worker::JsonWorker,
+    metadata_workers::json_worker::JsonWorker,
     raydium_price_fetcher::RaydiumTokenPriceFetcher,
 };
 

@@ -15,7 +15,7 @@ mod tests {
     };
     use nft_ingester::{
         backfiller::DirectBlockParser, buffer::Buffer, config::JsonMiddlewareConfig,
-        json_worker::JsonWorker,
+        metadata_workers::json_worker::JsonWorker,
         processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
         raydium_price_fetcher::RaydiumTokenPriceFetcher, transaction_ingester,
     };
