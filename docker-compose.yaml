@@ -1,5 +1,6 @@
 services:
   ingester:
+    image: ghcr.io/metaplex-foundation/aura-ingester:${DOCKER_IMAGE}
     container_name: ingester
     restart: always
     env_file:
@@ -35,6 +36,7 @@ services:
         max-size: "2048m"
 
   das-api:
+    image: ghcr.io/metaplex-foundation/aura-api:${DOCKER_IMAGE}
     container_name: das-api
     restart: always
     env_file:
@@ -60,6 +62,7 @@ services:
         max-size: "2048m"
 
   synchronizer:
+    image: ghcr.io/metaplex-foundation/aura-synchronizer:${DOCKER_IMAGE}
     container_name: synchronizer
     restart: always
     env_file:
@@ -106,6 +109,7 @@ services:
         max-size: "2048m"
 
   backfill:
+    image: ghcr.io/metaplex-foundation/aura-backfill:${DOCKER_IMAGE}
     container_name: backfill
     restart: no
     env_file:
@@ -128,6 +132,7 @@ services:
         max-size: "2048m"
 
   slot-persister:
+    image: ghcr.io/metaplex-foundation/aura-slot_persister:${DOCKER_IMAGE}
     container_name: slot-persister
     restart: always
     env_file:
@@ -168,6 +173,7 @@ services:
         max-size: "100m"
 
   rocksdb-backup:
+    image: ghcr.io/metaplex-foundation/aura-rocksdb_backup:${DOCKER_IMAGE}
     container_name: rocksdb-backup
     env_file:
       - .env
