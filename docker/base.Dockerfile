@@ -1,5 +1,5 @@
 # Initial stage: install cargo-chef
-FROM rust:1.84.0-bookworm AS chef
+FROM rust:1.85.0-bookworm AS chef
 RUN apt update && apt install -y libclang-dev protobuf-compiler
 RUN cargo install cargo-chef
 WORKDIR /rust
