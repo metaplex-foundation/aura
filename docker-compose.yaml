@@ -23,13 +23,6 @@ services:
       # - ${PROFILING_FILE_PATH}:${PROFILING_FILE_PATH_CONTAINER}:rw
     depends_on:
       - db
-    build:
-      context: .
-      dockerfile: docker/app.Dockerfile
-      # Replace for profiling:
-      # dockerfile: docker/profiling/app.Dockerfile
-      args:
-        BINARY: ingester
     stop_grace_period: 10m
     logging:
       options:
@@ -51,11 +44,6 @@ services:
       # - ./heaps:/usr/src/app/heaps:rw
     depends_on:
       - db
-    build:
-      context: .
-      dockerfile: docker/app.Dockerfile
-      args:
-        BINARY: api
     stop_grace_period: 2m
     logging:
       options:
@@ -77,11 +65,6 @@ services:
       # - ./heaps:/usr/src/app/heaps:rw
     depends_on:
       - db
-    build:
-      context: .
-      dockerfile: docker/app.Dockerfile
-      args:
-        BINARY: synchronizer
     stop_grace_period: 5m
     logging:
       options:
@@ -99,11 +82,6 @@ services:
       - ${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH}:${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH_CONTAINER}:rw
     depends_on:
       - db
-    build:
-      context: .
-      dockerfile: docker/app.Dockerfile
-      args:
-        BINARY: integrity-verification
     logging:
       options:
         max-size: "2048m"
@@ -122,11 +100,6 @@ services:
       - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:rw
       - ${ROCKS_SLOTS_DB_PATH}:${ROCKS_SLOTS_DB_PATH}:ro
     stop_grace_period: 5m
-    build:
-      context: .
-      dockerfile: docker/app.Dockerfile
-      args:
-        BINARY: backfill
     logging:
       options:
         max-size: "2048m"
@@ -145,11 +118,6 @@ services:
       - ${ROCKS_SLOTS_DB_PATH}:${ROCKS_SLOTS_DB_PATH}:rw
       - ./creds.json:/usr/src/app/creds.json
     stop_grace_period: 5m
-    build:
-      context: .
-      dockerfile: docker/app.Dockerfile
-      args:
-        BINARY: slot_persister
     logging:
       options:
         max-size: "2048m"
@@ -183,11 +151,6 @@ services:
       - ${ROCKS_BACKUP_DIR}:${ROCKS_BACKUP_DIR}:rw
       - ${ROCKS_BACKUP_ARCHIVES_DIR}:${ROCKS_BACKUP_ARCHIVES_DIR}:rw
       - ${ROCKS_DB_SECONDARY_PATH}/backup:${ROCKS_DB_SECONDARY_PATH}:rw
-    build:
-      context: .
-      dockerfile: docker/app.Dockerfile
-      args:
-        BINARY: rocksdb_backup
     stop_grace_period: 2m
     logging:
       options:
