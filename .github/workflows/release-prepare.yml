@@ -36,20 +36,81 @@ jobs:
           fetch-depth: 0  # Fetch all history for changelog generation
 
       - name: Setup environment
-        run: ./scripts/release/setup_environment.sh
+        run: |
+          set -e
+          # Setup Git Identity
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          # Install dependencies
+          sudo apt-get update && sudo apt-get install -y protobuf-compiler
+          cargo install cargo-edit
+          cargo install git-cliff
+
+      - name: Validate version format
+        run: |
+          set -e
+          VERSION="${{ inputs.version }}"
+          
+          # Make sure version is not empty
+          if [ -z "$VERSION" ]; then
+            echo "Error: Version is required"
+            exit 1
+          fi
+          
+          # Validate using semver regex pattern
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Error: Version '$VERSION' is not valid semantic versioning format."
+            echo "Expected format: MAJOR.MINOR.PATCH"
+            echo "Examples: 1.0.0, 0.5.0"
+            exit 1
+          fi
+          
+          echo "Version format is valid: $VERSION"
 
       - name: Create release branch
-        run: ./scripts/release/create_release_branch.sh "${{ inputs.version }}"
+        run: |
+          set -e
+          # Create release branch with standardized format
+          RELEASE_BRANCH="release/v${{ inputs.version }}"
+          echo "Creating branch $RELEASE_BRANCH"
+          git checkout -b $RELEASE_BRANCH
+          echo "RELEASE_BRANCH=$RELEASE_BRANCH" >> $GITHUB_ENV
 
       - name: Update version numbers
-        run: ./scripts/release/update_versions.sh "${{ inputs.version }}"
+        run: |
+          set -e
+          # Update Cargo.toml versions
+          find . -name "Cargo.toml" -type f -exec cargo set-version ${{ inputs.version }} --manifest-path {} \;
+          
+          # Update any other version references
+          if [ -f "VERSION" ]; then
+            echo "${{ inputs.version }}" > VERSION
+          fi
+          
+          git add -A
+          git commit -m "chore: bump version to ${{ inputs.version }}"
 
       - name: Generate changelog
         id: changelog
         run: ./scripts/release/prepare_changelog.sh "${{ inputs.version }}"
 
+      - name: Push release branch
+        run: |
+          set -e
+          git push -u origin ${{ env.RELEASE_BRANCH }}
+
       - name: Create pull request
-        run: ./scripts/release/create_release_pr.sh "v${{ inputs.version }}" "main" "${{ env.RELEASE_BRANCH }}"
+        run: |
+          set -e
+          gh pr create \
+            --base main \
+            --head ${{ env.RELEASE_BRANCH }} \
+            --title "Release v${{ inputs.version }}" \
+            --body-file .changelog_content \
+            --draft false
+          
+          echo "Pull Request created. Please review the PR, make any necessary adjustments, and merge when ready."
 
       - name: Upload changelog artifact
         uses: actions/upload-artifact@v4

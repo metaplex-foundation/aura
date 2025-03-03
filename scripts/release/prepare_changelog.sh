@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# This script generates a changelog for a new version
+# This script generates a changelog for a new version, verifies it, and extracts the section for PR
 # Usage: prepare_changelog.sh <version>
 
 VERSION=$1
@@ -35,10 +35,53 @@ else
 fi
 
 # Verify the changelog
-./scripts/release/verify_changelog.sh "$VERSION"
+echo "Verifying changelog..."
+# Check that the changelog file exists and has content
+if [ ! -s "CHANGELOG.md" ]; then
+  echo "Error: CHANGELOG.md is empty or does not exist"
+  exit 1
+fi
+
+# Check that the changelog contains the version we're releasing
+if ! grep -q "v$VERSION" CHANGELOG.md; then
+  echo "Error: CHANGELOG.md does not contain version v$VERSION"
+  echo "Contents of CHANGELOG.md:"
+  cat CHANGELOG.md
+  exit 1
+fi
+
+# Check that the changelog has sections
+if ! grep -q "###" CHANGELOG.md; then
+  echo "Warning: CHANGELOG.md does not contain any sections (###)"
+  echo "This might be ok if there are no conventional commits, but please verify"
+fi
+
+echo "Changelog verification passed!"
   
 # Extract changelog section for PR description
-./scripts/release/extract_changelog_section.sh .changelog_content
+echo "Extracting changelog section for PR description..."
+OUTPUT_FILE=".changelog_content"
+
+# Extract just the section for this version
+awk 'BEGIN{section=0; found=0} 
+  /^## \[.*\]/{
+    if(!found) {
+      section=1; 
+      found=1;
+    } else {
+      section=0;
+    }
+  } 
+  section{print}' CHANGELOG.md | grep -v "^\[" > "$OUTPUT_FILE"
+
+# Check if we extracted any content
+if [ ! -s "$OUTPUT_FILE" ]; then
+  echo "No content extracted from CHANGELOG.md. Check your changelog file."
+  echo "No changelog content found" > "$OUTPUT_FILE"
+  exit 1
+fi
+
+echo "Extracted changelog section to $OUTPUT_FILE"
 
 # Commit changes
 git add CHANGELOG.md
