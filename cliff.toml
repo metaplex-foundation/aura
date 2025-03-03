@@ -76,13 +76,6 @@ commit_parsers = [
   { message = "^MTG-\\d+\\s+.*(doc|docs)", group = "Documentation" },
   { message = "^MTG-\\d+\\s+.*(test)", group = "Testing" },
   { message = "^MTG-\\d+\\s+", group = "Tasks" },
-  
-  # Merge commits
-  { message = "^Merge pull request .*/fix/", group = "Bug Fixes" },
-  { message = "^Merge pull request .*/feat/", group = "Features" },
-  { message = "^Merge pull request .*/doc/", group = "Documentation" },
-  { message = "^Merge pull request .*/test/", group = "Testing" },
-  { message = "^Merge", group = "Merges" },
 ]
 # filter out the commits that are not matched by commit parsers
 filter_commits = false
