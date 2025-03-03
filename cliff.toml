@@ -27,7 +27,7 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | upper_first }}
 {% for commit in commits %}
-- {% if commit.breaking %}**BREAKING**: {% endif %}{{ commit.message | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/metaplex-foundation/aura/commit/{{ commit.id }})){% if commit.footers %} {% for footer in commit.footers %}{{ footer }}{% endfor %}{% endif %}
+- {{ commit.message | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/metaplex-foundation/aura/commit/{{ commit.id }}))
 {% endfor %}
 {% endfor %}\n
 """
@@ -45,23 +45,37 @@ postprocessors = [
 # parse the commits based on https://www.conventionalcommits.org
 conventional_commits = true
 # filter out the commits that are not conventional
-filter_unconventional = true
+filter_unconventional = false
 # process each line of a commit as an individual commit
 split_commits = false
 # regex for parsing and grouping commits
 commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^doc", group = "Documentation" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactor" },
-  { message = "^style", group = "Styling" },
-  { message = "^test", group = "Testing" },
-  { message = "^chore\\(release\\): prepare for", skip = true },
-  { message = "^chore\\(deps\\)", group = "Dependencies" },
-  { message = "^chore", group = "Miscellaneous Tasks" },
-  { message = "^ci", group = "CI/CD" },
-  { body = ".*security", group = "Security" },
+  # Conventional commits with scope
+  { message = "^feat(\\(.*\\))?:", group = "Features" },
+  { message = "^fix(\\(.*\\))?:", group = "Bug Fixes" },
+  { message = "^docs(\\(.*\\))?:", group = "Documentation" },
+  { message = "^doc(\\(.*\\))?:", group = "Documentation" },
+  { message = "^perf(\\(.*\\))?:", group = "Performance" },
+  { message = "^refactor(\\(.*\\))?:", group = "Refactor" },
+  { message = "^style(\\(.*\\))?:", group = "Styling" },
+  { message = "^test(\\(.*\\))?:", group = "Testing" },
+  { message = "^chore\\(release\\):", skip = true },
+  { message = "^chore\\(deps\\)(\\(.*\\))?:", group = "Dependencies" },
+  { message = "^chore(\\(.*\\))?:", group = "Miscellaneous Tasks" },
+  { message = "^ci(\\(.*\\))?:", group = "CI/CD" },
+  
+  # Simple commits without scope
+  { message = "^feat\\s+", group = "Features" },
+  { message = "^fix\\s+", group = "Bug Fixes" },
+  { message = "^doc\\s+", group = "Documentation" },
+  { message = "^test\\s+", group = "Testing" },
+  
+  # Ticket prefixed commits
+  { message = "^MTG-\\d+\\s+.*(fix|fixed)", group = "Bug Fixes" },
+  { message = "^MTG-\\d+\\s+.*(feat|feature)", group = "Features" },
+  { message = "^MTG-\\d+\\s+.*(doc|docs)", group = "Documentation" },
+  { message = "^MTG-\\d+\\s+.*(test)", group = "Testing" },
+  { message = "^MTG-\\d+\\s+", group = "Tasks" },
 ]
 # filter out the commits that are not matched by commit parsers
 filter_commits = false
@@ -75,5 +89,3 @@ ignore_tags = ""
 date_order = false
 # sort the commits inside sections by oldest/newest order
 sort_commits = "oldest"
-# limit the number of commits included in the changelog
-limit_commits = 0
