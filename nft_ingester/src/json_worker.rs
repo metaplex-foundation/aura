@@ -15,10 +15,11 @@ use rocks_db::{
 };
 use serde_json::Value;
 use tokio::{
-    sync::{broadcast::Receiver, mpsc, mpsc::error::TryRecvError, Mutex},
+    sync::{mpsc, mpsc::error::TryRecvError, Mutex},
     task::JoinSet,
     time::{Duration, Instant},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 use url::Url;
 
@@ -74,9 +75,14 @@ impl TasksStreamer {
         Self { db_conn, sender, receiver }
     }
 
-    pub async fn run(self, rx: Receiver<()>, num_of_tasks: i32, tasks: &mut JoinSet<()>) {
+    pub fn run(
+        self,
+        cancellation_token: CancellationToken,
+        num_of_tasks: i32,
+        tasks: &mut JoinSet<()>,
+    ) {
         tasks.spawn(async move {
-            while rx.is_empty() {
+            while !cancellation_token.is_cancelled() {
                 let locked_receiver = self.receiver.lock().await;
                 let is_empty = locked_receiver.is_empty();
                 drop(locked_receiver);
@@ -126,12 +132,12 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
         Self { persister, receiver }
     }
 
-    pub async fn run(mut self, rx: Receiver<()>, tasks: &mut JoinSet<()>) {
+    pub fn run(mut self, cancellation_token: CancellationToken, tasks: &mut JoinSet<()>) {
         tasks.spawn(async move {
             let mut buffer = vec![];
             let mut clock = tokio::time::Instant::now();
 
-            while rx.is_empty() {
+            while !cancellation_token.is_cancelled() {
                 if buffer.len() > JSON_BATCH
                     || tokio::time::Instant::now() - clock
                         > Duration::from_secs(WIPE_PERIOD_SEC)
@@ -184,7 +190,7 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
     }
 }
 
-pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
+pub async fn run(json_downloader: Arc<JsonWorker>, cancellation_token: CancellationToken) {
     let mut workers_pool = JoinSet::new();
 
     let num_of_tasks = json_downloader.num_of_parallel_workers;
@@ -199,17 +205,17 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
 
     let tasks_persister = TasksPersister::new(json_downloader.clone(), result_rx);
 
-    tasks_streamer.run(rx.resubscribe(), num_of_tasks, &mut workers_pool).await;
-    tasks_persister.run(rx.resubscribe(), &mut workers_pool).await;
+    tasks_streamer.run(cancellation_token.child_token(), num_of_tasks, &mut workers_pool);
+    tasks_persister.run(cancellation_token.child_token(), &mut workers_pool);
 
     for _ in 0..json_downloader.num_of_parallel_workers {
-        let cln_rx = rx.resubscribe();
         let json_downloader = json_downloader.clone();
         let tasks_rx = tasks_rx.clone();
         let result_tx = result_tx.clone();
+        let cancellation_token = cancellation_token.child_token();
 
         workers_pool.spawn(async move {
-            while cln_rx.is_empty() {
+            while !cancellation_token.is_cancelled() {
                 let mut locked_rx = tasks_rx.lock().await;
                 match locked_rx.try_recv() {
                     Ok(task) => {
@@ -217,9 +223,10 @@ pub async fn run(json_downloader: Arc<JsonWorker>, rx: Receiver<()>) {
 
                         let begin_processing = Instant::now();
 
-                        let response = json_downloader
-                            .download_file(task.metadata_url.clone(), CLIENT_TIMEOUT)
-                            .await;
+                        let response = tokio::select! {
+                                _ = cancellation_token.cancelled() => { break; },
+                                r = json_downloader.download_file(task.metadata_url.clone(), CLIENT_TIMEOUT) => r
+                            };
 
                         json_downloader.metrics.set_latency_task_executed(
                             "json_downloader",

@@ -18,10 +18,10 @@ members = [
 [workspace.dependencies]
 
 # Tokio ecosystem
-tokio = { version = "1.37.0", features = ["full", "tracing"] }
-tokio-stream = "0.1.11"
-tokio-util = { version = "0.7.10", features = ["codec", "compat"] }
-tokio-retry = "0.3.0"
+tokio = { version = "1.37", features = ["full", "tracing"] }
+tokio-stream = "0.1"
+tokio-util = { version = "0.7", features = ["codec", "compat"] }
+tokio-retry = "0.3"
 
 
 # Serde ecosystem and seryalization tools

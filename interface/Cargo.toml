@@ -22,5 +22,6 @@ anchor-lang = { workspace = true }
 serde_json = { workspace = true }
 serde_derive = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 jsonrpc-core = { workspace = true }
 bubblegum-batch-sdk = { workspace = true }

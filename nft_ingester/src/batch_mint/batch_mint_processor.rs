@@ -12,7 +12,8 @@ use metrics_utils::BatchMintProcessorMetricsConfig;
 use postgre_client::{model::BatchMintState, PgClient};
 use rocks_db::{columns::batch_mint::BatchMintWithStaker, Storage};
 use solana_program::pubkey::Pubkey;
-use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
+use tokio::{task::JoinError, time::Instant};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::error::IngesterError;
@@ -28,10 +29,10 @@ const FILE_PROCESSING_METRICS_LABEL: &str = "batch_mint_file_processing";
 
 pub async fn process_batch_mints<R: BatchMintTxSender, P: PermanentStorageClient>(
     processor_clone: Arc<BatchMintProcessor<R, P>>,
-    rx: Receiver<()>,
+    cancellation_token: CancellationToken,
 ) -> Result<(), JoinError> {
     info!("Start processing batch_mints...");
-    processor_clone.process_batch_mints(rx).await;
+    processor_clone.process_batch_mints(cancellation_token).await;
     info!("Finish processing batch_mints...");
 
     Ok(())
@@ -168,8 +169,8 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
         }
     }
 
-    pub async fn process_batch_mints(&self, mut rx: Receiver<()>) {
-        while rx.is_empty() {
+    pub async fn process_batch_mints(&self, cancellation_token: CancellationToken) {
+        while !cancellation_token.is_cancelled() {
             let batch_mint_to_process = match self.pg_client.fetch_batch_mint_for_processing().await
             {
                 Ok(Some(batch_mint)) => batch_mint,
@@ -181,12 +182,16 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
                     continue;
                 },
             };
-            if let Err(e) = self.process_batch_mint(rx.resubscribe(), batch_mint_to_process).await {
+            if let Err(e) = self
+                .process_batch_mint(cancellation_token.child_token(), batch_mint_to_process)
+                .await
+            {
                 error!("process_batch_mint: {}", e);
             }
+
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_secs(5)) => {},
-                _ = rx.recv() => {
+                _ = cancellation_token.cancelled() => {
                     info!("Received stop signal, stopping ...");
                     return;
                 },
@@ -196,7 +201,7 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
 
     pub async fn process_batch_mint(
         &self,
-        rx: Receiver<()>,
+        cancellation_token: CancellationToken,
         mut batch_mint_to_process: BatchMintWithState,
     ) -> Result<(), IngesterError> {
         info!("Processing {} batch_mint file", &batch_mint_to_process.file_name);
@@ -204,7 +209,7 @@ impl<R: BatchMintTxSender, P: PermanentStorageClient> BatchMintProcessor<R, P> {
         let (batch_mint, file_size, file_checksum) =
             self.read_batch_mint_file(&batch_mint_to_process).await?;
         let mut metadata_url = String::new();
-        while rx.is_empty() {
+        while !cancellation_token.is_cancelled() {
             match &batch_mint_to_process.state {
                 entities::enums::BatchMintState::Uploaded => {
                     self.process_batch_mint_validation(&batch_mint, &mut batch_mint_to_process)

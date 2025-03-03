@@ -15,7 +15,7 @@ mod tests {
     use solana_program::pubkey::Pubkey;
     use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_consume_a_block_and_check_if_processed() {
         let (_tx, rx) = tokio::sync::broadcast::channel(1);
@@ -45,7 +45,7 @@ mod tests {
         assert_eq!(persisted, original_block);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_collect_slots() {
         let (_tx, mut rx) = tokio::sync::broadcast::channel(1);
@@ -66,7 +66,7 @@ mod tests {
             .await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_get_max_u64_request() {
         let (_tx, mut rx) = tokio::sync::broadcast::channel(1);

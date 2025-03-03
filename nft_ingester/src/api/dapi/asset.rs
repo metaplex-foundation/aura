@@ -23,10 +23,6 @@ use rocks_db::{
     Storage,
 };
 use solana_sdk::pubkey::Pubkey;
-use tokio::{
-    sync::Mutex,
-    task::{JoinError, JoinSet},
-};
 use tracing::error;
 
 use crate::api::dapi::rpc_asset_models::FullAsset;
@@ -169,7 +165,6 @@ pub async fn get_by_ids<
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     // We need owner_address if we want to query fungible token accounts
     owner_address: &Option<Pubkey>,
     token_price_fetcher: Arc<TPF>,
@@ -315,11 +310,10 @@ pub async fn get_by_ids<
 
             if let Some(json_persister) = json_persister {
                 if !download_results.is_empty() {
-                    tasks.lock().await.spawn(async move {
+                    usecase::executor::spawn(async move {
                         if let Err(e) = json_persister.persist_response(download_results).await {
                             error!("Could not persist downloaded JSONs: {:?}", e);
                         }
-                        Ok(())
                     });
                 }
             }

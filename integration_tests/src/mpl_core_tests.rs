@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use entities::api_req_params::{
     GetAsset, GetAssetsByAuthority, GetAssetsByGroup, GetAssetsByOwner,
@@ -6,11 +6,10 @@ use entities::api_req_params::{
 use function_name::named;
 use itertools::Itertools;
 use serial_test::serial;
-use tokio::{sync::Mutex, task::JoinSet};
 
 use super::common::*;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset() {
@@ -35,14 +34,12 @@ async fn test_mpl_core_get_asset() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_collection() {
@@ -67,14 +64,12 @@ async fn test_mpl_core_get_collection() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_assets_by_authority() {
@@ -110,15 +105,12 @@ async fn test_mpl_core_get_assets_by_authority() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByAuthority = serde_json::from_str(request).unwrap();
-    let response =
-        setup.das_api.get_assets_by_authority(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_authority(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_assets_by_group() {
@@ -155,14 +147,12 @@ async fn test_mpl_core_get_assets_by_group() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByGroup = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_assets_by_group(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_group(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_assets_by_owner() {
@@ -196,14 +186,12 @@ async fn test_mpl_core_get_assets_by_owner() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByOwner = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_assets_by_owner(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_owner(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_edition() {
@@ -228,14 +216,12 @@ async fn test_mpl_core_get_asset_with_edition() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_pubkey_in_rule_set() {
@@ -260,14 +246,12 @@ async fn test_mpl_core_get_asset_with_pubkey_in_rule_set() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_two_oracle_external_plugins() {
@@ -292,14 +276,12 @@ async fn test_mpl_core_get_asset_with_two_oracle_external_plugins() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_oracle_external_plugin_on_collection() {
@@ -324,14 +306,12 @@ async fn test_mpl_core_get_asset_with_oracle_external_plugin_on_collection() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_oracle_multiple_lifecycle_events() {
@@ -356,14 +336,12 @@ async fn test_mpl_core_get_asset_with_oracle_multiple_lifecycle_events() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_oracle_custom_offset_and_base_address_config() {
@@ -388,14 +366,12 @@ async fn test_mpl_core_get_asset_with_oracle_custom_offset_and_base_address_conf
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_oracle_no_offset() {
@@ -420,14 +396,12 @@ async fn test_mpl_core_get_asset_with_oracle_no_offset() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_assets_by_group_with_oracle_and_custom_pda_all_seeds() {
@@ -462,14 +436,12 @@ async fn test_mpl_core_get_assets_by_group_with_oracle_and_custom_pda_all_seeds(
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByGroup = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_assets_by_group(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_group(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_multiple_internal_and_external_plugins() {
@@ -494,14 +466,12 @@ async fn test_mpl_core_get_asset_with_multiple_internal_and_external_plugins() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_autograph_plugin() {
@@ -526,14 +496,12 @@ async fn test_mpl_core_autograph_plugin() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_autograph_plugin_with_signature() {
@@ -558,14 +526,12 @@ async fn test_mpl_core_autograph_plugin_with_signature() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_verified_creators_plugin() {
@@ -590,14 +556,12 @@ async fn test_mpl_core_verified_creators_plugin() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_verified_creators_plugin_with_signature() {
@@ -622,14 +586,12 @@ async fn test_mpl_core_verified_creators_plugin_with_signature() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_app_data_with_binary_data_and_owner_is_data_authority() {
@@ -654,14 +616,12 @@ async fn test_mpl_core_get_asset_with_app_data_with_binary_data_and_owner_is_dat
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_app_data_with_json_data_and_update_authority_is_data_authority(
@@ -687,14 +647,12 @@ async fn test_mpl_core_get_asset_with_app_data_with_json_data_and_update_authori
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_app_data_with_msg_pack_data_and_address_is_data_authority() {
@@ -719,14 +677,12 @@ async fn test_mpl_core_get_asset_with_app_data_with_msg_pack_data_and_address_is
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_collection_with_linked_app_data_with_binary_data_and_address_is_data_authority(
@@ -752,14 +708,12 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_binary_data_and_
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_data_section_with_binary_data() {
@@ -784,14 +738,12 @@ async fn test_mpl_core_get_asset_with_data_section_with_binary_data() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_collection_with_linked_app_data_with_json_data_and_owner_is_data_authority(
@@ -817,14 +769,12 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_json_data_and_ow
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_data_section_with_json_data() {
@@ -849,14 +799,12 @@ async fn test_mpl_core_get_asset_with_data_section_with_json_data() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_collection_with_linked_app_data_with_msg_pack_data_and_update_authority_is_data_authority(
@@ -882,14 +830,12 @@ async fn test_mpl_core_get_collection_with_linked_app_data_with_msg_pack_data_an
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_mpl_core_get_asset_with_data_section_with_msg_pack_data() {
@@ -914,9 +860,7 @@ async fn test_mpl_core_get_asset_with_data_section_with_msg_pack_data() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }

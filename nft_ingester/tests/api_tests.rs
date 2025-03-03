@@ -84,7 +84,7 @@ mod tests {
     use sqlx::QueryBuilder;
     use tempfile::TempDir;
     use testcontainers::clients::Cli;
-    use tokio::{sync::Mutex, task::JoinSet};
+    use tokio_util::sync::CancellationToken;
     use usecase::proofs::MaybeProofChecker;
 
     const SLOT_UPDATED: u64 = 100;
@@ -94,15 +94,13 @@ mod tests {
         26, 235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
     ]);
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_search_assets() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let limit = 10;
         let before: Option<String>;
         let after: Option<String>;
@@ -116,7 +114,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             assert!(res.is_object());
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             after = res_obj.cursor.clone();
@@ -147,7 +145,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -168,7 +166,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -189,7 +187,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert!(res_obj.items.is_empty(), "items should be empty");
         }
@@ -204,7 +202,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -225,7 +223,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert!(res_obj.items.is_empty(), "items should be empty");
         }
@@ -253,7 +251,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             for i in 0..limit {
                 assert_eq!(
@@ -275,7 +273,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -297,7 +295,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -319,7 +317,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             // calculate the number of assets with creator verified true
             let mut cnt = 0;
@@ -342,7 +340,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -364,7 +362,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -386,7 +384,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -408,7 +406,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
             assert_eq!(res_obj.total, 1, "total should be 1");
             assert_eq!(res_obj.items.len(), 1, "items length should be 1");
@@ -432,7 +430,7 @@ mod tests {
                 },
                 ..Default::default()
             };
-            let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+            let res = api.search_assets(payload).await.unwrap();
             let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
             assert_eq!(res_obj.total, 1, "total should be 1");
@@ -446,15 +444,13 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_asset_none_grouping_with_token_standard() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
@@ -557,7 +553,7 @@ mod tests {
             id: pb.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["grouping"], Value::Array(vec![]));
         assert_eq!(response["content"]["metadata"]["token_standard"], "NonFungible");
@@ -565,14 +561,12 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_metadata_sanitizer() {
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, 0, SLOT_UPDATED).await;
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let whitespace_options = " \t\n\r\x0B\x0C\u{00A0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\
         \u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200A}\u{2028}\
@@ -680,7 +674,7 @@ mod tests {
                 id: pb.to_string(),
                 options: Options { show_unverified_collections: true, ..Default::default() },
             };
-            let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+            let response = api.get_asset(payload).await.unwrap();
             assert_eq!(
                 response["content"]["metadata"]["name"],
                 format!("{} name {}", whitespace, whitespace)
@@ -692,15 +686,13 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_asset_without_offchain_data() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let pb = Pubkey::new_unique();
         let authority = Pubkey::new_unique();
@@ -776,7 +768,7 @@ mod tests {
             id: pb.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["id"], pb.to_string());
         assert_eq!(response["grouping"], Value::Array(vec![]));
@@ -786,7 +778,7 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_fungible_asset() {
         let cnt = 20;
@@ -794,8 +786,6 @@ mod tests {
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let token_updates_processor =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
@@ -897,7 +887,7 @@ mod tests {
             id: mint_key.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
         assert_eq!(response["ownership"]["owner"], owner_key.to_string());
@@ -929,7 +919,7 @@ mod tests {
             id: mint_key.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "token");
         assert_eq!(response["ownership"]["owner"], "");
@@ -938,7 +928,7 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_asset_programable_interface() {
         let cnt = 20;
@@ -946,8 +936,6 @@ mod tests {
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let token_updates_processor =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
@@ -1074,7 +1062,7 @@ mod tests {
             id: mint_accs[0].pubkey.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["id"], mint_accs[0].pubkey.to_string());
         assert_eq!(response["interface"], "ProgrammableNFT".to_string());
@@ -1083,7 +1071,7 @@ mod tests {
             id: mint_accs[1].pubkey.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["id"], mint_accs[1].pubkey.to_string());
         assert_eq!(response["interface"], "ProgrammableNFT".to_string());
@@ -1091,15 +1079,13 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_burnt() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let token_updates_processor =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
@@ -1219,7 +1205,7 @@ mod tests {
             id: mint_key.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
         assert_eq!(response["ownership"]["owner"], owner_key.to_string());
@@ -1229,7 +1215,7 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_asset_signatures() {
         let cnt = 20;
         let cli = Cli::default();
@@ -1421,7 +1407,7 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_token_accounts() {
         let cnt = 20;
         let cli = Cli::default();
@@ -1615,7 +1601,7 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_token_accounts_pagination() {
         let cnt = 20;
         let cli = Cli::default();
@@ -1839,15 +1825,13 @@ mod tests {
         assert_eq!(combined_10_30, first_30.token_accounts[10..]);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_get_assets_by_owner() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.owners[8].clone();
         let payload = GetAssetsByOwner {
@@ -1863,7 +1847,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api.get_assets_by_owner(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.get_assets_by_owner(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1875,15 +1859,13 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_get_assets_by_group() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.collections[12].clone();
         let payload = GetAssetsByGroup {
@@ -1900,7 +1882,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api.get_assets_by_group(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.get_assets_by_group(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1912,15 +1894,13 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_get_assets_by_creator() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.dynamic_details[5].clone();
         let payload = GetAssetsByCreator {
@@ -1937,7 +1917,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api.get_assets_by_creator(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.get_assets_by_creator(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -1949,7 +1929,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_get_assets_by_authority() {
         let cnt = 20;
@@ -1957,8 +1937,6 @@ mod tests {
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let ref_value = generated_assets.authorities[9].clone();
         let payload = GetAssetsByAuthority {
@@ -1974,7 +1952,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api.get_assets_by_authority(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.get_assets_by_authority(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res_obj.total, 1, "total should be 1");
@@ -2012,14 +1990,12 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_json_middleware() {
         let cnt = 20;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, cnt, SLOT_UPDATED).await;
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let url = "http://someUrl.com".to_string();
 
@@ -2164,7 +2140,7 @@ mod tests {
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
 
-        let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload).await.unwrap();
 
         let expected_content: Value = serde_json::from_str(
             r#"
@@ -2205,7 +2181,7 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_cannot_service_gaped_tree() {
         let cnt = 20;
         let cli = Cli::default();
@@ -2260,7 +2236,7 @@ mod tests {
         assert!(matches!(res, DasApiError::CannotServiceRequest));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_core_account_fees() {
         let cnt = 20;
         let cli = Cli::default();
@@ -2307,15 +2283,13 @@ mod tests {
         assert_eq!(res.core_fees_account.len(), 0);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_search_assets_grand_total() {
         let total_assets = 2000;
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create(&cli, total_assets, SLOT_UPDATED).await;
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
             limit: Some(1000),
             page: Some(1),
@@ -2326,7 +2300,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert_eq!(res.grand_total, Some(total_assets as u32));
 
@@ -2340,7 +2314,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert_eq!(res.grand_total, Some(0));
 
@@ -2353,7 +2327,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert_eq!(res.grand_total, None);
     }
@@ -2397,8 +2371,6 @@ mod tests {
             NATIVE_MINT_PUBKEY.to_string(),
         );
 
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
             limit: Some(1000),
             page: Some(1),
@@ -2410,7 +2382,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
         assert!(res.native_balance.unwrap().total_price > 0.0);
     }
@@ -2500,8 +2472,6 @@ mod tests {
         o.await.unwrap();
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = GetAsset {
             id: generated_assets.collections.first().unwrap().pubkey.to_string(),
             options: Options {
@@ -2510,7 +2480,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
 
         assert_eq!(
@@ -2588,7 +2558,7 @@ mod tests {
             id: generated_assets.collections.first().unwrap().pubkey.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
 
         assert!(res.grouping.clone().unwrap().first().unwrap().collection_metadata.is_none());
@@ -2630,8 +2600,6 @@ mod tests {
         }).unwrap();
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = GetAsset {
             id: asset_pk.to_string(),
             options: Options {
@@ -2640,7 +2608,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
         assert_eq!(
             res.inscription.unwrap().validation_hash.unwrap(),
@@ -2656,7 +2624,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
         assert_eq!(res.inscription, None);
         assert_eq!(res.spl20, None);
@@ -2664,9 +2632,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_search_assets_get_all_spec_classes() {
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
         let number_items = 100;
         let cli = Cli::default();
 
@@ -2704,7 +2669,7 @@ mod tests {
             token_type: Some(TokenType::All),
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res.items.len(), number_items);
@@ -2712,9 +2677,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_search_assets_freeze_delegate_authorities_for_fungible() {
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
         let number_items = 100;
         let cli = Cli::default();
 
@@ -2804,9 +2766,8 @@ mod tests {
             .transform_and_save_mint_account(&mut batch_storage, &mint, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
 
-        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200_000,
@@ -2815,28 +2776,19 @@ mod tests {
             1,
         );
         let synchronizer = Arc::new(synchronizer);
-        let mut tasks = JoinSet::new();
 
         for asset_type in ASSET_TYPES {
-            let rx = rx.resubscribe();
             let synchronizer = synchronizer.clone();
-            match asset_type {
+            let _ = match asset_type {
                 AssetType::Fungible => {
-                    tasks.spawn(async move {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await
-                    });
+                    synchronizer
+                        .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                        .await
                 },
                 AssetType::NonFungible => {
-                    tasks.spawn(
-                        async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
-                    );
+                    synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await
                 },
-            }
-        }
-        while let Some(res) = tasks.join_next().await {
-            if let Err(err) = res {
-                panic!("{err}");
-            }
+            };
         }
 
         let payload = SearchAssets {
@@ -2853,7 +2805,7 @@ mod tests {
         };
 
         let api = create_api(&env, None);
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res.items.len(), 1);
@@ -2873,7 +2825,7 @@ mod tests {
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
 
-        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200_000,
@@ -3023,37 +2975,24 @@ mod tests {
             .transform_and_save_mint_account(&mut batch_storage, &mint2, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
 
         let synchronizer = Arc::new(synchronizer);
-        let mut tasks = JoinSet::new();
 
         for asset_type in ASSET_TYPES {
-            let rx = rx.resubscribe();
             let synchronizer = synchronizer.clone();
-            match asset_type {
+            let _ = match asset_type {
                 AssetType::Fungible => {
-                    tasks.spawn(async move {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await
-                    });
+                    synchronizer
+                        .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                        .await
                 },
                 AssetType::NonFungible => {
-                    tasks.spawn(
-                        async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
-                    );
+                    synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await
                 },
-            }
-        }
-
-        while let Some(res) = tasks.join_next().await {
-            if let Err(err) = res {
-                panic!("{err}");
-            }
+            };
         }
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
             limit: Some(1000),
             page: Some(1),
@@ -3066,7 +3005,7 @@ mod tests {
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res.items.len(), 2, "SearchAssets get by owner_address and token_type Fungible");
@@ -3111,7 +3050,7 @@ mod tests {
             token_type: Some(TokenType::All),
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // Totally we have 2 assets with required owner. show_fungible is false by default, so we don't have token info.
@@ -3131,7 +3070,7 @@ mod tests {
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // We have only 1 token account with non-zero balance
@@ -3216,13 +3155,11 @@ mod tests {
         batch_storage.flush().unwrap();
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = GetAsset {
             id: fungible_token_mint1.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let res = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
 
         let reference = json!({
@@ -3269,7 +3206,7 @@ mod tests {
         )
         .await;
 
-        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200_000,
@@ -3358,37 +3295,23 @@ mod tests {
             .unwrap();
         batch_storage.flush().unwrap();
 
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-
         let synchronizer = Arc::new(synchronizer);
-        let mut tasks = JoinSet::new();
 
         for asset_type in ASSET_TYPES {
-            let rx = rx.resubscribe();
             let synchronizer = synchronizer.clone();
-            match asset_type {
+            let _ = match asset_type {
                 AssetType::Fungible => {
-                    tasks.spawn(async move {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await
-                    });
+                    synchronizer
+                        .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                        .await
                 },
                 AssetType::NonFungible => {
-                    tasks.spawn(
-                        async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
-                    );
+                    synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await
                 },
-            }
-        }
-
-        while let Some(res) = tasks.join_next().await {
-            if let Err(err) = res {
-                panic!("{err}");
-            }
+            };
         }
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
         let payload = SearchAssets {
             limit: Some(1000),
             page: Some(1),
@@ -3403,7 +3326,7 @@ mod tests {
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         // We created 2 fungible tokens^ 1 with real pubkey (MPLX)
@@ -3435,7 +3358,7 @@ mod tests {
             pg_mount.to_str().unwrap(),
         )
         .await;
-        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200_000,
@@ -3495,11 +3418,8 @@ mod tests {
         assert_eq!(idx_fungible_asset_iter.count(), 1);
         assert_eq!(idx_non_fungible_asset_iter.count(), cnt + 2);
 
-        let (_, rx) = tokio::sync::broadcast::channel(1);
-
         for asset_type in ASSET_TYPES {
-            let rx = rx.resubscribe();
-            synchronizer.full_syncronize(&rx, asset_type).await.expect("sync");
+            synchronizer.full_syncronize(CancellationToken::new(), asset_type).await.expect("sync");
             clean_syncronized_idxs(
                 env.pg_env.client.clone(),
                 env.rocks_env.storage.clone(),
@@ -3601,7 +3521,7 @@ mod tests {
             temp_dir_path.to_str().unwrap(),
         )
         .await;
-        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             10,
@@ -3644,9 +3564,8 @@ mod tests {
                 .unwrap();
             batch_storage.flush().unwrap();
         }
-        let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         for asset_type in ASSET_TYPES {
-            synchronizer.full_syncronize(&rx, asset_type).await.unwrap();
+            synchronizer.full_syncronize(CancellationToken::new(), asset_type).await.unwrap();
         }
 
         // receive 5 more updates for the same asset
@@ -3724,7 +3643,7 @@ mod tests {
         )
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_static_details_transition_from_fungible_into_nft() {
         // Given Fungible Metadata
@@ -3756,8 +3675,6 @@ mod tests {
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
         );
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let token_updates_processor =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
@@ -3859,7 +3776,7 @@ mod tests {
             id: mint_key.to_string(),
             options: Options { show_unverified_collections: true, ..Default::default() },
         };
-        let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload.clone()).await.unwrap();
 
         assert_eq!(response["interface"], "FungibleToken".to_string());
 
@@ -3884,7 +3801,7 @@ mod tests {
             )
             .unwrap();
         batch_storage.flush().unwrap();
-        let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload.clone()).await.unwrap();
 
         assert_eq!(response["interface"], "V1_NFT".to_string());
 
@@ -3908,7 +3825,7 @@ mod tests {
             )
             .unwrap();
         batch_storage.flush().unwrap();
-        let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
+        let response = api.get_asset(payload.clone()).await.unwrap();
 
         assert_eq!(response["interface"], "V1_NFT".to_string());
     }
@@ -3920,7 +3837,7 @@ mod tests {
         let cli = Cli::default();
         let (env, _) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
 
-        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200_000,
@@ -4084,37 +4001,24 @@ mod tests {
             .transform_and_save_mint_account(&mut batch_storage, &mint2, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
 
         let synchronizer = Arc::new(synchronizer);
-        let mut tasks = JoinSet::new();
 
         for asset_type in ASSET_TYPES {
-            let rx = rx.resubscribe();
             let synchronizer = synchronizer.clone();
-            match asset_type {
+            let _ = match asset_type {
                 AssetType::Fungible => {
-                    tasks.spawn(async move {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await
-                    });
+                    synchronizer
+                        .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                        .await
                 },
                 AssetType::NonFungible => {
-                    tasks.spawn(
-                        async move { synchronizer.synchronize_nft_asset_indexes(&rx, 0).await },
-                    );
+                    synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await
                 },
-            }
-        }
-
-        while let Some(res) = tasks.join_next().await {
-            if let Err(err) = res {
-                panic!("{err}");
-            }
+            };
         }
 
         let api = create_api(&env, None);
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
         let payload = SearchAssets {
             limit: Some(1000),
@@ -4128,7 +4032,7 @@ mod tests {
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(
@@ -4149,7 +4053,7 @@ mod tests {
             token_type: Some(TokenType::All),
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(res.items.len(), 2, "SearchAssets by token_type:All show_zero_balance: true");
@@ -4168,7 +4072,7 @@ mod tests {
             token_type: Some(TokenType::NonFungible),
             ..Default::default()
         };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
+        let res = api.search_assets(payload).await.unwrap();
         let res: AssetList = serde_json::from_value(res).unwrap();
 
         assert_eq!(

@@ -12,7 +12,6 @@ mod tests {
     use setup::rocks::{RocksTestEnvironment, DEFAULT_PUBKEY_OF_ONES, PUBKEY_OF_TWOS};
     use solana_sdk::pubkey::Pubkey;
     use tempfile::TempDir;
-    use tokio::{sync::Mutex, task::JoinSet};
 
     #[test]
     fn test_process_asset_updates_batch_empty_db() {
@@ -20,7 +19,6 @@ mod tests {
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let storage = Storage::open(
             temp_dir.path().to_str().unwrap(),
-            Arc::new(Mutex::new(JoinSet::new())),
             red_metrics.clone(),
             MigrationState::Last,
         )

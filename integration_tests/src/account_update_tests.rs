@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use borsh::BorshSerialize;
 use entities::api_req_params::{GetAsset, Options};
@@ -10,7 +10,6 @@ use plerkle_serialization::{
 use serial_test::serial;
 use solana_sdk::{program_option::COption, program_pack::Pack, pubkey::Pubkey};
 use spl_token::state::{Account as TokenAccount, AccountState, Mint};
-use tokio::{sync::Mutex, task::JoinSet};
 
 use super::common::*;
 
@@ -109,7 +108,7 @@ async fn index_account_update(setup: &TestSetup, pubkey: Pubkey, update: Account
     index_and_sync_account_bytes(setup, fbb.finished_data().to_vec()).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_account_updates() {
@@ -166,8 +165,6 @@ async fn test_account_updates() {
     };
     let named_updates = vec![token_updated, mint_updated, metadata_updated];
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     // Test that stale updates are rejected and new updates are accepted
     for named_update in named_updates.clone() {
         if let AccountUpdate::None = named_update.update {
@@ -178,8 +175,7 @@ async fn test_account_updates() {
 
         index_nft_accounts(&setup, get_nft_accounts(&setup, mint).await).await;
 
-        let response =
-            setup.das_api.get_asset(request.clone(), mutexed_tasks.clone()).await.unwrap();
+        let response = setup.das_api.get_asset(request.clone()).await.unwrap();
         insta::assert_json_snapshot!(name.clone(), response);
 
         index_account_update(
@@ -190,8 +186,7 @@ async fn test_account_updates() {
         )
         .await;
 
-        let response_stale_lot =
-            setup.das_api.get_asset(request.clone(), mutexed_tasks.clone()).await.unwrap();
+        let response_stale_lot = setup.das_api.get_asset(request.clone()).await.unwrap();
         assert_eq!(
             response, response_stale_lot,
             "Update for {} account was not rejected",
@@ -206,8 +201,7 @@ async fn test_account_updates() {
         )
         .await;
 
-        let response_new_slot =
-            setup.das_api.get_asset(request.clone(), mutexed_tasks.clone()).await.unwrap();
+        let response_new_slot = setup.das_api.get_asset(request.clone()).await.unwrap();
 
         assert_ne!(response, response_new_slot);
         insta::assert_json_snapshot!(
@@ -243,7 +237,7 @@ async fn test_account_updates() {
         }
         insta::assert_json_snapshot!(
             format!("{}-with-all-updates", name),
-            setup.das_api.get_asset(request.clone(), mutexed_tasks.clone()).await.unwrap()
+            setup.das_api.get_asset(request.clone()).await.unwrap()
         );
     }
 }

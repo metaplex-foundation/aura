@@ -10,15 +10,15 @@ use interface::{
 use metrics_utils::{BackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig};
 use rocks_db::Storage;
 use tokio::{
-    sync::{broadcast::Receiver, Mutex},
-    task::{JoinError, JoinSet},
+    task::JoinError,
     time::{sleep as tokio_sleep, Instant},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::{error, log::info};
 use usecase::slots_collector::SlotsGetter;
 
 pub async fn process_asset_details_stream_wrapper(
-    cloned_rx: Receiver<()>,
+    cancellation_token: CancellationToken,
     cloned_rocks_storage: Arc<Storage>,
     last_saved_slot: u64,
     first_processed_slot_value: u64,
@@ -27,7 +27,7 @@ pub async fn process_asset_details_stream_wrapper(
 ) -> Result<(), JoinError> {
     if raw_blocks {
         let processed_raw_blocks = process_raw_blocks_stream(
-            cloned_rx,
+            cancellation_token,
             cloned_rocks_storage,
             last_saved_slot,
             first_processed_slot_value,
@@ -38,7 +38,7 @@ pub async fn process_asset_details_stream_wrapper(
         info!("Processed raw blocks: {}", processed_raw_blocks);
     } else {
         let processed_assets = process_asset_details_stream(
-            cloned_rx,
+            cancellation_token,
             cloned_rocks_storage.clone(),
             last_saved_slot,
             first_processed_slot_value,
@@ -60,19 +60,17 @@ pub async fn run_sequence_consistent_gapfiller<R, BP, BC>(
     sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     bp: Arc<BP>,
     bc: Arc<BC>,
-    rx: Receiver<()>,
+    cancellation_token: CancellationToken,
     rpc_backfiller: Arc<BackfillRPC>,
-    mutexed_tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     sequence_consistent_checker_wait_period_sec: u64,
 ) where
     R: SlotsGetter + Sync + Send + 'static,
     BP: BlockProducer,
     BC: BlockConsumer,
 {
-    let mut rx = rx.resubscribe();
     let metrics = sequence_consistent_gapfill_metrics.clone();
 
-    let run_sequence_consistent_gapfiller = async move {
+    usecase::executor::spawn(async move {
         tracing::info!("Start collecting sequences gaps...");
         loop {
             let start = Instant::now();
@@ -84,7 +82,7 @@ pub async fn run_sequence_consistent_gapfiller<R, BP, BC>(
                 sequence_consistent_gapfill_metrics.clone(),
                 bp.clone(),
                 bc.clone(),
-                rx.resubscribe(),
+                cancellation_token.child_token(),
             )
             .await;
             metrics.set_scans_latency(start.elapsed().as_secs_f64());
@@ -92,23 +90,19 @@ pub async fn run_sequence_consistent_gapfiller<R, BP, BC>(
 
             tokio::select! {
                 _ = tokio_sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)) => {},
-                _ = rx.recv() => {
+                _ = cancellation_token.cancelled() => {
                     info!("Received stop signal, stopping collecting sequences gaps");
                     break;
                 }
             }
         }
-
-        Ok(())
-    };
-
-    mutexed_tasks.lock().await.spawn(run_sequence_consistent_gapfiller);
+    });
 }
 
 /// Method returns the number of successfully processed assets
 #[allow(clippy::let_and_return)]
 pub async fn process_raw_blocks_stream(
-    _rx: Receiver<()>,
+    _cancellation_token: CancellationToken,
     _storage: Arc<Storage>,
     _start_slot: u64,
     _end_slot: u64,
@@ -154,7 +148,7 @@ pub async fn process_raw_blocks_stream(
 
 /// Method returns the number of successfully processed slots
 pub async fn process_asset_details_stream(
-    rx: Receiver<()>,
+    cancellation_token: CancellationToken,
     storage: Arc<Storage>,
     start_slot: u64,
     end_slot: u64,
@@ -173,7 +167,7 @@ pub async fn process_asset_details_stream(
 
     let mut processed_assets = 0;
 
-    while rx.is_empty() {
+    while !cancellation_token.is_cancelled() {
         match asset_details_stream.next().await {
             Some(Ok(details)) => {
                 if let Some(e) = storage.insert_gaped_data(details).await.err() {

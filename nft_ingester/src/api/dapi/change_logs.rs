@@ -275,7 +275,7 @@ fn get_asset_proof(
         let metrics = metrics.clone();
         let cloned_checker = proof_checker.clone();
         let asset_id = *asset_id;
-        tokio::spawn(async move {
+        usecase::executor::spawn(async move {
             match cloned_checker
                 .check_proof(tree_id, initial_proofs, leaf_data.nonce as u32, lf.to_bytes())
                 .await

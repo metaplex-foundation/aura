@@ -8,10 +8,6 @@ use entities::api_req_params::{
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::{types::params::Params, MetaIoHandler};
 use rocks_db::Storage;
-use tokio::{
-    sync::Mutex,
-    task::{JoinError, JoinSet},
-};
 use usecase::proofs::MaybeProofChecker;
 
 use crate::{
@@ -36,7 +32,6 @@ impl RpcApiBuilder {
             Storage,
         >,
         consistency_checkers: Vec<Arc<dyn ConsistencyChecker>>,
-        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     ) -> Result<MetaIoHandler<RpcMetaMiddleware, RpcMetaMiddleware>, DasApiError> {
         let mut module = MetaIoHandler::<RpcMetaMiddleware, RpcMetaMiddleware>::new(
             Default::default(),
@@ -59,15 +54,13 @@ impl RpcApiBuilder {
         module.add_alias("getAssetProof", "get_asset_proof");
 
         let cloned_api = api.clone();
-        let cloned_tasks = tasks.clone();
         module.add_method("get_asset", move |rpc_params: Params| {
             let api = cloned_api.clone();
-            let tasks = cloned_tasks.clone();
             async move {
                 match rpc_params.clone().parse::<GetAsset>() {
-                    Ok(payload) => api.get_asset(payload, tasks).await.map_err(Into::into),
+                    Ok(payload) => api.get_asset(payload).await.map_err(Into::into),
                     Err(_) => api
-                        .get_asset(rpc_params.parse::<GetAssetV0>()?.into(), tasks)
+                        .get_asset(rpc_params.parse::<GetAssetV0>()?.into())
                         .await
                         .map_err(Into::into),
                 }
@@ -76,20 +69,13 @@ impl RpcApiBuilder {
         module.add_alias("getAsset", "get_asset");
 
         let cloned_api = api.clone();
-        let cloned_tasks = tasks.clone();
         module.add_method("get_assets_by_owner", move |rpc_params: Params| {
             let api = cloned_api.clone();
-            let tasks = cloned_tasks.clone();
             async move {
                 match rpc_params.clone().parse::<GetAssetsByOwner>() {
-                    Ok(payload) => {
-                        api.get_assets_by_owner(payload, tasks).await.map_err(Into::into)
-                    },
+                    Ok(payload) => api.get_assets_by_owner(payload).await.map_err(Into::into),
                     Err(_) => api
-                        .get_assets_by_owner(
-                            rpc_params.parse::<GetAssetsByOwnerV0>()?.into(),
-                            tasks,
-                        )
+                        .get_assets_by_owner(rpc_params.parse::<GetAssetsByOwnerV0>()?.into())
                         .await
                         .map_err(Into::into),
                 }
@@ -98,20 +84,13 @@ impl RpcApiBuilder {
         module.add_alias("getAssetsByOwner", "get_assets_by_owner");
 
         let cloned_api = api.clone();
-        let cloned_tasks = tasks.clone();
         module.add_method("get_assets_by_creator", move |rpc_params: Params| {
             let api = cloned_api.clone();
-            let tasks = cloned_tasks.clone();
             async move {
                 match rpc_params.clone().parse::<GetAssetsByCreator>() {
-                    Ok(payload) => {
-                        api.get_assets_by_creator(payload, tasks).await.map_err(Into::into)
-                    },
+                    Ok(payload) => api.get_assets_by_creator(payload).await.map_err(Into::into),
                     Err(_) => api
-                        .get_assets_by_creator(
-                            rpc_params.parse::<GetAssetsByCreatorV0>()?.into(),
-                            tasks,
-                        )
+                        .get_assets_by_creator(rpc_params.parse::<GetAssetsByCreatorV0>()?.into())
                         .await
                         .map_err(Into::into),
                 }
@@ -120,19 +99,14 @@ impl RpcApiBuilder {
         module.add_alias("getAssetsByCreator", "get_assets_by_creator");
 
         let cloned_api = api.clone();
-        let cloned_tasks = tasks.clone();
         module.add_method("get_assets_by_authority", move |rpc_params: Params| {
             let api = cloned_api.clone();
-            let tasks = cloned_tasks.clone();
             async move {
                 match rpc_params.clone().parse::<GetAssetsByAuthority>() {
-                    Ok(payload) => {
-                        api.get_assets_by_authority(payload, tasks).await.map_err(Into::into)
-                    },
+                    Ok(payload) => api.get_assets_by_authority(payload).await.map_err(Into::into),
                     Err(_) => api
                         .get_assets_by_authority(
                             rpc_params.parse::<GetAssetsByAuthorityV0>()?.into(),
-                            tasks,
                         )
                         .await
                         .map_err(Into::into),
@@ -142,20 +116,13 @@ impl RpcApiBuilder {
         module.add_alias("getAssetsByAuthority", "get_assets_by_authority");
 
         let cloned_api = api.clone();
-        let cloned_tasks = tasks.clone();
         module.add_method("get_assets_by_group", move |rpc_params: Params| {
             let api = cloned_api.clone();
-            let tasks = cloned_tasks.clone();
             async move {
                 match rpc_params.clone().parse::<GetAssetsByGroup>() {
-                    Ok(payload) => {
-                        api.get_assets_by_group(payload, tasks).await.map_err(Into::into)
-                    },
+                    Ok(payload) => api.get_assets_by_group(payload).await.map_err(Into::into),
                     Err(_) => api
-                        .get_assets_by_group(
-                            rpc_params.parse::<GetAssetsByGroupV0>()?.into(),
-                            tasks,
-                        )
+                        .get_assets_by_group(rpc_params.parse::<GetAssetsByGroupV0>()?.into())
                         .await
                         .map_err(Into::into),
                 }
@@ -164,15 +131,13 @@ impl RpcApiBuilder {
         module.add_alias("getAssetsByGroup", "get_assets_by_group");
 
         let cloned_api = api.clone();
-        let cloned_tasks = tasks.clone();
         module.add_method("get_asset_batch", move |rpc_params: Params| {
             let api = cloned_api.clone();
-            let tasks = cloned_tasks.clone();
             async move {
                 match rpc_params.clone().parse::<GetAssetBatch>() {
-                    Ok(payload) => api.get_asset_batch(payload, tasks).await.map_err(Into::into),
+                    Ok(payload) => api.get_asset_batch(payload).await.map_err(Into::into),
                     Err(_) => api
-                        .get_asset_batch(rpc_params.parse::<GetAssetBatchV0>()?.into(), tasks)
+                        .get_asset_batch(rpc_params.parse::<GetAssetBatchV0>()?.into())
                         .await
                         .map_err(Into::into),
                 }
@@ -199,15 +164,13 @@ impl RpcApiBuilder {
         module.add_alias("getGrouping", "get_grouping");
 
         let cloned_api = api.clone();
-        let cloned_tasks = tasks.clone();
         module.add_method("search_assets", move |rpc_params: Params| {
             let api = cloned_api.clone();
-            let tasks = cloned_tasks.clone();
             async move {
                 match rpc_params.clone().parse::<SearchAssets>() {
-                    Ok(payload) => api.search_assets(payload, tasks).await.map_err(Into::into),
+                    Ok(payload) => api.search_assets(payload).await.map_err(Into::into),
                     Err(_) => api
-                        .search_assets(rpc_params.parse::<SearchAssetsV0>()?.into(), tasks)
+                        .search_assets(rpc_params.parse::<SearchAssetsV0>()?.into())
                         .await
                         .map_err(Into::into),
                 }

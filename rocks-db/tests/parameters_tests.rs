@@ -4,7 +4,7 @@ mod tests {
     use rocks_db::columns::parameters::Parameter;
     use setup::rocks::*;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_get_raw_block_on_empty_db() {
         let storage = RocksTestEnvironment::new(&[]).storage;
@@ -22,7 +22,7 @@ mod tests {
         assert!(response == Some(last_fetched_slot));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_merge_top_seen_slot() {
         let storage = RocksTestEnvironment::new(&[]).storage;

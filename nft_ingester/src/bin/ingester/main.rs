@@ -14,7 +14,6 @@ use arweave_rs::{consts::ARWEAVE_BASE_URL, Arweave};
 use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
 use entities::enums::ASSET_TYPES;
-use futures::FutureExt;
 use grpc::{
     asseturls::asset_url_service_server::AssetUrlServiceServer,
     asseturls_impl::AssetUrlServiceImpl, client::Client,
@@ -37,7 +36,7 @@ use nft_ingester::{
     consts::RAYDIUM_API_HOST,
     error::IngesterError,
     gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller},
-    init::{graceful_stop, init_index_storage_with_migration, init_primary_storage},
+    init::{init_index_storage_with_migration, init_primary_storage},
     json_worker,
     json_worker::JsonWorker,
     processors::{
@@ -57,11 +56,6 @@ use postgre_client::PG_MIGRATIONS_PATH;
 use pprof::ProfilerGuardBuilder;
 use rocks_db::{storage_traits::AssetSlotStorage, SlotStorage};
 use solana_client::nonblocking::rpc_client::RpcClient;
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-    time::sleep as tokio_sleep,
-};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Server;
 use tracing::{error, info, warn};
@@ -114,6 +108,25 @@ pub async fn main() -> Result<(), IngesterError> {
             .expect("Failed to build 'ProfilerGuardBuilder'!")
     });
 
+    let cancellation_token = CancellationToken::new();
+
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            // --stop
+            #[cfg(not(feature = "profiling"))]
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+
+            #[cfg(feature = "profiling")]
+            nft_ingester::init::graceful_stop(
+                cancellation_token,
+                guard,
+                args.profiling_file_path_container,
+                &args.heap_path,
+            )
+            .await;
+        }
+    });
     // try to restore rocksDB first
     if args.is_restore_rocks_db {
         restore_rocksdb(
@@ -131,9 +144,6 @@ pub async fn main() -> Result<(), IngesterError> {
         .await?;
     }
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
     info!("Init primary storage...");
     let primary_rocks_storage = Arc::new(
         init_primary_storage(
@@ -141,7 +151,6 @@ pub async fn main() -> Result<(), IngesterError> {
             args.enable_rocks_migration.unwrap_or(false),
             &args.rocks_migration_storage_path,
             &metrics_state,
-            mutexed_tasks.clone(),
         )
         .await?,
     );
@@ -173,28 +182,25 @@ pub async fn main() -> Result<(), IngesterError> {
         Some(metrics_state.red_metrics.clone()),
     ));
     let tpf = token_price_fetcher.clone();
-    let tasks_clone = mutexed_tasks.clone();
 
-    tasks_clone.lock().await.spawn(async move {
+    cancellation_token.run_until_cancelled(async move {
         if let Err(e) = tpf.warmup().await {
             warn!(error = %e, "Failed to warm up Raydium token price fetcher, cache is empty: {:?}", e);
         }
         let (symbol_cache_size, _) = tpf.get_cache_sizes();
         info!(%symbol_cache_size, "Warmed up Raydium token price fetcher with {} symbols", symbol_cache_size);
-        Ok(())
-    });
+    }).await;
     let well_known_fungible_accounts =
         token_price_fetcher.get_all_token_symbols().await.unwrap_or_else(|_| HashMap::new());
 
     info!("Init Redis ....");
-    let cloned_rx = shutdown_rx.resubscribe();
     let message_config = MessengerConfig {
         messenger_type: MessengerType::Redis,
         connection_config: args.redis_connection_config.clone(),
     };
 
     let ack_channel =
-        create_ack_channel(cloned_rx, message_config.clone(), mutexed_tasks.clone()).await;
+        create_ack_channel(message_config.clone(), cancellation_token.child_token()).await;
 
     for index in 0..args.redis_accounts_parsing_workers {
         let account_consumer_worker_name = Uuid::new_v4().to_string();
@@ -226,8 +232,7 @@ pub async fn main() -> Result<(), IngesterError> {
         );
 
         run_accounts_processor(
-            shutdown_rx.resubscribe(),
-            mutexed_tasks.clone(),
+            cancellation_token.child_token(),
             redis_receiver,
             primary_rocks_storage.clone(),
             args.account_processor_buffer_size,
@@ -236,11 +241,9 @@ pub async fn main() -> Result<(), IngesterError> {
             Some(metrics_state.message_process_metrics.clone()),
             index_pg_storage.clone(),
             rpc_client.clone(),
-            mutexed_tasks.clone(),
             Some(account_consumer_worker_name.clone()),
             well_known_fungible_accounts.clone(),
-        )
-        .await;
+        );
     }
 
     for index in 0..args.redis_transactions_parsing_workers {
@@ -272,13 +275,11 @@ pub async fn main() -> Result<(), IngesterError> {
         );
 
         run_transaction_processor(
-            shutdown_rx.resubscribe(),
-            mutexed_tasks.clone(),
+            cancellation_token.child_token(),
             redis_receiver,
             geyser_bubblegum_updates_processor.clone(),
             Some(metrics_state.message_process_metrics.clone()),
-        )
-        .await;
+        );
     }
 
     info!("MessageSource Redis FINISH");
@@ -288,12 +289,11 @@ pub async fn main() -> Result<(), IngesterError> {
     let first_processed_slot = Arc::new(AtomicU64::new(0));
     let first_processed_slot_clone = first_processed_slot.clone();
     let cloned_rocks_storage = primary_rocks_storage.clone();
-    let cloned_rx = shutdown_rx.resubscribe();
-    let cloned_tx = shutdown_tx.clone();
 
-    mutexed_tasks.lock().await.spawn(receive_last_saved_slot(
-        cloned_rx,
-        cloned_tx,
+    usecase::executor::spawn(receive_last_saved_slot(
+        // NOTE: the clone here is important to bubble up the cancellation
+        // from this function to other child tokens.
+        cancellation_token.clone(),
         cloned_rocks_storage,
         first_processed_slot_clone,
         last_saved_slot,
@@ -319,18 +319,19 @@ pub async fn main() -> Result<(), IngesterError> {
                 .map_err(|e| error!("GRPC Client new: {e}"))
                 .expect("Failed to create GRPC Client");
 
-        while first_processed_slot.load(Ordering::Relaxed) == 0 && shutdown_rx.is_empty() {
-            tokio_sleep(Duration::from_millis(100)).await
+        while first_processed_slot.load(Ordering::Relaxed) == 0
+            && !cancellation_token.is_cancelled()
+        {
+            tokio::time::sleep(Duration::from_millis(100)).await
         }
 
         let cloned_rocks_storage = primary_rocks_storage.clone();
-        if shutdown_rx.is_empty() {
+        if !cancellation_token.is_cancelled() {
             let gaped_data_client_clone = gaped_data_client.clone();
 
             let first_processed_slot_value = first_processed_slot.load(Ordering::Relaxed);
-            let cloned_rx = shutdown_rx.resubscribe();
-            mutexed_tasks.lock().await.spawn(process_asset_details_stream_wrapper(
-                cloned_rx,
+            usecase::executor::spawn(process_asset_details_stream_wrapper(
+                cancellation_token.child_token(),
                 cloned_rocks_storage,
                 last_saved_slot,
                 first_processed_slot_value,
@@ -339,9 +340,8 @@ pub async fn main() -> Result<(), IngesterError> {
             ));
 
             let cloned_rocks_storage = primary_rocks_storage.clone();
-            let cloned_rx = shutdown_rx.resubscribe();
-            mutexed_tasks.lock().await.spawn(process_asset_details_stream_wrapper(
-                cloned_rx,
+            usecase::executor::spawn(process_asset_details_stream_wrapper(
+                cancellation_token.child_token(),
                 cloned_rocks_storage,
                 last_saved_slot,
                 first_processed_slot_value,
@@ -359,10 +359,9 @@ pub async fn main() -> Result<(), IngesterError> {
         args.check_proofs_probability,
         args.check_proofs_commitment,
     )));
-    let cloned_rx = shutdown_rx.resubscribe();
     let file_storage_path = args.file_storage_path_container.clone();
 
-    if args.run_api.unwrap_or(false) {
+    if args.run_api.unwrap_or_default() {
         info!("Starting API (Ingester)...");
         let middleware_json_downloader = args
             .json_middleware_config
@@ -382,49 +381,44 @@ pub async fn main() -> Result<(), IngesterError> {
 
         let cloned_index_storage = index_pg_storage.clone();
 
-        mutexed_tasks.lock().await.spawn(async move {
-            match start_api(
-                cloned_index_storage,
-                cloned_rocks_storage.clone(),
-                cloned_rx,
-                cloned_api_metrics,
-                args.server_port,
-                proof_checker,
-                tree_gaps_checker,
-                args.max_page_limit,
-                middleware_json_downloader.clone(),
-                middleware_json_downloader,
-                args.json_middleware_config,
-                tasks_clone,
-                &args.archives_dir,
-                args.consistence_synchronization_api_threshold,
-                args.consistence_backfilling_slots_threshold,
-                args.batch_mint_service_port,
-                args.file_storage_path_container.as_str(),
-                account_balance_getter,
-                args.storage_service_base_url,
-                args.native_mint_pubkey,
-                token_price_fetcher,
-            )
-            .await
-            {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    error!("Start API: {}", e);
-                    Ok(())
-                },
+        usecase::executor::spawn({
+            let cancellation_token = cancellation_token.child_token();
+            async move {
+                start_api(
+                    cloned_index_storage,
+                    cloned_rocks_storage.clone(),
+                    cancellation_token,
+                    cloned_api_metrics,
+                    args.server_port,
+                    proof_checker,
+                    tree_gaps_checker,
+                    args.max_page_limit,
+                    middleware_json_downloader.clone(),
+                    middleware_json_downloader,
+                    args.json_middleware_config,
+                    &args.archives_dir,
+                    args.consistence_synchronization_api_threshold,
+                    args.consistence_backfilling_slots_threshold,
+                    args.batch_mint_service_port,
+                    args.file_storage_path_container.as_str(),
+                    account_balance_getter,
+                    args.storage_service_base_url,
+                    args.native_mint_pubkey,
+                    token_price_fetcher,
+                )
+                .await
+                .inspect_err(|e| error!("Start API: {}", e))
             }
         });
     }
 
-    let cloned_rx = shutdown_rx.resubscribe();
-    let cloned_jp = json_processor.clone();
-    mutexed_tasks.lock().await.spawn(json_worker::run(cloned_jp, cloned_rx).map(|_| Ok(())));
-
-    let shutdown_token = CancellationToken::new();
+    usecase::executor::spawn(json_worker::run(
+        json_processor.clone(),
+        cancellation_token.child_token(),
+    ));
 
     // Backfiller
-    if args.run_backfiller.unwrap_or(false) {
+    if args.run_backfiller.unwrap_or_default() {
         info!("Start backfiller...");
 
         let backfill_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
@@ -441,7 +435,6 @@ pub async fn main() -> Result<(), IngesterError> {
                     .clone()
                     .expect("slots_db_path is required for SlotStorage"),
                 args.rocks_secondary_slots_db_path.clone(),
-                mutexed_tasks.clone(),
                 metrics_state.red_metrics.clone(),
             )
             .expect("Failed to open slot storage"),
@@ -459,7 +452,7 @@ pub async fn main() -> Result<(), IngesterError> {
             .await,
         );
 
-        if args.run_bubblegum_backfiller.unwrap_or(false) {
+        if args.run_bubblegum_backfiller.unwrap_or_default() {
             info!("Runing Bubblegum backfiller (ingester)...");
 
             if args.should_reingest {
@@ -476,20 +469,21 @@ pub async fn main() -> Result<(), IngesterError> {
                 primary_rocks_storage.clone(),
                 metrics_state.backfiller_metrics.clone(),
             ));
-            let shutdown_token = shutdown_token.clone();
             let db = primary_rocks_storage.clone();
             let metrics: Arc<BackfillerMetricsConfig> = metrics_state.backfiller_metrics.clone();
             let slot_db = slot_db.clone();
-            mutexed_tasks.lock().await.spawn(async move {
-                nft_ingester::backfiller::run_backfill_slots(
-                    shutdown_token,
-                    db,
-                    slot_db,
-                    consumer,
-                    metrics,
-                )
-                .await;
-                Ok(())
+            usecase::executor::spawn({
+                let cancellation_token = cancellation_token.child_token();
+                async move {
+                    nft_ingester::backfiller::run_backfill_slots(
+                        cancellation_token,
+                        db,
+                        slot_db,
+                        consumer,
+                        metrics,
+                    )
+                    .await;
+                }
             });
         }
 
@@ -508,9 +502,8 @@ pub async fn main() -> Result<(), IngesterError> {
                 metrics_state.sequence_consistent_gapfill_metrics.clone(),
                 backfiller_source.clone(),
                 direct_block_parser,
-                shutdown_rx.resubscribe(),
+                cancellation_token.child_token(),
                 rpc_backfiller.clone(),
-                mutexed_tasks.clone(),
                 args.sequence_consistent_checker_wait_period_sec,
             )
             .await;
@@ -527,19 +520,19 @@ pub async fn main() -> Result<(), IngesterError> {
         let asset_url_serv = AssetUrlServiceImpl::new(primary_rocks_storage.clone());
         let addr = format!("0.0.0.0:{}", args.peer_grpc_port).parse()?;
         // Spawn the gRPC server task and add to JoinSet
-        let mut rx = shutdown_rx.resubscribe();
 
-        mutexed_tasks.lock().await.spawn(async move {
-            if let Err(e) = Server::builder()
-                .add_service(GapFillerServiceServer::new(serv))
-                .add_service(AssetUrlServiceServer::new(asset_url_serv))
-                .serve_with_shutdown(addr, rx.recv().map(|_| ()))
-                .await
-            {
-                error!("Server error: {}", e);
+        usecase::executor::spawn({
+            let cancellation_token = cancellation_token.child_token();
+            async move {
+                if let Err(e) = Server::builder()
+                    .add_service(GapFillerServiceServer::new(serv))
+                    .add_service(AssetUrlServiceServer::new(asset_url_serv))
+                    .serve_with_shutdown(addr, cancellation_token.cancelled())
+                    .await
+                {
+                    error!("Server error: {}", e);
+                }
             }
-
-            Ok(())
         });
 
         let rocks_clone = primary_rocks_storage.clone();
@@ -549,42 +542,55 @@ pub async fn main() -> Result<(), IngesterError> {
             tx_ingester.clone(),
             metrics_state.rpc_backfiller_metrics.clone(),
         );
-        let cloned_rx = shutdown_rx.resubscribe();
         let metrics_clone = metrics_state.rpc_backfiller_metrics.clone();
 
-        mutexed_tasks.lock().await.spawn(async move {
-            let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
-            while cloned_rx.is_empty() {
-                match signature_fetcher
-                    .fetch_signatures(program_id, args.rpc_retry_interval_millis)
-                    .await
-                {
-                    Ok(_) => {
-                        metrics_clone
-                            .inc_run_fetch_signatures("fetch_signatures", MetricStatus::SUCCESS);
-                        info!(
-                            "signatures sync finished successfully for program_id: {}",
-                            program_id
-                        );
-                    },
-                    Err(e) => {
-                        metrics_clone
-                            .inc_run_fetch_signatures("fetch_signatures", MetricStatus::FAILURE);
-                        error!("signatures sync failed: {:?} for program_id: {}", e, program_id);
-                    },
+        usecase::executor::spawn({
+            let cancellation_token = cancellation_token.child_token();
+            async move {
+                let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
+                while !cancellation_token.is_cancelled() {
+                    match signature_fetcher
+                        .fetch_signatures(program_id, args.rpc_retry_interval_millis)
+                        .await
+                    {
+                        Ok(_) => {
+                            metrics_clone.inc_run_fetch_signatures(
+                                "fetch_signatures",
+                                MetricStatus::SUCCESS,
+                            );
+                            info!(
+                                "signatures sync finished successfully for program_id: {}",
+                                program_id
+                            );
+                        },
+                        Err(e) => {
+                            metrics_clone.inc_run_fetch_signatures(
+                                "fetch_signatures",
+                                MetricStatus::FAILURE,
+                            );
+                            error!(
+                                "signatures sync failed: {:?} for program_id: {}",
+                                e, program_id
+                            );
+                        },
+                    }
+
+                    tokio::select! {
+                        _ = cancellation_token.cancelled() => {}
+                        _ = tokio::time::sleep(Duration::from_secs(60)) => {}
+                    }
                 }
-
-                tokio_sleep(Duration::from_secs(60)).await;
             }
-
-            Ok(())
         });
     }
 
-    Scheduler::run_in_background(Scheduler::new(
-        primary_rocks_storage.clone(),
-        Some(well_known_fungible_accounts.keys().cloned().collect()),
-    ))
+    Scheduler::run_in_background(
+        Scheduler::new(
+            primary_rocks_storage.clone(),
+            Some(well_known_fungible_accounts.keys().cloned().collect()),
+        ),
+        cancellation_token.child_token(),
+    )
     .await;
 
     if let Ok(arweave) = Arweave::from_keypair_path(
@@ -602,9 +608,11 @@ pub async fn main() -> Result<(), IngesterError> {
             file_storage_path,
             metrics_state.batch_mint_processor_metrics.clone(),
         ));
-        let rx = shutdown_rx.resubscribe();
         let processor_clone = batch_mint_processor.clone();
-        mutexed_tasks.lock().await.spawn(process_batch_mints(processor_clone, rx));
+        usecase::executor::spawn(process_batch_mints(
+            processor_clone,
+            cancellation_token.child_token(),
+        ));
     }
 
     let batch_mint_persister = BatchMintPersister::new(
@@ -613,10 +621,12 @@ pub async fn main() -> Result<(), IngesterError> {
         metrics_state.batch_mint_persisting_metrics.clone(),
     );
 
-    let rx = shutdown_rx.resubscribe();
-    mutexed_tasks.lock().await.spawn(async move {
-        info!("Start batch_mint persister...");
-        batch_mint_persister.persist_batch_mints(rx).await
+    usecase::executor::spawn({
+        let cancellation_token = cancellation_token.child_token();
+        async move {
+            info!("Start batch_mint persister...");
+            batch_mint_persister.persist_batch_mints(cancellation_token).await
+        }
     });
 
     // clean indexes
@@ -624,47 +634,35 @@ pub async fn main() -> Result<(), IngesterError> {
         info!("Start cleaning index {:?}", asset_type);
 
         let primary_rocks_storage = primary_rocks_storage.clone();
-        let mut rx = shutdown_rx.resubscribe();
         let index_pg_storage = index_pg_storage.clone();
-        mutexed_tasks.lock().await.spawn(async move {
-            let index_pg_storage = index_pg_storage.clone();
-            tokio::select! {
-                _ = rx.recv() => {}
-                _ = async move {
-                    loop {
-                        match clean_syncronized_idxs(index_pg_storage.clone(), primary_rocks_storage.clone(), asset_type).await {
-                            Ok(_) => {
-                                info!("Cleaned synchronized indexes for {:?}", asset_type);
+        usecase::executor::spawn({
+            let cancellation_token = cancellation_token.child_token();
+            async move {
+                let index_pg_storage = index_pg_storage.clone();
+                tokio::select! {
+                    _ = cancellation_token.cancelled() => {}
+                    _ = async move {
+                        loop {
+                            match clean_syncronized_idxs(index_pg_storage.clone(), primary_rocks_storage.clone(), asset_type).await {
+                                Ok(_) => {
+                                    info!("Cleaned synchronized indexes for {:?}", asset_type);
+                                }
+                                Err(e) => {
+                                    error!("Failed to clean synchronized indexes for {:?} with error {}", asset_type, e);
+                                }
                             }
-                            Err(e) => {
-                                error!("Failed to clean synchronized indexes for {:?} with error {}", asset_type, e);
-                            }
+                            tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_IDXS_CLEANUP)).await;
                         }
-                        tokio::time::sleep(Duration::from_secs(SECONDS_TO_RETRY_IDXS_CLEANUP)).await;
-                    }
-                } => {}
+                    } => {}
+                }
             }
-
-            Ok(())
         });
     }
 
     start_metrics(metrics_state.registry, args.metrics_port).await;
-
-    // --stop
-    #[cfg(not(feature = "profiling"))]
-    graceful_stop(mutexed_tasks, shutdown_tx, Some(shutdown_token)).await;
-
-    #[cfg(feature = "profiling")]
-    graceful_stop(
-        mutexed_tasks,
-        shutdown_tx,
-        Some(shutdown_token),
-        guard,
-        args.profiling_file_path_container,
-        &args.heap_path,
-    )
-    .await;
+    if stop_handle.await.is_err() {
+        error!("Error joining graceful shutdown!");
+    }
 
     Ok(())
 }

@@ -123,7 +123,7 @@ where
     }
 }
 pub async fn run_backfill_slots<C>(
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
     db: Arc<Storage>,
     slot_db: Arc<SlotStorage>,
     consumer: Arc<C>,
@@ -132,13 +132,13 @@ pub async fn run_backfill_slots<C>(
     C: BlockConsumer,
 {
     loop {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received, stopping run_backfill_slots");
             break;
         }
         let sleep = tokio::time::sleep(Duration::from_millis(400));
         if let Err(e) = backfill_slots(
-            &shutdown_token,
+            cancellation_token.child_token(),
             db.clone(),
             slot_db.clone(),
             consumer.clone(),
@@ -150,7 +150,7 @@ pub async fn run_backfill_slots<C>(
         }
         tokio::select! {
             _ = sleep => {}
-            _ = shutdown_token.cancelled() => {
+            _ = cancellation_token.cancelled() => {
                 info!("Shutdown signal received, stopping run_backfill_slots");
                 break;
             }
@@ -159,7 +159,7 @@ pub async fn run_backfill_slots<C>(
 }
 
 pub async fn backfill_slots<C>(
-    shutdown_token: &CancellationToken,
+    cancellation_token: CancellationToken,
     db: Arc<Storage>,
     slot_db: Arc<SlotStorage>,
     consumer: Arc<C>,
@@ -182,7 +182,7 @@ where
         it.seek_to_first();
     }
     while it.valid() {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received, stopping backfill_slots");
             break;
         }

@@ -294,13 +294,8 @@ async fn main() {
     // Open target RocksDB
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let target_db = Arc::new(
-        Storage::open(
-            &args.target_db_path,
-            Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
-            red_metrics.clone(),
-            MigrationState::Last,
-        )
-        .expect("Failed to open target RocksDB"),
+        Storage::open(&args.target_db_path, red_metrics.clone(), MigrationState::Last)
+            .expect("Failed to open target RocksDB"),
     );
 
     // Initialize metrics
