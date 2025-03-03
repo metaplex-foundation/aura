@@ -8,7 +8,7 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use tokio_stream::StreamExt;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_empty_db() {
         let storage = RocksTestEnvironment::new(&[]).storage;
 
@@ -22,7 +22,7 @@ mod tests {
         assert!(stream.next().await.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_data_only_before_target() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
@@ -38,7 +38,7 @@ mod tests {
         assert!(stream.next().await.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_data_only_after_target() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
@@ -54,7 +54,7 @@ mod tests {
         assert!(stream.next().await.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_data_missing_data() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
@@ -76,7 +76,7 @@ mod tests {
         assert!(stream.next().await.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_data() {
         let cnt = 1000;
         let env = RocksTestEnvironment::new(&[]);
@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(pk_set, pks.pubkeys.into_iter().collect::<HashSet<_>>());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_raw_blocks_stream_in_range_data() {
         let env = RocksTestEnvironment::new(&[]);
         let slot_storage = &env.slot_storage;

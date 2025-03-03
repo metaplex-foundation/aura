@@ -346,7 +346,7 @@ mod tests {
         });
 
         let (addr, server) = warp::serve(route).bind_ephemeral(([127, 0, 0, 1], 0));
-        let _server_handle = tokio::spawn(server);
+        let _server_handle = usecase::executor::spawn(server);
 
         let client =
             RpcClient::new_sender(TooManyRequestsRpcSender(addr.to_string()), Default::default());
@@ -373,7 +373,7 @@ mod tests {
         });
 
         let (addr, server) = warp::serve(route).bind_ephemeral(([127, 0, 0, 1], 0));
-        let _server_handle = tokio::spawn(server);
+        let _server_handle = usecase::executor::spawn(server);
 
         let client =
             RpcClient::new_sender(TooManyRequestsRpcSender(addr.to_string()), Default::default());

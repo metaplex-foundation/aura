@@ -3,7 +3,7 @@ use std::sync::Arc;
 use criterion::{criterion_group, criterion_main, Criterion};
 use entities::api_req_params::SearchAssets;
 use metrics_utils::ApiMetricsConfig;
-use nft_ingester::{api::middleware::JsonDownloaderMiddleware, index_syncronizer::Synchronizer};
+use nft_ingester::{api::middleware::JsonDownloaderMiddleware, index_synchronizer::Synchronizer};
 use rocks_db::storage_traits::AssetIndexReader;
 use setup::TestEnvironment;
 use testcontainers::clients::Cli;

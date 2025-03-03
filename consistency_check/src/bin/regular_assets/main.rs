@@ -20,11 +20,10 @@ use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
 use tokio::{
     sync::{mpsc::Receiver, Mutex, Semaphore},
-    task::{JoinError, JoinSet},
+    task::JoinError,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use usecase::graceful_stop::graceful_stop;
 
 mod snapshot_reader;
 
@@ -78,20 +77,13 @@ pub async fn main() {
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
+    let cancellation_token = CancellationToken::new();
     info!("Opening DB...");
     let db_client = Arc::new(
-        Storage::open_secondary(
-            config.db_path,
-            temp_path,
-            Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
-            red_metrics,
-            MigrationState::Last,
-        )
-        .unwrap(),
+        Storage::open_secondary(config.db_path, temp_path, red_metrics, MigrationState::Last)
+            .unwrap(),
     );
     info!("DB opened");
-
-    let shutdown_token = CancellationToken::new();
 
     let spinner_style =
         ProgressStyle::with_template("{prefix:>10.bold.dim} {spinner} total={human_pos} {msg}")
@@ -114,12 +106,10 @@ pub async fn main() {
     let (fungibles_channel_tx, fungibles_channel_rx) =
         tokio::sync::mpsc::channel::<Pubkey>(CHANNEL_SIZE);
 
-    let mut tasks = JoinSet::new();
-
-    tasks.spawn(process_nfts(
+    usecase::executor::spawn(process_nfts(
         config.inner_workers,
         db_client.clone(),
-        shutdown_token.clone(),
+        cancellation_token.child_token(),
         nfts_channel_rx,
         missed_asset_data.clone(),
         missed_mint_info.clone(),
@@ -131,10 +121,10 @@ pub async fn main() {
         counter_missed_token.clone(),
     ));
 
-    tasks.spawn(process_fungibles(
+    usecase::executor::spawn(process_fungibles(
         config.inner_workers,
         db_client.clone(),
-        shutdown_token.clone(),
+        cancellation_token.child_token(),
         fungibles_channel_rx,
         missed_token_acc.clone(),
         assets_processed.clone(),
@@ -151,15 +141,18 @@ pub async fn main() {
     info!("Snapshot file opened");
 
     let assets_processed_clone = assets_processed.clone();
-    let shutdown_token_clone = shutdown_token.clone();
     let rate_clone = rate.clone();
-    tokio::spawn(update_rate(shutdown_token_clone, assets_processed_clone, rate_clone));
+    usecase::executor::spawn(update_rate(
+        cancellation_token.child_token(),
+        assets_processed_clone,
+        rate_clone,
+    ));
 
     'outer: for append_vec in snapshot_loader.iter() {
         match append_vec {
             Ok(v) => {
                 for account in append_vec_iter(Rc::new(v)) {
-                    if shutdown_token.is_cancelled() {
+                    if cancellation_token.is_cancelled() {
                         break 'outer;
                     }
 
@@ -199,7 +192,7 @@ pub async fn main() {
     drop(nfts_channel_tx);
     drop(fungibles_channel_tx);
 
-    graceful_stop(&mut tasks).await;
+    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
 
     if let Err(e) = write_data_to_file(config.missed_asset_file, &missed_asset_data).await {
         error!("Could not save keys with missed asset data: {}", e);
@@ -218,7 +211,7 @@ pub async fn main() {
 async fn process_nfts(
     inner_workers: usize,
     rocks_db: Arc<Storage>,
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
     mut nfts_channel_rx: Receiver<(AccountType, Pubkey)>,
     missed_asset_data: Arc<Mutex<HashSet<String>>>,
     missed_mint_info: Arc<Mutex<HashSet<String>>>,
@@ -233,7 +226,7 @@ async fn process_nfts(
     let semaphore = Arc::new(Semaphore::new(inner_workers));
 
     loop {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             break;
         }
 
@@ -252,7 +245,7 @@ async fn process_nfts(
                 let counter_missed_mint_cloned = counter_missed_mint.clone();
                 let counter_missed_token_cloned = counter_missed_token.clone();
 
-                tokio::spawn(async move {
+                usecase::executor::spawn(async move {
                     match rocks_db_cloned.asset_data.has_key(key).await {
                         Ok(exist) => {
                             if !exist {
@@ -327,7 +320,7 @@ async fn process_nfts(
 async fn process_fungibles(
     inner_workers: usize,
     rocks_db: Arc<Storage>,
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
     mut fungibles_channel_rx: Receiver<Pubkey>,
     missed_token_acc: Arc<Mutex<HashSet<String>>>,
     assets_processed: Arc<AtomicU64>,
@@ -341,7 +334,7 @@ async fn process_fungibles(
     let semaphore = Arc::new(Semaphore::new(inner_workers));
 
     loop {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             break;
         }
 
@@ -359,7 +352,7 @@ async fn process_fungibles(
                 let counter_missed_mint_cloned = counter_missed_mint.clone();
                 let counter_missed_token_cloned = counter_missed_token.clone();
 
-                tokio::spawn(async move {
+                usecase::executor::spawn(async move {
                     match rocks_db_cloned.token_accounts.has_key(key).await {
                         Ok(exist) => {
                             if !exist {

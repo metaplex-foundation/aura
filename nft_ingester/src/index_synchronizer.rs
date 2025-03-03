@@ -10,6 +10,7 @@ use rocks_db::{
 };
 use solana_sdk::pubkey::Pubkey;
 use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use crate::error::IngesterError;
@@ -68,38 +69,36 @@ where
 
     pub async fn nft_run(
         &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         run_full_sync_threshold: i64,
-        timeout_duration: tokio::time::Duration,
     ) {
-        while rx.is_empty() {
-            if let Err(e) = self.synchronize_nft_asset_indexes(rx, run_full_sync_threshold).await {
+        while !cancellation_token.is_cancelled() {
+            let cancellation_token = cancellation_token.child_token();
+            if let Err(e) = self
+                .synchronize_nft_asset_indexes(cancellation_token, run_full_sync_threshold)
+                .await
+            {
                 tracing::error!("Non fungible synchronization failed: {:?}", e);
             } else {
                 tracing::info!("Non fungible synchronization finished successfully");
-            }
-            if rx.is_empty() {
-                tokio::time::sleep(timeout_duration).await;
             }
         }
     }
 
     pub async fn fungible_run(
         &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         run_full_sync_threshold: i64,
-        timeout_duration: tokio::time::Duration,
     ) {
-        while rx.is_empty() {
-            if let Err(e) =
-                self.synchronize_fungible_asset_indexes(rx, run_full_sync_threshold).await
+        while !cancellation_token.is_cancelled() {
+            let cancellation_token = cancellation_token.child_token();
+            if let Err(e) = self
+                .synchronize_fungible_asset_indexes(cancellation_token, run_full_sync_threshold)
+                .await
             {
                 tracing::error!("Fungible synchronization failed: {:?}", e);
             } else {
                 tracing::info!("Fungible synchronization finished successfully");
-            }
-            if rx.is_empty() {
-                tokio::time::sleep(timeout_duration).await;
             }
         }
     }
@@ -172,22 +171,24 @@ where
     pub async fn synchronize_asset_indexes(
         &self,
         asset_type: AssetType,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
         match asset_type {
             AssetType::NonFungible => {
-                self.synchronize_nft_asset_indexes(rx, run_full_sync_threshold).await
+                self.synchronize_nft_asset_indexes(cancellation_token, run_full_sync_threshold)
+                    .await
             },
             AssetType::Fungible => {
-                self.synchronize_fungible_asset_indexes(rx, run_full_sync_threshold).await
+                self.synchronize_fungible_asset_indexes(cancellation_token, run_full_sync_threshold)
+                    .await
             },
         }
     }
 
     pub async fn synchronize_nft_asset_indexes(
         &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
         let asset_type = AssetType::NonFungible;
@@ -196,11 +197,21 @@ where
         match state {
             SyncStatus::FullSyncRequired(state) => {
                 tracing::warn!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
-                self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key).await
+                self.regular_nft_syncronize(
+                    cancellation_token,
+                    state.last_indexed_key,
+                    state.last_known_key,
+                )
+                .await
             },
             SyncStatus::RegularSyncRequired(state) => {
                 tracing::debug!("Regular sync required for nft asset");
-                self.regular_nft_syncronize(rx, state.last_indexed_key, state.last_known_key).await
+                self.regular_nft_syncronize(
+                    cancellation_token,
+                    state.last_indexed_key,
+                    state.last_known_key,
+                )
+                .await
             },
             SyncStatus::NoSyncRequired => {
                 tracing::debug!("No sync required for nft asset");
@@ -211,7 +222,7 @@ where
 
     pub async fn synchronize_fungible_asset_indexes(
         &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         run_full_sync_threshold: i64,
     ) -> Result<(), IngesterError> {
         let asset_type = AssetType::Fungible;
@@ -221,13 +232,21 @@ where
         match state {
             SyncStatus::FullSyncRequired(state) => {
                 tracing::warn!("Should run dump synchronizer as the difference between last indexed and last known sequence is greater than the threshold. Last indexed: {:?}, Last known: {}", state.last_indexed_key.clone().map(|k|k.seq), state.last_known_key.seq);
-                self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await
+                self.regular_fungible_syncronize(
+                    cancellation_token,
+                    state.last_indexed_key,
+                    state.last_known_key,
+                )
+                .await
             },
             SyncStatus::RegularSyncRequired(state) => {
                 tracing::debug!("Regular sync required for fungible asset");
-                self.regular_fungible_syncronize(rx, state.last_indexed_key, state.last_known_key)
-                    .await
+                self.regular_fungible_syncronize(
+                    cancellation_token,
+                    state.last_indexed_key,
+                    state.last_known_key,
+                )
+                .await
             },
             SyncStatus::NoSyncRequired => {
                 tracing::debug!("No sync required for fungible asset");
@@ -238,7 +257,7 @@ where
 
     pub async fn full_syncronize(
         &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         asset_type: AssetType,
     ) -> Result<(), IngesterError> {
         let last_known_key = match asset_type {
@@ -254,23 +273,28 @@ where
         };
         let last_included_rocks_key =
             encode_u64x2_pubkey(last_known_key.seq, last_known_key.slot, last_known_key.pubkey);
-        self.dump_sync(last_included_rocks_key.as_slice(), rx, asset_type).await
+        self.dump_sync(last_included_rocks_key.as_slice(), cancellation_token, asset_type).await
     }
 
     async fn dump_sync(
         &self,
         last_included_rocks_key: &[u8],
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         asset_type: AssetType,
     ) -> Result<(), IngesterError> {
         tracing::info!("Dumping {:?} from the primary storage to {}", asset_type, self.dump_path);
 
         match asset_type {
             AssetType::NonFungible => {
-                self.dump_sync_nft(rx, last_included_rocks_key, NFT_SHARDS).await?;
+                self.dump_sync_nft(cancellation_token, last_included_rocks_key, NFT_SHARDS).await?;
             },
             AssetType::Fungible => {
-                self.dump_sync_fungibles(rx, last_included_rocks_key, FUNGIBLE_SHARDS).await?;
+                self.dump_sync_fungibles(
+                    cancellation_token,
+                    last_included_rocks_key,
+                    FUNGIBLE_SHARDS,
+                )
+                .await?;
             },
         }
 
@@ -280,7 +304,7 @@ where
 
     async fn dump_sync_nft(
         &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         last_included_rocks_key: &[u8],
         num_shards: u64,
     ) -> Result<(), IngesterError> {
@@ -335,9 +359,9 @@ where
 
             let start = *start;
             let end = *end;
-            let shutdown_rx = rx.resubscribe();
             let metrics = self.metrics.clone();
             let rocks_storage = self.rocks_primary_storage.clone();
+            let cancellation_token = cancellation_token.child_token();
             tasks.spawn_blocking(move || {
                 let res = rocks_storage.dump_nft_csv(
                     assets_file,
@@ -348,7 +372,7 @@ where
                     None,
                     Some(start),
                     Some(end),
-                    &shutdown_rx,
+                    cancellation_token,
                     metrics,
                 )?;
                 Ok((
@@ -393,7 +417,7 @@ where
 
     async fn dump_sync_fungibles(
         &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         last_included_rocks_key: &[u8],
         num_shards: u64,
     ) -> Result<(), IngesterError> {
@@ -422,9 +446,9 @@ where
 
             let start = *start;
             let end = *end;
-            let shutdown_rx = rx.resubscribe();
             let metrics = self.metrics.clone();
             let rocks_storage = self.rocks_primary_storage.clone();
+            let cancellation_token = cancellation_token.child_token();
 
             tasks.spawn_blocking(move || {
                 let res = rocks_storage.dump_fungible_csv(
@@ -432,7 +456,7 @@ where
                     BUF_CAPACITY,
                     Some(start),
                     Some(end),
-                    &shutdown_rx,
+                    cancellation_token.child_token(),
                     metrics,
                 )?;
                 Ok((res, fungible_tokens_path))
@@ -464,19 +488,19 @@ where
 
     async fn regular_fungible_syncronize(
         &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         last_indexed_key: Option<AssetUpdatedKey>,
         last_key: AssetUpdatedKey,
     ) -> Result<(), IngesterError> {
         let mut starting_key = last_indexed_key;
         let mut processed_keys = HashSet::<Pubkey>::new();
         // Loop until no more new keys are returned
-        while rx.is_empty() {
+        while !cancellation_token.is_cancelled() {
             let mut tasks = JoinSet::new();
             let mut last_included_rocks_key = None;
             let mut end_reached = false;
             for _ in 0..self.parallel_tasks {
-                if !rx.is_empty() {
+                if cancellation_token.is_cancelled() {
                     break;
                 }
                 let (updated_keys, last_included_key) =
@@ -553,19 +577,19 @@ where
 
     async fn regular_nft_syncronize(
         &self,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         last_indexed_key: Option<AssetUpdatedKey>,
         last_key: AssetUpdatedKey,
     ) -> Result<(), IngesterError> {
         let mut starting_key = last_indexed_key;
         let mut processed_keys = HashSet::<Pubkey>::new();
         // Loop until no more new keys are returned
-        while rx.is_empty() {
+        while !cancellation_token.is_cancelled() {
             let mut tasks = JoinSet::new();
             let mut last_included_rocks_key = None;
             let mut end_reached = false;
             for _ in 0..self.parallel_tasks {
-                if !rx.is_empty() {
+                if cancellation_token.is_cancelled() {
                     break;
                 }
                 let (updated_keys, last_included_key) =
@@ -772,7 +796,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_synchronizer_over_2_empty_storages() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
@@ -795,29 +819,33 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
             1,
         );
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
 
         for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
-            let rx = rx.resubscribe();
 
             match asset_type {
                 AssetType::Fungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
                 AssetType::NonFungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
             }
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_synchronizer_with_records_in_primary_storage() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
@@ -874,28 +902,32 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
             1,
         );
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
         for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
-            let rx = rx.resubscribe();
 
             match asset_type {
                 AssetType::Fungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
                 AssetType::NonFungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
             }
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_synchronizer_with_small_batch_size() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
@@ -964,28 +996,32 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
             1,
         ); // Small batch size
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
         for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
-            let rx = rx.resubscribe();
 
             match asset_type {
                 AssetType::Fungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
                 AssetType::NonFungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
             }
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_synchronizer_with_existing_index_data() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
@@ -1097,28 +1133,32 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
             1,
         );
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
         for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
-            let rx = rx.resubscribe();
 
             match asset_type {
                 AssetType::Fungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
                 AssetType::NonFungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
             }
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_synchronizer_with_synced_databases() {
         let mut primary_storage = MockPrimaryStorage::new();
         let mut index_storage = MockAssetIndexStorageMock::new();
@@ -1156,21 +1196,25 @@ mod tests {
             metrics_state.synchronizer_metrics.clone(),
             1,
         );
-        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
         let synchronizer = Arc::new(synchronizer);
         for asset_type in ASSET_TYPES {
             let synchronizer = synchronizer.clone();
-            let rx = rx.resubscribe();
 
             match asset_type {
                 AssetType::Fungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
                 AssetType::NonFungible => {
-                    tokio::spawn(async move {
-                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap();
+                    usecase::executor::spawn(async move {
+                        synchronizer
+                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
+                            .await
+                            .unwrap();
                     });
                 },
             }

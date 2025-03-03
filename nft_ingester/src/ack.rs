@@ -1,29 +1,24 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use plerkle_messenger::{redis_messenger::RedisMessenger, Messenger, MessengerConfig};
 use tokio::{
-    sync::{
-        broadcast::Receiver,
-        mpsc::{unbounded_channel, UnboundedSender},
-        Mutex,
-    },
-    task::{JoinError, JoinSet},
+    sync::mpsc::{unbounded_channel, UnboundedSender},
     time::{interval, Duration},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::log::error;
 
 pub async fn create_ack_channel(
-    shutdown_rx: Receiver<()>,
     config: MessengerConfig,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    cancellation_token: CancellationToken,
 ) -> UnboundedSender<(&'static str, String)> {
     let (tx, mut rx) = unbounded_channel::<(&'static str, String)>();
-    tasks.lock().await.spawn(async move {
+    usecase::executor::spawn(async move {
         let mut interval = interval(Duration::from_millis(100));
         let mut acks: HashMap<&str, Vec<String>> = HashMap::new();
         let source = RedisMessenger::new(config).await;
         if let Ok(mut msg) = source {
-            while shutdown_rx.is_empty() {
+            while !cancellation_token.is_cancelled() {
                 tokio::select! {
                     _ = interval.tick() => {
                         if acks.is_empty() {
@@ -45,7 +40,6 @@ pub async fn create_ack_channel(
                 }
             }
         }
-        Ok(())
     });
 
     tx

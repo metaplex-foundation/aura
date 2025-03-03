@@ -11,7 +11,7 @@ use rocks_db::{
     column::TypedColumn, columns::offchain_data::OffChainData, migrator::MigrationState, Storage,
 };
 use tempfile::TempDir;
-use tokio::{sync::Mutex, task::JoinSet};
+use tokio::task::JoinSet;
 
 const BATCH_SIZE: usize = 10_000;
 
@@ -65,18 +65,12 @@ async fn copy_column_families(
     let source_db = Storage::open_secondary(
         source_path,
         secondary_source_path,
-        Arc::new(Mutex::new(JoinSet::new())),
         red_metrics.clone(),
         MigrationState::Last,
     )
     .map_err(|e| e.to_string())?;
-    let destination_db = Storage::open(
-        destination_path,
-        Arc::new(Mutex::new(JoinSet::new())),
-        red_metrics.clone(),
-        MigrationState::Last,
-    )
-    .map_err(|e| e.to_string())?;
+    let destination_db = Storage::open(destination_path, red_metrics.clone(), MigrationState::Last)
+        .map_err(|e| e.to_string())?;
     let mut set = JoinSet::new();
 
     // Create a MultiProgress to manage multiple progress bars

@@ -62,16 +62,18 @@ async fn main() {
         Storage::open_readonly_with_cfs_only_db(&args.source_db_path, SlotStorage::cf_names())
             .expect("Failed to open source RocksDB");
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
+    let cancellation_token = CancellationToken::new();
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+        }
+    });
 
     // Open target RocksDB
     let target_db = Arc::new(
-        Storage::open(
-            &args.target_db_path,
-            Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
-            red_metrics.clone(),
-            MigrationState::Last,
-        )
-        .expect("Failed to open target RocksDB"),
+        Storage::open(&args.target_db_path, red_metrics.clone(), MigrationState::Last)
+            .expect("Failed to open target RocksDB"),
     );
 
     // Initialize the DirectBlockParser
@@ -93,23 +95,22 @@ async fn main() {
     let slots_processed = Arc::new(AtomicU64::new(0));
     let rate = Arc::new(Mutex::new(0.0));
 
-    // Spawn a task to handle graceful shutdown on Ctrl+C
-    let shutdown_token = CancellationToken::new();
-    let shutdown_token_clone = shutdown_token.clone();
-
-    let slot_sender_clone = slot_sender.clone();
-    tokio::spawn(async move {
-        // Wait for Ctrl+C signal
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => {
-                info!("Received Ctrl+C, shutting down gracefully...");
-                shutdown_token_clone.cancel();
-                // Close the channel to signal workers to stop
-                slot_sender_clone.close();
-            },
-            Err(err) => {
-                error!("Unable to listen for shutdown signal: {}", err);
-            },
+    usecase::executor::spawn({
+        let cancellation_token = cancellation_token.clone();
+        let slot_sender = slot_sender.clone();
+        async move {
+            // Wait for Ctrl+C signal
+            match tokio::signal::ctrl_c().await {
+                Ok(()) => {
+                    info!("Received Ctrl+C, shutting down gracefully...");
+                    cancellation_token.cancel();
+                    // Close the channel to signal workers to stop
+                    slot_sender.close();
+                },
+                Err(err) => {
+                    error!("Unable to listen for shutdown signal: {}", err);
+                },
+            }
         }
     });
 
@@ -197,82 +198,85 @@ async fn main() {
         let progress_bar = progress_bar.clone();
         let slots_processed = slots_processed.clone();
         let rate = rate.clone();
-        let shutdown_token = shutdown_token.clone();
 
         let slot_receiver = slot_receiver.clone();
 
-        let handle = tokio::spawn(async move {
-            while let Ok((slot, raw_block_data)) = slot_receiver.recv().await {
-                if shutdown_token.is_cancelled() {
-                    break;
+        let handle = tokio::task::spawn({
+            let cancellation_token = cancellation_token.child_token();
+            async move {
+                while let Ok((slot, raw_block_data)) = slot_receiver.recv().await {
+                    if cancellation_token.is_cancelled() {
+                        break;
+                    }
+
+                    // Process the slot
+                    let raw_block: RawBlock = match RawBlock::decode(&raw_block_data) {
+                        Ok(rb) => rb,
+                        Err(e) => {
+                            error!("Failed to decode the value for slot {}: {}", slot, e);
+                            continue;
+                        },
+                    };
+
+                    if let Err(e) = consumer.consume_block(slot, raw_block.block).await {
+                        error!("Error processing slot {}: {}", slot, e);
+                    }
+
+                    // Increment slots_processed
+                    let current_slots_processed =
+                        slots_processed.fetch_add(1, Ordering::Relaxed) + 1;
+
+                    // Update progress bar position and message
+                    progress_bar.inc(1);
+
+                    let current_rate = {
+                        let rate_guard = rate.lock().unwrap();
+                        *rate_guard
+                    };
+                    progress_bar.set_message(format!(
+                        "Slots Processed: {} Current Slot: {} Rate: {:.2}/s",
+                        current_slots_processed, slot, current_rate
+                    ));
                 }
-
-                // Process the slot
-                let raw_block: RawBlock = match RawBlock::decode(&raw_block_data) {
-                    Ok(rb) => rb,
-                    Err(e) => {
-                        error!("Failed to decode the value for slot {}: {}", slot, e);
-                        continue;
-                    },
-                };
-
-                if let Err(e) = consumer.consume_block(slot, raw_block.block).await {
-                    error!("Error processing slot {}: {}", slot, e);
-                }
-
-                // Increment slots_processed
-                let current_slots_processed = slots_processed.fetch_add(1, Ordering::Relaxed) + 1;
-
-                // Update progress bar position and message
-                progress_bar.inc(1);
-
-                let current_rate = {
-                    let rate_guard = rate.lock().unwrap();
-                    *rate_guard
-                };
-                progress_bar.set_message(format!(
-                    "Slots Processed: {} Current Slot: {} Rate: {:.2}/s",
-                    current_slots_processed, slot, current_rate
-                ));
             }
         });
 
         worker_handles.push(handle);
     }
 
-    // Spawn a task to update the rate periodically
-    let slots_processed_clone = slots_processed.clone();
-    let rate_clone = rate.clone();
-    let shutdown_token_clone = shutdown_token.clone();
+    usecase::executor::spawn({
+        let cancellation_token = cancellation_token.clone();
+        let slots_processed = slots_processed.clone();
+        let rate = rate.clone();
+        async move {
+            let mut last_time = std::time::Instant::now();
+            let mut last_count = slots_processed.load(Ordering::Relaxed);
 
-    tokio::spawn(async move {
-        let mut last_time = std::time::Instant::now();
-        let mut last_count = slots_processed_clone.load(Ordering::Relaxed);
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
 
-            if shutdown_token_clone.is_cancelled() {
-                break;
+                let current_time = std::time::Instant::now();
+                let current_count = slots_processed.load(Ordering::Relaxed);
+
+                let elapsed = current_time.duration_since(last_time).as_secs_f64();
+                let count = current_count - last_count;
+
+                let current_rate = if elapsed > 0.0 { (count as f64) / elapsed } else { 0.0 };
+
+                // Update rate
+                {
+                    let mut rate_guard = rate.lock().unwrap();
+                    *rate_guard = current_rate;
+                }
+
+                // Update for next iteration
+                last_time = current_time;
+                last_count = current_count;
             }
-
-            let current_time = std::time::Instant::now();
-            let current_count = slots_processed_clone.load(Ordering::Relaxed);
-
-            let elapsed = current_time.duration_since(last_time).as_secs_f64();
-            let count = current_count - last_count;
-
-            let current_rate = if elapsed > 0.0 { (count as f64) / elapsed } else { 0.0 };
-
-            // Update rate
-            {
-                let mut rate_guard = rate_clone.lock().unwrap();
-                *rate_guard = current_rate;
-            }
-
-            // Update for next iteration
-            last_time = current_time;
-            last_count = current_count;
         }
     });
 
@@ -283,7 +287,7 @@ async fn main() {
             slots_to_process,
             source_db,
             slot_sender.clone(),
-            shutdown_token.clone(),
+            cancellation_token.child_token(),
         )
         .await;
     } else {
@@ -291,7 +295,7 @@ async fn main() {
         send_all_slots_to_workers(
             source_db,
             slot_sender.clone(),
-            shutdown_token.clone(),
+            cancellation_token.child_token(),
             args.first_slot,
             args.last_slot,
         )
@@ -306,6 +310,9 @@ async fn main() {
         let _ = handle.await;
     }
 
+    if stop_handle.await.is_err() {
+        error!("Error joining graceful shutdown!");
+    }
     progress_bar.finish_with_message("Processing complete");
 }
 
@@ -314,12 +321,12 @@ async fn send_slots_to_workers(
     slots_to_process: Vec<u64>,
     source_db: rocksdb::DB,
     slot_sender: async_channel::Sender<(u64, Vec<u8>)>,
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
 ) {
     let cf_handle = source_db.cf_handle(RawBlock::NAME).unwrap();
 
     for slot in slots_to_process {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received. Stopping the submission of new slots.");
             break;
         }
@@ -347,7 +354,7 @@ async fn send_slots_to_workers(
 async fn send_all_slots_to_workers(
     source_db: rocksdb::DB,
     slot_sender: async_channel::Sender<(u64, Vec<u8>)>,
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
     first_slot: Option<u64>,
     last_slot: Option<u64>,
 ) {
@@ -367,7 +374,7 @@ async fn send_all_slots_to_workers(
 
     // Send slots to the channel
     while iter.valid() {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received. Stopping the submission of new slots.");
             break;
         }

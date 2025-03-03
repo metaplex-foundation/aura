@@ -54,7 +54,6 @@ use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use inflector::Inflector;
 use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{ColumnFamilyDescriptor, Options, DB};
-use tokio::{sync::Mutex, task::JoinSet};
 
 use crate::{
     errors::StorageError,
@@ -76,42 +75,32 @@ const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 pub struct SlotStorage {
     pub db: Arc<DB>,
     pub raw_blocks: Column<RawBlock>,
-    join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl SlotStorage {
-    pub fn new(
-        db: Arc<DB>,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Self {
+    pub fn new(db: Arc<DB>, red_metrics: Arc<RequestErrorDurationMetrics>) -> Self {
         let raw_blocks = Storage::column(db.clone(), red_metrics.clone());
-        Self { db, raw_blocks, red_metrics, join_set }
+        Self { db, raw_blocks, red_metrics }
     }
 
     pub fn cf_names() -> Vec<&'static str> {
         vec![RawBlock::NAME, MigrationVersions::NAME, OffChainDataDeprecated::NAME]
     }
 
-    pub fn open<P>(
-        db_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Result<Self>
+    pub fn open<P>(db_path: P, red_metrics: Arc<RequestErrorDurationMetrics>) -> Result<Self>
     where
         P: AsRef<Path>,
     {
         let cf_descriptors = Storage::cfs_to_column_families(Self::cf_names());
         let db =
             Arc::new(DB::open_cf_descriptors(&Storage::get_db_options(), db_path, cf_descriptors)?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 
     pub fn open_secondary<P>(
         primary_path: P,
         secondary_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self>
     where
@@ -124,11 +113,10 @@ impl SlotStorage {
             secondary_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
     pub fn open_readonly<P>(
         db_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self>
     where
@@ -136,7 +124,7 @@ impl SlotStorage {
     {
         let db = Arc::new(Storage::open_readonly_with_cfs_only_db(db_path, Self::cf_names())?);
 
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 }
 
@@ -189,16 +177,11 @@ pub struct Storage {
     pub spl_mints: Column<SplMint>,
     assets_update_last_seq: AtomicU64,
     fungible_assets_update_last_seq: AtomicU64,
-    join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl Storage {
-    fn new(
-        db: Arc<DB>,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Self {
+    fn new(db: Arc<DB>, red_metrics: Arc<RequestErrorDurationMetrics>) -> Self {
         let asset_static_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data_deprecated = Self::column(db.clone(), red_metrics.clone());
@@ -271,7 +254,6 @@ impl Storage {
             slot_asset_idx,
             assets_update_last_seq: AtomicU64::new(0),
             fungible_assets_update_last_seq: AtomicU64::new(0),
-            join_set,
             tree_seq_idx,
             trees_gaps,
             token_metadata_edition_cbor,
@@ -298,7 +280,6 @@ impl Storage {
 
     pub fn open<P>(
         db_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         migration_state: MigrationState,
     ) -> Result<Self>
@@ -308,13 +289,12 @@ impl Storage {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db =
             Arc::new(DB::open_cf_descriptors(&Self::get_db_options(), db_path, cf_descriptors)?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 
     pub fn open_secondary<P>(
         primary_path: P,
         secondary_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         migration_state: MigrationState,
     ) -> Result<Self>
@@ -328,13 +308,12 @@ impl Storage {
             secondary_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 
     pub fn open_cfs<P>(
         db_path: P,
         c_names: Vec<&str>,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self>
     where
@@ -343,20 +322,19 @@ impl Storage {
         let cf_descriptors = Self::cfs_to_column_families(c_names);
         let db =
             Arc::new(DB::open_cf_descriptors(&Self::get_db_options(), db_path, cf_descriptors)?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 
     pub fn open_readonly_with_cfs<P>(
         db_path: P,
         c_names: Vec<&str>,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self>
     where
         P: AsRef<Path>,
     {
         let db = Arc::new(Self::open_readonly_with_cfs_only_db(db_path, c_names)?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 
     pub fn cfs_to_column_families(cfs: Vec<&str>) -> Vec<ColumnFamilyDescriptor> {

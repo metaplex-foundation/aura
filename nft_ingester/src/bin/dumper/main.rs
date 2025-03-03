@@ -2,16 +2,15 @@ use std::{fs::File, path::PathBuf, sync::Arc};
 
 use clap::{command, Parser};
 use metrics_utils::SynchronizerMetricsConfig;
-use nft_ingester::{error::IngesterError, index_syncronizer::shard_pubkeys, init::graceful_stop};
+use nft_ingester::{error::IngesterError, index_synchronizer::shard_pubkeys};
 use rocks_db::{
     migrator::MigrationState,
     storage_traits::{AssetUpdateIndexStorage, Dumper},
     Storage,
 };
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-};
+use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
+use tracing::error;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -63,31 +62,26 @@ pub async fn main() -> Result<(), IngesterError> {
     let metrics = Arc::new(SynchronizerMetricsConfig::new());
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
 
-    let tasks = JoinSet::new();
-    let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
+    let cancellation_token = CancellationToken::new();
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            #[cfg(not(feature = "profiling"))]
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+            #[cfg(feature = "profiling")]
+            nft_ingester::init::graceful_stop(cancellation_token, None, None, "").await;
+        }
+    });
     let rocks_storage = Arc::new(
         Storage::open_secondary(
             &args.source_path,
             &secondary_storage_path,
-            mutexed_tasks.clone(),
             red_metrics.clone(),
             MigrationState::Last,
         )
         .unwrap(),
     );
 
-    let cloned_tasks = mutexed_tasks.clone();
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    mutexed_tasks.lock().await.spawn(async move {
-        // --stop
-        #[cfg(not(feature = "profiling"))]
-        graceful_stop(cloned_tasks, shutdown_tx, None).await;
-        #[cfg(feature = "profiling")]
-        graceful_stop(cloned_tasks, shutdown_tx, None, None, None, "").await;
-
-        Ok(())
-    });
     if let Err(e) = rocks_storage.db.try_catch_up_with_primary() {
         tracing::error!("Sync rocksdb error: {}", e);
     }
@@ -154,22 +148,24 @@ pub async fn main() -> Result<(), IngesterError> {
 
         let start = *start;
         let end = *end;
-        let shutdown_rx = shutdown_rx.resubscribe();
         let metrics = metrics.clone();
         let rocks_storage = rocks_storage.clone();
-        tasks.spawn_blocking(move || {
-            rocks_storage.dump_nft_csv(
-                assets_file,
-                creators_file,
-                authority_file,
-                metadata_file,
-                args.buffer_capacity,
-                args.limit,
-                Some(start),
-                Some(end),
-                &shutdown_rx,
-                metrics,
-            )
+        tasks.spawn_blocking({
+            let cancellation_token = cancellation_token.child_token();
+            move || {
+                rocks_storage.dump_nft_csv(
+                    assets_file,
+                    creators_file,
+                    authority_file,
+                    metadata_file,
+                    args.buffer_capacity,
+                    args.limit,
+                    Some(start),
+                    Some(end),
+                    cancellation_token,
+                    metrics,
+                )
+            }
         });
     }
 
@@ -190,18 +186,20 @@ pub async fn main() -> Result<(), IngesterError> {
 
         let start = *start;
         let end = *end;
-        let shutdown_rx = shutdown_rx.resubscribe();
         let metrics = metrics.clone();
         let rocks_storage = rocks_storage.clone();
-        fungible_tasks.spawn_blocking(move || {
-            rocks_storage.dump_fungible_csv(
-                (fungible_tokens_file, fungible_tokens_path),
-                args.buffer_capacity,
-                Some(start),
-                Some(end),
-                &shutdown_rx,
-                metrics,
-            )
+        fungible_tasks.spawn_blocking({
+            let cancellation_token = cancellation_token.child_token();
+            move || {
+                rocks_storage.dump_fungible_csv(
+                    (fungible_tokens_file, fungible_tokens_path),
+                    args.buffer_capacity,
+                    Some(start),
+                    Some(end),
+                    cancellation_token,
+                    metrics,
+                )
+            }
         });
     }
 
@@ -224,5 +222,8 @@ pub async fn main() -> Result<(), IngesterError> {
     tracing::info!("Dumping fungible tokens done");
     let keys_file = File::create(base_path.join("keys.csv")).expect("should create keys file");
     Storage::dump_last_keys(keys_file, last_known_key, last_known_fungible_key)?;
+    if stop_handle.await.is_err() {
+        error!("Error joining graceful shutdown!");
+    }
     Ok(())
 }

@@ -10,7 +10,7 @@ mod tests {
     use setup::rocks::RocksTestEnvironment;
     use solana_sdk::keccak::{self, HASH_BYTES};
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_replace_file_urls_with_preview_urls() {
         let rocks_env = RocksTestEnvironment::new(&[]);
@@ -124,7 +124,7 @@ mod tests {
 
     // This test demostrates that elements in the result of batch_get call
     // preserves same order as keys in argument
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_rocks_batch_get_order() {
         let rocks_env = RocksTestEnvironment::new(&[]);

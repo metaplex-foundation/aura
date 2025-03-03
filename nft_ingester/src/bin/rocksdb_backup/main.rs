@@ -9,7 +9,6 @@ use rocks_db::{
     migrator::MigrationState,
     Storage,
 };
-use tokio::{sync::Mutex, task::JoinSet};
 use tracing::{debug, info};
 
 #[tokio::main(flavor = "multi_thread")]
@@ -23,13 +22,9 @@ async fn main() -> Result<(), RocksDbBackupServiceError> {
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     red_metrics.register(&mut registry);
 
-    let tasks = JoinSet::new();
-    let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
     let storage = Storage::open_secondary(
         &args.rocks_db_path,
         &args.rocks_db_secondary_path,
-        mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
     )

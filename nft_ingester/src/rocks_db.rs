@@ -11,23 +11,19 @@ use std::{
 use rocks_db::{
     backup_service, errors::RocksDbBackupServiceError, storage_traits::AssetSlotStorage, Storage,
 };
-use tokio::{
-    sync::broadcast::{Receiver, Sender},
-    task::JoinError,
-    time::sleep as tokio_sleep,
-};
+use tokio::{task::JoinError, time::sleep as tokio_sleep};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::config::INGESTER_BACKUP_NAME;
 
 pub async fn receive_last_saved_slot(
-    cloned_rx: Receiver<()>,
-    cloned_tx: Sender<()>,
+    cancellation_token: CancellationToken,
     cloned_rocks_storage: Arc<Storage>,
     first_processed_slot_clone: Arc<AtomicU64>,
     last_saved_slot: u64,
 ) -> Result<(), JoinError> {
-    while cloned_rx.is_empty() {
+    while !cancellation_token.is_cancelled() {
         match cloned_rocks_storage.last_saved_slot() {
             Ok(Some(slot)) if slot != last_saved_slot => {
                 first_processed_slot_clone.store(slot, Ordering::Relaxed);
@@ -35,7 +31,7 @@ pub async fn receive_last_saved_slot(
             },
             Err(e) => {
                 error!("Error while getting last saved slot: {}", e);
-                cloned_tx.send(()).ok();
+                cancellation_token.cancel();
                 break;
             },
             _ => {},

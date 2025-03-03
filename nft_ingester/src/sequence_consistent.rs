@@ -7,7 +7,7 @@ use interface::{
     slot_getter::FinalizedSlotGetter,
 };
 use metrics_utils::{BackfillerMetricsConfig, SequenceConsistentGapfillMetricsConfig};
-use tokio::sync::broadcast::Receiver;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use usecase::slots_collector::{SlotsCollector, SlotsGetter};
 
@@ -22,7 +22,7 @@ pub async fn collect_sequences_gaps<R, S, F, BP, BC>(
     sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     bp: Arc<BP>,
     bc: Arc<BC>,
-    rx: Receiver<()>,
+    cancellation_token: CancellationToken,
 ) where
     R: SlotsGetter + Sync + Send + 'static,
     S: SequenceConsistentManager,
@@ -33,7 +33,7 @@ pub async fn collect_sequences_gaps<R, S, F, BP, BC>(
     let last_slot_to_look_for_gaps = finalized_slot_getter.get_finalized_slot_no_error().await;
     let mut prev_state = TreeState::default();
     for current_state in sequence_consistent_manager.tree_sequence_iter() {
-        if !rx.is_empty() {
+        if cancellation_token.is_cancelled() {
             info!("Stop iteration over tree iterator...");
             return;
         }
@@ -60,7 +60,12 @@ pub async fn collect_sequences_gaps<R, S, F, BP, BC>(
             // fill the gap now, the dumper is the inmemory one, so we could fetch the slots and ingest all of those
 
             collector
-                .collect_slots(&current_state.tree, current_state.slot, prev_state.slot, &rx)
+                .collect_slots(
+                    &current_state.tree,
+                    current_state.slot,
+                    prev_state.slot,
+                    cancellation_token.child_token(),
+                )
                 .await;
             let slots = in_memory_dumper.get_sorted_keys().await;
             for slot_num in slots {

@@ -14,10 +14,7 @@ use nft_ingester::{
     inmemory_slots_dumper::InMemorySlotsDumper,
 };
 use rocks_db::{column::TypedColumn, SlotStorage};
-use tokio::{
-    sync::{broadcast, Semaphore},
-    task::JoinSet,
-};
+use tokio::{sync::Semaphore, task::JoinSet};
 use tokio_retry::{strategy::ExponentialBackoff, RetryIf};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
@@ -151,14 +148,17 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     metrics_state.register_metrics();
 
     start_metrics(metrics_state.registry, Some(args.metrics_port)).await;
+    let cancellation_token = CancellationToken::new();
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+        }
+    });
     // Open target RocksDB
     let target_db = Arc::new(
-        SlotStorage::open(
-            &args.target_db_path,
-            Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
-            metrics_state.red_metrics.clone(),
-        )
-        .expect("Failed to open target RocksDB"),
+        SlotStorage::open(&args.target_db_path, metrics_state.red_metrics.clone())
+            .expect("Failed to open target RocksDB"),
     );
 
     let last_persisted_slot = get_last_persisted_slot(target_db.clone());
@@ -172,25 +172,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Starting from last persisted slot: {}", last_persisted_slot);
         last_persisted_slot
     };
-
-    let shutdown_token = CancellationToken::new();
-    let shutdown_token_clone = shutdown_token.clone();
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
-    // Spawn a task to handle graceful shutdown on Ctrl+C
-    tokio::spawn(async move {
-        // Wait for Ctrl+C signal
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => {
-                info!("Received Ctrl+C, shutting down gracefully...");
-                shutdown_token_clone.cancel();
-                shutdown_tx.send(()).unwrap();
-            },
-            Err(err) => {
-                error!("Unable to listen for shutdown signal: {}", err);
-            },
-        }
-    });
 
     let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host.clone()));
 
@@ -242,13 +223,19 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Total slots to process: {}", provided_slots.len());
 
         // Proceed to process the provided slots
-        process_slots(provided_slots, backfill_source, target_db, &args, shutdown_token.clone())
-            .await;
+        process_slots(
+            provided_slots,
+            backfill_source,
+            target_db,
+            &args,
+            cancellation_token.child_token(),
+        )
+        .await;
         return Ok(()); // Exit after processing provided slots
     }
     let mut start_slot = start_slot;
     loop {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received, exiting main loop...");
             break;
         }
@@ -265,7 +252,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &blockbuster::programs::bubblegum::ID,
                         last_slot_to_check,
                         start_slot,
-                        &shutdown_rx,
+                        cancellation_token.child_token(),
                     )
                     .await;
                 if let Some(slot) = top_collected_slot {
@@ -286,7 +273,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     tokio::select! {
                         _ = sleep => {},
-                        _ = shutdown_token.cancelled() => {
+                        _ = cancellation_token.cancelled() => {
                             info!("Received shutdown signal, stopping loop...");
                             break;
                         },
@@ -299,7 +286,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     backfill_source.clone(),
                     target_db.clone(),
                     &args,
-                    shutdown_token.clone(),
+                    cancellation_token.child_token(),
                 )
                 .await;
             },
@@ -311,11 +298,15 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let sleep = tokio::time::sleep(wait_period);
         tokio::select! {
             _ = sleep => {},
-            _ = shutdown_token.cancelled() => {
+            _ = cancellation_token.cancelled() => {
                 info!("Received shutdown signal, stopping loop...");
                 break;
             },
         };
+    }
+
+    if stop_handle.await.is_err() {
+        error!("Error joining graceful shutdown!");
     }
     info!("Slot persister has stopped.");
     Ok(())
@@ -326,11 +317,11 @@ async fn process_slots(
     backfill_source: Arc<BackfillSource>,
     target_db: Arc<SlotStorage>,
     args: &Args,
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
 ) {
     // Process slots in batches
     for batch in slots.chunks(args.chunk_size) {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received during batch processing, exiting...");
             break;
         }
@@ -344,7 +335,7 @@ async fn process_slots(
 
         // Retry loop for the batch
         loop {
-            if shutdown_token.is_cancelled() {
+            if cancellation_token.is_cancelled() {
                 info!("Shutdown signal received during batch processing, exiting...");
                 break;
             }
@@ -353,7 +344,7 @@ async fn process_slots(
 
             let backfill_source = backfill_source.clone();
             let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
-            let shutdown_token = shutdown_token.clone();
+            let shutdown_token = cancellation_token.clone();
 
             match &*backfill_source {
                 // ------------------------------------------------------------------

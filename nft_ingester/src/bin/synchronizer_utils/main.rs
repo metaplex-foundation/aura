@@ -13,7 +13,6 @@ use rocks_db::{
     Storage,
 };
 use solana_sdk::pubkey::Pubkey;
-use tokio::{sync::Mutex, task::JoinSet};
 use tracing::info;
 
 #[derive(Parser, Debug)]
@@ -48,14 +47,11 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let tx_storage_dir = tempfile::TempDir::new().unwrap();
 
-    let tasks = JoinSet::new();
-    let mutexed_tasks = Arc::new(Mutex::new(tasks));
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
 
     let storage = Storage::open_secondary(
         &args.db_path,
         &tx_storage_dir.path().to_path_buf(),
-        mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
     )

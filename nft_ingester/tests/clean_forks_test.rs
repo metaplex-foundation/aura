@@ -19,12 +19,12 @@ use rocks_db::{
 use setup::rocks::RocksTestEnvironment;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use spl_account_compression::{events::ChangeLogEventV1, state::PathNode};
-use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 #[tracing_test::traced_test]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_clean_forks() {
     use std::{
         collections::{HashMap, HashSet},
@@ -34,6 +34,7 @@ async fn test_clean_forks() {
     use entities::models::{RawBlockWithTransactions, UpdateVersion, Updated};
     use metrics_utils::{utils::start_metrics, MetricsTrait};
     use rocks_db::columns::{cl_items::ClItemKey, leaf_signatures::LeafSignature};
+    use tokio_util::sync::CancellationToken;
 
     let RocksTestEnvironment { storage, slot_storage, .. } = RocksTestEnvironment::new(&[]);
     let first_tree_key =
@@ -586,14 +587,12 @@ async fn test_clean_forks() {
     metrics_state.register_metrics();
     start_metrics(metrics_state.registry, Some(4444)).await;
 
-    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    let rx = shutdown_rx.resubscribe();
     let fork_cleaner = ForkCleaner::new(
         storage.clone(),
         slot_storage.clone(),
         metrics_state.fork_cleaner_metrics.clone(),
     );
-    fork_cleaner.clean_forks(rx.resubscribe()).await;
+    fork_cleaner.clean_forks(CancellationToken::new()).await;
 
     let forked_first_key_first_item =
         storage.cl_items.get(ClItemKey::new(103, first_tree_key)).unwrap();
@@ -656,7 +655,7 @@ async fn test_clean_forks() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_process_forked_transaction() {
     let metrics_state = MetricState::new();
     let RocksTestEnvironment { storage, slot_storage, .. } = RocksTestEnvironment::new(&[]);
@@ -841,14 +840,12 @@ async fn test_process_forked_transaction() {
         )
         .unwrap();
 
-    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
     let fork_cleaner = ForkCleaner::new(
         storage.clone(),
         slot_storage.clone(),
         metrics_state.fork_cleaner_metrics.clone(),
     );
-    fork_cleaner.clean_forks(shutdown_rx.resubscribe()).await;
+    fork_cleaner.clean_forks(CancellationToken::new()).await;
 
     for cl_item in storage.cl_items.iter_start() {
         let (_, value) = cl_item.unwrap();

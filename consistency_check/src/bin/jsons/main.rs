@@ -15,13 +15,9 @@ use indicatif::{ProgressBar, ProgressStyle};
 use nft_ingester::init::init_index_storage_with_migration;
 use rocks_db::{migrator::MigrationState, Storage};
 use tempfile::TempDir;
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-};
+use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use usecase::graceful_stop::graceful_stop;
 
 const WRITER_SLEEP_TIME: Duration = Duration::from_secs(30);
 const SLEEP_AFTER_ERROR: Duration = Duration::from_secs(3);
@@ -132,16 +128,11 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
     let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let temp_path = temp_dir.path().to_str().unwrap().to_string();
+    let cancellation_token = CancellationToken::new();
     info!("Opening DB...");
     let db_client = Arc::new(
-        Storage::open_secondary(
-            rocks_path,
-            temp_path,
-            Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
-            red_metrics.clone(),
-            MigrationState::Last,
-        )
-        .unwrap(),
+        Storage::open_secondary(rocks_path, temp_path, red_metrics.clone(), MigrationState::Last)
+            .unwrap(),
     );
     info!("DB opened");
 
@@ -176,46 +167,45 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
     let rate = Arc::new(Mutex::new(0.0));
     let count_of_missed_jsons = Arc::new(AtomicU64::new(0));
 
-    let shutdown_token = CancellationToken::new();
-    let (shutdown_for_file_writer_tx, shutdown_for_file_writer_rx) = broadcast::channel::<()>(1);
-
-    let mut writers = JoinSet::new();
-
     let missed_jsons: Arc<Mutex<HashSet<String>>> = Arc::new(Mutex::new(HashSet::new()));
 
     info!("Launching writer job...");
     let missed_jsons_cloned = missed_jsons.clone();
-    writers.spawn(async move {
-        let missed_jsons_file =
-            File::create(MISSED_JSONS_FILE).expect("Failed to create file for missed jsons");
+    usecase::executor::spawn({
+        let cancellation_token = cancellation_token.child_token();
+        async move {
+            let missed_jsons_file =
+                File::create(MISSED_JSONS_FILE).expect("Failed to create file for missed jsons");
 
-        let mut missed_jsons_wrt = csv::Writer::from_writer(missed_jsons_file);
+            let mut missed_jsons_wrt = csv::Writer::from_writer(missed_jsons_file);
 
-        loop {
-            let mut f_ch = missed_jsons_cloned.lock().await;
-            for t in f_ch.iter() {
-                missed_jsons_wrt.write_record([t]).unwrap();
+            loop {
+                let mut f_ch = missed_jsons_cloned.lock().await;
+                for t in f_ch.iter() {
+                    missed_jsons_wrt.write_record([t]).unwrap();
+                }
+                missed_jsons_wrt.flush().unwrap();
+                f_ch.clear();
+
+                drop(f_ch);
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tokio::time::sleep(WRITER_SLEEP_TIME).await;
             }
-            missed_jsons_wrt.flush().unwrap();
-            f_ch.clear();
-
-            drop(f_ch);
-
-            if !shutdown_for_file_writer_rx.is_empty() {
-                break;
-            }
-
-            tokio::time::sleep(WRITER_SLEEP_TIME).await;
         }
-
-        Ok(())
     });
 
     info!("Launching rate updater...");
     let assets_processed_clone = assets_processed.clone();
-    let shutdown_token_clone = shutdown_token.clone();
     let rate_clone = rate.clone();
-    tokio::spawn(update_rate(shutdown_token_clone, assets_processed_clone, rate_clone));
+    usecase::executor::spawn(update_rate(
+        cancellation_token.child_token(),
+        assets_processed_clone,
+        rate_clone,
+    ));
 
     let mut last_key_in_batch = None;
 
@@ -297,9 +287,6 @@ async fn check_jsons_consistency(rocks_path: String, postgre_creds: String, batc
         ));
     }
 
+    usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
     info!("Main loop finished its job");
-
-    shutdown_for_file_writer_tx.send(()).unwrap();
-
-    graceful_stop(&mut writers).await;
 }

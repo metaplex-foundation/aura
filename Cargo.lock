@@ -1676,7 +1676,7 @@ dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
  "blockbuster",
- "borsh 0.9.3",
+ "borsh 0.10.3",
  "bytemuck",
  "chrono",
  "mpl-bubblegum",
@@ -2067,7 +2067,7 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
 ]
 
 [[package]]
@@ -2107,7 +2107,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tracing",
  "tracing-subscriber",
  "usecase",
@@ -3344,7 +3344,7 @@ dependencies = [
  "indexmap 2.2.6",
  "slab",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tracing",
 ]
 
@@ -3874,6 +3874,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tokio-util 0.7.13",
  "tracing",
  "tracing-test",
  "usecase",
@@ -3907,7 +3908,7 @@ dependencies = [
  "spl-concurrent-merkle-tree 0.2.0",
  "thiserror",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tracing",
  "usecase",
 ]
@@ -3934,6 +3935,7 @@ dependencies = [
  "solana-transaction-status",
  "thiserror",
  "tokio",
+ "tokio-util 0.7.13",
 ]
 
 [[package]]
@@ -4856,7 +4858,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-retry",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tonic 0.10.2",
  "tracing",
  "tracing-subscriber",
@@ -6326,7 +6328,7 @@ dependencies = [
  "sha1_smol",
  "tokio",
  "tokio-native-tls",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "url",
 ]
 
@@ -6448,7 +6450,7 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.24.1",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -6562,6 +6564,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-util 0.7.13",
  "tracing",
  "tracing-test",
  "usecase",
@@ -7136,6 +7139,7 @@ dependencies = [
  "testcontainers",
  "testcontainers-modules",
  "tokio",
+ "tokio-util 0.7.13",
  "tracing",
  "uuid 1.8.0",
 ]
@@ -9798,9 +9802,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.11"
+version = "0.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
+checksum = "d7fcaa8d55a2bdd6b83ace262b016eca0d79ee02818c5c1bcdf0305114081078"
 dependencies = [
  "bytes",
  "futures-core",
@@ -9901,7 +9905,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.23.4",
  "tokio-stream",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tower",
  "tower-layer",
  "tower-service",
@@ -10020,7 +10024,7 @@ dependencies = [
  "rand 0.8.5",
  "slab",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -10396,6 +10400,7 @@ dependencies = [
  "spl-concurrent-merkle-tree 0.4.1",
  "thiserror",
  "tokio",
+ "tokio-util 0.7.13",
  "tracing",
 ]
 
@@ -10522,7 +10527,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tokio-tungstenite 0.21.0",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tower-service",
  "tracing",
 ]
