@@ -45,7 +45,7 @@ postprocessors = [
 # parse the commits based on https://www.conventionalcommits.org
 conventional_commits = true
 # filter out the commits that are not conventional
-filter_unconventional = false
+filter_unconventional = true
 # process each line of a commit as an individual commit
 split_commits = false
 # regex for parsing and grouping commits
@@ -61,7 +61,7 @@ commit_parsers = [
   { message = "^test(\\(.*\\))?:", group = "Testing" },
   { message = "^chore\\(release\\):", skip = true },
   { message = "^chore\\(deps\\)(\\(.*\\))?:", group = "Dependencies" },
-  { message = "^chore(\\(.*\\))?:", group = "Miscellaneous Tasks" },
+  { message = "^chore(\\(.*\\))?:", group = "Build Process & Auxiliary Tools" },
   { message = "^ci(\\(.*\\))?:", group = "CI/CD" },
   
   # Simple commits without scope
@@ -75,10 +75,10 @@ commit_parsers = [
   { message = "^MTG-\\d+\\s+.*(feat|feature)", group = "Features" },
   { message = "^MTG-\\d+\\s+.*(doc|docs)", group = "Documentation" },
   { message = "^MTG-\\d+\\s+.*(test)", group = "Testing" },
-  { message = "^MTG-\\d+\\s+", group = "Tasks" },
+  { message = "^MTG-\\d+\\s+", group = "Miscellaneous Tasks" },
 ]
 # filter out the commits that are not matched by commit parsers
-filter_commits = false
+filter_commits = true
 # glob pattern for matching git tags
 tag_pattern = "v[0-9]*.[0-9]*.[0-9]*"
 # regex for skipping tags
