@@ -2,7 +2,7 @@
 edition = "2021"
 name = "integration_tests"
 publish = false
-version = "0.1.0"
+version = "0.5.0"
 
 [dependencies]
 anyhow = { workspace = true }
