@@ -107,8 +107,7 @@ jobs:
             --base main \
             --head ${{ env.RELEASE_BRANCH }} \
             --title "Release v${{ inputs.version }}" \
-            --body-file .changelog_content \
-            --draft false
+            --body-file .changelog_content
           
           echo "Pull Request created. Please review the PR, make any necessary adjustments, and merge when ready."
 
