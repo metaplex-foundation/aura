@@ -68,7 +68,7 @@ async fn test_collect_urls_to_download() {
             rocks_env.storage.asset_offchain_data.put(entity.url.clone().unwrap(), entity).unwrap()
         });
 
-    let sut = Scheduler::new(rocks_env.storage.clone());
+    let sut = Scheduler::new(rocks_env.storage.clone(), None);
     Scheduler::run_in_background(sut).await;
 
     await_async_for!(

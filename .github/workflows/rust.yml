@@ -2,7 +2,7 @@ name: Rust CI
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main, develop]
 
 env:
   CARGO_INCREMENTAL: 0
@@ -13,55 +13,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check out
-      uses: actions/checkout@v3
+      - name: Check out
+        uses: actions/checkout@v3
 
-    - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
-    - name: Install Rust specific version
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: 1.84
-        profile: minimal
-        components: clippy, rustfmt
-        override: true
+      - name: Install Rust specific version
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.85
+          profile: minimal
+          components: clippy, rustfmt
+          override: true
 
-    - name: Restore cargo cache
-      id: cache-cargo
-      uses: actions/cache/restore@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: ${{ runner.os }}-cargo-
+      - name: Restore cargo cache
+        id: cache-cargo
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
-    - name: Append to Cargo.toml
-      run: |
-        echo "[profile.dev]" >> Cargo.toml
-        echo "debug = 0" >> Cargo.toml
+      - name: Append to Cargo.toml
+        run: |
+          echo "[profile.dev]" >> Cargo.toml
+          echo "debug = 0" >> Cargo.toml
 
-    - name: Check formatting
-      run: cargo fmt -- --check
+      - name: Check formatting
+        run: cargo fmt -- --check
 
-    - name: Lint with Clippy
-      run: cargo clippy --all -- -D warnings --allow=deprecated
+      - name: Lint with Clippy
+        run: cargo clippy --all -- -D warnings --allow=deprecated
 
-    - name: Save cargo cache
-      id: cache-cargo-save
-      uses: actions/cache/save@v4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/
-        key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
+      - name: Save cargo cache
+        id: cache-cargo-save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
 
   test:
     runs-on: ubuntu-latest
@@ -90,7 +90,7 @@ jobs:
       - name: Install Rust specific version
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.84
+          toolchain: 1.85
           profile: minimal
           components: clippy, rustfmt
           override: true

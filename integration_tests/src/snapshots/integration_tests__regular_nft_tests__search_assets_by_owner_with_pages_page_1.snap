@@ -1,8 +1,6 @@
 ---
 source: integration_tests/src/regular_nft_tests.rs
-assertion_line: 317
 expression: response
-snapshot_kind: text
 ---
 {
   "total": 2,
@@ -67,7 +65,6 @@ snapshot_kind: text
       "burnt": false,
       "mint_extensions": {
         "metadata_pointer": {
-          "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
           "metadata_address": "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ"
         },
         "metadata": {
@@ -79,7 +76,6 @@ snapshot_kind: text
           "additional_metadata": []
         },
         "group_member_pointer": {
-          "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
           "member_address": "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ"
         }
       },
@@ -149,7 +145,6 @@ snapshot_kind: text
       "burnt": false,
       "mint_extensions": {
         "metadata_pointer": {
-          "authority": "6qVNPWh4Qhr6pBVZQMNpxwn477rg5LUkjBFuG5KpZvJc",
           "metadata_address": "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom"
         },
         "metadata": {
@@ -161,7 +156,6 @@ snapshot_kind: text
           "additional_metadata": []
         },
         "group_member_pointer": {
-          "authority": "6qVNPWh4Qhr6pBVZQMNpxwn477rg5LUkjBFuG5KpZvJc",
           "member_address": "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom"
         }
       },

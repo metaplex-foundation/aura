@@ -573,7 +573,7 @@ impl Storage {
         Ok(())
     }
 
-    pub(crate) fn merge_compete_details_with_batch(
+    pub fn merge_compete_details_with_batch(
         &self,
         batch: &mut rocksdb::WriteBatchWithTransaction<false>,
         data: &AssetCompleteDetails,

@@ -37,6 +37,26 @@ impl<'a> TestEnvironment<'a> {
         .await
     }
 
+    pub async fn create_with_pg_mount(
+        cli: &'a Cli,
+        cnt: usize,
+        slot: u64,
+        mount: &str,
+    ) -> (TestEnvironment<'a>, rocks::GeneratedAssets) {
+        Self::create_and_setup_from_closures_with_mount(
+            cli,
+            cnt,
+            slot,
+            &[SpecificationAssetClass::Nft],
+            RocksTestEnvironmentSetup::with_authority,
+            RocksTestEnvironmentSetup::test_owner,
+            RocksTestEnvironmentSetup::dynamic_data,
+            RocksTestEnvironmentSetup::collection_without_authority,
+            mount,
+        )
+        .await
+    }
+
     pub async fn create_noise(
         cli: &'a Cli,
         cnt: usize,
@@ -61,6 +81,74 @@ impl<'a> TestEnvironment<'a> {
             RocksTestEnvironmentSetup::collection_without_authority,
         )
         .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_and_setup_from_closures_with_mount(
+        cli: &'a Cli,
+        cnt: usize,
+        slot: u64,
+        spec_asset_class_list: &[SpecificationAssetClass],
+        authorities: fn(&[Pubkey]) -> Vec<AssetAuthority>,
+        owners: fn(&[Pubkey]) -> Vec<AssetOwner>,
+        dynamic_details: fn(&[Pubkey], u64) -> Vec<AssetDynamicDetails>,
+        collections: fn(&[Pubkey]) -> Vec<AssetCollection>,
+        mount: &str,
+    ) -> (TestEnvironment<'a>, rocks::GeneratedAssets) {
+        let rocks_env = rocks::RocksTestEnvironment::new(&[]);
+        let pg_env = pg::TestEnvironment::new_with_mount(cli, mount).await;
+
+        let generated_data = rocks_env
+            .generate_from_closure(
+                cnt,
+                slot,
+                spec_asset_class_list,
+                authorities,
+                owners,
+                dynamic_details,
+                collections,
+            )
+            .await;
+
+        let env = Self { rocks_env, pg_env };
+
+        let mut metrics_state = metrics_utils::MetricState::new();
+        metrics_state.register_metrics();
+
+        let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            200000,
+            "./tmp/sync_dump".to_string(),
+            metrics_state.synchronizer_metrics.clone(),
+            1,
+        );
+        let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
+        let synchronizer = Arc::new(syncronizer);
+
+        let mut tasks = JoinSet::new();
+        for asset_type in ASSET_TYPES {
+            let synchronizer = synchronizer.clone();
+            let rx = rx.resubscribe();
+            tasks.spawn(async move {
+                match asset_type {
+                    AssetType::NonFungible => {
+                        synchronizer.synchronize_nft_asset_indexes(&rx, 0).await.unwrap()
+                    },
+                    AssetType::Fungible => {
+                        synchronizer.synchronize_fungible_asset_indexes(&rx, 0).await.unwrap()
+                    },
+                }
+            });
+        }
+
+        while let Some(res) = tasks.join_next().await {
+            if let Err(err) = res {
+                panic!("{err}");
+            }
+        }
+
+        (env, generated_data)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -98,7 +186,7 @@ impl<'a> TestEnvironment<'a> {
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200000,
-            "/tmp/sync_dump".to_string(),
+            "./tmp/sync_dump".to_string(),
             metrics_state.synchronizer_metrics.clone(),
             1,
         );

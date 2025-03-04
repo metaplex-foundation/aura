@@ -30,6 +30,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     tracing::info!("Starting Synchronizer server...");
 
+    #[cfg(feature = "profiling")]
     let guard = if args.run_profiling {
         Some(pprof::ProfilerGuardBuilder::default().frequency(100).build().unwrap())
     } else {
@@ -60,7 +61,7 @@ pub async fn main() -> Result<(), IngesterError> {
     let mutexed_tasks = Arc::new(Mutex::new(tasks));
 
     let storage = Storage::open_secondary(
-        &args.rocks_db_path_container,
+        &args.rocks_db_path,
         &args.rocks_db_secondary_path,
         mutexed_tasks.clone(),
         red_metrics.clone(),
@@ -76,6 +77,10 @@ pub async fn main() -> Result<(), IngesterError> {
 
     mutexed_tasks.lock().await.spawn(async move {
         // --stop
+        #[cfg(not(feature = "profiling"))]
+        graceful_stop(cloned_tasks, shutdown_tx, Some(shutdown_token_clone)).await;
+
+        #[cfg(feature = "profiling")]
         graceful_stop(
             cloned_tasks,
             shutdown_tx,

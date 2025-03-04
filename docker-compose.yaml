@@ -3,12 +3,12 @@ services:
   ingester:
     container_name: ingester
     restart: always
-    entrypoint: sh -c "if [ -z '${MALLOC_CONF}' ]; then exec ./ingester --rocks-slots-db-path $$ROCKS_SLOTS_DB_PATH --rocks-secondary-slots-db-path $$ROCKS_SECONDARY_SLOTS_DB_PATH; else exec ./profiling_ingester --rocks-slots-db-path $$ROCKS_SLOTS_DB_PATH --rocks-secondary-slots-db-path $$ROCKS_SECONDARY_SLOTS_DB_PATH; fi"
+    entrypoint: sh -c "./ingester --rocks-slots-db-path $$ROCKS_SLOTS_DB_PATH --rocks-secondary-slots-db-path $$ROCKS_SECONDARY_SLOTS_DB_PATH"
     env_file:
       - .env
     network_mode: host
     volumes:
-      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:rw
       - ${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:rw
       - ${ROCKS_BACKUP_DIR}:${ROCKS_BACKUP_DIR}:rw
       - ${ROCKS_BACKUP_ARCHIVES_DIR}:${ROCKS_BACKUP_ARCHIVES_DIR}:rw
@@ -25,7 +25,9 @@ services:
       - db
     build:
       context: .
-      dockerfile: ingester.Dockerfile
+      dockerfile: docker/app.Dockerfile
+      args:
+        BINARY: ingester
     stop_grace_period: 10m
     logging:
       options:
@@ -34,13 +36,12 @@ services:
   das-api:
     container_name: das-api
     restart: always
-    entrypoint: sh -c "if [ -z '${MALLOC_CONF}' ]; then exec ./api; else exec ./profiling_api; fi"
     env_file:
       - .env
     network_mode: host
     volumes:
-      - ${ROCKS_DB_PATH_CONTAINER}:${ROCKS_DB_PATH_CONTAINER}:ro
-      - ${ROCKS_DB_SECONDARY_PATH_CONTAINER}/api:${ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:ro
+      - ${ROCKS_DB_SECONDARY_PATH}/api:${ROCKS_DB_SECONDARY_PATH}:rw
       - ${ROCKS_ARCHIVES_DIR}:${ROCKS_ARCHIVES_DIR}:ro
       - ${FILE_STORAGE_PATH}:${FILE_STORAGE_PATH_CONTAINER}:rw
       - ./heaps:/usr/src/app/heaps:rw
@@ -48,7 +49,9 @@ services:
       - db
     build:
       context: .
-      dockerfile: ingester.Dockerfile
+      dockerfile: docker/app.Dockerfile
+      args:
+        BINARY: api
     stop_grace_period: 2m
     logging:
       options:
@@ -57,21 +60,22 @@ services:
   synchronizer:
     container_name: synchronizer
     restart: always
-    entrypoint: sh -c "if [ -z '${MALLOC_CONF}' ]; then exec ./synchronizer; else exec ./profiling_synchronizer; fi"
     env_file:
       - .env
     network_mode: host
     volumes:
-      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:rw
       - ${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:${ROCKS_DUMP_PATH:-/tmp/rocks_dump}:rw
-      - ${ROCKS_DB_SECONDARY_PATH_CONTAINER}/synchronizer:${ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_SECONDARY_PATH}/synchronizer:${ROCKS_DB_SECONDARY_PATH}:rw
       - ./heaps:/usr/src/app/heaps:rw
       - ./migrations:/usr/src/app/migrations
     depends_on:
       - db
     build:
       context: .
-      dockerfile: ingester.Dockerfile
+      dockerfile: docker/app.Dockerfile
+      args:
+        BINARY: synchronizer
     stop_grace_period: 5m
     logging:
       options:
@@ -80,7 +84,6 @@ services:
   integrity-verification:
     container_name: integrity-verification
     restart: always
-    entrypoint: "./integrity-verification"
     env_file:
       - .env
     network_mode: host
@@ -92,7 +95,9 @@ services:
       - db
     build:
       context: .
-      dockerfile: integrity_verification.Dockerfile
+      dockerfile: docker/app.Dockerfile
+      args:
+        BINARY: integrity-verification
     logging:
       options:
         max-size: "2048m"
@@ -100,7 +105,6 @@ services:
   backfill:
     container_name: backfill
     restart: no
-    entrypoint: ./backfill
     env_file:
       - .env
     environment:
@@ -113,7 +117,9 @@ services:
     stop_grace_period: 5m
     build:
       context: .
-      dockerfile: ingester.Dockerfile
+      dockerfile: docker/app.Dockerfile
+      args:
+        BINARY: backfill
     logging:
       options:
         max-size: "2048m"
@@ -139,7 +145,9 @@ services:
     stop_grace_period: 5m
     build:
       context: .
-      dockerfile: ingester.Dockerfile
+      dockerfile: docker/app.Dockerfile
+      args:
+        BINARY: slot_persister
     logging:
       options:
         max-size: "2048m"
@@ -164,18 +172,19 @@ services:
 
   rocksdb-backup:
     container_name: rocksdb-backup
-    entrypoint: ./rocksdb_backup
     env_file:
       - .env
     network_mode: host
     volumes:
-      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH_CONTAINER}:ro
+      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:ro
       - ${ROCKS_BACKUP_DIR}:${ROCKS_BACKUP_DIR}:rw
       - ${ROCKS_BACKUP_ARCHIVES_DIR}:${ROCKS_BACKUP_ARCHIVES_DIR}:rw
-      - ${ROCKS_DB_SECONDARY_PATH}/backup:${ROCKS_DB_SECONDARY_PATH_CONTAINER}:rw
+      - ${ROCKS_DB_SECONDARY_PATH}/backup:${ROCKS_DB_SECONDARY_PATH}:rw
     build:
       context: .
-      dockerfile: ingester.Dockerfile
+      dockerfile: docker/app.Dockerfile
+      args:
+        BINARY: rocksdb_backup
     stop_grace_period: 2m
     logging:
       options:

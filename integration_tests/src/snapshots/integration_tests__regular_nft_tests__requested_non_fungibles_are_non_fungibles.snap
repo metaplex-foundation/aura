@@ -1,8 +1,6 @@
 ---
 source: integration_tests/src/regular_nft_tests.rs
-assertion_line: 271
 expression: response
-snapshot_kind: text
 ---
 {
   "total": 5,
@@ -66,7 +64,6 @@ snapshot_kind: text
       "burnt": false,
       "mint_extensions": {
         "metadata_pointer": {
-          "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
           "metadata_address": "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ"
         },
         "metadata": {
@@ -78,7 +75,6 @@ snapshot_kind: text
           "additional_metadata": []
         },
         "group_member_pointer": {
-          "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
           "member_address": "DvpMQyF8sT6hPBewQf6VrVESw6L1zewPyNit1CSt1tDJ"
         }
       },
@@ -146,7 +142,6 @@ snapshot_kind: text
       "burnt": false,
       "mint_extensions": {
         "metadata_pointer": {
-          "authority": "6qVNPWh4Qhr6pBVZQMNpxwn477rg5LUkjBFuG5KpZvJc",
           "metadata_address": "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom"
         },
         "metadata": {
@@ -158,7 +153,6 @@ snapshot_kind: text
           "additional_metadata": []
         },
         "group_member_pointer": {
-          "authority": "6qVNPWh4Qhr6pBVZQMNpxwn477rg5LUkjBFuG5KpZvJc",
           "member_address": "9qA21TR9QTsQeR5sP6L2PytjgxXcVRSyqUY5vRcUogom"
         }
       },
@@ -225,7 +219,6 @@ snapshot_kind: text
       "burnt": false,
       "mint_extensions": {
         "metadata_pointer": {
-          "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
           "metadata_address": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1"
         },
         "metadata": {
@@ -237,7 +230,6 @@ snapshot_kind: text
           "additional_metadata": []
         },
         "group_member_pointer": {
-          "authority": "2jL7yFGXkKE9oi1xHsA45UzV5491PD55AugGJiTbUr9m",
           "member_address": "8WKGo1z9k3PjTsQw5GDQmvAbKwuRGtb4APkCneH8AVY1"
         }
       },
@@ -305,7 +297,6 @@ snapshot_kind: text
       "burnt": false,
       "mint_extensions": {
         "metadata_pointer": {
-          "authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb",
           "metadata_address": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB"
         },
         "metadata": {
@@ -326,7 +317,6 @@ snapshot_kind: text
           ]
         },
         "group_member_pointer": {
-          "authority": "6wBjjwmWAZzuzAYt9N7EbhPsthE6m2LStNAxZUbViqQb",
           "member_address": "7ZkXycbrAhVzeB9ngnjcCdjk5bxTJYzscSZMhRRBx3QB"
         }
       },
@@ -397,7 +387,6 @@ snapshot_kind: text
           "delegate": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo"
         },
         "metadata_pointer": {
-          "authority": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo",
           "metadata_address": "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH"
         },
         "metadata": {
@@ -442,7 +431,6 @@ snapshot_kind: text
           ]
         },
         "group_member_pointer": {
-          "authority": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo",
           "member_address": "EdmnsgHGEeeBoGEhtK4th6L3ebmfzfR9Lvw9oi9t4nnL"
         }
       },

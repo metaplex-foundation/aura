@@ -1,8 +1,6 @@
 ---
 source: integration_tests/src/regular_nft_tests.rs
-assertion_line: 363
 expression: response
-snapshot_kind: text
 ---
 {
   "total": 1,
@@ -70,7 +68,6 @@ snapshot_kind: text
           "delegate": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo"
         },
         "metadata_pointer": {
-          "authority": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo",
           "metadata_address": "75peBtH5MwfA5t9uhr51AYL7MR5DbPJ5xQ7wizzvowUH"
         },
         "metadata": {
@@ -115,7 +112,6 @@ snapshot_kind: text
           ]
         },
         "group_member_pointer": {
-          "authority": "8JGNPBnUFHyjtzF8h9orj7fWNRLJBbvJZvZB2nwjE4Zo",
           "member_address": "EdmnsgHGEeeBoGEhtK4th6L3ebmfzfR9Lvw9oi9t4nnL"
         }
       },

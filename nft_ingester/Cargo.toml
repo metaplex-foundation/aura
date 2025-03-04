@@ -1,6 +1,6 @@
 [package]
 name = "nft_ingester"
-version = "0.7.2"
+version = "0.5.0"
 edition = "2021"
 publish = false
 
@@ -51,7 +51,7 @@ tonic = { workspace = true }
 tracing = { workspace = true }
 backfill-rpc = { path = "../backfill_rpc" }
 prometheus-client = { workspace = true }
-pprof = { workspace = true }
+pprof = { workspace = true, optional = true }
 solana-program = { workspace = true }
 itertools = { workspace = true }
 solana-client = { workspace = true }
@@ -108,7 +108,7 @@ harness = false
 rpc_tests = []
 integration_tests = []
 batch_mint_tests = []
-profiling = []
+profiling = ["dep:pprof"]
 big_table_tests = []
 
 [dependencies.utils]
@@ -144,3 +144,6 @@ name = "synchronizer_utils"
 
 [[bin]]
 name = "dumper"
+
+[[bin]]
+name = "burnt_assets_ingester"

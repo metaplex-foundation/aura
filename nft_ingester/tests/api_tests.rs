@@ -1,7 +1,7 @@
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
+    use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 
     use base64::{engine::general_purpose, Engine};
     use blockbuster::{
@@ -16,10 +16,11 @@ mod tests {
     };
     use entities::{
         api_req_params::{
-            AssetSortBy, AssetSortDirection, AssetSorting, DisplayOptions, GetAsset, GetAssetProof,
-            GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup,
-            GetAssetsByOwner, GetByMethodsOptions, GetCoreFees, GetTokenAccounts, Options,
-            SearchAssets, SearchAssetsOptions,
+            AssetSortBy, AssetSortDirection, AssetSorting, DisplayOptions, GetAsset, GetAssetBatch,
+            GetAssetBatchV0, GetAssetProof, GetAssetSignatures, GetAssetV0, GetAssetsByAuthority,
+            GetAssetsByAuthorityV0, GetAssetsByCreator, GetAssetsByCreatorV0, GetAssetsByGroup,
+            GetAssetsByGroupV0, GetAssetsByOwner, GetAssetsByOwnerV0, GetByMethodsOptions,
+            GetCoreFees, GetTokenAccounts, Options, SearchAssets, SearchAssetsOptions,
         },
         enums::{
             AssetType, ChainMutability, Interface, OwnerType, OwnershipModel, RoyaltyModel,
@@ -72,7 +73,7 @@ mod tests {
         Storage, ToFlatbuffersConverter,
     };
     use serde_json::{json, Value};
-    use setup::rocks::{RocksTestEnvironment, RocksTestEnvironmentSetup};
+    use setup::rocks::RocksTestEnvironmentSetup;
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signature::Signature;
     use spl_pod::{
@@ -787,7 +788,6 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
-    #[ignore = "FIXME: owner returned is not empty"]
     async fn test_fungible_asset() {
         let cnt = 20;
         let cli = Cli::default();
@@ -877,14 +877,19 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
         );
         token_updates_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc, &Default::default())
             .unwrap();
         token_updates_processor
             .transform_and_save_token_account(&mut batch_storage, token_acc.pubkey, &token_acc)
             .unwrap();
 
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                mint_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -895,8 +900,8 @@ mod tests {
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
-        assert_eq!(response["ownership"]["owner"], "");
-        assert_eq!(response["interface"], "FungibleToken".to_string());
+        assert_eq!(response["ownership"]["owner"], owner_key.to_string());
+        assert_eq!(response["interface"], "V1_NFT".to_string());
 
         let mint_acc = Mint {
             pubkey: mint_key,
@@ -916,7 +921,7 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
         );
         token_updates_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -1041,7 +1046,7 @@ mod tests {
         );
         for mint in mint_accs.iter() {
             token_updates_processor
-                .transform_and_save_mint_account(&mut batch_storage, mint)
+                .transform_and_save_mint_account(&mut batch_storage, mint, &Default::default())
                 .unwrap();
         }
         for token_account in token_accs.iter() {
@@ -1055,7 +1060,12 @@ mod tests {
         }
         for (key, metadata) in metadata_info.iter() {
             mplx_updates_processor
-                .transform_and_store_metadata_account(&mut batch_storage, *key, metadata)
+                .transform_and_store_metadata_account(
+                    &mut batch_storage,
+                    *key,
+                    metadata,
+                    &HashMap::new(),
+                )
                 .unwrap();
         }
         batch_storage.flush().unwrap();
@@ -1083,7 +1093,6 @@ mod tests {
 
     #[tokio::test]
     #[tracing_test::traced_test]
-    #[ignore = "FIXME: owner returned is non-empty"]
     async fn test_burnt() {
         let cnt = 20;
         let cli = Cli::default();
@@ -1176,7 +1185,12 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
         );
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, metadata_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                metadata_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         // save metadata_mint map
         batch_storage.flush().unwrap();
@@ -1194,7 +1208,7 @@ mod tests {
             .unwrap();
 
         token_updates_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc, &Default::default())
             .unwrap();
         token_updates_processor
             .transform_and_save_token_account(&mut batch_storage, token_acc.pubkey, &token_acc)
@@ -1208,8 +1222,8 @@ mod tests {
         let response = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
 
         assert_eq!(response["ownership"]["ownership_model"], "single");
-        assert_eq!(response["ownership"]["owner"], "");
-        assert_eq!(response["interface"], "FungibleToken".to_string());
+        assert_eq!(response["ownership"]["owner"], owner_key.to_string());
+        assert_eq!(response["interface"], "V1_NFT".to_string());
         assert_eq!(response["burnt"], true);
 
         env.teardown().await;
@@ -1969,6 +1983,32 @@ mod tests {
             res_obj.items[0].id,
             ref_value.pubkey.to_string(),
             "asset should match the pubkey"
+        );
+    }
+
+    #[test]
+    fn get_assets_by_authority_params_decode_correctly_with_positional_arguments() {
+        let request_params = r#"["DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz",null,null,null,null,null,{"showUnverifiedCollections":true},null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByAuthority = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByAuthority");
+        assert_eq!(
+            params_deserialized,
+            GetAssetsByAuthority {
+                authority_address: "DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz".to_owned(),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: GetByMethodsOptions {
+                    show_unverified_collections: true,
+                    ..Default::default()
+                },
+                cursor: None
+            }
         );
     }
 
@@ -2761,7 +2801,7 @@ mod tests {
             .unwrap();
 
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint)
+            .transform_and_save_mint_account(&mut batch_storage, &mint, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
@@ -2977,10 +3017,10 @@ mod tests {
             )
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .transform_and_save_mint_account(&mut batch_storage, &mint1, &Default::default())
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .transform_and_save_mint_account(&mut batch_storage, &mint2, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
@@ -3099,7 +3139,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_mint_extentions() {
+    async fn test_mint_extensions() {
         let cnt = 100;
         let cli = Cli::default();
         let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
@@ -3117,7 +3157,6 @@ mod tests {
             extensions: Some(MintAccountExtensions {
                 default_account_state: None,
                 confidential_transfer_mint: None,
-                confidential_transfer_account: None,
                 confidential_transfer_fee_config: None,
                 interest_bearing_config: Some(ShadowInterestBearingConfig {
                     rate_authority: OptionalNonZeroPubkey::try_from(Some(
@@ -3159,6 +3198,8 @@ mod tests {
                 token_group: None,
                 group_member_pointer: None,
                 token_group_member: None,
+                non_transferable: None,
+                immutable_owner: None,
             }),
         };
 
@@ -3170,7 +3211,7 @@ mod tests {
         let token_accounts_processor =
             TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .transform_and_save_mint_account(&mut batch_storage, &mint1, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -3310,10 +3351,10 @@ mod tests {
             )
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .transform_and_save_mint_account(&mut batch_storage, &mint1, &Default::default())
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .transform_and_save_mint_account(&mut batch_storage, &mint2, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -3380,17 +3421,25 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "FIXME: non fungible count is not reset"]
     async fn test_idx_cleaner() {
         let cnt = 100;
         let cli = Cli::default();
 
-        let (env, generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
-        let _synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+        let _ = std::fs::create_dir_all("./tmp/test_idx_cleaner_dump");
+        let pg_mount =
+            PathBuf::from_str("./tmp/test_idx_cleaner_dump").unwrap().canonicalize().unwrap();
+        let (env, generated_assets) = setup::TestEnvironment::create_with_pg_mount(
+            &cli,
+            cnt,
+            100,
+            pg_mount.to_str().unwrap(),
+        )
+        .await;
+        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
             env.rocks_env.storage.clone(),
             env.pg_env.client.clone(),
             200_000,
-            "./tmp/test_idx_cleaner_dump".to_string(),
+            pg_mount.to_str().unwrap().to_owned(),
             Arc::new(SynchronizerMetricsConfig::new()),
             1,
         );
@@ -3436,7 +3485,7 @@ mod tests {
             )
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint)
+            .transform_and_save_mint_account(&mut batch_storage, &mint, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -3446,7 +3495,11 @@ mod tests {
         assert_eq!(idx_fungible_asset_iter.count(), 1);
         assert_eq!(idx_non_fungible_asset_iter.count(), cnt + 2);
 
+        let (_, rx) = tokio::sync::broadcast::channel(1);
+
         for asset_type in ASSET_TYPES {
+            let rx = rx.resubscribe();
+            synchronizer.full_syncronize(&rx, asset_type).await.expect("sync");
             clean_syncronized_idxs(
                 env.pg_env.client.clone(),
                 env.rocks_env.storage.clone(),
@@ -3535,29 +3588,32 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_idx_cleaner_erases_updates_partially() {
-        let rocks_env: RocksTestEnvironment = RocksTestEnvironment::new(&[]);
-        let number_of_assets = 1;
-        let slot = 0;
-        let generated_assets = rocks_env.generate_assets(number_of_assets, slot).await;
-        let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
-        let temp_dir_path = temp_dir.path();
+        let cnt = 1;
+        let cli = Cli::default();
 
-        let cli: Cli = Cli::default();
-        let pg_env =
-            setup::pg::TestEnvironment::new_with_mount(&cli, temp_dir_path.to_str().unwrap()).await;
-        let syncronizer = Arc::new(nft_ingester::index_syncronizer::Synchronizer::new(
-            rocks_env.storage.clone(),
-            pg_env.client.clone(),
+        let _ = std::fs::create_dir_all("./tmp");
+        let temp_dir = TempDir::new_in("./tmp").expect("Failed to create a temporary directory");
+        let temp_dir_path = temp_dir.path();
+        let (env, generated_assets) = setup::TestEnvironment::create_with_pg_mount(
+            &cli,
+            cnt,
+            1,
+            temp_dir_path.to_str().unwrap(),
+        )
+        .await;
+        let synchronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
             10,
-            temp_dir_path.to_str().unwrap().to_string(),
+            temp_dir_path.to_str().unwrap().to_owned(),
             Arc::new(SynchronizerMetricsConfig::new()),
             1,
-        ));
+        );
 
         let nft_token_mint = generated_assets.pubkeys[0];
         let owner: Pubkey = generated_assets.owners[0].owner.value.unwrap();
         let mut batch_storage = BatchSaveStorage::new(
-            rocks_env.storage.clone(),
+            env.rocks_env.storage.clone(),
             10,
             Arc::new(IngesterMetricsConfig::new()),
         );
@@ -3590,7 +3646,7 @@ mod tests {
         }
         let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         for asset_type in ASSET_TYPES {
-            syncronizer.full_syncronize(&rx, asset_type).await.unwrap();
+            synchronizer.full_syncronize(&rx, asset_type).await.unwrap();
         }
 
         // receive 5 more updates for the same asset
@@ -3618,20 +3674,24 @@ mod tests {
         }
 
         // full story of idxs is stored
-        let idx_fungible_asset_iter = rocks_env.storage.fungible_assets_update_idx.iter_start();
-        let idx_non_fungible_asset_iter = rocks_env.storage.assets_update_idx.iter_start();
+        let idx_fungible_asset_iter = env.rocks_env.storage.fungible_assets_update_idx.iter_start();
+        let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
         assert_eq!(idx_fungible_asset_iter.count(), 10);
         assert_eq!(idx_non_fungible_asset_iter.count(), 11);
 
         for asset_type in ASSET_TYPES {
-            clean_syncronized_idxs(pg_env.client.clone(), rocks_env.storage.clone(), asset_type)
-                .await
-                .unwrap();
+            clean_syncronized_idxs(
+                env.pg_env.client.clone(),
+                env.rocks_env.storage.clone(),
+                asset_type,
+            )
+            .await
+            .unwrap();
         }
 
         // after sync idxs should be half cleaned
-        let idx_fungible_asset_iter = rocks_env.storage.fungible_assets_update_idx.iter_start();
-        let idx_non_fungible_asset_iter = rocks_env.storage.assets_update_idx.iter_start();
+        let idx_fungible_asset_iter = env.rocks_env.storage.fungible_assets_update_idx.iter_start();
+        let idx_non_fungible_asset_iter = env.rocks_env.storage.assets_update_idx.iter_start();
         assert_eq!(idx_fungible_asset_iter.count(), 6);
         assert_eq!(idx_non_fungible_asset_iter.count(), 6);
     }
@@ -3779,14 +3839,19 @@ mod tests {
             Arc::new(IngesterMetricsConfig::new()),
         );
         token_updates_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint_acc)
+            .transform_and_save_mint_account(&mut batch_storage, &mint_acc, &Default::default())
             .unwrap();
         token_updates_processor
             .transform_and_save_token_account(&mut batch_storage, token_acc.pubkey, &token_acc)
             .unwrap();
 
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                mint_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         batch_storage.flush().unwrap();
 
@@ -3811,7 +3876,12 @@ mod tests {
         };
 
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                mint_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         batch_storage.flush().unwrap();
         let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
@@ -3830,7 +3900,12 @@ mod tests {
         };
 
         mplx_updates_processor
-            .transform_and_store_metadata_account(&mut batch_storage, mint_key, &metadata)
+            .transform_and_store_metadata_account(
+                &mut batch_storage,
+                mint_key,
+                &metadata,
+                &HashMap::new(),
+            )
             .unwrap();
         batch_storage.flush().unwrap();
         let response = api.get_asset(payload.clone(), mutexed_tasks.clone()).await.unwrap();
@@ -3838,7 +3913,7 @@ mod tests {
         assert_eq!(response["interface"], "V1_NFT".to_string());
     }
 
-    /// Cover task changes MTG-947
+    /// More test cases covered in the regular_nft_tests.rs/test_search_by_owner_with_show_zero_balance_false
     #[tokio::test(flavor = "multi_thread")]
     async fn test_determining_non_fungible_tokens() {
         let cnt = 100;
@@ -4003,10 +4078,10 @@ mod tests {
             )
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint1)
+            .transform_and_save_mint_account(&mut batch_storage, &mint1, &Default::default())
             .unwrap();
         token_accounts_processor
-            .transform_and_save_mint_account(&mut batch_storage, &mint2)
+            .transform_and_save_mint_account(&mut batch_storage, &mint2, &Default::default())
             .unwrap();
         batch_storage.flush().unwrap();
         let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
@@ -4086,24 +4161,6 @@ mod tests {
             page: Some(1),
             owner_address: Some(owner.to_string()),
             options: SearchAssetsOptions {
-                show_zero_balance: false,
-                show_unverified_collections: true,
-                ..Default::default()
-            },
-            token_type: Some(TokenType::All),
-            ..Default::default()
-        };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
-        let res: AssetList = serde_json::from_value(res).unwrap();
-
-        // todo FIX MTG-1283 assert value should be 1
-        assert_eq!(res.items.len(), 2, "SearchAssets by token_type:All show_zero_balance: false");
-
-        let payload = SearchAssets {
-            limit: Some(1000),
-            page: Some(1),
-            owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
@@ -4121,27 +4178,118 @@ mod tests {
         );
         assert_eq!(res.items[0].clone().interface, Interface::V1NFT);
         assert_eq!(res.items[1].clone().interface, Interface::V1NFT);
+    }
 
-        let payload = SearchAssets {
-            limit: Some(1000),
-            page: Some(1),
-            owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
-                show_zero_balance: false,
-                show_unverified_collections: true,
-                ..Default::default()
-            },
-            token_type: Some(TokenType::NonFungible),
-            ..Default::default()
-        };
-        let res = api.search_assets(payload, mutexed_tasks.clone()).await.unwrap();
-        let res: AssetList = serde_json::from_value(res).unwrap();
-
-        // todo FIX MTG-1283 assert value should be 1
+    /// More test cases covered in the regular_nft_tests.rs/test_search_by_owner_with_show_zero_balance_false
+    #[test]
+    fn v1_payloads_are_parsed_correctly_from_v0_payloads() {
+        // getAssetsByAuthority
+        let request_params =
+            r#"["DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz",null,null,null,null,null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByAuthorityV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByAuthority");
         assert_eq!(
-            res.items.len(),
-            2,
-            "SearchAssets by token_type: NonFungible, show_zero_balance: false"
+            Into::<GetAssetsByAuthority>::into(params_deserialized),
+            GetAssetsByAuthority {
+                authority_address: "DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz".to_owned(),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: Default::default(),
+                cursor: None
+            }
+        );
+        // getAssetsByGroup
+        let request_params = r#"["something","else",null,null,null,null,null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByGroupV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByGroup");
+        assert_eq!(
+            Into::<GetAssetsByGroup>::into(params_deserialized),
+            GetAssetsByGroup {
+                group_key: "something".to_owned(),
+                group_value: "else".to_owned(),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: Default::default(),
+                cursor: None
+            }
+        );
+        // getAssetsByOwner
+        let request_params = r#"["owner",null,null,null,null,null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByOwnerV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+        assert_eq!(
+            Into::<GetAssetsByOwner>::into(params_deserialized),
+            GetAssetsByOwner {
+                owner_address: "owner".to_owned(),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: Default::default(),
+                cursor: None
+            }
+        );
+        // getAssetsByCreator
+        let request_params = r#"["creator_address",false,null,null,null,null,null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByCreatorV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+        assert_eq!(
+            Into::<GetAssetsByCreator>::into(params_deserialized),
+            GetAssetsByCreator {
+                creator_address: "creator_address".to_owned(),
+                only_verified: Some(false),
+                sort_by: None,
+                limit: None,
+                page: None,
+                before: None,
+                after: None,
+                options: Default::default(),
+                cursor: None
+            }
+        );
+        // getAssets
+        let request_params = r#"[["asset1","asset2"]]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetBatchV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+        assert_eq!(
+            Into::<GetAssetBatch>::into(params_deserialized),
+            GetAssetBatch {
+                ids: vec!["asset1".to_owned(), "asset2".to_owned()],
+                options: Default::default(),
+            }
+        );
+        // getAsset
+        let request_params = r#"["asset"]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetV0 = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+        assert_eq!(
+            Into::<GetAsset>::into(params_deserialized),
+            GetAsset { id: "asset".to_owned(), options: Default::default() }
         );
     }
 }

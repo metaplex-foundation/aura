@@ -285,6 +285,9 @@ where
         num_shards: u64,
     ) -> Result<(), IngesterError> {
         let base_path = std::path::Path::new(self.dump_path.as_str());
+        let _ = std::fs::create_dir_all(base_path).inspect_err(|e| {
+            tracing::debug!(error = %e, "Base path already exists");
+        });
         self.pg_index_storage.destructive_prep_to_batch_nft_load().await?;
 
         let shards = shard_pubkeys(num_shards);
@@ -395,6 +398,10 @@ where
         num_shards: u64,
     ) -> Result<(), IngesterError> {
         let base_path = std::path::Path::new(self.dump_path.as_str());
+        let _ = std::fs::create_dir_all(base_path).inspect_err(|e| {
+            tracing::debug!(error = %e, "Base path already exists");
+        });
+
         self.pg_index_storage.destructive_prep_to_batch_fungible_load().await?;
 
         let shards = shard_pubkeys(num_shards);
@@ -494,13 +501,13 @@ where
                 // Update the asset indexes in the index storage
                 // let last_included_key = AssetsUpdateIdx::encode_key(last_included_key);
                 last_included_rocks_key = Some(last_included_key);
-                let primary_storage = self.rocks_primary_storage.clone();
-                let index_storage = self.pg_index_storage.clone();
+                let rocks_primary_storage = self.rocks_primary_storage.clone();
+                let pg_index_storage = self.pg_index_storage.clone();
                 let metrics = self.metrics.clone();
                 tasks.spawn(async move {
                     Self::syncronize_fungible_batch(
-                        primary_storage.clone(),
-                        index_storage.clone(),
+                        rocks_primary_storage.clone(),
+                        pg_index_storage.clone(),
                         updated_keys_refs.as_slice(),
                         metrics,
                     )
@@ -655,19 +662,20 @@ where
     }
 
     pub async fn syncronize_fungible_batch(
-        primary_storage: Arc<T>,
-        index_storage: Arc<U>,
+        rocks_primary_storage: Arc<T>,
+        pg_index_storage: Arc<U>,
         updated_keys_refs: &[Pubkey],
         metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<(), IngesterError> {
-        let asset_indexes = primary_storage.get_fungible_assets_indexes(updated_keys_refs).await?;
+        let asset_indexes =
+            rocks_primary_storage.get_fungible_assets_indexes(updated_keys_refs).await?;
 
         if asset_indexes.is_empty() {
             warn!("No asset indexes found for keys: {:?}", updated_keys_refs);
             return Ok(());
         }
 
-        index_storage.update_fungible_asset_indexes_batch(asset_indexes.as_slice()).await?;
+        pg_index_storage.update_fungible_asset_indexes_batch(asset_indexes.as_slice()).await?;
         metrics.inc_number_of_records_synchronized(
             "synchronized_records",
             updated_keys_refs.len() as u64,
