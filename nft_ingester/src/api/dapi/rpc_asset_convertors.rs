@@ -1,6 +1,5 @@
 use std::{cmp::Ordering, collections::HashMap, path::Path};
 
-use assert_json_diff::assert_json_eq;
 use entities::{
     api_req_params::Pagination,
     enums::{Interface, SpecificationVersions},
@@ -647,6 +646,7 @@ fn get_pagination_values(
 
 #[cfg(test)]
 mod tests {
+    use assert_json_diff::assert_json_eq;
     use entities::models::Updated;
     use serde_json::json;
 
