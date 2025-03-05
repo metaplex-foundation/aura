@@ -1,0 +1,63 @@
+name: Delete Container Versions
+
+on:
+  workflow_call:
+    inputs:
+      package_name:
+        required: true
+        type: string
+      keep_release:
+        required: false
+        type: number
+        default: 20
+      keep_develop:
+        required: false
+        type: number
+        default: 15
+      keep_other:
+        required: false
+        type: number
+        default: 10
+      keep_untagged:
+        required: false
+        type: number
+        default: 0
+
+jobs:
+  delete_old_packages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep last release versions
+        uses: smartsquaregmbh/delete-old-packages@v0.8.1
+        with:
+          user: ${{ github.repository_owner }}
+          type: container
+          names: ${{ inputs.package_name }}
+          version-pattern: '^v\d+\.\d+\.\d+$'
+          keep: ${{ inputs.keep_release }}
+
+      - name: Keep last develop versions
+        uses: smartsquaregmbh/delete-old-packages@v0.8.1
+        with:
+          user: ${{ github.repository_owner }}
+          type: container
+          names: ${{ inputs.package_name }}
+          version-pattern: '^develop-.*'
+          keep: ${{ inputs.keep_develop }}
+
+      - name: Keep last other tagged versions
+        uses: smartsquaregmbh/delete-old-packages@v0.8.1
+        with:
+          user: ${{ github.repository_owner }}
+          type: container
+          names: ${{ inputs.package_name }}
+          version-pattern: '^(?!v\d+\.\d+\.\d+$)(?!latest)(?!develop-).*'
+          keep: ${{ inputs.keep_other }}
+
+      - name: Keep last untagged versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ inputs.package_name }}
+          package-type: container
+          delete-only-untagged-versions: 'true'
+          min-versions-to-keep: ${{ inputs.keep_untagged }}

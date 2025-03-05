@@ -1,0 +1,28 @@
+name: Cleanup Container Images
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 0'
+
+jobs:
+  get_repo:
+    runs-on: ubuntu-latest
+    outputs:
+      repo_name: ${{ steps.get_repo.outputs.repo_name }}
+    steps:
+      - name: Determine repository name
+        id: get_repo
+        run: |
+          echo "repo_name=${GITHUB_REPOSITORY#*/}" >> $GITHUB_OUTPUT
+
+  cleanup:
+    needs: get_repo
+    uses: ./.github/workflows/delete-container-versions.yml
+    with:
+      package_name: ${{ needs.get_repo.outputs.repo_name }}
+      keep_release: 30
+      keep_develop: 20
+      keep_other: 20
+      keep_untagged: 0
+      
