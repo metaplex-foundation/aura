@@ -2,11 +2,11 @@ version: "3.7"
 services:
   pgdb:
     image: "postgres:14.15"
-    container_name: pgdb
+    container_name: pg_db
     environment:
       - POSTGRES_USER=solana
       - POSTGRES_PASSWORD=solana
-      - POSTGRES_DB=aura_db
+      - POSTGRES_DB=solana
     ports:
       - "5432:5432"
 
