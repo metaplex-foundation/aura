@@ -313,7 +313,7 @@ pub struct SynchronizerClapArgs {
     pub metrics_port: Option<u16>,
     pub profiling_file_path_container: Option<String>,
 
-    #[clap(long, env, default_value = "200000")]
+    #[clap(long, env, default_value = "10000")]
     pub dump_synchronizer_batch_size: usize,
     #[clap(
         long,
@@ -639,7 +639,7 @@ mod tests {
         assert_eq!(args.rocks_db_secondary_path, "./my_rocksdb_secondary");
         assert_eq!(args.run_profiling, false);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
-        assert_eq!(args.dump_synchronizer_batch_size, 200000);
+        assert_eq!(args.dump_synchronizer_batch_size, 10000);
         assert_eq!(args.dump_sync_threshold, 150000000);
         assert_eq!(args.synchronizer_parallel_tasks, 30);
         assert_eq!(args.timeout_between_syncs_sec, 0);

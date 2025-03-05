@@ -1,0 +1,31 @@
+name: Cleanup Container Images
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 0'
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      REPO_NAME: ${GITHUB_REPOSITORY#*/}
+    strategy:
+      matrix:
+        binary: [ingester, das-api, slot_persister, backfill, synchronizer, rocksdb_backup]
+    steps:
+      - name: Set full package name
+        id: set_pkg
+        run: |
+          FULL_NAME="${REPO_NAME}-${{ matrix.binary }}"
+          echo "package_name=${FULL_NAME}" >> $GITHUB_OUTPUT
+          echo "Cleaning up package: ${FULL_NAME}"
+
+      - name: Cleanup package images
+        uses: ./.github/workflows/delete-container-versions.yml
+        with:
+          package_name: ${{ steps.set_pkg.outputs.package_name }}
+          keep_release: 30
+          keep_develop: 20
+          keep_other: 20
+          keep_untagged: 0
