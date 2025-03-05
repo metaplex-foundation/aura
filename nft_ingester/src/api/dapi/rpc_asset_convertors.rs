@@ -238,26 +238,20 @@ fn extract_collection_metadata(
     let link_fields = vec!["name", "symbol"];
     for name in link_fields {
         let value = safe_select(chain_data_selector, format!("$.{}", name).as_str());
-        match value {
-            Some(symbol) => {
-                meta.set_item(name, symbol.clone());
-            },
-            None => {
-                meta.set_item(name, empty_string_value.clone());
-            },
+        if let Some(symbol) = value {
+            meta.set_item(name, symbol.clone());
+        } else {
+            meta.set_item(name, empty_string_value.clone());
         }
     }
 
     let link_fields = vec!["image", "external_url", "description"];
     for name in link_fields {
         let value = safe_select(selector, format!("$.{}", name).as_str());
-        match value {
-            Some(symbol) => {
-                meta.set_item(name, symbol.clone());
-            },
-            None => {
-                meta.set_item(name, empty_string_value.clone());
-            },
+        if let Some(symbol) = value {
+            meta.set_item(name, symbol.clone());
+        } else {
+            meta.set_item(name, empty_string_value.clone());
         }
     }
 
