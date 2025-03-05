@@ -9,15 +9,15 @@ on:
       keep_release:
         required: false
         type: number
-        default: 20
+        default: 30
       keep_develop:
         required: false
         type: number
-        default: 15
+        default: 20
       keep_other:
         required: false
         type: number
-        default: 10
+        default: 20
       keep_untagged:
         required: false
         type: number
@@ -30,29 +30,32 @@ jobs:
       - name: Keep last release versions
         uses: smartsquaregmbh/delete-old-packages@v0.8.1
         with:
-          user: ${{ github.repository_owner }}
+          organization: ${{ github.repository_owner }}
           type: container
           names: ${{ inputs.package_name }}
           version-pattern: '^v\d+\.\d+\.\d+$'
           keep: ${{ inputs.keep_release }}
+          dry-run: true
 
       - name: Keep last develop versions
         uses: smartsquaregmbh/delete-old-packages@v0.8.1
         with:
-          user: ${{ github.repository_owner }}
+          organization: ${{ github.repository_owner }}
           type: container
           names: ${{ inputs.package_name }}
           version-pattern: '^develop-.*'
           keep: ${{ inputs.keep_develop }}
+          dry-run: true
 
       - name: Keep last other tagged versions
         uses: smartsquaregmbh/delete-old-packages@v0.8.1
         with:
-          user: ${{ github.repository_owner }}
+          organization: ${{ github.repository_owner }}
           type: container
           names: ${{ inputs.package_name }}
           version-pattern: '^(?!v\d+\.\d+\.\d+$)(?!latest)(?!develop-).*'
           keep: ${{ inputs.keep_other }}
+          dry-run: true
 
       - name: Keep last untagged versions
         uses: actions/delete-package-versions@v5
