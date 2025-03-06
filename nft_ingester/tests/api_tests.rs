@@ -4170,6 +4170,23 @@ mod tests {
                 cursor: None
             }
         );
+
+        // getAssetsByCreator V1
+        let request_params = r#"["DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz",true,null,null,1,null,null,{"showCollectionMetadata":true},null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: GetAssetsByCreator = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+
+        assert_eq!(
+            params_deserialized.creator_address,
+            "DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz".to_owned()
+        );
+        assert_eq!(params_deserialized.only_verified, Some(true));
+        assert_eq!(params_deserialized.options.show_collection_metadata, true);
+        assert_eq!(params_deserialized.page, Some(1));
+
         // getAssets
         let request_params = r#"[["asset1","asset2"]]"#;
         let rpc_params: jsonrpc_core::Params =
