@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use entities::{
-    api_req_params::{
-        GetAsset, GetAssetBatch, GetAssetsByCreator, GetAssetsByCreatorV0, GetAssetsByGroup,
-        GetByMethodsOptions, SearchAssets,
-    },
+    api_req_params::{GetAsset, GetAssetBatch, GetAssetsByGroup, SearchAssets},
     enums::{AssetType, AssetType::Fungible},
 };
 use function_name::named;
