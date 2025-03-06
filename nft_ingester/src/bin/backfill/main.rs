@@ -63,10 +63,19 @@ async fn main() {
             .expect("Failed to open source RocksDB");
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let cancellation_token = CancellationToken::new();
-    let stop_handle = tokio::task::spawn({
+
+    // Concurrency setup
+    let num_workers = args.workers;
+    let (slot_sender, slot_receiver) = async_channel::bounded::<(u64, Vec<u8>)>(num_workers * 2);
+    let slots_processed = Arc::new(AtomicU64::new(0));
+    let rate = Arc::new(Mutex::new(0.0));
+
+    tokio::task::spawn({
         let cancellation_token = cancellation_token.clone();
+        let slot_sender = slot_sender.clone();
         async move {
             usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+            slot_sender.close();
         }
     });
 
@@ -88,31 +97,6 @@ async fn main() {
 
     let consumer =
         Arc::new(DirectBlockParser::new(tx_ingester.clone(), target_db.clone(), metrics.clone()));
-
-    // Concurrency setup
-    let num_workers = args.workers;
-    let (slot_sender, slot_receiver) = async_channel::bounded::<(u64, Vec<u8>)>(num_workers * 2);
-    let slots_processed = Arc::new(AtomicU64::new(0));
-    let rate = Arc::new(Mutex::new(0.0));
-
-    usecase::executor::spawn({
-        let cancellation_token = cancellation_token.clone();
-        let slot_sender = slot_sender.clone();
-        async move {
-            // Wait for Ctrl+C signal
-            match tokio::signal::ctrl_c().await {
-                Ok(()) => {
-                    info!("Received Ctrl+C, shutting down gracefully...");
-                    cancellation_token.cancel();
-                    // Close the channel to signal workers to stop
-                    slot_sender.close();
-                },
-                Err(err) => {
-                    error!("Unable to listen for shutdown signal: {}", err);
-                },
-            }
-        }
-    });
 
     // Parse slots if provided
     let mut slots_to_process = Vec::new();
@@ -244,7 +228,7 @@ async fn main() {
         worker_handles.push(handle);
     }
 
-    usecase::executor::spawn({
+    tokio::task::spawn({
         let cancellation_token = cancellation_token.clone();
         let slots_processed = slots_processed.clone();
         let rate = rate.clone();
@@ -310,9 +294,6 @@ async fn main() {
         let _ = handle.await;
     }
 
-    if stop_handle.await.is_err() {
-        error!("Error joining graceful shutdown!");
-    }
     progress_bar.finish_with_message("Processing complete");
 }
 
