@@ -217,7 +217,6 @@ fn extract_collection_metadata(
     asset_dynamic: &AssetDynamicDetails,
     offchain_data: &OffChainData,
 ) -> MetadataMap {
-    let empty_string_value: Value = Value::String("".to_string());
     let metadata = serde_json::from_str(&offchain_data.metadata.clone().unwrap_or_default())
         .unwrap_or(Value::Null);
     let chain_data: Value =
@@ -241,7 +240,7 @@ fn extract_collection_metadata(
         if let Some(symbol) = value {
             meta.set_item(name, symbol.clone());
         } else {
-            meta.set_item(name, empty_string_value.clone());
+            meta.set_item(name, "".into());
         }
     }
 
@@ -251,7 +250,7 @@ fn extract_collection_metadata(
         if let Some(symbol) = value {
             meta.set_item(name, symbol.clone());
         } else {
-            meta.set_item(name, empty_string_value.clone());
+            meta.set_item(name, "".into());
         }
     }
 
