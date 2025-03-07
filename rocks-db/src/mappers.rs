@@ -230,7 +230,7 @@ macro_rules! impl_partial_ord_for_updated {
             fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
                 // Compare slot_updated first
                 let slot_order = self.slot_updated().cmp(&other.slot_updated());
-                
+
                 // If slots are equal, then check update_version
                 if slot_order == Ordering::Equal {
                     match self.update_version().partial_cmp(&other.update_version()) {
