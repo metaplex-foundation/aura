@@ -228,13 +228,19 @@ macro_rules! impl_partial_ord_for_updated {
     ($name:ident) => {
         impl PartialOrd for fb::$name<'_> {
             fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                Some(match self.update_version().partial_cmp(&other.update_version()) {
-                    Some(std::cmp::Ordering::Equal) => {
-                        self.slot_updated().cmp(&other.slot_updated())
-                    },
-                    Some(ord) => ord,
-                    None => self.slot_updated().cmp(&other.slot_updated()),
-                })
+                // Compare slot_updated first
+                let slot_order = self.slot_updated().cmp(&other.slot_updated());
+                
+                // If slots are equal, then check update_version
+                if slot_order == Ordering::Equal {
+                    match self.update_version().partial_cmp(&other.update_version()) {
+                        Some(ord) => Some(ord),
+                        None => Some(Ordering::Equal), // If versions can't be compared, consider them equal since slots are equal
+                    }
+                } else {
+                    // If slots are different, use that ordering
+                    Some(slot_order)
+                }
             }
         }
     };
