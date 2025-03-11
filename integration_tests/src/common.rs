@@ -434,6 +434,7 @@ async fn process_and_save_accounts_to_rocks(setup: &TestSetup, account_bytes: Ve
             &mut vec![],
             &mut interval,
             &mut batch_fill_instant,
+            &interface::unprocessed_data_getter::AccountSource::Stream,
         )
         .await;
 

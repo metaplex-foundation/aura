@@ -3,13 +3,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use entities::models::{BufferedTxWithID, UnprocessedAccountMessage};
 use interface::{
-    error::UsecaseError, signature_persistence::UnprocessedTransactionsGetter,
-    unprocessed_data_getter::UnprocessedAccountsGetter,
+    error::{MessengerError, UsecaseError},
+    signature_persistence::UnprocessedTransactionsGetter,
+    unprocessed_data_getter::{AccountSource, UnprocessedAccountsGetter},
 };
 use metrics_utils::RedisReceiverMetricsConfig;
 use num_traits::Zero;
 use plerkle_messenger::{
-    redis_messenger::RedisMessenger, ConsumptionType, Messenger, MessengerConfig, ACCOUNT_STREAM,
+    redis_messenger::RedisMessenger, ConsumptionType, Messenger, MessengerConfig,
     TRANSACTION_STREAM,
 };
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
@@ -20,7 +21,7 @@ use crate::{error::IngesterError, message_parser::MessageParser};
 pub struct RedisReceiver {
     consumption_type: ConsumptionType,
     message_parser: Arc<MessageParser>,
-    messanger: Mutex<RedisMessenger>,
+    messenger: Mutex<RedisMessenger>,
     ack_channel: UnboundedSender<(&'static str, String)>,
     metrics: Arc<RedisReceiverMetricsConfig>,
 }
@@ -35,7 +36,7 @@ impl RedisReceiver {
         info!("Initializing RedisReceiver...");
         let message_parser = Arc::new(MessageParser::new());
         let messanger = Mutex::new(RedisMessenger::new(config).await?);
-        Ok(Self { messanger, consumption_type, message_parser, ack_channel, metrics })
+        Ok(Self { messenger: messanger, consumption_type, message_parser, ack_channel, metrics })
     }
 }
 
@@ -43,12 +44,12 @@ impl RedisReceiver {
 impl UnprocessedTransactionsGetter for RedisReceiver {
     async fn next_transactions(&self) -> Result<Vec<BufferedTxWithID>, UsecaseError> {
         let recv_data = self
-            .messanger
+            .messenger
             .lock()
             .await
             .recv(TRANSACTION_STREAM, self.consumption_type.clone())
             .await
-            .map_err(|e| UsecaseError::Messenger(e.to_string()))?;
+            .map_err(|e| UsecaseError::Messenger(MessengerError::Redis(e.to_string())))?;
         self.metrics.inc_transactions_received_by(recv_data.len() as u64);
         let mut result = Vec::new();
         for item in recv_data {
@@ -75,14 +76,24 @@ impl UnprocessedAccountsGetter for RedisReceiver {
     async fn next_accounts(
         &self,
         _batch_size: usize,
+        source: &AccountSource,
     ) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
         let recv_data = self
-            .messanger
+            .messenger
             .lock()
             .await
-            .recv(ACCOUNT_STREAM, self.consumption_type.clone())
+            .recv(source.to_stream_name(), self.consumption_type.clone())
             .await
-            .map_err(|e| UsecaseError::Messenger(e.to_string()))?;
+            .map_err(|e| UsecaseError::Messenger(MessengerError::Redis(e.to_string())))?;
+        if recv_data.is_empty() {
+            tracing::debug!(
+                "Stream {} is empty, returning error to wait...",
+                source.to_stream_name()
+            );
+            return Err(UsecaseError::Messenger(MessengerError::Empty(
+                source.to_stream_name().to_owned(),
+            )));
+        }
 
         self.metrics.inc_accounts_received_by(recv_data.len() as u64);
         let mut result = Vec::new();
@@ -117,16 +128,16 @@ impl UnprocessedAccountsGetter for RedisReceiver {
         self.metrics
             .inc_accounts_parsed_by((result.len() + unknown_account_types_ids.len()) as u64);
 
-        UnprocessedAccountsGetter::ack(self, unknown_account_types_ids);
+        UnprocessedAccountsGetter::ack(self, unknown_account_types_ids, source);
         Ok(result)
     }
 
-    fn ack(&self, ids: Vec<String>) {
+    fn ack(&self, ids: Vec<String>, source: &AccountSource) {
         for id in ids {
             if id.is_empty() {
                 continue;
             }
-            let send = self.ack_channel.send((ACCOUNT_STREAM, id));
+            let send = self.ack_channel.send((source.to_stream_name(), id));
             if let Err(err) = send {
                 error!(error = %err, "Account stream ack error: {:?}", err);
             }

@@ -39,3 +39,4 @@ metrics-utils = { path = "../metrics_utils" }
 rocks-db = { path = "../rocks-db", features = ["integration_tests"] }
 usecase = { path = "../usecase" }
 entities = { path = "../entities" }
+interface = { path = "../interface" }
