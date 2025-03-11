@@ -175,4 +175,10 @@ table AssetCompleteDetails {
   other_known_owners: [AssetOwner];
 }
 
+table TokenMetadataEditionParentIndex {
+  parent: [ubyte];                         // Pubkey (32 bytes) + '_' + Edition Number (uint)
+  asset_key: [ubyte];                      // Pubkey (32 bytes)
+  write_version: ulong;
+}
+
 root_type AssetCompleteDetails;

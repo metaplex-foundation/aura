@@ -68,7 +68,7 @@ where
     fn put_sync(backend: Arc<DB>, key: C::KeyType, value: C::ValueType) -> Result<()> {
         let serialized_value = C::encode(&value)?;
         backend.put_cf(
-            &backend.cf_handle(C::NAME).unwrap(),
+            &backend.cf_handle(C::NAME).expect("Column family handle not found"),
             C::encode_key(key),
             serialized_value,
         )?;
@@ -86,7 +86,7 @@ where
         let serialized_value = C::encode(&value)?;
 
         backend.merge_cf(
-            &backend.cf_handle(C::NAME).unwrap(),
+            &backend.cf_handle(C::NAME).expect("Column family handle not found"),
             C::encode_key(key),
             serialized_value,
         )?;
@@ -141,7 +141,7 @@ where
         for (k, v) in values.iter() {
             let serialized_value = C::encode(v).map_err(|e| StorageError::Common(e.to_string()))?;
             batch.merge_cf(
-                &backend.cf_handle(C::NAME).unwrap(),
+                &backend.cf_handle(C::NAME).expect("Column family handle not found"),
                 C::encode_key(k.clone()),
                 serialized_value,
             )
@@ -163,7 +163,7 @@ where
         for (k, v) in values.iter() {
             let serialized_value = C::encode(v).map_err(|e| StorageError::Common(e.to_string()))?;
             batch.put_cf(
-                &backend.cf_handle(C::NAME).unwrap(),
+                &backend.cf_handle(C::NAME).expect("Column family handle not found"),
                 C::encode_key(k.clone()),
                 serialized_value,
             )
@@ -173,7 +173,10 @@ where
     }
 
     fn get_raw(backend: Arc<DB>, key: C::KeyType) -> Result<Option<Vec<u8>>> {
-        let r = backend.get_cf(&backend.cf_handle(C::NAME).unwrap(), C::encode_key(key))?;
+        let r = backend.get_cf(
+            &backend.cf_handle(C::NAME).expect("Column family handle not found"),
+            C::encode_key(key),
+        )?;
         Ok(r)
     }
 
@@ -209,7 +212,6 @@ where
         }
         let start_time = chrono::Utc::now();
         let db = self.backend.clone();
-        let keys = keys.clone();
         match tokio::task::spawn_blocking(move || Self::batch_get_sync(db, keys)).await {
             Ok(res) => {
                 self.red_metrics.observe_request(
@@ -233,7 +235,7 @@ where
     ) -> Result<Vec<Option<C::ValueType>>> {
         backend
             .batched_multi_get_cf(
-                &backend.cf_handle(C::NAME).unwrap(),
+                &backend.cf_handle(C::NAME).expect("Column family handle not found"),
                 keys.into_iter().map(C::encode_key).collect::<Vec<_>>(),
                 false,
             )
@@ -324,7 +326,7 @@ where
 
     #[inline]
     pub(crate) fn handle(&self) -> Arc<BoundColumnFamily> {
-        self.backend.cf_handle(C::NAME).unwrap()
+        self.backend.cf_handle(C::NAME).expect("Column family not found")
     }
 
     pub fn delete(&self, key: C::KeyType) -> Result<()> {
@@ -338,7 +340,10 @@ where
     fn delete_batch_sync(backend: Arc<DB>, keys: Vec<C::KeyType>) -> Result<()> {
         let mut batch = rocksdb::WriteBatchWithTransaction::<false>::default();
         for key in keys {
-            batch.delete_cf(&backend.cf_handle(C::NAME).unwrap(), C::encode_key(key))
+            batch.delete_cf(
+                &backend.cf_handle(C::NAME).expect("Column family handle not found"),
+                C::encode_key(key),
+            )
         }
         backend.write(batch)?;
         Ok(())
@@ -354,7 +359,7 @@ where
 
     fn delete_range_sync(backend: Arc<DB>, from: C::KeyType, to: C::KeyType) -> Result<()> {
         backend.delete_range_cf(
-            &backend.cf_handle(C::NAME).unwrap(),
+            &backend.cf_handle(C::NAME).expect("Column family handle not found"),
             C::encode_key(from),
             C::encode_key(to),
         )?;
@@ -376,7 +381,7 @@ where
     }
 
     pub(crate) fn sync_has_key(db: Arc<DB>, key: C::KeyType) -> crate::Result<bool> {
-        let cf = &db.cf_handle(C::NAME).unwrap();
+        let cf = &db.cf_handle(C::NAME).expect("Column family handle not found");
         let encoded_key = C::encode_key(key);
         if !db.key_may_exist_cf(cf, &encoded_key) {
             return Ok(false);
