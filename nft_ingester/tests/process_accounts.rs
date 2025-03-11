@@ -41,7 +41,7 @@ mod tests {
     use rocks_db::{
         batch_savers::BatchSaveStorage,
         column::TypedColumn,
-        columns::asset::{AssetAuthority, AssetCompleteDetails},
+        columns::asset::{AssetAuthority, AssetCompleteDetails, TokenMetadataEditionParentIndex},
         ToFlatbuffersConverter,
     };
     use solana_program::pubkey::Pubkey;
@@ -191,28 +191,35 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn mplx_update_process() {
-        let first_mint = Pubkey::new_unique();
+        let first_mint_master_edition =
+            Pubkey::from_str("Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL").unwrap();
+        let first_mint_authority = Pubkey::new_unique();
         let second_mint = Pubkey::new_unique();
-        let first_edition = Pubkey::new_unique();
-        let second_edition = Pubkey::new_unique();
-        let parent = Pubkey::new_unique();
-        let supply = 12345;
+        let second_mint_authority = Pubkey::new_unique();
+        let supply: u64 = 123;
+        let max_supply: u64 = 20000;
 
-        let first_metadata_to_save = generate_metadata(first_mint);
+        let first_metadata_to_save = generate_metadata(first_mint_master_edition);
         let second_metadata_to_save = generate_metadata(second_mint);
-        let first_edition_to_save = EditionMetadata {
-            edition: TokenMetadataEdition::EditionV1 {
-                0: EditionV1 { key: Default::default(), parent, edition: 0, write_version: 1 },
+
+        let first_mint_master_edition_to_save = EditionMetadata {
+            edition: TokenMetadataEdition::MasterEdition {
+                0: MasterEdition {
+                    key: first_mint_master_edition,
+                    supply,
+                    max_supply: Some(max_supply),
+                    write_version: 1,
+                },
             },
             write_version: 1,
             slot_updated: 1,
         };
-        let second_edition_to_save = EditionMetadata {
-            edition: TokenMetadataEdition::MasterEdition {
-                0: MasterEdition {
-                    key: Default::default(),
-                    supply,
-                    max_supply: None,
+        let second_mint_edition_to_save = EditionMetadata {
+            edition: TokenMetadataEdition::EditionV1 {
+                0: EditionV1 {
+                    key: second_mint,
+                    parent: first_mint_master_edition,
+                    edition: 1,
                     write_version: 1,
                 },
             },
@@ -225,6 +232,48 @@ mod tests {
         let (env, _generated_assets) = setup::TestEnvironment::create(&cli, cnt, 100).await;
         let mplx_accs_parser = MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
 
+        let first_authority_complete_asset = AssetCompleteDetails {
+            pubkey: first_mint_master_edition,
+            authority: Some(AssetAuthority {
+                pubkey: first_mint_master_edition,
+                authority: first_mint_authority,
+                slot_updated: 12,
+                write_version: None,
+            }),
+            ..Default::default()
+        };
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                first_mint_master_edition,
+                first_authority_complete_asset.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        let second_authority_complete_asset = AssetCompleteDetails {
+            pubkey: second_mint,
+            authority: Some(AssetAuthority {
+                pubkey: second_mint,
+                authority: second_mint_authority,
+                slot_updated: 12,
+                write_version: None,
+            }),
+            ..Default::default()
+        };
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                second_mint,
+                second_authority_complete_asset.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        let first = env.rocks_env.storage.get_complete_asset_details(second_mint).unwrap().unwrap();
+
         let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
             10,
@@ -233,7 +282,7 @@ mod tests {
         mplx_accs_parser
             .transform_and_store_metadata_account(
                 &mut batch_storage,
-                first_mint,
+                first_mint_master_edition,
                 &first_metadata_to_save,
                 &HashMap::new(),
             )
@@ -249,51 +298,89 @@ mod tests {
         mplx_accs_parser
             .transform_and_store_edition_account(
                 &mut batch_storage,
-                first_edition,
-                &first_edition_to_save.edition,
+                first_mint_master_edition,
+                &first_mint_master_edition_to_save.edition,
             )
             .unwrap();
         mplx_accs_parser
             .transform_and_store_edition_account(
                 &mut batch_storage,
-                second_edition,
-                &second_edition_to_save.edition,
+                second_mint,
+                &second_mint_edition_to_save.edition,
             )
             .unwrap();
         batch_storage.flush().unwrap();
 
-        let first_static_from_db =
-            env.rocks_env.storage.get_complete_asset_details(first_mint).unwrap().unwrap();
+        let first_static_from_db = env
+            .rocks_env
+            .storage
+            .get_complete_asset_details(first_mint_master_edition)
+            .unwrap()
+            .unwrap();
         let second_static_from_db =
             env.rocks_env.storage.get_complete_asset_details(second_mint).unwrap().unwrap();
-        assert_eq!(first_static_from_db.pubkey, first_mint);
+
+        let second_static_from_db =
+            env.rocks_env.storage.get_complete_asset_details(second_mint).unwrap().unwrap();
+
+        assert_eq!(first_static_from_db.pubkey, first_mint_master_edition);
         assert_eq!(second_static_from_db.pubkey, second_mint);
+
+        let editions: Vec<TokenMetadataEditionParentIndex> = env
+            .rocks_env
+            .storage
+            .get_master_edition_child_assets(first_mint_master_edition)
+            .await
+            .unwrap();
+        assert_eq!(editions.len(), 1);
+        assert_eq!(editions[0].asset_key, second_mint);
+
+        let edition_child_assets_info = env
+            .rocks_env
+            .storage
+            .get_master_edition_child_assets_info(first_mint_master_edition)
+            .await
+            .unwrap();
+
+        assert_eq!(edition_child_assets_info.max_supply.unwrap(), max_supply);
+        assert_eq!(edition_child_assets_info.supply, supply);
+        assert_eq!(edition_child_assets_info.master_edition_address.unwrap(), first_mint_authority);
+        assert_eq!(edition_child_assets_info.editions.len(), 1);
+        assert_eq!(edition_child_assets_info.editions[0].edition, 1);
+        assert_eq!(edition_child_assets_info.editions[0].mint, second_mint);
+        assert_eq!(
+            edition_child_assets_info.editions[0].edition_address.unwrap(),
+            second_mint_authority
+        );
 
         let first_edition_from_db = env
             .rocks_env
             .storage
             .token_metadata_edition_cbor
-            .get_async(first_edition)
+            .get_async(first_mint_master_edition)
             .await
             .unwrap()
             .unwrap();
+
         let second_edition_from_db = env
             .rocks_env
             .storage
             .token_metadata_edition_cbor
-            .get_async(second_edition)
+            .get_async(second_mint)
             .await
             .unwrap()
             .unwrap();
-        if let TokenMetadataEdition::EditionV1(edition) = first_edition_from_db {
-            assert_eq!(edition.parent, parent);
-        } else {
-            panic!("expected EditionV1 enum variant");
-        };
-        if let TokenMetadataEdition::MasterEdition(edition) = second_edition_from_db {
+
+        if let TokenMetadataEdition::MasterEdition(edition) = first_edition_from_db {
             assert_eq!(edition.supply, supply);
         } else {
             panic!("expected MasterEdition enum variant");
+        };
+
+        if let TokenMetadataEdition::EditionV1(edition) = second_edition_from_db {
+            assert_eq!(edition.parent, first_mint_master_edition);
+        } else {
+            panic!("expected EditionV1 enum variant");
         };
     }
 

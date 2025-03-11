@@ -42,6 +42,29 @@ pub struct AssetSelectedMaps {
     pub spl_mints: HashMap<Pubkey, SplMint>,
 }
 
+#[derive(Debug)]
+pub struct MasterAssetEditionsInfo {
+    pub master_edition_address: Option<Pubkey>,
+    pub supply: u64,
+    pub max_supply: Option<u64>,
+    pub editions: Vec<AssetEditionInfo>,
+}
+
+#[derive(Debug)]
+pub struct AssetEditionInfo {
+    pub mint: Pubkey,
+    pub edition_address: Option<Pubkey>,
+    pub edition: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TokenMetadataEditionParentIndex {
+    pub parent: Pubkey,
+    pub edition: u64,
+    pub asset_key: Pubkey,
+    pub write_version: u64,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct AssetCompleteDetails {
     pub pubkey: Pubkey,
@@ -3431,6 +3454,9 @@ mod tests {
             collection: Some(collection),
         }
     }
+
+    #[test]
+    fn test_merge_complete_details_with_no_operands_keeps_object_unchanged() {}
 
     #[test]
     fn test_merge_complete_details_with_no_operands_keeps_object_unchanged() {

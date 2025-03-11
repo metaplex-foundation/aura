@@ -53,9 +53,10 @@ use entities::{
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use inflector::Inflector;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocksdb::{ColumnFamilyDescriptor, Options, DB};
+use rocksdb::{ColumnFamilyDescriptor, Options, SliceTransform, DB};
 
 use crate::{
+    columns::asset::TokenMetadataEditionParentIndex,
     errors::StorageError,
     migrator::{MigrationState, MigrationVersions},
     tree_seq::{TreeSeqIdx, TreesGaps},
@@ -159,6 +160,7 @@ pub struct Storage {
     pub tree_seq_idx: Column<TreeSeqIdx>,
     pub trees_gaps: Column<TreesGaps>,
     pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
+    pub token_metadata_edition_parent_index: Column<TokenMetadataEditionParentIndex>,
     pub token_accounts: Column<TokenAccount>,
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
@@ -209,6 +211,7 @@ impl Storage {
         let tree_seq_idx = Self::column(db.clone(), red_metrics.clone());
         let trees_gaps = Self::column(db.clone(), red_metrics.clone());
         let token_metadata_edition_cbor = Self::column(db.clone(), red_metrics.clone());
+        let token_metadata_edition_parent_index = Self::column(db.clone(), red_metrics.clone());
         let asset_static_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_signature = Self::column(db.clone(), red_metrics.clone());
         let token_accounts = Self::column(db.clone(), red_metrics.clone());
@@ -257,6 +260,7 @@ impl Storage {
             tree_seq_idx,
             trees_gaps,
             token_metadata_edition_cbor,
+            token_metadata_edition_parent_index,
             token_accounts,
             token_account_owner_idx,
             asset_static_data_deprecated,
@@ -372,6 +376,7 @@ impl Storage {
             Self::new_cf_descriptor::<TreeSeqIdx>(migration_state),
             Self::new_cf_descriptor::<TreesGaps>(migration_state),
             Self::new_cf_descriptor::<TokenMetadataEdition>(migration_state),
+            Self::new_cf_descriptor::<TokenMetadataEditionParentIndex>(migration_state),
             Self::new_cf_descriptor::<AssetSignature>(migration_state),
             Self::new_cf_descriptor::<TokenAccount>(migration_state),
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(migration_state),
@@ -621,7 +626,14 @@ impl Storage {
             TokenMetadataEdition::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_metadata_edition_keep_existing",
-                    crate::columns::editions::merge_token_metadata_edition,
+                    columns::editions::merge_token_metadata_edition,
+                );
+            },
+            TokenMetadataEditionParentIndex::NAME => {
+                cf_options.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_token_metadata_edition_parent_index_keep_existing",
+                    columns::editions::merge_token_metadata_parent_index_edition,
                 );
             },
             AssetStaticDetailsDeprecated::NAME => {
@@ -734,6 +746,7 @@ impl Storage {
             TreeSeqIdx::NAME,
             TreesGaps::NAME,
             TokenMetadataEdition::NAME,
+            TokenMetadataEditionParentIndex::NAME,
             TokenAccount::NAME,
             TokenAccountOwnerIdx::NAME,
             TokenAccountMintOwnerIdx::NAME,
