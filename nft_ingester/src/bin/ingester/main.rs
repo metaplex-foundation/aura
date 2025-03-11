@@ -260,7 +260,7 @@ pub async fn main() -> Result<(), IngesterError> {
                     .insert("consumer_id".to_string(), account_consumer_worker_name.clone().into());
                 config
                     .entry("batch_size".to_string())
-                    .or_insert_with(|| args.account_processor_buffer_size.into());
+                    .or_insert_with(|| args.account_backfill_processor_buffer_size.into());
                 config
                     .entry("retries".to_string())
                     .or_insert_with(|| (args.redis_account_backfill_parsing_workers + 1).into());
@@ -281,7 +281,7 @@ pub async fn main() -> Result<(), IngesterError> {
             cancellation_token.child_token(),
             redis_receiver,
             primary_rocks_storage.clone(),
-            args.account_processor_buffer_size,
+            args.account_backfill_processor_buffer_size,
             args.account_processor_mpl_fees_buffer_size,
             metrics_state.ingester_metrics.clone(),
             Some(metrics_state.message_process_metrics.clone()),
