@@ -52,6 +52,9 @@ pub struct IngesterClapArgs {
     #[clap(long, env, default_value = "5")]
     pub redis_accounts_parsing_workers: u32,
 
+    #[clap(long, env, default_value = "5")]
+    pub redis_account_backfill_parsing_workers: u32,
+
     #[clap(long, env, default_value = "2")]
     pub redis_transactions_parsing_workers: u32,
 
@@ -60,6 +63,9 @@ pub struct IngesterClapArgs {
 
     #[clap(long, env, default_value = "100")]
     pub account_processor_buffer_size: usize,
+
+    #[clap(long, env, default_value = "1000")]
+    pub account_backfill_processor_buffer_size: usize,
 
     #[clap(long, env, default_value = "100")]
     pub tx_processor_buffer_size: usize,
@@ -623,6 +629,8 @@ mod tests {
         assert_eq!(args.backfiller_source_mode, BackfillerSourceMode::RPC);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.log_level, "info");
+        assert_eq!(args.redis_account_backfill_parsing_workers, 5);
+        assert_eq!(args.account_backfill_processor_buffer_size, 1000);
     }
 
     #[test]

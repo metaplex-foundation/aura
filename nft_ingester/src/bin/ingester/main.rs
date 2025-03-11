@@ -20,6 +20,7 @@ use grpc::{
     gapfiller::gap_filler_service_server::GapFillerServiceServer,
     service::PeerGapFillerServiceImpl,
 };
+use interface::unprocessed_data_getter::AccountSource;
 use metrics_utils::{
     utils::start_metrics, BackfillerMetricsConfig, MetricState, MetricStatus, MetricsTrait,
 };
@@ -204,7 +205,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     for index in 0..args.redis_accounts_parsing_workers {
         let account_consumer_worker_name = Uuid::new_v4().to_string();
-        info!("New Redis account worker {}: {}", index, account_consumer_worker_name);
+        info!("New Redis account stream worker {}: {}", index, account_consumer_worker_name);
 
         let personal_message_config = MessengerConfig {
             messenger_type: MessengerType::Redis,
@@ -243,6 +244,52 @@ pub async fn main() -> Result<(), IngesterError> {
             rpc_client.clone(),
             Some(account_consumer_worker_name.clone()),
             well_known_fungible_accounts.clone(),
+            AccountSource::Stream,
+        );
+    }
+
+    for index in 0..args.redis_account_backfill_parsing_workers {
+        let account_consumer_worker_name = Uuid::new_v4().to_string();
+        info!("New Redis account backfill worker {}: {}", index, account_consumer_worker_name);
+
+        let personal_message_config = MessengerConfig {
+            messenger_type: MessengerType::Redis,
+            connection_config: {
+                let mut config = args.redis_connection_config.clone();
+                config
+                    .insert("consumer_id".to_string(), account_consumer_worker_name.clone().into());
+                config
+                    .entry("batch_size".to_string())
+                    .or_insert_with(|| args.account_backfill_processor_buffer_size.into());
+                config
+                    .entry("retries".to_string())
+                    .or_insert_with(|| (args.redis_account_backfill_parsing_workers + 1).into());
+                config
+            },
+        };
+        let redis_receiver = Arc::new(
+            RedisReceiver::new(
+                personal_message_config,
+                ConsumptionType::All,
+                ack_channel.clone(),
+                metrics_state.redis_receiver_metrics.clone(),
+            )
+            .await?,
+        );
+
+        run_accounts_processor(
+            cancellation_token.child_token(),
+            redis_receiver,
+            primary_rocks_storage.clone(),
+            args.account_backfill_processor_buffer_size,
+            args.account_processor_mpl_fees_buffer_size,
+            metrics_state.ingester_metrics.clone(),
+            Some(metrics_state.message_process_metrics.clone()),
+            index_pg_storage.clone(),
+            rpc_client.clone(),
+            Some(account_consumer_worker_name.clone()),
+            well_known_fungible_accounts.clone(),
+            AccountSource::Backfill,
         );
     }
 

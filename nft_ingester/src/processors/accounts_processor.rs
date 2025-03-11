@@ -9,7 +9,10 @@ use entities::{
     enums::UnprocessedAccount,
     models::{CoreAssetFee, UnprocessedAccountMessage},
 };
-use interface::unprocessed_data_getter::UnprocessedAccountsGetter;
+use interface::{
+    error::{MessengerError, UsecaseError},
+    unprocessed_data_getter::{AccountSource, UnprocessedAccountsGetter},
+};
 use metrics_utils::{IngesterMetricsConfig, MessageProcessMetricsConfig};
 use postgre_client::PgClient;
 use rocks_db::{batch_savers::BatchSaveStorage, Storage};
@@ -27,8 +30,10 @@ use super::account_based::{
 };
 use crate::{error::IngesterError, redis_receiver::get_timestamp_from_id};
 
-// worker idle timeout
-const WORKER_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
+// regular stream worker idle timeout
+const STREAM_WORKER_IDLE_TIMEOUT: Duration = Duration::from_millis(100);
+// backfill worker idle timeout for snapshot parsing
+const BACKFILL_WORKER_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
 // interval after which buffer is flushed
 const FLUSH_INTERVAL: Duration = Duration::from_millis(500);
 // interval to try & build account processor if the previous build fails
@@ -67,6 +72,7 @@ pub fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 'sta
     rpc_client: Arc<RpcClient>,
     processor_name: Option<String>,
     wellknown_fungible_accounts: HashMap<String, String>,
+    source: AccountSource,
 ) {
     usecase::executor::spawn(async move {
         let account_processor = loop {
@@ -92,7 +98,12 @@ pub fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 'sta
         };
 
         account_processor
-            .process_accounts(cancellation_token.child_token(), rocks_storage, account_buffer_size)
+            .process_accounts(
+                cancellation_token.child_token(),
+                rocks_storage,
+                account_buffer_size,
+                source,
+            )
             .await;
     });
 }
@@ -157,6 +168,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         cancellation_token: CancellationToken,
         storage: Arc<Storage>,
         accounts_batch_size: usize,
+        source: AccountSource,
     ) {
         let mut batch_storage =
             BatchSaveStorage::new(storage, accounts_batch_size, self.metrics.clone());
@@ -167,29 +179,48 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
 
         loop {
             tokio::select! {
-                unprocessed_accounts = self.unprocessed_account_getter.next_accounts(accounts_batch_size) => {
+                unprocessed_accounts = self.unprocessed_account_getter.next_accounts(accounts_batch_size, &source) => {
                         let unprocessed_accounts = match unprocessed_accounts {
                             Ok(unprocessed_accounts) => unprocessed_accounts,
                             Err(err) => {
-                                error!("Get unprocessed accounts: {}", err);
-                                tokio::time::sleep(WORKER_IDLE_TIMEOUT)
-                                    .await;
+                                if !matches!(err, UsecaseError::Messenger(MessengerError::Empty(_))) {
+                                    error!("Get unprocessed accounts: {}", err);
+                                }
+                                cancellation_token.run_until_cancelled(async {
+                                    match &source {
+                                        AccountSource::Stream => tokio::time::sleep(STREAM_WORKER_IDLE_TIMEOUT).await,
+                                        AccountSource::Backfill => tokio::time::sleep(BACKFILL_WORKER_IDLE_TIMEOUT).await,
+                                    }
+                                }).await;
                                 continue;
                             }
                         };
 
-                        debug!(processor = %self.processor_name, unprocessed_accounts_len = %unprocessed_accounts.len(), "Processor {}, Unprocessed_accounts: {}  {:?}", self.processor_name, unprocessed_accounts.len(), unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", "));
+                        debug!(
+                            processor = %self.processor_name,
+                            unprocessed_accounts_len = %unprocessed_accounts.len(),
+                            "Processor {}, Unprocessed_accounts: {}  {:?}",
+                            self.processor_name,
+                            unprocessed_accounts.len(),
+                            unprocessed_accounts.iter().map(|account| account.id.to_string()).collect::<Vec<_>>().join(", ")
+                        );
 
-                        self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_instant).await;
+                        self.process_account(&mut batch_storage, unprocessed_accounts, &mut core_fees, &mut ack_ids, &mut interval, &mut batch_fill_instant, &source).await;
                     },
                 _ = interval.tick() => {
-                    self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_instant);
+                    self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_instant, &source);
                     self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
                 }
                 _ = cancellation_token.cancelled() => { break; }
             }
         }
-        self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_instant);
+        self.flush(
+            &mut batch_storage,
+            &mut ack_ids,
+            &mut interval,
+            &mut batch_fill_instant,
+            &source,
+        );
         self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
     }
 
@@ -201,6 +232,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         ack_ids: &mut Vec<String>,
         interval: &mut tokio::time::Interval,
         batch_fill_instant: &mut Instant,
+        source: &AccountSource,
     ) {
         for unprocessed_account in unprocessed_accounts {
             debug!(
@@ -304,7 +336,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
 
             ack_ids.push(unprocessed_account.id);
             if batch_storage.batch_filled() {
-                self.flush(batch_storage, ack_ids, interval, batch_fill_instant);
+                self.flush(batch_storage, ack_ids, interval, batch_fill_instant, source);
             }
             if core_fees.len() > self.fees_batch_size {
                 self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(core_fees)).await;
@@ -318,11 +350,12 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         ack_ids: &mut Vec<String>,
         interval: &mut tokio::time::Interval,
         batch_fill_instant: &mut Instant,
+        source: &AccountSource,
     ) {
         let write_batch_result = storage.flush();
         match write_batch_result {
             Ok(_) => {
-                self.unprocessed_account_getter.ack(std::mem::take(ack_ids));
+                self.unprocessed_account_getter.ack(std::mem::take(ack_ids), source);
             },
             Err(err) => {
                 error!("Write batch: {}", err);
