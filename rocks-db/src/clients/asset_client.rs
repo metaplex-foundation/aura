@@ -5,12 +5,13 @@ use std::{
 
 use bincode::serialize;
 use entities::{
-    api_req_params::Options,
+    api_req_params::{Options, PaginationQuery},
     enums::{AssetType, SpecificationAssetClass, TokenMetadataEdition},
     models::{EditionData, PubkeyWithSlot},
 };
 use futures::future::Either;
 use itertools::Itertools;
+use mpl_token_metadata::ID as METADATA_PROGRAM_ID;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
@@ -19,7 +20,10 @@ use crate::{
         FungibleAssetsUpdateIdx, SlotAssetIdx, SlotAssetIdxKey,
     },
     column::{Column, TypedColumn},
-    columns::asset::{AssetEditionInfo, MasterAssetEditionsInfo, TokenMetadataEditionParentIndex},
+    columns::{
+        asset::{AssetEditionInfo, MasterAssetEditionsInfo, TokenMetadataEditionParentIndex},
+        editions::EditionIndexKey,
+    },
     errors::StorageError,
     generated::asset_generated::asset as fb,
     key_encoders::encode_u64x2_pubkey,
@@ -323,16 +327,54 @@ impl Storage {
     pub async fn get_master_edition_child_assets(
         &self,
         master_edition: Pubkey,
+        pagination: PaginationQuery,
     ) -> Result<Vec<TokenMetadataEditionParentIndex>> {
-        let iter = self.db.prefix_iterator_cf(
-            &self.db.cf_handle(TokenMetadataEditionParentIndex::NAME).unwrap(),
-            master_edition.as_ref(),
-        );
-        let mut asset_keys: Vec<TokenMetadataEditionParentIndex> = Vec::new();
+        let limit = pagination.limit.unwrap_or(100) as usize;
+
+        let iter = if pagination.after.is_some() {
+            self.token_metadata_edition_parent_index.iter(EditionIndexKey {
+                pub_key: master_edition,
+                edition: pagination
+                    .after
+                    .unwrap()
+                    .parse::<u64>()
+                    .expect("failed to parse edition after key"),
+            })
+        } else if pagination.before.is_some() {
+            self.token_metadata_edition_parent_index.iter_reverse(EditionIndexKey {
+                pub_key: master_edition,
+                edition: pagination
+                    .before
+                    .unwrap()
+                    .parse::<u64>()
+                    .expect("failed to parse edition before key"),
+            })
+        } else {
+            let page = pagination.page.unwrap_or(1) - 1;
+            let mut iter = self.db.prefix_iterator_cf(
+                &self.db.cf_handle(TokenMetadataEditionParentIndex::NAME).unwrap(),
+                master_edition.as_ref(),
+            );
+
+            if page > 0 {
+                let skip = page as usize * limit;
+                // iter.skip(n) changes the iterator type, making it incompatible with RocksDB.
+                for _ in 0..skip {
+                    iter.next();
+                }
+            }
+
+            iter
+        };
+
+        let mut asset_keys: Vec<TokenMetadataEditionParentIndex> = Vec::with_capacity(limit);
         for item in iter {
             let (_, value) = item?;
             if let Ok(decoded_value) = TokenMetadataEditionParentIndex::decode(&value) {
                 asset_keys.push(decoded_value);
+            }
+            if asset_keys.len() >= limit {
+                break;
             }
         }
 
@@ -342,43 +384,41 @@ impl Storage {
     pub async fn get_master_edition_child_assets_info(
         &self,
         master_edition: Pubkey,
+        pagination: PaginationQuery,
     ) -> Result<MasterAssetEditionsInfo> {
-        let asset_edition_child_assets =
-            self.get_master_edition_child_assets(master_edition).await?;
-        let mut asset_mint_pub_keys: Vec<Pubkey> =
-            asset_edition_child_assets.clone().iter().map(|key| key.asset_key).collect();
-        asset_mint_pub_keys.push(master_edition);
-
-        let (master_edition_metadata, complete_asset_details_list) = tokio::join!(
+        let (master_edition_metadata, asset_edition_child_assets) = tokio::join!(
             self.token_metadata_edition_cbor.get_async(master_edition),
-            self.get_complete_assets_details(asset_mint_pub_keys),
+            self.get_master_edition_child_assets(master_edition, pagination),
         );
-
-        let assets_complete_details_map = complete_asset_details_list?
-            .into_iter()
-            .filter_map(|a| a.authority.as_ref().map(|auth| (a.pubkey, auth.authority)))
-            .collect::<HashMap<Pubkey, Pubkey>>();
 
         let master_edition_metadata = match master_edition_metadata? {
             Some(TokenMetadataEdition::MasterEdition(metadata)) => metadata,
             _ => return Err(StorageError::Common("Expected MasterEdition".to_string())),
         };
 
-        let asset_edition_info_list: Vec<AssetEditionInfo> = asset_edition_child_assets
+        let asset_edition_info_list: Vec<AssetEditionInfo> = asset_edition_child_assets?
             .iter()
             .map(|asset_edition| AssetEditionInfo {
                 mint: asset_edition.asset_key,
-                edition_address: assets_complete_details_map.get(&asset_edition.asset_key).copied(),
+                edition_address: Storage::find_edition_address(&asset_edition.asset_key),
                 edition: asset_edition.edition,
             })
             .collect();
 
         Ok(MasterAssetEditionsInfo {
-            master_edition_address: assets_complete_details_map.get(&master_edition).copied(),
+            master_edition_address: Storage::find_edition_address(&master_edition),
             supply: master_edition_metadata.supply,
             max_supply: master_edition_metadata.max_supply,
             editions: asset_edition_info_list,
         })
+    }
+
+    pub fn find_edition_address(mint: &Pubkey) -> Pubkey {
+        let (edition_address, _) = Pubkey::find_program_address(
+            &[b"metadata", METADATA_PROGRAM_ID.as_ref(), mint.as_ref(), b"edition"],
+            &METADATA_PROGRAM_ID,
+        );
+        edition_address
     }
 
     // todo: review this method as it has 2 more awaits
@@ -495,5 +535,20 @@ impl Storage {
             batch.put_cf(&self.asset_data.handle(), pubkey, asset.convert_to_fb_bytes());
         }
         self.db.write(batch).map_err(StorageError::RocksDb)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn test_find_edition_address() {
+        let mint = Pubkey::from_str("Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL").unwrap();
+        let expected_edition =
+            Pubkey::from_str("8SHfqzJYABeGfiG1apwiEYt6TvfGQiL1pdwEjvTKsyiZ").unwrap();
+        assert_eq!(Storage::find_edition_address(&mint), expected_edition);
     }
 }

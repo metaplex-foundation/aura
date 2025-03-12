@@ -19,13 +19,44 @@ impl Default for AssetSorting {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Pagination {
     pub limit: Option<u32>,
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
     pub cursor: Option<String>,
+}
+
+#[derive(Default)]
+pub struct PaginationQuery {
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+impl PaginationQuery {
+    pub fn build(pagination: Pagination) -> Result<PaginationQuery, String> {
+        let cursor_enabled =
+            pagination.before.is_none() && pagination.after.is_none() && pagination.page.is_none();
+
+        // if cursor is passed use it as 'after' parameter
+        let after = {
+            if cursor_enabled {
+                pagination.cursor
+            } else {
+                pagination.after
+            }
+        };
+
+        Ok(PaginationQuery {
+            limit: pagination.limit,
+            page: pagination.page,
+            before: pagination.before,
+            after,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
@@ -147,6 +178,17 @@ pub struct GetAssetsByOwner {
     pub after: Option<String>,
     #[serde(default)]
     pub options: GetByMethodsOptions,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GetNftEditions {
+    pub mint: String,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
     pub cursor: Option<String>,
 }
 

@@ -44,16 +44,16 @@ pub struct AssetSelectedMaps {
 
 #[derive(Debug)]
 pub struct MasterAssetEditionsInfo {
-    pub master_edition_address: Option<Pubkey>,
+    pub master_edition_address: Pubkey,
     pub supply: u64,
     pub max_supply: Option<u64>,
     pub editions: Vec<AssetEditionInfo>,
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AssetEditionInfo {
     pub mint: Pubkey,
-    pub edition_address: Option<Pubkey>,
+    pub edition_address: Pubkey,
     pub edition: u64,
 }
 
@@ -3454,9 +3454,6 @@ mod tests {
             collection: Some(collection),
         }
     }
-
-    #[test]
-    fn test_merge_complete_details_with_no_operands_keeps_object_unchanged() {}
 
     #[test]
     fn test_merge_complete_details_with_no_operands_keeps_object_unchanged() {

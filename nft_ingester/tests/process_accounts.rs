@@ -21,6 +21,7 @@ mod tests {
         },
     };
     use entities::{
+        api_req_params::PaginationQuery,
         enums::{TokenMetadataEdition, UnprocessedAccount},
         models::{
             EditionMetadata, EditionV1, IndexableAssetWithAccountInfo, MasterEdition, MetadataInfo,
@@ -42,7 +43,7 @@ mod tests {
         batch_savers::BatchSaveStorage,
         column::TypedColumn,
         columns::asset::{AssetAuthority, AssetCompleteDetails, TokenMetadataEditionParentIndex},
-        ToFlatbuffersConverter,
+        Storage, ToFlatbuffersConverter,
     };
     use solana_program::pubkey::Pubkey;
     use testcontainers::clients::Cli;
@@ -193,9 +194,9 @@ mod tests {
     async fn mplx_update_process() {
         let first_mint_master_edition =
             Pubkey::from_str("Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL").unwrap();
-        let first_mint_authority = Pubkey::new_unique();
+        let master_edition_address = Storage::find_edition_address(&first_mint_master_edition);
         let second_mint = Pubkey::new_unique();
-        let second_mint_authority = Pubkey::new_unique();
+        let second_mint_edition_address = Storage::find_edition_address(&second_mint);
         let supply: u64 = 123;
         let max_supply: u64 = 20000;
 
@@ -236,7 +237,7 @@ mod tests {
             pubkey: first_mint_master_edition,
             authority: Some(AssetAuthority {
                 pubkey: first_mint_master_edition,
-                authority: first_mint_authority,
+                authority: master_edition_address,
                 slot_updated: 12,
                 write_version: None,
             }),
@@ -256,7 +257,7 @@ mod tests {
             pubkey: second_mint,
             authority: Some(AssetAuthority {
                 pubkey: second_mint,
-                authority: second_mint_authority,
+                authority: second_mint_edition_address,
                 slot_updated: 12,
                 write_version: None,
             }),
@@ -271,8 +272,6 @@ mod tests {
                 second_authority_complete_asset.convert_to_fb_bytes(),
             )
             .unwrap();
-
-        let first = env.rocks_env.storage.get_complete_asset_details(second_mint).unwrap().unwrap();
 
         let mut batch_storage = BatchSaveStorage::new(
             env.rocks_env.storage.clone(),
@@ -317,8 +316,6 @@ mod tests {
             .get_complete_asset_details(first_mint_master_edition)
             .unwrap()
             .unwrap();
-        let second_static_from_db =
-            env.rocks_env.storage.get_complete_asset_details(second_mint).unwrap().unwrap();
 
         let second_static_from_db =
             env.rocks_env.storage.get_complete_asset_details(second_mint).unwrap().unwrap();
@@ -329,7 +326,7 @@ mod tests {
         let editions: Vec<TokenMetadataEditionParentIndex> = env
             .rocks_env
             .storage
-            .get_master_edition_child_assets(first_mint_master_edition)
+            .get_master_edition_child_assets(first_mint_master_edition, PaginationQuery::default())
             .await
             .unwrap();
         assert_eq!(editions.len(), 1);
@@ -338,19 +335,22 @@ mod tests {
         let edition_child_assets_info = env
             .rocks_env
             .storage
-            .get_master_edition_child_assets_info(first_mint_master_edition)
+            .get_master_edition_child_assets_info(
+                first_mint_master_edition,
+                PaginationQuery::default(),
+            )
             .await
             .unwrap();
 
         assert_eq!(edition_child_assets_info.max_supply.unwrap(), max_supply);
         assert_eq!(edition_child_assets_info.supply, supply);
-        assert_eq!(edition_child_assets_info.master_edition_address.unwrap(), first_mint_authority);
+        assert_eq!(edition_child_assets_info.master_edition_address, master_edition_address);
         assert_eq!(edition_child_assets_info.editions.len(), 1);
         assert_eq!(edition_child_assets_info.editions[0].edition, 1);
         assert_eq!(edition_child_assets_info.editions[0].mint, second_mint);
         assert_eq!(
-            edition_child_assets_info.editions[0].edition_address.unwrap(),
-            second_mint_authority
+            edition_child_assets_info.editions[0].edition_address,
+            second_mint_edition_address
         );
 
         let first_edition_from_db = env
