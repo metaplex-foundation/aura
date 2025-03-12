@@ -330,25 +330,34 @@ impl Storage {
         pagination: PaginationQuery,
     ) -> Result<Vec<TokenMetadataEditionParentIndex>> {
         let limit = pagination.limit.unwrap_or(100) as usize;
+        let mut revert = false;
 
         let iter = if pagination.after.is_some() {
-            self.token_metadata_edition_parent_index.iter(EditionIndexKey {
+            let mut iter = self.token_metadata_edition_parent_index.iter(EditionIndexKey {
                 pub_key: master_edition,
                 edition: pagination
                     .after
                     .unwrap()
                     .parse::<u64>()
                     .expect("failed to parse edition after key"),
-            })
+            });
+            // iterator is on the item we were searching for
+            iter.next();
+            iter
         } else if pagination.before.is_some() {
-            self.token_metadata_edition_parent_index.iter_reverse(EditionIndexKey {
+            let mut iter = self.token_metadata_edition_parent_index.iter_reverse(EditionIndexKey {
                 pub_key: master_edition,
                 edition: pagination
                     .before
                     .unwrap()
                     .parse::<u64>()
                     .expect("failed to parse edition before key"),
-            })
+            });
+            revert = true;
+
+            // iterator is on the item we were searching for
+            iter.next();
+            iter
         } else {
             let page = pagination.page.unwrap_or(1) - 1;
             let mut iter = self.db.prefix_iterator_cf(
@@ -376,6 +385,10 @@ impl Storage {
             if asset_keys.len() >= limit {
                 break;
             }
+        }
+
+        if revert {
+            asset_keys.reverse()
         }
 
         Ok(asset_keys)

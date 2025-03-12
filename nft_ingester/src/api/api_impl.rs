@@ -393,7 +393,7 @@ where
 
         let pagination = Pagination {
             limit: payload.limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
-            page: payload.page.unwrap_or(1).into(),
+            page: payload.page,
             before: payload.before,
             after: payload.after,
             cursor: payload.cursor,

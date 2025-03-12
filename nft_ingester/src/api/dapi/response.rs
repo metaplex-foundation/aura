@@ -120,6 +120,7 @@ impl From<(MasterAssetEditionsInfo, Pagination)> for MasterAssetEditionsInfoMode
                 page: pagination.page,
                 before: pagination.before,
                 after: pagination.after,
+                cursor: pagination.cursor,
             },
         }
     }
@@ -136,6 +137,8 @@ pub struct PaginationModel {
     pub before: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
