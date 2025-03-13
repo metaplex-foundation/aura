@@ -597,7 +597,11 @@ pub async fn main() -> Result<(), IngesterError> {
                 let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
                 while !cancellation_token.is_cancelled() {
                     match signature_fetcher
-                        .fetch_signatures(program_id, args.rpc_retry_interval_millis)
+                        .fetch_signatures(
+                            program_id,
+                            args.rpc_retry_interval_millis,
+                            cancellation_token.child_token(),
+                        )
                         .await
                     {
                         Ok(_) => {
