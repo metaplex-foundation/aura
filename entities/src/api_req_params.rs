@@ -273,7 +273,6 @@ pub struct SearchAssets {
     pub royalty_target_type: Option<RoyaltyModel>,
     pub royalty_target: Option<String>,
     pub royalty_amount: Option<u32>,
-    pub token_type: Option<TokenType>,
     pub burnt: Option<bool>,
     pub sort_by: Option<AssetSorting>,
     pub limit: Option<u32>,
@@ -292,6 +291,7 @@ pub struct SearchAssets {
     pub name: Option<String>,
     #[serde(default)]
     pub options: SearchAssetsOptions,
+    pub token_type: Option<TokenType>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
