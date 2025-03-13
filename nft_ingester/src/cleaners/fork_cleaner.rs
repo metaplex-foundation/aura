@@ -27,12 +27,15 @@ pub async fn run_fork_cleaner(
         fork_cleaner.clean_forks(cancellation_token.child_token()).await;
         metrics.set_scans_latency(start.elapsed().as_secs_f64());
         metrics.inc_total_scans();
-        tokio::select! {
-            _ = tokio_sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)) => {},
-            _ = cancellation_token.cancelled() => {
-                info!("Received stop signal, stopping cleaning forks!");
-                break;
-            }
+        if cancellation_token
+            .run_until_cancelled(tokio_sleep(Duration::from_secs(
+                sequence_consistent_checker_wait_period_sec,
+            )))
+            .await
+            .is_none()
+        {
+            info!("Received stop signal, stopping cleaning forks!");
+            break;
         }
     }
 

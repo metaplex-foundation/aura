@@ -215,7 +215,11 @@ impl JsonMigrator {
 
                     if tasks_buffer.is_empty() {
                         drop(tasks_buffer);
-                        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                        cancellation_token
+                            .run_until_cancelled(tokio::time::sleep(
+                                tokio::time::Duration::from_secs(10),
+                            ))
+                            .await;
                         continue;
                     }
 
