@@ -291,6 +291,7 @@ pub struct SearchAssets {
     pub name: Option<String>,
     #[serde(default)]
     pub options: SearchAssetsOptions,
+    #[serde(default)]
     pub token_type: Option<TokenType>,
 }
 
