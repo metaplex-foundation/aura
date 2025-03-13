@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant};
 
 use dapi::{
     get_asset, get_asset_batch, get_asset_signatures::get_asset_signatures,
@@ -35,7 +35,7 @@ use crate::{
         dapi::{
             converters::SearchAssetsQuery,
             response::{
-                AssetList, GetGroupingResponse, MasterAssetEditionsInfoModel,
+                AssetList, GetGroupingResponse, MasterAssetEditionsInfoResponse,
                 TransactionSignatureListDeprecated,
             },
             rpc_asset_models::Asset,
@@ -399,8 +399,22 @@ where
             cursor: payload.cursor,
         };
         Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
-        let mint_address = Pubkey::from_str(&payload.mint)
-            .map_err(|_| DasApiError::Validation("Invalid mint address".to_string()))?;
+        let mint_address = validate_pubkey(payload.mint)?;
+
+        if pagination.after.is_some() {
+            pagination.after.clone().unwrap().parse::<u64>().map_err(|_| {
+                DasApiError::Validation(
+                    "Failed to parse edition after key. It should be a number.".to_string(),
+                )
+            })?;
+        }
+        if pagination.before.is_some() {
+            pagination.before.clone().unwrap().parse::<u64>().map_err(|_| {
+                DasApiError::Validation(
+                    "Failed to parse edition before key. It should be a number.".to_string(),
+                )
+            })?;
+        }
 
         let master_asset_editions_info = self
             .rocks_db
@@ -412,7 +426,7 @@ where
 
         self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
-        Ok(json!(MasterAssetEditionsInfoModel::from((master_asset_editions_info, pagination))))
+        Ok(json!(MasterAssetEditionsInfoResponse::from((master_asset_editions_info, pagination))))
     }
 
     pub async fn get_assets_by_group(

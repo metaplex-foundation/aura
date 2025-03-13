@@ -81,23 +81,23 @@ impl From<AssetSignature> for SignatureItem {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
 #[serde(default)]
-pub struct MasterAssetEditionsInfoModel {
+pub struct MasterAssetEditionsInfoResponse {
     pub master_edition_address: String,
     pub supply: u64,
     pub max_supply: Option<u64>,
-    pub editions: Vec<AssetEditionInfoModel>,
+    pub editions: Vec<AssetEditionInfoResponse>,
 
     #[serde(flatten)]
-    pub pagination: PaginationModel,
+    pub pagination: PaginationResponse,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
-pub struct AssetEditionInfoModel {
+pub struct AssetEditionInfoResponse {
     pub mint: String,
     pub edition_address: String,
     pub edition: u64,
 }
-impl From<&AssetEditionInfo> for AssetEditionInfoModel {
+impl From<&AssetEditionInfo> for AssetEditionInfoResponse {
     fn from(value: &AssetEditionInfo) -> Self {
         Self {
             mint: value.mint.to_string(),
@@ -107,15 +107,15 @@ impl From<&AssetEditionInfo> for AssetEditionInfoModel {
     }
 }
 
-impl From<(MasterAssetEditionsInfo, Pagination)> for MasterAssetEditionsInfoModel {
+impl From<(MasterAssetEditionsInfo, Pagination)> for MasterAssetEditionsInfoResponse {
     fn from((value, pagination): (MasterAssetEditionsInfo, Pagination)) -> Self {
         Self {
             master_edition_address: value.master_edition_address.to_string(),
             supply: value.supply,
             max_supply: value.max_supply,
-            editions: value.editions.iter().map(AssetEditionInfoModel::from).collect(),
-            pagination: PaginationModel {
-                total: value.editions.len() as u32,
+            editions: value.editions.iter().map(AssetEditionInfoResponse::from).collect(),
+            pagination: PaginationResponse {
+                total: u32::try_from(value.editions.len()).ok().unwrap_or(u32::MAX),
                 limit: pagination.limit.unwrap(),
                 page: pagination.page,
                 before: pagination.before,
@@ -128,7 +128,7 @@ impl From<(MasterAssetEditionsInfo, Pagination)> for MasterAssetEditionsInfoMode
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
 #[serde(default)]
-pub struct PaginationModel {
+pub struct PaginationResponse {
     pub total: u32,
     pub limit: u32,
     #[serde(skip_serializing_if = "Option::is_none")]

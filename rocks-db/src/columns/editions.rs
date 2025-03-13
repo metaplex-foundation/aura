@@ -54,14 +54,6 @@ impl TypedColumn for TokenMetadataEditionParentIndex {
         let (pub_key, edition) = decode_pubkey_u64(encoded_key)?;
         Ok(EditionIndexKey { pub_key, edition })
     }
-
-    fn decode(bytes: &[u8]) -> Result<Self::ValueType> {
-        serde_cbor::from_slice(bytes).map_err(|e| StorageError::Common(e.to_string()))
-    }
-
-    fn encode(v: &Self::ValueType) -> Result<Vec<u8>> {
-        serde_cbor::to_vec(&v).map_err(|e| StorageError::Common(e.to_string()))
-    }
 }
 
 pub fn merge_token_metadata_edition(
@@ -118,7 +110,7 @@ pub fn merge_token_metadata_parent_index_edition(
     let mut result = vec![];
     let mut write_version = 0;
     if let Some(existing_val) = existing_val {
-        match serde_cbor::from_slice::<TokenMetadataEditionParentIndex>(existing_val) {
+        match TokenMetadataEditionParentIndex::decode(existing_val) {
             Ok(value) => {
                 write_version = value.write_version;
                 result = existing_val.to_vec();
@@ -130,7 +122,7 @@ pub fn merge_token_metadata_parent_index_edition(
     }
 
     for op in operands {
-        match serde_cbor::from_slice::<TokenMetadataEditionParentIndex>(op) {
+        match TokenMetadataEditionParentIndex::decode(op) {
             Ok(new_val) => {
                 if new_val.write_version > write_version || result.is_empty() {
                     write_version = new_val.write_version;

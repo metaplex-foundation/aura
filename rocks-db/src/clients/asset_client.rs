@@ -10,7 +10,6 @@ use entities::{
     models::{EditionData, PubkeyWithSlot},
 };
 use futures::future::Either;
-use itertools::Itertools;
 use mpl_token_metadata::ID as METADATA_PROGRAM_ID;
 use solana_sdk::pubkey::Pubkey;
 
@@ -305,7 +304,6 @@ impl Storage {
                             a.static_details.as_ref().map(|s| s.edition_address)
                         })
                         .flatten()
-                        .dedup()
                         .collect::<Vec<_>>(),
                 )
                 .await?,
@@ -330,16 +328,14 @@ impl Storage {
         pagination: PaginationQuery,
     ) -> Result<Vec<TokenMetadataEditionParentIndex>> {
         let limit = pagination.limit.unwrap_or(100) as usize;
-        let mut revert = false;
+        let mut reverse = false;
 
         let iter = if pagination.after.is_some() {
             let mut iter = self.token_metadata_edition_parent_index.iter(EditionIndexKey {
                 pub_key: master_edition,
-                edition: pagination
-                    .after
-                    .unwrap()
-                    .parse::<u64>()
-                    .expect("failed to parse edition after key"),
+                edition: pagination.after.unwrap().parse::<u64>().map_err(|_| {
+                    StorageError::Common("failed to parse edition after key".to_string())
+                })?,
             });
             // iterator is on the item we were searching for
             iter.next();
@@ -347,13 +343,11 @@ impl Storage {
         } else if pagination.before.is_some() {
             let mut iter = self.token_metadata_edition_parent_index.iter_reverse(EditionIndexKey {
                 pub_key: master_edition,
-                edition: pagination
-                    .before
-                    .unwrap()
-                    .parse::<u64>()
-                    .expect("failed to parse edition before key"),
+                edition: pagination.before.unwrap().parse::<u64>().map_err(|_| {
+                    StorageError::Common("failed to parse edition before key".to_string())
+                })?,
             });
-            revert = true;
+            reverse = true;
 
             // iterator is on the item we were searching for
             iter.next();
@@ -372,7 +366,6 @@ impl Storage {
                     iter.next();
                 }
             }
-
             iter
         };
 
@@ -387,7 +380,7 @@ impl Storage {
             }
         }
 
-        if revert {
+        if reverse {
             asset_keys.reverse()
         }
 

@@ -42,13 +42,7 @@ impl PaginationQuery {
             pagination.before.is_none() && pagination.after.is_none() && pagination.page.is_none();
 
         // if cursor is passed use it as 'after' parameter
-        let after = {
-            if cursor_enabled {
-                pagination.cursor
-            } else {
-                pagination.after
-            }
-        };
+        let after = if cursor_enabled { pagination.cursor } else { pagination.after };
 
         Ok(PaginationQuery {
             limit: pagination.limit,
