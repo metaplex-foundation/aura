@@ -4,7 +4,7 @@ use clap::Parser;
 use metrics_utils::{utils::setup_metrics, ApiMetricsConfig, JsonDownloaderMetricsConfig};
 use nft_ingester::{
     api::{account_balance::AccountBalanceGetterImpl, service::start_api},
-    config::{init_logger, ApiClapArgs},
+    config::{init_logger, ApiClapArgs, HealthCheckInfo},
     consts::RAYDIUM_API_HOST,
     error::IngesterError,
     json_worker::JsonWorker,
@@ -25,8 +25,15 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 pub async fn main() -> Result<(), IngesterError> {
     let args = ApiClapArgs::parse();
     init_logger(&args.log_level);
+    const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
     info!("Starting API server...");
+    info!("___________________________________",);
+    info!("Node name: {:?}", args.node_name);
+    info!("APP VERSION: {}", APP_VERSION);
+
+    let health_check_info =
+        HealthCheckInfo { app_version: APP_VERSION.to_string(), node_name: args.node_name };
 
     #[cfg(feature = "profiling")]
     let guard = if args.run_profiling {
@@ -162,6 +169,7 @@ pub async fn main() -> Result<(), IngesterError> {
             let _ = start_api(
                 pg_client.clone(),
                 cloned_rocks_storage.clone(),
+                health_check_info,
                 cancellation_token,
                 metrics.clone(),
                 args.server_port,

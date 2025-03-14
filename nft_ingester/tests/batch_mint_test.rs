@@ -31,7 +31,7 @@ use nft_ingester::{
         batch_mint_persister::{BatchMintPersister, MAX_BATCH_MINT_DOWNLOAD_ATTEMPTS},
         batch_mint_processor::{BatchMintProcessor, MockPermanentStorageClient},
     },
-    config::JsonMiddlewareConfig,
+    config::{HealthCheckInfo, JsonMiddlewareConfig},
     error::IngesterError,
     json_worker::JsonWorker,
     processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
@@ -383,6 +383,7 @@ async fn batch_mint_with_verified_creators_test() {
     >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
+        HealthCheckInfo { node_name: Some("test".to_string()), app_version: "1.0".to_string() },
         Arc::new(ApiMetricsConfig::new()),
         None,
         None,
@@ -520,6 +521,7 @@ async fn batch_mint_with_unverified_creators_test() {
     >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
+        HealthCheckInfo { node_name: Some("test".to_string()), app_version: "1.0".to_string() },
         Arc::new(ApiMetricsConfig::new()),
         None,
         None,
@@ -609,6 +611,7 @@ async fn batch_mint_persister_test() {
     >::new(
         env.pg_env.client.clone(),
         env.rocks_env.storage.clone(),
+        HealthCheckInfo { node_name: Some("test".to_string()), app_version: "1.0".to_string() },
         Arc::new(ApiMetricsConfig::new()),
         None,
         None,

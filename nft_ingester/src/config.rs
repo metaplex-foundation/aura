@@ -12,6 +12,9 @@ use crate::error::IngesterError;
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct IngesterClapArgs {
+    #[clap(long, env, help = "Node name to simplify monitoring staff")]
+    pub node_name: Option<String>,
+
     #[clap(
         short('d'),
         long,
@@ -401,6 +404,9 @@ pub struct MigratorClapArgs {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct ApiClapArgs {
+    #[clap(long, env, help = "Node name to simplify monitoring staff")]
+    pub node_name: Option<String>,
+
     #[clap(short('p'), long, env, help = "example: https://mainnet-aura.metaplex.com")]
     pub rpc_host: String,
 
@@ -556,6 +562,13 @@ pub enum JsonMigratorMode {
 pub struct JsonMiddlewareConfig {
     pub is_enabled: bool,
     pub max_urls_to_parse: usize,
+}
+
+/// Information that we pass to the API level
+#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+pub struct HealthCheckInfo {
+    pub app_version: String,
+    pub node_name: Option<String>,
 }
 
 pub const DATABASE_URL_KEY: &str = "url";

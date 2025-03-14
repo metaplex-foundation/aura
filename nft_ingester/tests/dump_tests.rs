@@ -130,7 +130,7 @@ mod mtg_441_tests {
     use metrics_utils::ApiMetricsConfig;
     use nft_ingester::{
         api::{dapi::rpc_asset_models::Asset, DasApi},
-        config::JsonMiddlewareConfig,
+        config::{HealthCheckInfo, JsonMiddlewareConfig},
         json_worker::JsonWorker,
         raydium_price_fetcher::RaydiumTokenPriceFetcher,
     };
@@ -164,6 +164,7 @@ mod mtg_441_tests {
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
+            HealthCheckInfo { node_name: Some("test".to_string()), app_version: "1.0".to_string() },
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
