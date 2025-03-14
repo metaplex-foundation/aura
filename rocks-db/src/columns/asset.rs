@@ -7,7 +7,8 @@ use bincode::{deserialize, serialize};
 use entities::{
     enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass},
     models::{
-        AssetIndex, EditionData, SplMint, TokenAccount, UpdateVersion, Updated, UrlWithStatus,
+        AssetIndex, EditionData, EditionV1, SplMint, TokenAccount, UpdateVersion, Updated,
+        UrlWithStatus,
     },
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
@@ -63,6 +64,17 @@ pub struct TokenMetadataEditionParentIndex {
     pub edition: u64,
     pub asset_key: Pubkey,
     pub write_version: u64,
+}
+
+impl From<&EditionV1> for TokenMetadataEditionParentIndex {
+    fn from(edition_v1: &EditionV1) -> Self {
+        Self {
+            parent: edition_v1.parent,
+            edition: edition_v1.edition,
+            asset_key: edition_v1.key,
+            write_version: edition_v1.write_version,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]

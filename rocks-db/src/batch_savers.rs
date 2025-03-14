@@ -143,12 +143,7 @@ impl BatchSaveStorage {
         self.storage.token_metadata_edition_cbor.merge_with_batch(&mut self.batch, key, edition)?;
 
         if let TokenMetadataEdition::EditionV1(edition_v1) = edition {
-            let edition_index = TokenMetadataEditionParentIndex {
-                parent: edition_v1.parent,
-                edition: edition_v1.edition,
-                asset_key: edition_v1.key,
-                write_version: edition_v1.write_version,
-            };
+            let edition_index: TokenMetadataEditionParentIndex = edition_v1.into();
 
             self.storage.token_metadata_edition_parent_index.merge_with_batch(
                 &mut self.batch,

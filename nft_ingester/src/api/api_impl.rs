@@ -416,12 +416,12 @@ where
             })?;
         }
 
+        let pagination_query = PaginationQuery::build(pagination.clone()).map_err(|_| {
+            DasApiError::Validation("Failed to build pagination object.".to_string())
+        })?;
         let master_asset_editions_info = self
             .rocks_db
-            .get_master_edition_child_assets_info(
-                mint_address,
-                PaginationQuery::build(pagination.clone()).unwrap(),
-            )
+            .get_master_edition_child_assets_info(mint_address, pagination_query)
             .await?;
 
         self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
