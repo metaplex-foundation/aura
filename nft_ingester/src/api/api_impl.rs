@@ -34,7 +34,10 @@ use crate::{
     api::{
         dapi::{
             converters::SearchAssetsQuery,
-            response::{AssetList,Check, GetGroupingResponse, TransactionSignatureListDeprecated, HealthCheckResponse, Status, MasterAssetEditionsInfoResponse,},
+            response::{
+                AssetList, Check, GetGroupingResponse, HealthCheckResponse,
+                MasterAssetEditionsInfoResponse, Status, TransactionSignatureListDeprecated,
+            },
             rpc_asset_models::Asset,
         },
         error::DasApiError,

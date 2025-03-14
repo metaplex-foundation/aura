@@ -1399,7 +1399,7 @@ async fn test_health_check() {
             well_known_fungible_accounts: HashMap::new(),
         },
     )
-        .await;
+    .await;
 
     let response = setup.das_api.check_health().await.unwrap();
 
