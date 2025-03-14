@@ -4212,5 +4212,24 @@ mod tests {
             Into::<GetAsset>::into(params_deserialized),
             GetAsset { id: "asset".to_owned(), options: Default::default() }
         );
+
+        // searchAssets
+        let request_params = r#"[null,"all",null,"pB6sjL2WCbbU654j7pqYbY3hoiMYMYCaa7qnD5qeJ2E",null,null,null,null,null,null,null,null,null,true,null,null,null,null,null,null,153,2,null,null,null]"#;
+        let rpc_params: jsonrpc_core::Params =
+            serde_json::from_str(request_params).expect("params are valid json");
+        let params_deserialized: SearchAssets = rpc_params
+            .parse()
+            .expect("params provided deserialize correctly into GetAssetsByOwner");
+        assert_eq!(
+            params_deserialized,
+            SearchAssets {
+                condition_type: Some(entities::api_req_params::SearchConditionType::All),
+                owner_address: Some("pB6sjL2WCbbU654j7pqYbY3hoiMYMYCaa7qnD5qeJ2E".to_owned()),
+                compressed: Some(true),
+                limit: Some(153),
+                page: Some(2),
+                ..Default::default()
+            }
+        );
     }
 }
