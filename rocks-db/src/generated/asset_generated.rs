@@ -2,8 +2,6 @@
 
 // @generated
 
-use core::{cmp::Ordering, mem};
-
 extern crate flatbuffers;
 use self::flatbuffers::{EndianScalar, Follow};
 
@@ -4343,6 +4341,176 @@ pub mod asset {
             ds.field("owner", &self.owner());
             ds.field("collection", &self.collection());
             ds.field("other_known_owners", &self.other_known_owners());
+            ds.finish()
+        }
+    }
+    pub enum TokenMetadataEditionParentIndexOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct TokenMetadataEditionParentIndex<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for TokenMetadataEditionParentIndex<'a> {
+        type Inner = TokenMetadataEditionParentIndex<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self { _tab: flatbuffers::Table::new(buf, loc) }
+        }
+    }
+
+    impl<'a> TokenMetadataEditionParentIndex<'a> {
+        pub const VT_PARENT: flatbuffers::VOffsetT = 4;
+        pub const VT_ASSET_KEY: flatbuffers::VOffsetT = 6;
+        pub const VT_WRITE_VERSION: flatbuffers::VOffsetT = 8;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            TokenMetadataEditionParentIndex { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args TokenMetadataEditionParentIndexArgs<'args>,
+        ) -> flatbuffers::WIPOffset<TokenMetadataEditionParentIndex<'bldr>> {
+            let mut builder = TokenMetadataEditionParentIndexBuilder::new(_fbb);
+            builder.add_write_version(args.write_version);
+            if let Some(x) = args.asset_key {
+                builder.add_asset_key(x);
+            }
+            if let Some(x) = args.parent {
+                builder.add_parent(x);
+            }
+            builder.finish()
+        }
+
+        #[inline]
+        pub fn parent(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    TokenMetadataEditionParentIndex::VT_PARENT,
+                    None,
+                )
+            }
+        }
+        #[inline]
+        pub fn asset_key(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    TokenMetadataEditionParentIndex::VT_ASSET_KEY,
+                    None,
+                )
+            }
+        }
+        #[inline]
+        pub fn write_version(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(TokenMetadataEditionParentIndex::VT_WRITE_VERSION, Some(0))
+                    .unwrap()
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for TokenMetadataEditionParentIndex<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    "parent",
+                    Self::VT_PARENT,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    "asset_key",
+                    Self::VT_ASSET_KEY,
+                    false,
+                )?
+                .visit_field::<u64>("write_version", Self::VT_WRITE_VERSION, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct TokenMetadataEditionParentIndexArgs<'a> {
+        pub parent: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub asset_key: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub write_version: u64,
+    }
+    impl<'a> Default for TokenMetadataEditionParentIndexArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            TokenMetadataEditionParentIndexArgs { parent: None, asset_key: None, write_version: 0 }
+        }
+    }
+
+    pub struct TokenMetadataEditionParentIndexBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TokenMetadataEditionParentIndexBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_parent(&mut self, parent: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
+                TokenMetadataEditionParentIndex::VT_PARENT,
+                parent,
+            );
+        }
+        #[inline]
+        pub fn add_asset_key(
+            &mut self,
+            asset_key: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
+        ) {
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
+                TokenMetadataEditionParentIndex::VT_ASSET_KEY,
+                asset_key,
+            );
+        }
+        #[inline]
+        pub fn add_write_version(&mut self, write_version: u64) {
+            self.fbb_.push_slot::<u64>(
+                TokenMetadataEditionParentIndex::VT_WRITE_VERSION,
+                write_version,
+                0,
+            );
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> TokenMetadataEditionParentIndexBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            TokenMetadataEditionParentIndexBuilder { fbb_: _fbb, start_: start }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<TokenMetadataEditionParentIndex<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for TokenMetadataEditionParentIndex<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("TokenMetadataEditionParentIndex");
+            ds.field("parent", &self.parent());
+            ds.field("asset_key", &self.asset_key());
+            ds.field("write_version", &self.write_version());
             ds.finish()
         }
     }

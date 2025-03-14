@@ -3,7 +3,8 @@ use std::sync::Arc;
 use entities::api_req_params::{
     GetAsset, GetAssetBatch, GetAssetBatchV0, GetAssetV0, GetAssetsByAuthority,
     GetAssetsByAuthorityV0, GetAssetsByCreator, GetAssetsByCreatorV0, GetAssetsByGroup,
-    GetAssetsByGroupV0, GetAssetsByOwner, GetAssetsByOwnerV0, SearchAssets, SearchAssetsV0,
+    GetAssetsByGroupV0, GetAssetsByOwner, GetAssetsByOwnerV0, GetNftEditions, SearchAssets,
+    SearchAssetsV0,
 };
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_core::{types::params::Params, MetaIoHandler};
@@ -97,6 +98,21 @@ impl RpcApiBuilder {
             }
         });
         module.add_alias("getAssetsByCreator", "get_assets_by_creator");
+
+        let cloned_api = api.clone();
+        module.add_method("get_nft_editions", move |rpc_params: Params| {
+            let api = cloned_api.clone();
+            async move {
+                match rpc_params.clone().parse::<GetNftEditions>() {
+                    Ok(payload) => api.get_nft_editions(payload).await.map_err(Into::into),
+                    Err(_) => api
+                        .get_nft_editions(rpc_params.parse::<GetNftEditions>()?)
+                        .await
+                        .map_err(Into::into),
+                }
+            }
+        });
+        module.add_alias("getNftEditions", "get_nft_editions");
 
         let cloned_api = api.clone();
         module.add_method("get_assets_by_authority", move |rpc_params: Params| {

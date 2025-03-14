@@ -1,18 +1,23 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use entities::{
-    api_req_params::{GetAsset, GetAssetBatch, GetAssetsByGroup, SearchAssets},
-    enums::{AssetType, AssetType::Fungible},
+    api_req_params::{GetAsset, GetAssetBatch, GetAssetsByGroup, GetNftEditions, SearchAssets},
+    enums::{AssetType, AssetType::Fungible, TokenMetadataEdition},
+    models::{EditionMetadata, EditionV1, MasterEdition},
 };
 use function_name::named;
 use itertools::Itertools;
+use metrics_utils::IngesterMetricsConfig;
 use nft_ingester::{
     api::dapi::response::AssetList,
     consts::RAYDIUM_API_HOST,
+    processors::account_based::mplx_updates_processor::MplxAccountsProcessor,
     raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
     scheduler::{update_fungible_token_static_details, Scheduler},
 };
+use rocks_db::batch_savers::BatchSaveStorage;
 use serial_test::serial;
+use solana_sdk::pubkey::Pubkey;
 use tokio_util::sync::CancellationToken;
 use AssetType::NonFungible;
 
@@ -1148,4 +1153,234 @@ async fn test_update_fungible_token_static_details_job() {
     });
 
     insta::assert_json_snapshot!(name, response);
+}
+
+#[named]
+#[serial]
+#[tokio::test(flavor = "multi_thread")]
+#[tracing_test::traced_test]
+async fn test_get_master_editions() {
+    let name = trim_test_name(function_name!());
+    let first_mint_master_edition =
+        Pubkey::from_str("Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL").unwrap();
+    let second_mint_edition =
+        Pubkey::from_str("GJvFDcBWf6aDncd1TBzx2ou1rgLFYaMBdbYLBa9oTAEw").unwrap();
+    let third_mint_edition =
+        Pubkey::from_str("9yQecKKYSHxez7fFjJkUvkz42TLmkoXzhyZxEf2pw8pz").unwrap();
+    let fourth_mint_edition =
+        Pubkey::from_str("7AeRUkukNCpWFtxK2QBZr1PymzPde6qtQYND6CajrE2B").unwrap();
+    let supply = 123;
+    let max_supply = 10000;
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts([
+        first_mint_master_edition.to_string(), // Master Edition
+        second_mint_edition.to_string(),
+        third_mint_edition.to_string(),
+        fourth_mint_edition.to_string(),
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let first_mint_master_edition_to_save = EditionMetadata {
+        edition: TokenMetadataEdition::MasterEdition {
+            0: MasterEdition {
+                key: first_mint_master_edition,
+                supply,
+                max_supply: Some(max_supply),
+                write_version: 1,
+            },
+        },
+        write_version: 1,
+        slot_updated: 1,
+    };
+    let second_mint_edition_to_save =
+        create_edition_metadata(second_mint_edition, first_mint_master_edition, 1);
+    let third_mint_edition_to_save =
+        create_edition_metadata(third_mint_edition, first_mint_master_edition, 2);
+    let fourth_mint_edition_to_save =
+        create_edition_metadata(fourth_mint_edition, first_mint_master_edition, 3);
+
+    let mut batch_storage =
+        BatchSaveStorage::new(setup.rocks_db, 10, Arc::new(IngesterMetricsConfig::new()));
+    let mplx_accs_parser = MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+
+    mplx_accs_parser
+        .transform_and_store_edition_account(
+            &mut batch_storage,
+            first_mint_master_edition,
+            &first_mint_master_edition_to_save.edition,
+        )
+        .unwrap();
+    mplx_accs_parser
+        .transform_and_store_edition_account(
+            &mut batch_storage,
+            second_mint_edition,
+            &second_mint_edition_to_save.edition,
+        )
+        .unwrap();
+    mplx_accs_parser
+        .transform_and_store_edition_account(
+            &mut batch_storage,
+            third_mint_edition,
+            &third_mint_edition_to_save.edition,
+        )
+        .unwrap();
+    mplx_accs_parser
+        .transform_and_store_edition_account(
+            &mut batch_storage,
+            fourth_mint_edition,
+            &fourth_mint_edition_to_save.edition,
+        )
+        .unwrap();
+
+    batch_storage.flush().unwrap();
+
+    let request = r#"
+        {
+            "page": 1,
+            "limit": 100,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 1);
+    assert_eq!(response["total"], 3);
+    assert_eq!(response["limit"], 100);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 3);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 1);
+    assert_eq!(response["editions"].as_array().unwrap()[1]["edition"], 2);
+    assert_eq!(response["editions"].as_array().unwrap()[2]["edition"], 3);
+    insta::assert_json_snapshot!(format!("{}_all_items_in_sorted_order", name), response);
+
+    let request = r#"
+        {
+            "page": 1,
+            "limit": 2,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 1);
+    assert_eq!(response["total"], 2);
+    assert_eq!(response["limit"], 2);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 2);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 1);
+    assert_eq!(response["editions"].as_array().unwrap()[1]["edition"], 2);
+    insta::assert_json_snapshot!(format!("{}_few_items_in_sorted_order", name), response);
+
+    let request = r#"
+        {
+            "page": 1,
+            "limit": 1,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 1);
+    assert_eq!(response["total"], 1);
+    assert_eq!(response["limit"], 1);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 1);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 1);
+    insta::assert_json_snapshot!(format!("{}_first_page", name), response);
+
+    let request = r#"
+        {
+            "page": 2,
+            "limit": 1,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 2);
+    assert_eq!(response["total"], 1);
+    assert_eq!(response["limit"], 1);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 1);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 2);
+    insta::assert_json_snapshot!(format!("{}_second_page", name), response);
+
+    let request = r#"
+        {
+            "page": 50,
+            "limit": 1,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 50);
+    assert_eq!(response["total"], 0);
+    assert_eq!(response["limit"], 1);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 0);
+    insta::assert_json_snapshot!(format!("{}_page_out_of_range", name), response);
+
+    let request = r#"
+        {
+            "after": "1",
+            "limit": 100,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["after"], "1");
+    assert_eq!(response["total"], 2);
+    assert_eq!(response["limit"], 100);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 2);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 2);
+    assert_eq!(response["editions"].as_array().unwrap()[1]["edition"], 3);
+    insta::assert_json_snapshot!(format!("{}_page_after_first", name), response);
+
+    let request = r#"
+        {
+            "before": "3",
+            "limit": 100,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["before"], "3");
+    assert_eq!(response["total"], 2);
+    assert_eq!(response["limit"], 100);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 2);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 1);
+    assert_eq!(response["editions"].as_array().unwrap()[1]["edition"], 2);
+    insta::assert_json_snapshot!(format!("{}_page_before_third", name), response);
+}
+
+fn create_edition_metadata(key: Pubkey, parent: Pubkey, edition: u64) -> EditionMetadata {
+    EditionMetadata {
+        edition: TokenMetadataEdition::EditionV1 {
+            0: EditionV1 { key, parent, edition, write_version: 1 },
+        },
+        write_version: 1,
+        slot_updated: 1,
+    }
 }

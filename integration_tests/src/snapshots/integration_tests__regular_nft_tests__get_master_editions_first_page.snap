@@ -1,0 +1,21 @@
+---
+source: integration_tests/src/regular_nft_tests.rs
+assertion_line: 1297
+expression: response
+snapshot_kind: text
+---
+{
+  "master_edition_address": "8SHfqzJYABeGfiG1apwiEYt6TvfGQiL1pdwEjvTKsyiZ",
+  "supply": 123,
+  "max_supply": 10000,
+  "editions": [
+    {
+      "mint": "GJvFDcBWf6aDncd1TBzx2ou1rgLFYaMBdbYLBa9oTAEw",
+      "edition_address": "AoxgzXKEsJmUyF5pBb3djn9cJFA26zh2SQHvd9EYijZV",
+      "edition": 1
+    }
+  ],
+  "total": 1,
+  "limit": 1,
+  "page": 1
+}
