@@ -9,7 +9,8 @@ use entities::{
     api_req_params::{
         GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
         GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
-        GetByMethodsOptions, GetCoreFees, GetGrouping, GetTokenAccounts, Pagination, SearchAssets,
+        GetByMethodsOptions, GetCoreFees, GetGrouping, GetNftEditions, GetTokenAccounts,
+        Pagination, PaginationQuery, SearchAssets,
     },
     enums::TokenType,
 };
@@ -33,7 +34,10 @@ use crate::{
     api::{
         dapi::{
             converters::SearchAssetsQuery,
-            response::{AssetList, GetGroupingResponse, TransactionSignatureListDeprecated},
+            response::{
+                AssetList, GetGroupingResponse, MasterAssetEditionsInfoResponse,
+                TransactionSignatureListDeprecated,
+            },
             rpc_asset_models::Asset,
         },
         error::DasApiError,
@@ -380,6 +384,49 @@ where
         self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
         Ok(json!(res))
+    }
+
+    pub async fn get_nft_editions(&self, payload: GetNftEditions) -> Result<Value, DasApiError> {
+        let label = "get_nft_editions";
+        self.metrics.inc_requests(label);
+        let latency_timer = Instant::now();
+
+        let pagination = Pagination {
+            limit: payload.limit.unwrap_or(DEFAULT_LIMIT as u32).into(),
+            page: payload.page,
+            before: payload.before,
+            after: payload.after,
+            cursor: payload.cursor,
+        };
+        Self::validate_basic_pagination(&pagination, self.max_page_limit)?;
+        let mint_address = validate_pubkey(payload.mint)?;
+
+        if pagination.after.is_some() {
+            pagination.after.clone().unwrap().parse::<u64>().map_err(|_| {
+                DasApiError::Validation(
+                    "Failed to parse edition after key. It should be a number.".to_string(),
+                )
+            })?;
+        }
+        if pagination.before.is_some() {
+            pagination.before.clone().unwrap().parse::<u64>().map_err(|_| {
+                DasApiError::Validation(
+                    "Failed to parse edition before key. It should be a number.".to_string(),
+                )
+            })?;
+        }
+
+        let pagination_query = PaginationQuery::build(pagination.clone()).map_err(|_| {
+            DasApiError::Validation("Failed to build pagination object.".to_string())
+        })?;
+        let master_asset_editions_info = self
+            .rocks_db
+            .get_master_edition_child_assets_info(mint_address, pagination_query)
+            .await?;
+
+        self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
+
+        Ok(json!(MasterAssetEditionsInfoResponse::from((master_asset_editions_info, pagination))))
     }
 
     pub async fn get_assets_by_group(

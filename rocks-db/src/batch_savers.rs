@@ -17,7 +17,10 @@ use usecase::save_metrics::result_to_metrics;
 use crate::{
     asset::{AssetCollection, AssetCompleteDetails, MetadataMintMap},
     column::TypedColumn,
-    columns::inscriptions::InscriptionData,
+    columns::{
+        asset::TokenMetadataEditionParentIndex, editions::EditionIndexKey,
+        inscriptions::InscriptionData,
+    },
     generated::asset_generated::asset as fb,
     token_accounts::{TokenAccountMintOwnerIdx, TokenAccountOwnerIdx},
     AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, Result, Storage,
@@ -138,8 +141,19 @@ impl BatchSaveStorage {
 
     pub fn store_edition(&mut self, key: Pubkey, edition: &TokenMetadataEdition) -> Result<()> {
         self.storage.token_metadata_edition_cbor.merge_with_batch(&mut self.batch, key, edition)?;
+
+        if let TokenMetadataEdition::EditionV1(edition_v1) = edition {
+            let edition_index: TokenMetadataEditionParentIndex = edition_v1.into();
+
+            self.storage.token_metadata_edition_parent_index.merge_with_batch(
+                &mut self.batch,
+                EditionIndexKey { pub_key: edition_index.parent, edition: edition_index.edition },
+                &edition_index.clone(),
+            )?;
+        }
         Ok(())
     }
+
     pub fn store_inscription(&mut self, inscription: &InscriptionInfo) -> Result<()> {
         self.storage.inscriptions.merge_with_batch(
             &mut self.batch,
