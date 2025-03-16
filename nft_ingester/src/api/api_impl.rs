@@ -127,27 +127,23 @@ where
         let label = "check_health";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
-        let mut status = Status::OK;
+        let mut overall_status = Status::Ok;
 
-        let check = match self.pg_client.check_health().await {
-            Ok(_) => {
-                Check { status: Status::OK, name: "PostgresDB".to_string(), description: None }
-            },
-            Err(_) => {
-                status = Status::Unhealthy;
-                Check {
-                    status: Status::Unhealthy,
-                    name: "PostgresDB".to_string(),
-                    description: Some(DasApiError::InternalDbError.to_string()),
-                }
-            },
-        };
+        //List of Checks
+        let mut check = Check::new("PostgresDB".to_string());
+
+        if self.pg_client.check_health().await.is_err() {
+            overall_status = Status::Unhealthy;
+            check.status = Status::Unhealthy;
+            check.description = Some(DasApiError::InternalDbError.to_string());
+        }
 
         let response = HealthCheckResponse {
-            status,
+            status: overall_status,
             app_version: self.health_check_info.app_version.clone(),
             node_name: self.health_check_info.node_name.clone(),
             checks: vec![check],
+            image_info: self.health_check_info.image_info.clone(),
         };
 
         self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);

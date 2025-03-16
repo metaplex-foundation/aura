@@ -157,7 +157,11 @@ impl TestSetup {
         let das_api = DasApi::new(
             index_storage.clone(),
             storage.clone(),
-            HealthCheckInfo { node_name: Some("test".to_string()), app_version: "1.0".to_string() },
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             metrics_state.api_metrics.clone(),
             None,
             None,

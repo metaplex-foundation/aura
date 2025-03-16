@@ -30,6 +30,7 @@ pub struct HealthCheckResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub node_name: Option<String>,
     pub checks: Vec<Check>,
+    pub image_info: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -40,9 +41,16 @@ pub struct Check {
     pub description: Option<String>,
 }
 
+impl Check {
+    pub fn new(name: String) -> Self {
+        Self { status: Status::Ok, name, description: None }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Status {
-    OK,
+    Ok,
     Degraded,
     Unhealthy,
 }

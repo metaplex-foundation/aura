@@ -33,8 +33,8 @@ use nft_ingester::{
         batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender},
     },
     cleaners::indexer_cleaner::clean_syncronized_idxs,
-    config::{init_logger, HealthCheckInfo, IngesterClapArgs},
-    consts::RAYDIUM_API_HOST,
+    config::{init_logger, read_version_info, HealthCheckInfo, IngesterClapArgs},
+    consts::{RAYDIUM_API_HOST, VERSION_FILE_PATH},
     error::IngesterError,
     gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller},
     init::{init_index_storage_with_migration, init_primary_storage},
@@ -82,12 +82,14 @@ pub async fn main() -> Result<(), IngesterError> {
 
     let args = IngesterClapArgs::parse();
     init_logger(&args.log_level);
+    let image_info = read_version_info(VERSION_FILE_PATH);
 
     info!("Starting Ingester...");
     info!("___________________________________",);
     info!("Node name: {:?}", args.node_name);
     info!("APP VERSION: {}", APP_VERSION);
     info!("API: {}", args.run_api.unwrap_or(false));
+    info!("Image info: {}", image_info.clone().unwrap_or("No image info available".to_string()));
     if args.run_api.unwrap_or(false) {
         info!("API port: localhost:{}", args.server_port);
     }
@@ -102,8 +104,11 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Tx processor buffer size: {}", args.tx_processor_buffer_size);
     info!("___________________________________",);
 
-    let health_check_info =
-        HealthCheckInfo { app_version: APP_VERSION.to_string(), node_name: args.node_name };
+    let health_check_info = HealthCheckInfo {
+        app_version: APP_VERSION.to_string(),
+        node_name: args.node_name,
+        image_info,
+    };
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();

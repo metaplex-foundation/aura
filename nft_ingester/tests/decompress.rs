@@ -240,7 +240,11 @@ mod tests {
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
-            HealthCheckInfo { node_name: Some("test".to_string()), app_version: "1.0".to_string() },
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -324,7 +328,11 @@ mod tests {
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
-            HealthCheckInfo { node_name: Some("test".to_string()), app_version: "1.0".to_string() },
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -408,7 +416,11 @@ mod tests {
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
-            HealthCheckInfo { node_name: Some("test".to_string()), app_version: "1.0".to_string() },
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -492,7 +504,11 @@ mod tests {
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
-            HealthCheckInfo { node_name: Some("test".to_string()), app_version: "1.0".to_string() },
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
