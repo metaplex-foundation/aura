@@ -7,7 +7,7 @@ use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
 use tracing_subscriber::fmt;
 
-use crate::{error::IngesterError};
+use crate::error::IngesterError;
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
