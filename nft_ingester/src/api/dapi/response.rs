@@ -30,6 +30,7 @@ pub struct HealthCheckResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub node_name: Option<String>,
     pub checks: Vec<Check>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_info: Option<String>,
 }
 
