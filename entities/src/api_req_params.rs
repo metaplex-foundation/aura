@@ -125,6 +125,8 @@ pub struct GetByMethodsOptions {
     pub show_zero_balance: bool,
     #[serde(default)]
     pub show_fungible: bool,
+    #[serde(default)]
+    pub show_burnt: Option<bool>,
 }
 
 impl From<&SearchAssetsOptions> for Options {
@@ -596,6 +598,7 @@ impl From<SearchAssetsOptions> for GetByMethodsOptions {
             show_inscription: value.show_inscription,
             show_zero_balance: value.show_zero_balance,
             show_fungible: false,
+            show_burnt: None,
         }
     }
 }
