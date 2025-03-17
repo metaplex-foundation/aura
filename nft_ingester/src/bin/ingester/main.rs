@@ -33,8 +33,8 @@ use nft_ingester::{
         batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender},
     },
     cleaners::indexer_cleaner::clean_syncronized_idxs,
-    config::{init_logger, IngesterClapArgs},
-    consts::RAYDIUM_API_HOST,
+    config::{init_logger, read_version_info, HealthCheckInfo, IngesterClapArgs},
+    consts::{RAYDIUM_API_HOST, VERSION_FILE_PATH},
     error::IngesterError,
     gapfiller::{process_asset_details_stream_wrapper, run_sequence_consistent_gapfiller},
     init::{init_index_storage_with_migration, init_primary_storage},
@@ -78,12 +78,18 @@ pub const SECONDS_TO_RETRY_IDXS_CLEANUP: u64 = 15 * 60; // 15 minutes
 
 #[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> Result<(), IngesterError> {
+    const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
     let args = IngesterClapArgs::parse();
     init_logger(&args.log_level);
+    let image_info = read_version_info(VERSION_FILE_PATH);
 
     info!("Starting Ingester...");
     info!("___________________________________",);
+    info!("Node name: {:?}", args.node_name);
+    info!("APP VERSION: {}", APP_VERSION);
     info!("API: {}", args.run_api.unwrap_or(false));
+    info!("Image info: {}", image_info.clone().unwrap_or("No image info available".to_string()));
     if args.run_api.unwrap_or(false) {
         info!("API port: localhost:{}", args.server_port);
     }
@@ -97,6 +103,12 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Tx redis parsing workers: {}", args.redis_transactions_parsing_workers);
     info!("Tx processor buffer size: {}", args.tx_processor_buffer_size);
     info!("___________________________________",);
+
+    let health_check_info = HealthCheckInfo {
+        app_version: APP_VERSION.to_string(),
+        node_name: args.node_name,
+        image_info,
+    };
 
     let mut metrics_state = MetricState::new();
     metrics_state.register_metrics();
@@ -434,6 +446,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 start_api(
                     cloned_index_storage,
                     cloned_rocks_storage.clone(),
+                    health_check_info,
                     cancellation_token,
                     cloned_api_metrics,
                     args.server_port,

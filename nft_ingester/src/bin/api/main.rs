@@ -4,8 +4,8 @@ use clap::Parser;
 use metrics_utils::{utils::setup_metrics, ApiMetricsConfig, JsonDownloaderMetricsConfig};
 use nft_ingester::{
     api::{account_balance::AccountBalanceGetterImpl, service::start_api},
-    config::{init_logger, ApiClapArgs},
-    consts::RAYDIUM_API_HOST,
+    config::{init_logger, read_version_info, ApiClapArgs, HealthCheckInfo},
+    consts::{RAYDIUM_API_HOST, VERSION_FILE_PATH},
     error::IngesterError,
     json_worker::JsonWorker,
     raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
@@ -25,8 +25,20 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 pub async fn main() -> Result<(), IngesterError> {
     let args = ApiClapArgs::parse();
     init_logger(&args.log_level);
+    const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+    let image_info = read_version_info(VERSION_FILE_PATH);
 
     info!("Starting API server...");
+    info!("___________________________________",);
+    info!("Node name: {:?}", args.node_name);
+    info!("APP VERSION: {}", APP_VERSION);
+    info!("Image info: {}", image_info.clone().unwrap_or("No image info available".to_string()));
+
+    let health_check_info = HealthCheckInfo {
+        app_version: APP_VERSION.to_string(),
+        node_name: args.node_name,
+        image_info,
+    };
 
     #[cfg(feature = "profiling")]
     let guard = if args.run_profiling {
@@ -162,6 +174,7 @@ pub async fn main() -> Result<(), IngesterError> {
             let _ = start_api(
                 pg_client.clone(),
                 cloned_rocks_storage.clone(),
+                health_check_info,
                 cancellation_token,
                 metrics.clone(),
                 args.server_port,

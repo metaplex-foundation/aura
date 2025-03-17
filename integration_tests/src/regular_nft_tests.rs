@@ -1384,3 +1384,27 @@ fn create_edition_metadata(key: Pubkey, parent: Pubkey, edition: u64) -> Edition
         slot_updated: 1,
     }
 }
+
+#[named]
+#[tokio::test(flavor = "multi_thread")]
+#[tracing_test::traced_test]
+async fn test_health_check() {
+    let name = trim_test_name(function_name!());
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
+    )
+    .await;
+
+    let response = setup.das_api.check_health().await.unwrap();
+
+    assert_eq!(response["status"], "OK");
+    assert_eq!(response["app_version"], "1.0");
+    assert_eq!(response["node_name"], "test");
+    insta::assert_json_snapshot!(name, response);
+}

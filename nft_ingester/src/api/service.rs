@@ -28,7 +28,7 @@ use crate::{
         synchronization_state_consistency::SynchronizationStateConsistencyChecker,
         DasApi,
     },
-    config::JsonMiddlewareConfig,
+    config::{HealthCheckInfo, JsonMiddlewareConfig},
     json_worker::JsonWorker,
     raydium_price_fetcher::RaydiumTokenPriceFetcher,
 };
@@ -50,6 +50,7 @@ pub(crate) struct MiddlewaresData {
 pub async fn start_api(
     pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
+    health_check_info: HealthCheckInfo,
     cancellation_token: CancellationToken,
     metrics: Arc<ApiMetricsConfig>,
     port: u16,
@@ -108,6 +109,7 @@ pub async fn start_api(
     let api = DasApi::new(
         pg_client.clone(),
         rocks_db,
+        health_check_info,
         metrics,
         proof_checker,
         tree_gaps_checker,
