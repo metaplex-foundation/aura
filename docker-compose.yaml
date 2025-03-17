@@ -28,27 +28,6 @@ services:
       options:
         max-size: "2048m"
 
-  das-api:
-    image: ghcr.io/metaplex-foundation/aura-api:${DOCKER_IMAGE_TAG}
-    container_name: das-api
-    restart: always
-    env_file:
-      - .env
-    network_mode: host
-    volumes:
-      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:ro
-      - ${ROCKS_DB_SECONDARY_PATH}/api:${ROCKS_DB_SECONDARY_PATH}:rw
-      - ${ROCKS_ARCHIVES_DIR}:${ROCKS_ARCHIVES_DIR}:ro
-      - ${FILE_STORAGE_PATH}:${FILE_STORAGE_PATH_CONTAINER}:rw
-      # Only exists for profiling - uncomment if needed
-      # - ./heaps:/usr/src/app/heaps:rw
-    depends_on:
-      - db
-    stop_grace_period: 2m
-    logging:
-      options:
-        max-size: "2048m"
-
   synchronizer:
     image: ghcr.io/metaplex-foundation/aura-synchronizer:${DOCKER_IMAGE_TAG}
     container_name: synchronizer
@@ -65,40 +44,6 @@ services:
       # - ./heaps:/usr/src/app/heaps:rw
     depends_on:
       - db
-    stop_grace_period: 5m
-    logging:
-      options:
-        max-size: "2048m"
-
-  integrity-verification:
-    container_name: integrity-verification
-    restart: always
-    env_file:
-      - .env
-    network_mode: host
-    volumes:
-      - ./creds.json:/usr/src/app/creds.json
-      - ${INTEGRITY_VERIFICATION_TEST_FILE_PATH}:${INTEGRITY_VERIFICATION_TEST_FILE_PATH_CONTAINER}:rw
-      - ${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH}:${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH_CONTAINER}:rw
-    depends_on:
-      - db
-    logging:
-      options:
-        max-size: "2048m"
-
-  backfill:
-    image: ghcr.io/metaplex-foundation/aura-backfill:${DOCKER_IMAGE_TAG}
-    container_name: backfill
-    restart: no
-    env_file:
-      - .env
-    environment:
-      SOURCE_SLOTS_DB_PATH: ${ROCKS_SLOTS_DB_PATH}
-      TARGET_MAIN_DB_PATH: ${ROCKS_DB_PATH}
-    network_mode: host
-    volumes:
-      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:rw
-      - ${ROCKS_SLOTS_DB_PATH}:${ROCKS_SLOTS_DB_PATH}:ro
     stop_grace_period: 5m
     logging:
       options:
@@ -140,18 +85,81 @@ services:
       options:
         max-size: "100m"
 
-  rocksdb-backup:
-    image: ghcr.io/metaplex-foundation/aura-rocksdb_backup:${DOCKER_IMAGE_TAG}
-    container_name: rocksdb-backup
-    env_file:
-      - .env
-    network_mode: host
-    volumes:
-      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:ro
-      - ${ROCKS_BACKUP_DIR}:${ROCKS_BACKUP_DIR}:rw
-      - ${ROCKS_BACKUP_ARCHIVES_DIR}:${ROCKS_BACKUP_ARCHIVES_DIR}:rw
-      - ${ROCKS_DB_SECONDARY_PATH}/backup:${ROCKS_DB_SECONDARY_PATH}:rw
-    stop_grace_period: 2m
-    logging:
-      options:
-        max-size: "100m"
+#  - Currently not in use, requires rechecking of functionality
+#
+#  rocksdb-backup:
+#    image: ghcr.io/metaplex-foundation/aura-rocksdb_backup:${DOCKER_IMAGE_TAG}
+#    container_name: rocksdb-backup
+#    env_file:
+#      - .env
+#    network_mode: host
+#    volumes:
+#      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:ro
+#      - ${ROCKS_BACKUP_DIR}:${ROCKS_BACKUP_DIR}:rw
+#      - ${ROCKS_BACKUP_ARCHIVES_DIR}:${ROCKS_BACKUP_ARCHIVES_DIR}:rw
+#      - ${ROCKS_DB_SECONDARY_PATH}/backup:${ROCKS_DB_SECONDARY_PATH}:rw
+#    stop_grace_period: 2m
+#    logging:
+#      options:
+#        max-size: "100m"
+
+# - We run it with ingester
+#
+#  das-api:
+#    image: ghcr.io/metaplex-foundation/aura-api:${DOCKER_IMAGE_TAG}
+#    container_name: das-api
+#    restart: always
+#    env_file:
+#      - .env
+#    network_mode: host
+#    volumes:
+#      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:ro
+#      - ${ROCKS_DB_SECONDARY_PATH}/api:${ROCKS_DB_SECONDARY_PATH}:rw
+#      - ${ROCKS_ARCHIVES_DIR}:${ROCKS_ARCHIVES_DIR}:ro
+#      - ${FILE_STORAGE_PATH}:${FILE_STORAGE_PATH_CONTAINER}:rw
+#      # Only exists for profiling - uncomment if needed
+#      # - ./heaps:/usr/src/app/heaps:rw
+#    depends_on:
+#      - db
+#    stop_grace_period: 2m
+#    logging:
+#      options:
+#        max-size: "2048m"
+
+# - We run it with ingester
+#
+#  backfill:
+#    image: ghcr.io/metaplex-foundation/aura-backfill:${DOCKER_IMAGE_TAG}
+#    container_name: backfill
+#    restart: no
+#    env_file:
+#      - .env
+#    environment:
+#      SOURCE_SLOTS_DB_PATH: ${ROCKS_SLOTS_DB_PATH}
+#      TARGET_MAIN_DB_PATH: ${ROCKS_DB_PATH}
+#    network_mode: host
+#    volumes:
+#      - ${ROCKS_DB_PATH}:${ROCKS_DB_PATH}:rw
+#      - ${ROCKS_SLOTS_DB_PATH}:${ROCKS_SLOTS_DB_PATH}:ro
+#    stop_grace_period: 5m
+#    logging:
+#      options:
+#        max-size: "2048m"
+
+#  - Currently not in use, requires rechecking of functionality
+#
+#  integrity-verification:
+#    container_name: integrity-verification
+#    restart: always
+#    env_file:
+#      - .env
+#    network_mode: host
+#    volumes:
+#      - ./creds.json:/usr/src/app/creds.json
+#      - ${INTEGRITY_VERIFICATION_TEST_FILE_PATH}:${INTEGRITY_VERIFICATION_TEST_FILE_PATH_CONTAINER}:rw
+#      - ${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH}:${INTEGRITY_VERIFICATION_SLOTS_COLLECT_PATH_CONTAINER}:rw
+#    depends_on:
+#      - db
+#    logging:
+#      options:
+#        max-size: "2048m"
