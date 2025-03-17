@@ -35,15 +35,15 @@ use crate::{
         dapi::{
             converters::SearchAssetsQuery,
             response::{
-                AssetList, GetGroupingResponse, MasterAssetEditionsInfoResponse,
-                TransactionSignatureListDeprecated,
+                AssetList, Check, GetGroupingResponse, HealthCheckResponse,
+                MasterAssetEditionsInfoResponse, Status, TransactionSignatureListDeprecated,
             },
             rpc_asset_models::Asset,
         },
         error::DasApiError,
         *,
     },
-    config::JsonMiddlewareConfig,
+    config::{HealthCheckInfo, JsonMiddlewareConfig},
 };
 
 const MAX_ITEMS_IN_BATCH_REQ: usize = 1000;
@@ -60,6 +60,7 @@ where
 {
     pub(crate) pg_client: Arc<PgClient>,
     rocks_db: Arc<Storage>,
+    health_check_info: HealthCheckInfo,
     metrics: Arc<ApiMetricsConfig>,
     proof_checker: Option<Arc<PC>>,
     tree_gaps_checker: Option<Arc<PPC>>,
@@ -91,6 +92,7 @@ where
     pub fn new(
         pg_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
+        health_check_info: HealthCheckInfo,
         metrics: Arc<ApiMetricsConfig>,
         proof_checker: Option<Arc<PC>>,
         tree_gaps_checker: Option<Arc<PPC>>,
@@ -106,6 +108,7 @@ where
         DasApi {
             pg_client,
             rocks_db,
+            health_check_info,
             metrics,
             proof_checker,
             tree_gaps_checker,
@@ -124,12 +127,28 @@ where
         let label = "check_health";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
+        let mut overall_status = Status::Ok;
 
-        self.pg_client.check_health().await.map_err(|_| DasApiError::InternalDbError)?;
+        //List of Checks
+        let mut check = Check::new("PostgresDB".to_string());
+
+        if self.pg_client.check_health().await.is_err() {
+            overall_status = Status::Unhealthy;
+            check.status = Status::Unhealthy;
+            check.description = Some(DasApiError::InternalDbError.to_string());
+        }
+
+        let response = HealthCheckResponse {
+            status: overall_status,
+            app_version: self.health_check_info.app_version.clone(),
+            node_name: self.health_check_info.node_name.clone(),
+            checks: vec![check],
+            image_info: self.health_check_info.image_info.clone(),
+        };
 
         self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 
-        Ok(json!("ok"))
+        Ok(json!(response))
     }
 
     fn validate_options(
