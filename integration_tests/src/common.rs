@@ -13,7 +13,7 @@ use mpl_token_metadata::accounts::Metadata;
 use nft_ingester::{
     api::{account_balance::AccountBalanceGetterImpl, DasApi},
     buffer::Buffer,
-    config::JsonMiddlewareConfig,
+    config::{HealthCheckInfo, JsonMiddlewareConfig},
     index_synchronizer::Synchronizer,
     init::init_index_storage_with_migration,
     json_worker::JsonWorker,
@@ -157,6 +157,11 @@ impl TestSetup {
         let das_api = DasApi::new(
             index_storage.clone(),
             storage.clone(),
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             metrics_state.api_metrics.clone(),
             None,
             None,

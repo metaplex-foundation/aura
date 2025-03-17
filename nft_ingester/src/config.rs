@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fs::File, io::Read, path::PathBuf};
 
 use clap::{Parser, ValueEnum};
 // TODO: replace String paths with PathBuf
@@ -12,6 +12,9 @@ use crate::error::IngesterError;
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct IngesterClapArgs {
+    #[clap(long, env, help = "Node name to simplify monitoring staff")]
+    pub node_name: Option<String>,
+
     #[clap(
         short('d'),
         long,
@@ -401,6 +404,9 @@ pub struct MigratorClapArgs {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct ApiClapArgs {
+    #[clap(long, env, help = "Node name to simplify monitoring staff")]
+    pub node_name: Option<String>,
+
     #[clap(short('p'), long, env, help = "example: https://mainnet-aura.metaplex.com")]
     pub rpc_host: String,
 
@@ -558,6 +564,14 @@ pub struct JsonMiddlewareConfig {
     pub max_urls_to_parse: usize,
 }
 
+/// Information that we pass to the API level
+#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+pub struct HealthCheckInfo {
+    pub app_version: String,
+    pub node_name: Option<String>,
+    pub image_info: Option<String>,
+}
+
 pub const DATABASE_URL_KEY: &str = "url";
 pub const MAX_POSTGRES_CONNECTIONS: &str = "max_postgres_connections";
 
@@ -589,6 +603,14 @@ impl BigTableConfig {
 pub fn init_logger(log_level: &str) {
     let t = tracing_subscriber::fmt().with_env_filter(log_level);
     t.event_format(fmt::format::json().with_line_number(true).with_file(true)).init();
+}
+
+pub fn read_version_info(file_path: &str) -> Option<String> {
+    let mut file = File::open(file_path).ok()?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).ok()?;
+
+    Some(contents)
 }
 
 #[cfg(test)]

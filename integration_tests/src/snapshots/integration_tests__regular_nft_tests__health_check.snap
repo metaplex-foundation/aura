@@ -1,0 +1,17 @@
+---
+source: integration_tests/src/regular_nft_tests.rs
+assertion_line: 1175
+expression: response
+snapshot_kind: text
+---
+{
+  "status": "OK",
+  "app_version": "1.0",
+  "node_name": "test",
+  "checks": [
+    {
+      "status": "OK",
+      "name": "PostgresDB"
+    }
+  ]
+}

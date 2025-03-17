@@ -23,6 +23,39 @@ pub struct GetGroupingResponse {
     pub group_size: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct HealthCheckResponse {
+    pub status: Status,
+    pub app_version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_name: Option<String>,
+    pub checks: Vec<Check>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_info: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct Check {
+    pub status: Status,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+impl Check {
+    pub fn new(name: String) -> Self {
+        Self { status: Status::Ok, name, description: None }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Status {
+    Ok,
+    Degraded,
+    Unhealthy,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]
 #[serde(default)]
 pub struct NativeBalance {

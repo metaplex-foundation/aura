@@ -293,6 +293,7 @@ impl Storage {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db =
             Arc::new(DB::open_cf_descriptors(&Self::get_db_options(), db_path, cf_descriptors)?);
+
         Ok(Self::new(db, red_metrics))
     }
 

@@ -14,10 +14,13 @@ mod tests {
         IngesterMetricsConfig,
     };
     use nft_ingester::{
-        backfiller::DirectBlockParser, buffer::Buffer, config::JsonMiddlewareConfig,
+        backfiller::DirectBlockParser,
+        buffer::Buffer,
+        config::{HealthCheckInfo, JsonMiddlewareConfig},
         json_worker::JsonWorker,
         processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
-        raydium_price_fetcher::RaydiumTokenPriceFetcher, transaction_ingester,
+        raydium_price_fetcher::RaydiumTokenPriceFetcher,
+        transaction_ingester,
     };
     use rocks_db::{columns::offchain_data::OffChainData, migrator::MigrationState, Storage};
     use solana_program::pubkey::Pubkey;
@@ -70,6 +73,11 @@ mod tests {
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -170,6 +178,11 @@ mod tests {
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
