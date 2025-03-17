@@ -23,7 +23,7 @@ services:
       # - ${PROFILING_FILE_PATH}:${PROFILING_FILE_PATH_CONTAINER}:rw
     depends_on:
       - db
-    stop_grace_period: 2m
+    stop_grace_period: 10m
     logging:
       options:
         max-size: "2048m"
