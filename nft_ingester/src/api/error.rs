@@ -69,7 +69,7 @@ impl From<DasApiError> for jsonrpc_core::Error {
             },
             DasApiError::NoDataFoundError => jsonrpc_core::Error {
                 code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
-                message: "Database Error: RecordNotFound Error: Asset Not Found".to_string(),
+                message: "Asset Not Found".to_string(),
                 data: None,
             },
             DasApiError::InvalidGroupingKey(key) => jsonrpc_core::Error {
@@ -84,7 +84,7 @@ impl From<DasApiError> for jsonrpc_core::Error {
             },
             DasApiError::ProofNotFound => jsonrpc_core::Error {
                 code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
-                message: "Database Error: RecordNotFound Error: Asset Proof Not Found".to_string(),
+                message: "Asset Proof Not Found".to_string(),
                 data: None,
             },
             DasApiError::Validation(msg) => jsonrpc_core::Error {
