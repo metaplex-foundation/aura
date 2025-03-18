@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
-use entities::api_req_params::{GetAsset, Options, SearchAssets};
+use entities::api_req_params::{DisplayOptions, GetAsset, SearchAssets};
 use function_name::named;
 use itertools::Itertools;
 use serial_test::serial;
@@ -15,7 +15,7 @@ pub async fn run_get_asset_scenario_test(
     asset_id: &str,
     seeds: Vec<SeedEvent>,
     order: Order,
-    options: Options,
+    options: DisplayOptions,
 ) {
     let seed_permutations: Vec<Vec<&SeedEvent>> = match order {
         Order::AllPermutations => seeds.iter().permutations(seeds.len()).collect::<Vec<_>>(),
@@ -24,7 +24,7 @@ pub async fn run_get_asset_scenario_test(
 
     for events in seed_permutations {
         index_seed_events(setup, events).await;
-        let request = GetAsset { id: asset_id.to_string(), options: options.clone() };
+        let request = GetAsset { id: asset_id.to_string(), options: Some(options.clone()) };
 
         let response = setup.das_api.get_asset(request).await.unwrap();
         insta::assert_json_snapshot!(setup.name.clone(), response);
@@ -68,7 +68,7 @@ async fn test_asset_decompress() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -102,7 +102,7 @@ async fn test_cnft_scenario_mint_update_metadata() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -138,7 +138,7 @@ async fn test_cnft_scenario_mint_update_metadata_remove_creators() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -214,7 +214,7 @@ async fn test_mint_no_json_uri() {
         "DFRJ4PwAze1mMQccRmdyc46yQpEVd4FPiwtAVgzGCs7g",
         seeds,
         Order::Forward,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -247,7 +247,7 @@ async fn test_mint_delegate_transfer() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -280,7 +280,7 @@ async fn test_mint_redeem_cancel_redeem() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -318,7 +318,7 @@ async fn test_mint_redeem() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -351,7 +351,7 @@ async fn test_mint_transfer_burn() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -384,7 +384,7 @@ async fn test_mint_transfer_noop() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -417,7 +417,7 @@ async fn test_mint_transfer_transfer() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -449,7 +449,7 @@ async fn test_mint_verify_creator() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -481,7 +481,7 @@ async fn test_mint_verify_collection() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -514,7 +514,7 @@ async fn test_mint_transfer_mpl_programs() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options::default(),
+        DisplayOptions::default(),
     )
     .await;
 }
@@ -546,11 +546,12 @@ async fn test_mint_to_collection_unverify_collection() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options {
+        DisplayOptions {
             show_unverified_collections: true,
             show_collection_metadata: false,
             show_inscription: false,
             show_fungible: false,
+            ..Default::default()
         },
     )
     .await;
@@ -584,11 +585,12 @@ async fn test_mint_verify_collection_unverify_collection() {
         asset_id,
         seeds,
         Order::AllPermutations,
-        Options {
+        DisplayOptions {
             show_unverified_collections: true,
             show_collection_metadata: false,
             show_inscription: false,
             show_fungible: false,
+            ..Default::default()
         },
     )
     .await;

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use entities::{
-    api_req_params::GetByMethodsOptions,
+    api_req_params::DisplayOptions,
     enums::AssetType,
     models::{AssetIndex, FungibleAssetIndex},
 };
@@ -128,12 +128,12 @@ pub trait AssetPubkeyFilteredFetcher {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
-        options: &GetByMethodsOptions,
+        options: &DisplayOptions,
     ) -> Result<Vec<AssetSortedIndex>, IndexDbError>;
     async fn get_grand_total(
         &self,
         filter: &SearchAssetsFilter,
-        options: &GetByMethodsOptions,
+        options: &DisplayOptions,
     ) -> Result<u32, IndexDbError>;
 }
 

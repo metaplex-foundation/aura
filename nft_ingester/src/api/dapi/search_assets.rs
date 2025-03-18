@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use entities::{
-    api_req_params::{AssetSorting, GetByMethodsOptions},
+    api_req_params::{AssetSorting, DisplayOptions},
     enums::TokenType,
 };
 use interface::{
@@ -39,7 +39,7 @@ pub async fn search_assets<
     before: Option<String>,
     after: Option<String>,
     cursor: Option<String>,
-    options: GetByMethodsOptions,
+    options: DisplayOptions,
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
@@ -111,7 +111,7 @@ async fn fetch_assets<
     before: Option<String>,
     after: Option<String>,
     cursor: Option<String>,
-    options: GetByMethodsOptions,
+    options: DisplayOptions,
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
@@ -170,7 +170,7 @@ async fn fetch_assets<
     let assets = asset::get_by_ids(
         rocks_db,
         asset_ids,
-        options.clone().into(),
+        options.clone(),
         json_downloader,
         json_persister,
         max_json_to_download,
