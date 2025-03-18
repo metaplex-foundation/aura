@@ -7,7 +7,7 @@ mod tests {
         sync::Arc,
     };
 
-    use entities::api_req_params::{GetAsset, GetAssetProof, Options};
+    use entities::api_req_params::{DisplayOptions, GetAsset, GetAssetProof};
     use interface::account_balance::MockAccountBalanceGetter;
     use metrics_utils::{
         red::RequestErrorDurationMetrics, ApiMetricsConfig, BackfillerMetricsConfig,
@@ -260,7 +260,10 @@ mod tests {
         for asset in assets_to_test_proof_for.iter() {
             let payload = GetAsset {
                 id: asset.to_string(),
-                options: Options { show_unverified_collections: true, ..Default::default() },
+                options: Some(DisplayOptions {
+                    show_unverified_collections: true,
+                    ..Default::default()
+                }),
             };
             let asset_info = api.get_asset(payload).await.unwrap();
 

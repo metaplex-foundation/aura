@@ -7,10 +7,10 @@ use dapi::{
 };
 use entities::{
     api_req_params::{
-        GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
-        GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
-        GetByMethodsOptions, GetCoreFees, GetGrouping, GetNftEditions, GetTokenAccounts,
-        Pagination, PaginationQuery, SearchAssets,
+        DisplayOptions, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
+        GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup,
+        GetAssetsByOwner, GetCoreFees, GetGrouping, GetNftEditions, GetTokenAccounts, Pagination,
+        PaginationQuery, SearchAssets,
     },
     enums::TokenType,
 };
@@ -152,7 +152,7 @@ where
     }
 
     fn validate_options(
-        options: &GetByMethodsOptions,
+        options: &DisplayOptions,
         query: &SearchAssetsQuery,
     ) -> Result<(), DasApiError> {
         if options.show_native_balance && query.owner_address.is_none() {
@@ -329,7 +329,7 @@ where
         let latency_timer = Instant::now();
 
         let id = validate_pubkey(payload.id.clone())?;
-        let options = payload.options;
+        let options = payload.options.unwrap_or_default();
 
         let res = get_asset(
             self.rocks_db.clone(),
@@ -368,7 +368,7 @@ where
 
         let ids: Vec<Pubkey> =
             payload.ids.into_iter().map(validate_pubkey).collect::<Result<Vec<_>, _>>()?;
-        let options = payload.options;
+        let options = payload.options.unwrap_or_default();
 
         let res = get_asset_batch(
             self.rocks_db.clone(),
@@ -504,7 +504,16 @@ where
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
 
-        let GetTokenAccounts { limit, page, owner, mint, options, before, after, cursor } = payload;
+        let GetTokenAccounts {
+            limit,
+            page,
+            owner_address: owner,
+            mint_address: mint,
+            options,
+            before,
+            after,
+            cursor,
+        } = payload;
 
         let pagination = Pagination { limit, page, before, after, cursor };
 

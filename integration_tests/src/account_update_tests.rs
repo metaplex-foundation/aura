@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use borsh::BorshSerialize;
-use entities::api_req_params::{GetAsset, Options};
+use entities::api_req_params::{DisplayOptions, GetAsset};
 use function_name::named;
 use plerkle_serialization::{
     root_as_account_info, serializer::serialize_account,
@@ -126,7 +126,7 @@ async fn test_account_updates() {
 
     let nft_accounts = get_nft_accounts(&setup, mint).await;
 
-    let request = GetAsset { id: mint.to_string(), options: Options::default() };
+    let request = GetAsset { id: mint.to_string(), options: Some(DisplayOptions::default()) };
 
     let random_pub_key = Pubkey::try_from("1111111QLbz7JHiBTspS962RLKV8GndWFwiEaqKM").unwrap();
     let random_pub_key2 = Pubkey::try_from("1111111ogCyDbaRMvkdsHB3qfdyFYaG1WtRUAfdh").unwrap();

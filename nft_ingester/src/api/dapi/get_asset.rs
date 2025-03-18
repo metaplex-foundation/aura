@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use entities::api_req_params::Options;
+use entities::api_req_params::DisplayOptions;
 use interface::{
     json::{JsonDownloader, JsonPersister},
     price_fetcher::TokenPriceFetcher,
@@ -22,7 +22,7 @@ pub async fn get_asset<
 >(
     rocks_db: Arc<Storage>,
     id: Pubkey,
-    options: Options,
+    options: DisplayOptions,
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
