@@ -4867,7 +4867,6 @@ dependencies = [
  "tracing-test",
  "url",
  "usecase",
- "utils",
  "uuid 1.8.0",
  "xxhash-rust",
  "zip-extract",
@@ -10419,24 +10418,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
-name = "utils"
-version = "0.1.8"
-source = "git+https://github.com/extrnode/solana-geyser-zmq#8d8cee57af31b0bbc61af6be392f2a663c9472a8"
-dependencies = [
- "anyhow",
- "bincode",
- "bs58 0.4.0",
- "flatbuffers 23.5.26",
- "log",
- "parking_lot 0.12.3",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "uuid 1.8.0",
-]
-
-[[package]]
 name = "uuid"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10453,7 +10434,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a183cf7feeba97b4dd1c0d46788634f6221d87fa961b305bed08c851829efcc0"
 dependencies = [
  "getrandom 0.2.15",
- "rand 0.8.5",
 ]
 
 [[package]]
