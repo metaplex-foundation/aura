@@ -4109,6 +4109,552 @@ mod tests {
         assert_eq!(res.items[1].clone().interface, Interface::V1NFT);
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_fungible_and_non_fungible_cursor_pagination() {
+        let cnt = 100;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
+
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            200_000,
+            "".to_string(),
+            Arc::new(SynchronizerMetricsConfig::new()),
+            1,
+        );
+
+        // create two pseudo-fungible tokens (they are in fact NFTs)
+        let nft_mint1 = Pubkey::new_unique();
+        let nft_mint2 = Pubkey::new_unique();
+        let mint1 = Mint {
+            pubkey: nft_mint1,
+            supply: 1,
+            decimals: 0,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: None,
+        };
+        let mint2 = Mint {
+            pubkey: nft_mint2,
+            supply: 1,
+            decimals: 0,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 7,
+            write_version: 10,
+            extensions: None,
+        };
+
+        // create two real fungible tokens
+        let fungible_token_mint1 = Pubkey::new_unique();
+        let fungible_token_mint2 = Pubkey::new_unique();
+        let mint3 = Mint {
+            pubkey: fungible_token_mint1,
+            supply: 1_000,
+            decimals: 4,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: None,
+        };
+        let mint4 = Mint {
+            pubkey: fungible_token_mint2,
+            supply: 1_000,
+            decimals: 4,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 7,
+            write_version: 10,
+            extensions: None,
+        };
+
+        let owner = Pubkey::new_unique();
+        let nft_account1 = Pubkey::new_unique();
+        let nft_account2 = Pubkey::new_unique();
+        let token_account1 = TokenAccount {
+            pubkey: nft_account1,
+            mint: nft_mint1,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 0,
+            write_version: 10,
+        };
+        let token_account2 = TokenAccount {
+            pubkey: nft_account2,
+            mint: nft_mint2,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 30000,
+            write_version: 10,
+        };
+        let fungible_token_account1 = Pubkey::new_unique();
+        let fungible_token_account2 = Pubkey::new_unique();
+        let token_account3 = TokenAccount {
+            pubkey: fungible_token_account1,
+            mint: fungible_token_mint1,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 0,
+            write_version: 10,
+        };
+        let token_account4 = TokenAccount {
+            pubkey: fungible_token_account2,
+            mint: fungible_token_mint2,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 30000,
+            write_version: 10,
+        };
+
+        let nft_complete1 = AssetCompleteDetails {
+            pubkey: nft_mint1,
+            static_details: Some(AssetStaticDetails {
+                pubkey: nft_mint1,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: nft_mint1,
+                owner: Updated::new(100, Some(UpdateVersion::WriteVersion(100)), Some(owner)),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            }),
+            ..Default::default()
+        };
+
+        let nft_complete2 = AssetCompleteDetails {
+            pubkey: nft_mint2,
+            static_details: Some(AssetStaticDetails {
+                pubkey: nft_mint2,
+                specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: nft_mint2,
+                owner: Updated::new(100, Some(UpdateVersion::WriteVersion(100)), Some(owner)),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            }),
+            ..Default::default()
+        };
+
+        let ftm_complete1 = AssetCompleteDetails {
+            pubkey: fungible_token_mint1,
+            static_details: Some(AssetStaticDetails {
+                pubkey: fungible_token_mint1,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: fungible_token_mint1,
+                owner: Updated::new(100, Some(UpdateVersion::WriteVersion(100)), Some(owner)),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            }),
+            ..Default::default()
+        };
+
+        let ftm_complete2 = AssetCompleteDetails {
+            pubkey: fungible_token_mint2,
+            static_details: Some(AssetStaticDetails {
+                pubkey: fungible_token_mint2,
+                specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: fungible_token_mint2,
+                owner: Updated::new(100, Some(UpdateVersion::WriteVersion(100)), Some(owner)),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            }),
+            ..Default::default()
+        };
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                nft_mint1,
+                nft_complete1.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                nft_mint2,
+                nft_complete2.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                fungible_token_mint1,
+                ftm_complete1.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                fungible_token_mint2,
+                ftm_complete2.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                nft_account1,
+                &token_account1,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                nft_account2,
+                &token_account2,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                fungible_token_account1,
+                &token_account3,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                fungible_token_account2,
+                &token_account4,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(&mut batch_storage, nft_account1, &token_account1)
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(&mut batch_storage, nft_account2, &token_account2)
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account1,
+                &token_account3,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account2,
+                &token_account4,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint1, &Default::default())
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint2, &Default::default())
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint3, &Default::default())
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint4, &Default::default())
+            .unwrap();
+        batch_storage.flush().unwrap();
+
+        let synchronizer = Arc::new(synchronizer);
+
+        for asset_type in ASSET_TYPES {
+            let synchronizer = synchronizer.clone();
+            let _ = match asset_type {
+                AssetType::Fungible => {
+                    synchronizer
+                        .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                        .await
+                },
+                AssetType::NonFungible => {
+                    synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await
+                },
+            };
+        }
+
+        let api = create_api(&env, None);
+
+        let mut pubkeys_sorted = [nft_mint1, nft_mint2, fungible_token_mint1, fungible_token_mint2];
+        pubkeys_sorted.sort();
+        pubkeys_sorted.reverse();
+        // 1. test for TokenType::All
+        let payload = SearchAssets {
+            limit: Some(2),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::All),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // the default direction of sorting is descending.
+        assert_eq!(
+            [res.items[0].id.clone(), res.items[1].id.clone()],
+            [pubkeys_sorted[0].to_string(), pubkeys_sorted[1].to_string()],
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+
+        let payload = SearchAssets {
+            limit: Some(2),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::All),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // get the next values after the cursor; these two are the last ones.
+        assert_eq!(
+            [res.items[0].id.clone(), res.items[1].id.clone()],
+            [pubkeys_sorted[2].to_string(), pubkeys_sorted[3].to_string()],
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+        let payload = SearchAssets {
+            limit: Some(2),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::All),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // no more items left
+        assert!(
+            res.items.is_empty(),
+            "We have retrieved everything. There are no assets left for this owner."
+        );
+        assert!(res.cursor.is_none(), "Cursor must be empty after the iteration is finished.");
+
+        let mut nfts_sorted = [nft_mint1, nft_mint2];
+        nfts_sorted.sort();
+        nfts_sorted.reverse();
+
+        // 2. Test for TokenType::NonFungible
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::NonFungible),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // the default direction of sorting is descending.
+        assert_eq!(
+            res.items[0].id.clone(),
+            nfts_sorted[0].to_string(),
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::NonFungible),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // get the next value after the cursor
+        assert_eq!(
+            res.items[0].id.clone(),
+            nfts_sorted[1].to_string(),
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::NonFungible),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // no more items left
+        assert!(
+            res.items.is_empty(),
+            "We have retrieved everything. There are no assets left for this owner."
+        );
+        assert!(res.cursor.is_none(), "Cursor must be empty after the iteration is finished.");
+        let mut fungibles_sorted = [fungible_token_mint1, fungible_token_mint2];
+        fungibles_sorted.sort();
+        fungibles_sorted.reverse();
+
+        // 3. Test for TokenType::Fungible
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::Fungible),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // the default direction of sorting is descending.
+        assert_eq!(
+            res.items[0].id.clone(),
+            fungibles_sorted[0].to_string(),
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::Fungible),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // get the next value after the cursor
+        assert_eq!(
+            res.items[0].id.clone(),
+            fungibles_sorted[1].to_string(),
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::Fungible),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // no more items left
+        assert!(
+            res.items.is_empty(),
+            "We have retrieved everything. There are no assets left for this owner."
+        );
+        assert!(res.cursor.is_none(), "Cursor must be empty after the iteration is finished.");
+    }
+
     /// More test cases covered in the regular_nft_tests.rs/test_search_by_owner_with_show_zero_balance_false
     #[test]
     fn v1_payloads_are_parsed_correctly_from_v0_payloads() {
