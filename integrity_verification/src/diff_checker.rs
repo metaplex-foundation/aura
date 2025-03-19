@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::commitment_config::CommitmentLevel;
-use tokio::sync::broadcast::Receiver;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use usecase::{
     bigtable::BigTableClient, proofs::MaybeProofChecker, slots_collector::SlotsCollector,
@@ -214,8 +214,13 @@ where
             if let Some(diff) = diff_with_responses.diff {
                 test_failed = true;
                 error!("{}: mismatch responses: req: {:#?}, diff: {}", req.method, req, diff);
-                let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
-                self.try_collect_slots(req, &diff_with_responses.reference_response, &rx).await;
+                // this will never be cancelled
+                self.try_collect_slots(
+                    req,
+                    &diff_with_responses.reference_response,
+                    CancellationToken::new(),
+                )
+                .await;
             }
 
             if req.method == GET_ASSET_PROOF_METHOD {
@@ -404,7 +409,12 @@ impl<T> DiffChecker<T>
 where
     T: IntegrityVerificationKeysFetcher + Send + Sync,
 {
-    async fn try_collect_slots(&self, req: &Body, reference_response: &Value, rx: &Receiver<()>) {
+    async fn try_collect_slots(
+        &self,
+        req: &Body,
+        reference_response: &Value,
+        cancellation_token: CancellationToken,
+    ) {
         let collect_tools = match &self.collect_slots_tools {
             None => return,
             Some(collect_tools) => collect_tools,
@@ -435,7 +445,7 @@ where
             },
         };
         if let Ok(tree_id) = Pubkey::from_str(tree_id) {
-            collect_tools.collect_slots(asset_id, tree_id, slot, rx).await
+            collect_tools.collect_slots(asset_id, tree_id, slot, cancellation_token).await
         }
     }
 
@@ -481,7 +491,13 @@ where
 }
 
 impl CollectSlotsTools {
-    async fn collect_slots(&self, asset: &str, tree_key: Pubkey, slot: u64, rx: &Receiver<()>) {
+    async fn collect_slots(
+        &self,
+        asset: &str,
+        tree_key: Pubkey,
+        slot: u64,
+        cancellation_token: CancellationToken,
+    ) {
         let slots_collector = SlotsCollector::new(
             Arc::new(FileSlotsDumper::new(self.format_filename(&tree_key.to_string(), asset))),
             self.bigtable_client.big_table_inner_client.clone(),
@@ -489,7 +505,7 @@ impl CollectSlotsTools {
         );
 
         info!("Start collecting slots for {}", tree_key);
-        slots_collector.collect_slots(&tree_key, slot, 0, rx).await;
+        slots_collector.collect_slots(&tree_key, slot, 0, cancellation_token).await;
         info!("Collected slots for {}", tree_key);
     }
 
@@ -544,8 +560,8 @@ mod tests {
         use std::str::FromStr;
 
         use solana_program::pubkey::Pubkey;
+        use tokio_util::sync::CancellationToken;
 
-        let (_tx, rx) = tokio::sync::broadcast::channel::<()>(1);
         create_test_diff_checker()
             .await
             .collect_slots_tools
@@ -554,7 +570,7 @@ mod tests {
                 "BAtEs7TuGm2hP2owc9cTit2TNfVzpPFyQAAvkDWs6tDm",
                 Pubkey::from_str("4FZcSBJkhPeNAkXecmKnnqHy93ABWzi3Q5u9eXkUfxVE").unwrap(),
                 244259062,
-                &rx,
+                CancellationToken::new(),
             )
             .await;
     }

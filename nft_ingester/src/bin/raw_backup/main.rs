@@ -8,7 +8,6 @@ use rocks_db::{
     column::TypedColumn, columns::offchain_data::OffChainData, migrator::MigrationState, Storage,
 };
 use tempfile::TempDir;
-use tokio::{sync::Mutex, task::JoinSet};
 use tracing::info;
 
 #[derive(Parser, Debug)]
@@ -28,25 +27,18 @@ pub async fn main() -> Result<(), IngesterError> {
 
     info!("Started...");
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let secondary_rocks_dir = TempDir::new().unwrap();
     let source_storage = Storage::open_secondary(
         config.source_db.as_str(),
         secondary_rocks_dir.path().to_str().unwrap(),
-        mutexed_tasks.clone(),
         red_metrics.clone(),
         MigrationState::Last,
     )
     .unwrap();
 
-    let target_storage = Storage::open(
-        &config.target_db,
-        mutexed_tasks.clone(),
-        red_metrics.clone(),
-        MigrationState::Last,
-    )
-    .unwrap();
+    let target_storage =
+        Storage::open(&config.target_db, red_metrics.clone(), MigrationState::Last).unwrap();
 
     let cf = &target_storage.db.cf_handle(OffChainData::NAME).unwrap();
     info!("Copying offchain data...");

@@ -9,7 +9,6 @@ use rocks_db::{
     SlotStorage, Storage,
 };
 use solana_sdk::pubkey::Pubkey;
-use tokio::{sync::Mutex, task::JoinSet};
 
 const BATCH_TO_DROP: usize = 1000;
 
@@ -42,10 +41,8 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
 
     println!("Opening DB...");
 
-    let js = Arc::new(Mutex::new(JoinSet::new()));
-    let source_db =
-        Storage::open(source_path, js.clone(), red_metrics.clone(), MigrationState::Last)
-            .map_err(|e| e.to_string())?;
+    let source_db = Storage::open(source_path, red_metrics.clone(), MigrationState::Last)
+        .map_err(|e| e.to_string())?;
 
     println!("Opened in {:?}", start.elapsed());
 
@@ -53,7 +50,6 @@ async fn find_forks(source_path: &str) -> Result<(), String> {
         SlotStorage::open_secondary(
             source_path, // FIXME: provide correct paths for slots storage
             source_path,
-            js.clone(),
             red_metrics.clone(),
         )
         .expect("should open slots db"),
@@ -151,7 +147,7 @@ async fn check_assets_signatures(
         let higher_seq_slot =
             if last_sig.1 > before_last_sig.1 { last_sig.2 } else { before_last_sig.2 };
 
-        match slots_db.raw_blocks_cbor.has_key(higher_seq_slot).await {
+        match slots_db.raw_blocks.has_key(higher_seq_slot).await {
             Ok(has_block) => {
                 if !has_block {
                     // only block check is not enough because was found out that during forks

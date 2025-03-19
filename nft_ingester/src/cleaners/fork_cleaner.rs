@@ -6,10 +6,10 @@ use metrics_utils::ForkCleanerMetricsConfig;
 use rocks_db::{SlotStorage, Storage};
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use tokio::{
-    sync::broadcast::Receiver,
     task::JoinError,
     time::{sleep as tokio_sleep, Instant},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 const CI_ITEMS_DELETE_BATCH_SIZE: usize = 100;
@@ -18,21 +18,24 @@ const SLOT_CHECK_OFFSET: u64 = 1500;
 pub async fn run_fork_cleaner(
     fork_cleaner: ForkCleaner<Storage, SlotStorage>,
     metrics: Arc<ForkCleanerMetricsConfig>,
-    mut rx: Receiver<()>,
+    cancellation_token: CancellationToken,
     sequence_consistent_checker_wait_period_sec: u64,
 ) -> Result<(), JoinError> {
     info!("Start cleaning forks...");
     loop {
         let start = Instant::now();
-        fork_cleaner.clean_forks(rx.resubscribe()).await;
+        fork_cleaner.clean_forks(cancellation_token.child_token()).await;
         metrics.set_scans_latency(start.elapsed().as_secs_f64());
         metrics.inc_total_scans();
-        tokio::select! {
-            _ = tokio_sleep(Duration::from_secs(sequence_consistent_checker_wait_period_sec)) => {},
-            _ = rx.recv() => {
-                info!("Received stop signal, stopping cleaning forks!");
-                break;
-            }
+        if cancellation_token
+            .run_until_cancelled(tokio_sleep(Duration::from_secs(
+                sequence_consistent_checker_wait_period_sec,
+            )))
+            .await
+            .is_none()
+        {
+            info!("Received stop signal, stopping cleaning forks!");
+            break;
         }
     }
 
@@ -62,10 +65,11 @@ where
         Self { cl_items_manager, fork_checker, metrics }
     }
 
-    pub async fn clean_forks(&self, rx: Receiver<()>) {
+    pub async fn clean_forks(&self, cancellation_token: CancellationToken) {
         let last_slot_for_check =
             self.fork_checker.last_slot_for_check().saturating_sub(SLOT_CHECK_OFFSET);
-        let all_non_forked_slots = self.fork_checker.get_all_non_forked_slots(rx.resubscribe());
+        let all_non_forked_slots =
+            self.fork_checker.get_all_non_forked_slots(cancellation_token.child_token());
 
         let mut forked_slots = 0;
         let mut delete_items = Vec::new();
@@ -73,7 +77,7 @@ where
         // from this column data will be dropped by slot
         // if we have any update from forked slot we have to delete it
         for cl_item in self.cl_items_manager.cl_items_iter() {
-            if !rx.is_empty() {
+            if cancellation_token.is_cancelled() {
                 info!("Stop iteration over cl items iterator...");
                 return;
             }

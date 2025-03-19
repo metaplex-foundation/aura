@@ -14,18 +14,17 @@ mod tests {
         IngesterMetricsConfig,
     };
     use nft_ingester::{
-        backfiller::DirectBlockParser, buffer::Buffer, config::JsonMiddlewareConfig,
+        backfiller::DirectBlockParser,
+        buffer::Buffer,
+        config::{HealthCheckInfo, JsonMiddlewareConfig},
         json_worker::JsonWorker,
         processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
-        raydium_price_fetcher::RaydiumTokenPriceFetcher, transaction_ingester,
+        raydium_price_fetcher::RaydiumTokenPriceFetcher,
+        transaction_ingester,
     };
     use rocks_db::{columns::offchain_data::OffChainData, migrator::MigrationState, Storage};
     use solana_program::pubkey::Pubkey;
     use testcontainers::clients::Cli;
-    use tokio::{
-        sync::{broadcast, Mutex},
-        task::JoinSet,
-    };
     use usecase::proofs::MaybeProofChecker;
 
     // corresponds to So11111111111111111111111111111111111111112
@@ -34,7 +33,7 @@ mod tests {
         26, 235, 59, 85, 152, 160, 240, 0, 0, 0, 0, 1,
     ]);
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     #[ignore = "FIXME: column families not opened error (probably outdated)"]
     async fn test_bubblegum_proofs() {
@@ -45,9 +44,6 @@ mod tests {
             242943774, 242947970, 242948187, 242949333, 242949940, 242951695, 242952638,
         ];
 
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
         let tx_storage_dir = tempfile::TempDir::new().unwrap();
 
         let storage_archieve = File::open("./tests/artifacts/test_rocks.zip").unwrap();
@@ -57,7 +53,6 @@ mod tests {
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let transactions_storage = Storage::open(
             &format!("{}{}", tx_storage_dir.path().to_str().unwrap(), "/test_rocks"),
-            mutexed_tasks.clone(),
             red_metrics.clone(),
             MigrationState::Last,
         )
@@ -78,6 +73,11 @@ mod tests {
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -108,8 +108,6 @@ mod tests {
             Arc::new(BackfillerMetricsConfig::new()),
         ));
         let _producer = rocks_storage.clone();
-
-        let (_shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
 
         let file = File::open("./tests/artifacts/expected_proofs.json").unwrap();
         let mut reader = io::BufReader::new(file);
@@ -140,7 +138,7 @@ mod tests {
         env.teardown().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     #[ignore = "FIXME: column families not opened error (probably outdated)"]
     async fn test_asset_compression_info() {
@@ -151,9 +149,6 @@ mod tests {
             242943774, 242947970, 242948187, 242949333, 242949940, 242951695, 242952638,
         ];
 
-        let tasks = JoinSet::new();
-        let mutexed_tasks = Arc::new(Mutex::new(tasks));
-
         let tx_storage_dir = tempfile::TempDir::new().unwrap();
 
         let storage_archieve = File::open("./tests/artifacts/test_rocks.zip").unwrap();
@@ -163,7 +158,6 @@ mod tests {
         let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
         let transactions_storage = Storage::open(
             &format!("{}{}", tx_storage_dir.path().to_str().unwrap(), "/test_rocks"),
-            mutexed_tasks.clone(),
             red_metrics.clone(),
             MigrationState::Last,
         )
@@ -184,6 +178,11 @@ mod tests {
         >::new(
             env.pg_env.client.clone(),
             env.rocks_env.storage.clone(),
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             Arc::new(ApiMetricsConfig::new()),
             None,
             None,
@@ -214,8 +213,6 @@ mod tests {
             Arc::new(BackfillerMetricsConfig::new()),
         ));
         let _producer = rocks_storage.clone();
-
-        let (_shutdown_tx, _shutdown_rx) = broadcast::channel::<()>(1);
 
         let metadata = OffChainData {
             url: Some("https://supersweetcollection.notarealurl/token.json".to_string()),
@@ -265,7 +262,7 @@ mod tests {
                 id: asset.to_string(),
                 options: Options { show_unverified_collections: true, ..Default::default() },
             };
-            let asset_info = api.get_asset(payload, mutexed_tasks.clone()).await.unwrap();
+            let asset_info = api.get_asset(payload).await.unwrap();
 
             assert_eq!(asset_info["compression"], expected_results[*asset]);
         }

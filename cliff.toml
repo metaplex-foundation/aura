@@ -63,13 +63,13 @@ commit_parsers = [
   { message = "^chore\\(deps\\)(\\(.*\\))?:", group = "Dependencies" },
   { message = "^chore(\\(.*\\))?:", group = "Build Process & Auxiliary Tools" },
   { message = "^ci(\\(.*\\))?:", group = "CI/CD" },
-  
+
   # Simple commits without scope
   { message = "^feat\\s+", group = "Features" },
   { message = "^fix\\s+", group = "Bug Fixes" },
   { message = "^doc\\s+", group = "Documentation" },
   { message = "^test\\s+", group = "Testing" },
-  
+
   # Ticket prefixed commits
   { message = "^MTG-\\d+\\s+.*(fix|fixed)", group = "Bug Fixes" },
   { message = "^MTG-\\d+\\s+.*(feat|feature)", group = "Features" },

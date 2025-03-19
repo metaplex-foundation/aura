@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fs::File, io::Read, path::PathBuf};
 
 use clap::{Parser, ValueEnum};
 // TODO: replace String paths with PathBuf
@@ -12,6 +12,9 @@ use crate::error::IngesterError;
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct IngesterClapArgs {
+    #[clap(long, env, help = "Node name to simplify monitoring staff")]
+    pub node_name: Option<String>,
+
     #[clap(
         short('d'),
         long,
@@ -46,11 +49,14 @@ pub struct IngesterClapArgs {
     #[clap(long, env = "INGESTER_PG_MAX_QUERY_TIMEOUT_SECS", default_value = "120")]
     pub pg_max_query_statement_timeout_secs: u32,
 
-    #[clap(short('r'), long, env, help="example: {redis_connection_str=\"redis://127.0.0.1:6379/0\"}", value_parser = parse_json_to_dict)]
+    #[clap(short('r'), long, env, help="example: {\"redis_connection_str\": \"redis://127.0.0.1:6379/0\"}", value_parser = parse_json::<Dict>)]
     pub redis_connection_config: Dict,
 
     #[clap(long, env, default_value = "5")]
     pub redis_accounts_parsing_workers: u32,
+
+    #[clap(long, env, default_value = "5")]
+    pub redis_account_backfill_parsing_workers: u32,
 
     #[clap(long, env, default_value = "2")]
     pub redis_transactions_parsing_workers: u32,
@@ -60,6 +66,9 @@ pub struct IngesterClapArgs {
 
     #[clap(long, env, default_value = "100")]
     pub account_processor_buffer_size: usize,
+
+    #[clap(long, env, default_value = "1000")]
+    pub account_backfill_processor_buffer_size: usize,
 
     #[clap(long, env, default_value = "100")]
     pub tx_processor_buffer_size: usize,
@@ -106,7 +115,7 @@ pub struct IngesterClapArgs {
     )]
     pub run_profiling: bool,
 
-    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json::<JsonMiddlewareConfig>,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
 
     // Group: Rocks DB Configuration
@@ -221,7 +230,7 @@ pub struct IngesterClapArgs {
     pub backfill_rpc_address: Option<String>,
     #[clap(long, env, default_value = "rpc", help = "#backfiller Backfill source mode.")]
     pub backfiller_source_mode: BackfillerSourceMode,
-    #[clap(long, env, value_parser = parse_json_to_big_table_config, help ="#backfiller Big table config")]
+    #[clap(long, env, value_parser = parse_json::<BigTableConfig>, help ="#backfiller Big table config")]
     pub big_table_config: Option<BigTableConfig>,
 
     #[clap(
@@ -313,7 +322,7 @@ pub struct SynchronizerClapArgs {
     pub metrics_port: Option<u16>,
     pub profiling_file_path_container: Option<String>,
 
-    #[clap(long, env, default_value = "200000")]
+    #[clap(long, env, default_value = "10000")]
     pub dump_synchronizer_batch_size: usize,
     #[clap(
         long,
@@ -395,6 +404,9 @@ pub struct MigratorClapArgs {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct ApiClapArgs {
+    #[clap(long, env, help = "Node name to simplify monitoring staff")]
+    pub node_name: Option<String>,
+
     #[clap(short('p'), long, env, help = "example: https://mainnet-aura.metaplex.com")]
     pub rpc_host: String,
 
@@ -510,7 +522,7 @@ pub struct ApiClapArgs {
     #[clap(long, env, help = "#api Storage service base url")]
     pub storage_service_base_url: Option<String>,
 
-    #[clap(long, env, value_parser = parse_json_to_json_middleware_config,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json::<Result<JsonMiddlewareConfig, String>>,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     #[clap(long, env, default_value = "100")]
     pub parallel_json_downloaders: i32,
@@ -525,19 +537,7 @@ pub struct ApiClapArgs {
     pub log_level: String,
 }
 
-fn parse_json_to_dict(s: &str) -> Result<Dict, String> {
-    parse_json(s)
-}
-
-fn parse_json_to_json_middleware_config(s: &str) -> Result<JsonMiddlewareConfig, String> {
-    parse_json(s)
-}
-
-fn parse_json_to_big_table_config(s: &str) -> Result<BigTableConfig, String> {
-    parse_json(s)
-}
-
-fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
+pub fn parse_json<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, String> {
     serde_json::from_str(s).map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
@@ -564,11 +564,19 @@ pub struct JsonMiddlewareConfig {
     pub max_urls_to_parse: usize,
 }
 
+/// Information that we pass to the API level
+#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+pub struct HealthCheckInfo {
+    pub app_version: String,
+    pub node_name: Option<String>,
+    pub image_info: Option<String>,
+}
+
 pub const DATABASE_URL_KEY: &str = "url";
 pub const MAX_POSTGRES_CONNECTIONS: &str = "max_postgres_connections";
 
 #[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct BigTableConfig(Dict);
+pub struct BigTableConfig(serde_json::Value);
 
 pub const BIG_TABLE_CREDS_KEY: &str = "creds";
 pub const BIG_TABLE_TIMEOUT_KEY: &str = "timeout";
@@ -586,7 +594,7 @@ impl BigTableConfig {
     }
 
     pub fn get_big_table_timeout_key(&self) -> Result<u32, IngesterError> {
-        Ok(self.0.get(BIG_TABLE_TIMEOUT_KEY).and_then(|v| v.to_u128()).ok_or(
+        Ok(self.0.get(BIG_TABLE_TIMEOUT_KEY).and_then(|v| v.as_u64()).ok_or(
             IngesterError::ConfigurationError { msg: "BIG_TABLE_TIMEOUT_KEY missing".to_string() },
         )? as u32)
     }
@@ -595,6 +603,14 @@ impl BigTableConfig {
 pub fn init_logger(log_level: &str) {
     let t = tracing_subscriber::fmt().with_env_filter(log_level);
     t.event_format(fmt::format::json().with_line_number(true).with_file(true)).init();
+}
+
+pub fn read_version_info(file_path: &str) -> Option<String> {
+    let mut file = File::open(file_path).ok()?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).ok()?;
+
+    Some(contents)
 }
 
 #[cfg(test)]
@@ -612,7 +628,7 @@ mod tests {
             "--rpc-host",
             "https://mainnet-aura.metaplex.com",
             "--redis-connection-config",
-            "{}",
+            r#"{"redis_connection_str": "foo"}"#,
         ]);
 
         assert_eq!(args.rocks_db_path, "./my_rocksdb");
@@ -635,6 +651,8 @@ mod tests {
         assert_eq!(args.backfiller_source_mode, BackfillerSourceMode::RPC);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
         assert_eq!(args.log_level, "info");
+        assert_eq!(args.redis_account_backfill_parsing_workers, 5);
+        assert_eq!(args.account_backfill_processor_buffer_size, 1000);
     }
 
     #[test]
@@ -651,7 +669,7 @@ mod tests {
         assert_eq!(args.rocks_db_secondary_path, "./my_rocksdb_secondary");
         assert_eq!(args.run_profiling, false);
         assert_eq!(args.heap_path, "/usr/src/app/heaps");
-        assert_eq!(args.dump_synchronizer_batch_size, 200000);
+        assert_eq!(args.dump_synchronizer_batch_size, 10000);
         assert_eq!(args.dump_sync_threshold, 150000000);
         assert_eq!(args.synchronizer_parallel_tasks, 30);
         assert_eq!(args.timeout_between_syncs_sec, 0);

@@ -39,7 +39,7 @@ impl AssetDetailsStreamer for Storage {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         let backend = self.slot_asset_idx.backend.clone();
         let metrics = self.red_metrics.clone();
-        self.join_set.lock().await.spawn(tokio::spawn(async move {
+        usecase::executor::spawn(async move {
             let _ = process_asset_details_range(
                 backend,
                 start_slot,
@@ -48,7 +48,7 @@ impl AssetDetailsStreamer for Storage {
                 tx.clone(),
             )
             .await;
-        }));
+        });
 
         Ok(Box::pin(ReceiverStream::new(rx)) as AssetDetailsStream)
     }

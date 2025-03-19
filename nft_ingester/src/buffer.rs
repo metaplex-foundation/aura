@@ -9,8 +9,9 @@ use entities::{
     models::{BufferedTransaction, BufferedTxWithID, Task, UnprocessedAccountMessage},
 };
 use interface::{
-    error::UsecaseError, signature_persistence::UnprocessedTransactionsGetter,
-    unprocessed_data_getter::UnprocessedAccountsGetter,
+    error::UsecaseError,
+    signature_persistence::UnprocessedTransactionsGetter,
+    unprocessed_data_getter::{AccountSource, UnprocessedAccountsGetter},
 };
 use metrics_utils::IngesterMetricsConfig;
 use solana_program::pubkey::Pubkey;
@@ -93,6 +94,7 @@ impl UnprocessedAccountsGetter for Buffer {
     async fn next_accounts(
         &self,
         batch_size: usize,
+        _source: &AccountSource,
     ) -> Result<Vec<UnprocessedAccountMessage>, UsecaseError> {
         let mut buffer = self.accounts.lock().await;
         let mut result = Vec::with_capacity(batch_size);
@@ -112,5 +114,5 @@ impl UnprocessedAccountsGetter for Buffer {
         Ok(result)
     }
 
-    fn ack(&self, _ids: Vec<String>) {}
+    fn ack(&self, _ids: Vec<String>, _source: &AccountSource) {}
 }

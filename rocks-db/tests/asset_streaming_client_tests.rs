@@ -2,14 +2,13 @@
 mod tests {
     use std::collections::HashSet;
 
-    use entities::models::RawBlock;
+    use entities::models::{RawBlock, RawBlockWithTransactions};
     use interface::asset_streaming_and_discovery::{AssetDetailsStreamer, RawBlocksStreamer};
     use setup::rocks::*;
     use solana_sdk::pubkey::Pubkey;
-    use solana_transaction_status::UiConfirmedBlock;
     use tokio_stream::StreamExt;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_empty_db() {
         let storage = RocksTestEnvironment::new(&[]).storage;
 
@@ -23,7 +22,7 @@ mod tests {
         assert!(stream.next().await.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_data_only_before_target() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
@@ -39,7 +38,7 @@ mod tests {
         assert!(stream.next().await.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_data_only_after_target() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
@@ -55,7 +54,7 @@ mod tests {
         assert!(stream.next().await.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_data_missing_data() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let pk = Pubkey::new_unique();
@@ -77,7 +76,7 @@ mod tests {
         assert!(stream.next().await.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_asset_details_stream_in_range_data() {
         let cnt = 1000;
         let env = RocksTestEnvironment::new(&[]);
@@ -100,27 +99,24 @@ mod tests {
         assert_eq!(pk_set, pks.pubkeys.into_iter().collect::<HashSet<_>>());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_get_raw_blocks_stream_in_range_data() {
         let env = RocksTestEnvironment::new(&[]);
         let slot_storage = &env.slot_storage;
         let slot = 153;
         let blockhash = "blockhash";
         slot_storage
-            .raw_blocks_cbor
+            .raw_blocks
             .put(
                 slot,
                 RawBlock {
                     slot,
-                    block: UiConfirmedBlock {
+                    block: RawBlockWithTransactions {
                         previous_blockhash: "".to_string(),
                         blockhash: blockhash.to_string(),
                         parent_slot: 0,
-                        transactions: None,
-                        signatures: None,
-                        rewards: None,
+                        transactions: Default::default(),
                         block_time: None,
-                        block_height: None,
                     },
                 },
             )

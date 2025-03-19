@@ -7,7 +7,8 @@ use bincode::{deserialize, serialize};
 use entities::{
     enums::{ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass},
     models::{
-        AssetIndex, EditionData, SplMint, TokenAccount, UpdateVersion, Updated, UrlWithStatus,
+        AssetIndex, EditionData, EditionV1, SplMint, TokenAccount, UpdateVersion, Updated,
+        UrlWithStatus,
     },
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
@@ -40,6 +41,40 @@ pub struct AssetSelectedMaps {
     pub inscriptions_data: HashMap<Pubkey, InscriptionData>,
     pub token_accounts: HashMap<Pubkey, TokenAccount>,
     pub spl_mints: HashMap<Pubkey, SplMint>,
+}
+
+#[derive(Debug)]
+pub struct MasterAssetEditionsInfo {
+    pub master_edition_address: Pubkey,
+    pub supply: u64,
+    pub max_supply: Option<u64>,
+    pub editions: Vec<AssetEditionInfo>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct AssetEditionInfo {
+    pub mint: Pubkey,
+    pub edition_address: Pubkey,
+    pub edition: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TokenMetadataEditionParentIndex {
+    pub parent: Pubkey,
+    pub edition: u64,
+    pub asset_key: Pubkey,
+    pub write_version: u64,
+}
+
+impl From<&EditionV1> for TokenMetadataEditionParentIndex {
+    fn from(edition_v1: &EditionV1) -> Self {
+        Self {
+            parent: edition_v1.parent,
+            edition: edition_v1.edition,
+            asset_key: edition_v1.key,
+            write_version: edition_v1.write_version,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
@@ -3607,7 +3642,12 @@ mod tests {
         }
         assert!(asset.other_known_owners().is_none());
         let asset_mapped = AssetCompleteDetails::from(asset);
-        assert_eq!(asset_mapped.owner.unwrap().owner.value.unwrap(), new_owner);
+        // Now that slot is prioritized over version, we expect the existing owner to be kept
+        // because the new owner has a smaller slot (1) despite higher write version
+        assert_eq!(
+            asset_mapped.owner.as_ref().unwrap().owner.value.unwrap(),
+            Pubkey::from_str(EXISTING_OWNER).unwrap()
+        );
     }
 
     #[test]
@@ -3650,13 +3690,9 @@ mod tests {
         }
         assert!(asset.other_known_owners().is_none());
         let asset_mapped = AssetCompleteDetails::from(asset);
-        assert_eq!(
-            asset_mapped.owner.as_ref().unwrap().owner.value.unwrap(),
-            Pubkey::from_str(EXISTING_OWNER).unwrap()
-        );
-        // This is ther case, when the is current owner was not ever set and now it's updated by some old update.
-        // This update shouldn't have happened as usually the vesioning of owner, delegate and is_current_owner is done together.
-        // For the case of empty data after the migration this is acceptable imho.
+        // With slot prioritized over version, the new owner should be used because it has a higher slot
+        // even though it has a smaller write version
+        assert_eq!(asset_mapped.owner.as_ref().unwrap().owner.value.unwrap(), new_owner);
         assert!(asset_mapped.owner.unwrap().is_current_owner.value);
     }
 

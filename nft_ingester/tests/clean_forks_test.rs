@@ -1,6 +1,6 @@
 use bincode::deserialize;
 use blockbuster::{instruction::InstructionBundle, programs::bubblegum::BubblegumInstruction};
-use entities::models::{RawBlock, SignatureWithSlot};
+use entities::models::{RawBlock, RawBlockWithTransactions, SignatureWithSlot};
 use metrics_utils::MetricState;
 use mpl_bubblegum::{
     types::{BubblegumEventType, LeafSchema, Version},
@@ -19,22 +19,22 @@ use rocks_db::{
 use setup::rocks::RocksTestEnvironment;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use spl_account_compression::{events::ChangeLogEventV1, state::PathNode};
-use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
 #[cfg(feature = "integration_tests")]
 #[tracing_test::traced_test]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_clean_forks() {
     use std::{
         collections::{HashMap, HashSet},
         str::FromStr,
     };
 
-    use entities::models::{UpdateVersion, Updated};
+    use entities::models::{RawBlockWithTransactions, UpdateVersion, Updated};
     use metrics_utils::{utils::start_metrics, MetricsTrait};
     use rocks_db::columns::{cl_items::ClItemKey, leaf_signatures::LeafSignature};
-    use solana_transaction_status::UiConfirmedBlock;
+    use tokio_util::sync::CancellationToken;
 
     let RocksTestEnvironment { storage, slot_storage, .. } = RocksTestEnvironment::new(&[]);
     let first_tree_key =
@@ -416,100 +416,85 @@ async fn test_clean_forks() {
         .unwrap();
 
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10000,
             RawBlock {
                 slot: 10000,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
         .await
         .unwrap();
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10001,
             RawBlock {
                 slot: 10001,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
         .await
         .unwrap();
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10002,
             RawBlock {
                 slot: 10002,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
         .await
         .unwrap();
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10005,
             RawBlock {
                 slot: 10000,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
         .await
         .unwrap();
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             10006,
             RawBlock {
                 slot: 10000,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -517,20 +502,17 @@ async fn test_clean_forks() {
         .unwrap();
     // Need for SLOT_CHECK_OFFSET
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put_async(
             30000,
             RawBlock {
                 slot: 30000,
-                block: UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "".to_string(),
                     blockhash: "".to_string(),
                     parent_slot: 0,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -605,14 +587,12 @@ async fn test_clean_forks() {
     metrics_state.register_metrics();
     start_metrics(metrics_state.registry, Some(4444)).await;
 
-    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    let rx = shutdown_rx.resubscribe();
     let fork_cleaner = ForkCleaner::new(
         storage.clone(),
         slot_storage.clone(),
         metrics_state.fork_cleaner_metrics.clone(),
     );
-    fork_cleaner.clean_forks(rx.resubscribe()).await;
+    fork_cleaner.clean_forks(CancellationToken::new()).await;
 
     let forked_first_key_first_item =
         storage.cl_items.get(ClItemKey::new(103, first_tree_key)).unwrap();
@@ -675,7 +655,7 @@ async fn test_clean_forks() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_process_forked_transaction() {
     let metrics_state = MetricState::new();
     let RocksTestEnvironment { storage, slot_storage, .. } = RocksTestEnvironment::new(&[]);
@@ -825,20 +805,17 @@ async fn test_process_forked_transaction() {
     //
     // for this test all we need is key from Rocks raw_blocks_cbor column family, so RawBlock data could be arbitrary
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put(
             slot_normal_tx,
             RawBlock {
                 slot: slot_normal_tx,
-                block: solana_transaction_status::UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "previousBlockHash".to_string(),
                     blockhash: "blockHash".to_string(),
                     parent_slot: slot_normal_tx,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
@@ -847,33 +824,28 @@ async fn test_process_forked_transaction() {
     // Required for SLOT_CHECK_OFFSET
     // 16000 is arbitrary number
     slot_storage
-        .raw_blocks_cbor
+        .raw_blocks
         .put(
             slot_normal_tx + 16000,
             RawBlock {
                 slot: slot_normal_tx + 16000,
-                block: solana_transaction_status::UiConfirmedBlock {
+                block: RawBlockWithTransactions {
                     previous_blockhash: "previousBlockHash".to_string(),
                     blockhash: "blockHash".to_string(),
                     parent_slot: slot_normal_tx + 16000,
-                    transactions: None,
-                    signatures: None,
-                    rewards: None,
+                    transactions: Default::default(),
                     block_time: None,
-                    block_height: None,
                 },
             },
         )
         .unwrap();
-
-    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
 
     let fork_cleaner = ForkCleaner::new(
         storage.clone(),
         slot_storage.clone(),
         metrics_state.fork_cleaner_metrics.clone(),
     );
-    fork_cleaner.clean_forks(shutdown_rx.resubscribe()).await;
+    fork_cleaner.clean_forks(CancellationToken::new()).await;
 
     for cl_item in storage.cl_items.iter_start() {
         let (_, value) = cl_item.unwrap();

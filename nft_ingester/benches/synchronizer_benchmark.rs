@@ -21,7 +21,7 @@ async fn bench_synchronize(env: Arc<TestEnvironment<'_>>, batch_size: usize) {
         .await
         .unwrap();
     let metrics = Arc::new(SynchronizerMetricsConfig::new());
-    let syncronizer = nft_ingester::index_syncronizer::Synchronizer::new(
+    let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
         env.rocks_env.storage.clone(),
         env.pg_env.client.clone(),
         env.pg_env.client.clone(),
@@ -33,14 +33,14 @@ async fn bench_synchronize(env: Arc<TestEnvironment<'_>>, batch_size: usize) {
     );
 
     let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
-    syncronizer.synchronize_asset_indexes(&rx, 0).await.unwrap();
+    synchronizer.synchronize_asset_indexes(&rx, 0).await.unwrap();
 }
 
 fn sync_benchmark(c: &mut Criterion) {
     let cli: Cli = Cli::default();
     let rt = tokio::runtime::Runtime::new().unwrap();
     let (env, _generated_assets) = rt.block_on(setup_environment(&cli));
-    let mut group = c.benchmark_group("Syncronizer Group");
+    let mut group = c.benchmark_group("Synchronizer Group");
     group.sample_size(10);
     group.measurement_time(std::time::Duration::from_secs(60));
     let env = Arc::new(env);

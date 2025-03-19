@@ -18,6 +18,7 @@ use inflector::Inflector;
 use metrics_utils::SynchronizerMetricsConfig;
 use serde::{Serialize, Serializer};
 use solana_sdk::pubkey::Pubkey;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::{
@@ -102,7 +103,7 @@ impl Dumper for Storage {
         asset_limit: Option<usize>,
         start_pubkey: Option<Pubkey>,
         end_pubkey: Option<Pubkey>,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<usize, String> {
         let mut metadata_key_set = HashSet::new();
@@ -337,7 +338,7 @@ impl Dumper for Storage {
                     synchronizer_metrics.inc_num_of_records_written("authority", 1);
                 }
             }
-            if !rx.is_empty() {
+            if cancellation_token.is_cancelled() {
                 return Err("dump cancelled".to_string());
             }
             iter.next();
@@ -371,7 +372,7 @@ impl Dumper for Storage {
         buf_capacity: usize,
         start_pubkey: Option<Pubkey>,
         end_pubkey: Option<Pubkey>,
-        rx: &tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         synchronizer_metrics: Arc<SynchronizerMetricsConfig>,
     ) -> Result<usize, String> {
         let column: Column<TokenAccount> = Self::column(self.db.clone(), self.red_metrics.clone());
@@ -393,7 +394,7 @@ impl Dumper for Storage {
                     break;
                 }
             }
-            if !rx.is_empty() {
+            if cancellation_token.is_cancelled() {
                 info!("Shutdown signal received...");
                 return Ok(cnt);
             }

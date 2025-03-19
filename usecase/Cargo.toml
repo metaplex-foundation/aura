@@ -1,6 +1,6 @@
 [package]
 name = "usecase"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -31,6 +31,7 @@ plerkle_serialization = { workspace = true }
 async-recursion = { workspace = true }
 thiserror = { workspace = true }
 bubblegum-batch-sdk = { workspace = true }
-
-[dev-dependencies]
+solana-storage-proto = { workspace = true }
+prost = "0.11.9"
 futures = { workspace = true }
+tokio-util = { workspace = true }

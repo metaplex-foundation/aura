@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use entities::models::RawBlock;
+use entities::models::{RawBlock, RawBlockDeprecated, RawBlockWithTransactions};
 use interface::{
     error::StorageError as InterfaceStorageError, signature_persistence::BlockProducer,
 };
 
 use crate::{column::TypedColumn, errors::StorageError, key_encoders, SlotStorage};
 
-impl TypedColumn for RawBlock {
+impl TypedColumn for RawBlockDeprecated {
     type KeyType = u64;
 
     type ValueType = Self;
@@ -31,15 +31,30 @@ impl TypedColumn for RawBlock {
     }
 }
 
+impl TypedColumn for RawBlock {
+    type KeyType = u64;
+
+    type ValueType = Self;
+    const NAME: &'static str = "RAW_BLOCK";
+
+    fn encode_key(slot: u64) -> Vec<u8> {
+        key_encoders::encode_u64(slot)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
+        key_encoders::decode_u64(bytes)
+    }
+}
+
 #[async_trait]
 impl BlockProducer for SlotStorage {
     async fn get_block(
         &self,
         slot: u64,
         backup_provider: Option<Arc<impl BlockProducer>>,
-    ) -> Result<solana_transaction_status::UiConfirmedBlock, InterfaceStorageError> {
+    ) -> Result<RawBlockWithTransactions, InterfaceStorageError> {
         let raw_block = self
-            .raw_blocks_cbor
+            .raw_blocks
             .get_async(slot)
             .await
             .map_err(|e| InterfaceStorageError::Common(e.to_string()))?;

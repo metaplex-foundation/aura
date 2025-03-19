@@ -2,15 +2,13 @@ use std::{collections::HashMap, sync::Arc, time};
 
 use async_trait::async_trait;
 use backfill_rpc::rpc::BackfillRPC;
-use entities::models::{BufferedTransaction, RawBlock};
-use flatbuffers::FlatBufferBuilder;
+use entities::models::{RawBlock, RawBlockWithTransactions, TransactionInfo};
 use interface::{
     error::{BlockConsumeError, StorageError, UsecaseError},
     signature_persistence::{BlockConsumer, BlockProducer},
     slots_dumper::{SlotGetter, SlotsDumper},
 };
 use metrics_utils::BackfillerMetricsConfig;
-use plerkle_serialization::serializer::seralize_encoded_transaction_with_status;
 use rocks_db::{
     column::TypedColumn,
     columns::bubblegum_slots::ForceReingestableSlots,
@@ -18,14 +16,11 @@ use rocks_db::{
     SlotStorage, Storage,
 };
 use solana_program::pubkey::Pubkey;
-use solana_transaction_status::{
-    EncodedConfirmedTransactionWithStatusMeta, EncodedTransactionWithStatusMeta, UiConfirmedBlock,
-};
 use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use usecase::{
-    bigtable::{is_bubblegum_transaction_encoded, BigTableClient},
+    bigtable::{is_bubblegum_transaction_from_info, BigTableClient},
     slots_collector::SlotsGetter,
 };
 
@@ -95,7 +90,7 @@ impl BlockProducer for BackfillSource {
         &self,
         slot: u64,
         backup_provider: Option<Arc<impl BlockProducer>>,
-    ) -> Result<UiConfirmedBlock, StorageError> {
+    ) -> Result<RawBlockWithTransactions, StorageError> {
         match self {
             BackfillSource::Bigtable(bigtable) => bigtable.get_block(slot, backup_provider).await,
             BackfillSource::Rpc(rpc) => rpc.get_block(slot, backup_provider).await,
@@ -128,7 +123,7 @@ where
     }
 }
 pub async fn run_backfill_slots<C>(
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
     db: Arc<Storage>,
     slot_db: Arc<SlotStorage>,
     consumer: Arc<C>,
@@ -137,13 +132,13 @@ pub async fn run_backfill_slots<C>(
     C: BlockConsumer,
 {
     loop {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received, stopping run_backfill_slots");
             break;
         }
         let sleep = tokio::time::sleep(Duration::from_millis(400));
         if let Err(e) = backfill_slots(
-            &shutdown_token,
+            cancellation_token.child_token(),
             db.clone(),
             slot_db.clone(),
             consumer.clone(),
@@ -155,7 +150,7 @@ pub async fn run_backfill_slots<C>(
         }
         tokio::select! {
             _ = sleep => {}
-            _ = shutdown_token.cancelled() => {
+            _ = cancellation_token.cancelled() => {
                 info!("Shutdown signal received, stopping run_backfill_slots");
                 break;
             }
@@ -164,7 +159,7 @@ pub async fn run_backfill_slots<C>(
 }
 
 pub async fn backfill_slots<C>(
-    shutdown_token: &CancellationToken,
+    cancellation_token: CancellationToken,
     db: Arc<Storage>,
     slot_db: Arc<SlotStorage>,
     consumer: Arc<C>,
@@ -187,14 +182,14 @@ where
         it.seek_to_first();
     }
     while it.valid() {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received, stopping backfill_slots");
             break;
         }
         if let Some((key, raw_block_data)) = it.item() {
             let slot = RawBlock::decode_key(key.to_vec())?;
             // Process the slot
-            let raw_block: RawBlock = match serde_cbor::from_slice(raw_block_data) {
+            let raw_block: RawBlock = match RawBlock::decode(raw_block_data) {
                 Ok(rb) => rb,
                 Err(e) => {
                     error!("Failed to decode the value for slot {}: {}", slot, e);
@@ -207,7 +202,7 @@ where
             }
             if let Some(block_time) = block_time {
                 let dur = time::SystemTime::now()
-                    .duration_since(time::UNIX_EPOCH + Duration::from_secs(block_time as u64))
+                    .duration_since(time::UNIX_EPOCH + Duration::from_secs(block_time))
                     .unwrap_or_default()
                     .as_millis() as f64;
                 metrics.set_slot_delay_time("raw_slot_backfilled", dur);
@@ -227,36 +222,18 @@ where
     async fn consume_block(
         &self,
         slot: u64,
-        block: solana_transaction_status::UiConfirmedBlock,
+        block: RawBlockWithTransactions,
     ) -> Result<(), BlockConsumeError> {
-        if block.transactions.is_none() {
+        if block.transactions.is_empty() {
             return Ok(());
         }
-        let txs: Vec<EncodedTransactionWithStatusMeta> = block.transactions.unwrap();
+        let txs: Vec<TransactionInfo> = block.transactions;
         let mut results = Vec::new();
         for tx in txs.iter() {
-            if !is_bubblegum_transaction_encoded(tx) {
+            if !is_bubblegum_transaction_from_info(tx) {
                 continue;
             }
 
-            let builder = FlatBufferBuilder::new();
-            let encoded_tx = tx.clone();
-            let tx_wrap = EncodedConfirmedTransactionWithStatusMeta {
-                transaction: encoded_tx,
-                slot,
-                block_time: block.block_time,
-            };
-
-            let builder = match seralize_encoded_transaction_with_status(builder, tx_wrap) {
-                Ok(builder) => builder,
-                Err(err) => {
-                    error!("Error serializing transaction with plerkle: {}", err);
-                    continue;
-                },
-            };
-
-            let tx = builder.finished_data().to_vec();
-            let tx = BufferedTransaction { transaction: tx, map_flatbuffer: false };
             match self
                 .ingester
                 .get_ingest_transaction_results(tx.clone())
@@ -267,10 +244,7 @@ where
                     self.metrics.inc_data_processed("backfiller_tx_processed");
                 },
                 Err(e) => {
-                    let signature =
-                        plerkle_serialization::root_as_transaction_info(tx.transaction.as_slice())
-                            .map(|parsed_tx| parsed_tx.signature().unwrap_or_default())
-                            .unwrap_or_default();
+                    let signature = tx.signature;
                     error!("Failed to ingest transaction {}: {}", signature, e);
                     self.metrics.inc_data_processed("backfiller_tx_processed_failed");
                 },
@@ -382,7 +356,7 @@ where
     async fn consume_block(
         &self,
         slot: u64,
-        block: solana_transaction_status::UiConfirmedBlock,
+        block: RawBlockWithTransactions,
     ) -> Result<(), BlockConsumeError> {
         self.direct_block_parser.consume_block(slot, block).await
     }

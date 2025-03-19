@@ -18,10 +18,7 @@ use rocks_db::{
     column::TypedColumn, columns::offchain_data::OffChainDataDeprecated,
     migrator::MigrationVersions, Storage,
 };
-use tokio::{
-    signal,
-    sync::{broadcast, Mutex as AsyncMutex},
-};
+use tokio::{signal, sync::Mutex as AsyncMutex};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
@@ -110,12 +107,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let metrics_state = MetricState::new();
 
+    let cancellation_token = CancellationToken::new();
     // Open target RocksDB in read-only mode
     let db = Arc::new(
         Storage::open_readonly_with_cfs(
             &args.target_db_path,
             vec![RawBlock::NAME, MigrationVersions::NAME, OffChainDataDeprecated::NAME],
-            Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
             metrics_state.red_metrics,
         )
         .expect("Failed to open target RocksDB"),
@@ -143,23 +140,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         metrics_state.backfiller_metrics,
     );
 
-    // Handle Ctrl+C
-    let shutdown_token = CancellationToken::new();
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
-    // Spawn a task to handle graceful shutdown on Ctrl+C
-    {
-        let shutdown_token = shutdown_token.clone();
-        tokio::spawn(async move {
+    usecase::executor::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
             if signal::ctrl_c().await.is_ok() {
                 info!("Received Ctrl+C, shutting down gracefully...");
-                shutdown_token.cancel();
-                shutdown_tx.send(()).unwrap();
+                cancellation_token.cancel();
             } else {
                 error!("Unable to listen for shutdown signal");
             }
-        });
-    }
+        }
+    });
     // Check if slots or slots_file is provided
     let mut slots_to_check = Vec::new();
 
@@ -257,7 +248,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             &BUBBLEGUM_PROGRAM_ID,
             last_persisted_slot,
             args.first_slot.unwrap_or_default(),
-            &shutdown_rx,
+            cancellation_token.child_token(),
         )
         .await;
 
@@ -268,7 +259,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let collected_slots = in_mem_dumper.get_sorted_keys().await;
     in_mem_dumper.clear().await;
 
-    if shutdown_token.is_cancelled() {
+    if cancellation_token.is_cancelled() {
         info!("Shutdown signal received, stopping...");
         return Ok(());
     }
@@ -307,7 +298,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verification loop
     while let Some(slot) = next_slot {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received, stopping...");
             break;
         }

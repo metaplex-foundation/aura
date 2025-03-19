@@ -234,16 +234,23 @@ fn extract_collection_metadata(
         meta.set_item("name", name.clone());
     }
 
-    let symbol = safe_select(chain_data_selector, "$.symbol");
-    if let Some(symbol) = symbol {
-        meta.set_item("symbol", symbol.clone());
+    let link_fields = vec!["name", "symbol"];
+    for name in link_fields {
+        let value = safe_select(chain_data_selector, format!("$.{}", name).as_str());
+        if let Some(symbol) = value {
+            meta.set_item(name, symbol.clone());
+        } else {
+            meta.set_item(name, "".into());
+        }
     }
 
     let link_fields = vec!["image", "external_url", "description"];
-    for f in link_fields {
-        let l = safe_select(selector, format!("$.{}", f).as_str());
-        if let Some(l) = l {
-            meta.set_item(f, l.to_owned());
+    for name in link_fields {
+        let value = safe_select(selector, format!("$.{}", name).as_str());
+        if let Some(symbol) = value {
+            meta.set_item(name, symbol.clone());
+        } else {
+            meta.set_item(name, "".into());
         }
     }
 
@@ -627,5 +634,66 @@ fn get_pagination_values(
         let last_row = token_accounts.last().map(|token_acc| token_acc.sorting_id.clone());
 
         Ok(Pagination { after: last_row, before: first_row, ..Default::default() })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_json_diff::assert_json_eq;
+    use entities::models::Updated;
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn test_extract_collection_metadata() {
+        let asset_dynamic = AssetDynamicDetails {
+            url: Updated::new(12, None, "https://example.com".to_string()),
+            onchain_data: Some(Updated::new(
+                12,
+                None,
+                r#"{"name": "Test Asset", "symbol": "TST"}"#.to_string(),
+            )),
+            ..Default::default()
+        };
+        let offchain_data = OffChainData {
+            metadata: Some(r#"{"image": "https://example.com/image.png", "external_url": "https://example.com", "description": "Test Description"}"#.to_string()),
+            ..Default::default()
+        };
+
+        let expected_metadata = json!({
+            "name": "Test Asset",
+            "symbol": "TST",
+            "image": "https://example.com/image.png",
+            "external_url": "https://example.com",
+            "description": "Test Description"
+        });
+
+        let result = extract_collection_metadata(&asset_dynamic, &offchain_data);
+
+        assert_json_eq!(result, expected_metadata);
+    }
+
+    #[test]
+    fn test_extract_collection_metadata_empty_fields() {
+        let asset_dynamic = AssetDynamicDetails {
+            url: Updated::new(12, None, "https://example.com".to_string()),
+            onchain_data: Some(Updated::new(12, None, r#"{}"#.to_string())),
+            ..Default::default()
+        };
+        let offchain_data =
+            OffChainData { metadata: Some(r#"{}"#.to_string()), ..Default::default() };
+
+        let expected_metadata = json!({
+            "name": "",
+            "symbol": "",
+            "image": "",
+            "external_url": "",
+            "description": ""
+        });
+
+        let result = extract_collection_metadata(&asset_dynamic, &offchain_data);
+
+        assert_json_eq!(result, expected_metadata);
     }
 }

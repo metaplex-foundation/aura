@@ -1,8 +1,9 @@
-use std::{collections::HashMap, ptr::with_exposed_provenance, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use entities::{
-    api_req_params::{GetAsset, GetAssetBatch, GetAssetsByGroup, SearchAssets},
-    enums::{AssetType, AssetType::Fungible},
+    api_req_params::{GetAsset, GetAssetBatch, GetAssetsByGroup, GetNftEditions, SearchAssets},
+    enums::{AssetType, AssetType::Fungible, TokenMetadataEdition},
+    models::{EditionMetadata, EditionV1, MasterEdition},
 };
 use function_name::named;
 use itertools::Itertools;
@@ -10,21 +11,19 @@ use metrics_utils::IngesterMetricsConfig;
 use nft_ingester::{
     api::dapi::response::AssetList,
     consts::RAYDIUM_API_HOST,
+    processors::account_based::mplx_updates_processor::MplxAccountsProcessor,
     raydium_price_fetcher::{RaydiumTokenPriceFetcher, CACHE_TTL},
     scheduler::{update_fungible_token_static_details, Scheduler},
 };
-use rocks_db::{batch_savers::BatchSaveStorage, storage_traits::AssetIndexReader};
+use rocks_db::batch_savers::BatchSaveStorage;
 use serial_test::serial;
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-};
-use tracing::{info, warn};
+use solana_sdk::pubkey::Pubkey;
+use tokio_util::sync::CancellationToken;
 use AssetType::NonFungible;
 
 use super::common::*;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_reg_get_asset() {
@@ -49,14 +48,12 @@ async fn test_reg_get_asset() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_reg_get_asset_batch() {
@@ -109,15 +106,13 @@ async fn test_reg_get_asset_batch() {
             "2-and-a-missing-1",
         ),
     ] {
-        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
         let request: GetAssetBatch = serde_json::from_str(request).unwrap();
-        let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+        let response = setup.das_api.get_asset_batch(request).await.unwrap();
         insta::assert_json_snapshot!(format!("{}-{}", name, individual_test_name), response);
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_reg_get_asset_by_group() {
@@ -153,14 +148,12 @@ async fn test_reg_get_asset_by_group() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAssetsByGroup = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_assets_by_group(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_assets_by_group(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_reg_search_assets() {
@@ -190,14 +183,12 @@ async fn test_reg_search_assets() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_regular_nft_collection() {
@@ -222,30 +213,22 @@ async fn test_regular_nft_collection() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
     insta::assert_json_snapshot!(name.clone(), response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_search_by_owner_with_show_zero_balance() {
     let name = trim_test_name(function_name!());
-    let mut wellknown_fungible_accounts = HashMap::new();
-    wellknown_fungible_accounts
-        .insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
-    wellknown_fungible_accounts
-        .insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
-
     let setup = TestSetup::new_with_options(
         name.clone(),
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            well_known_fungible_accounts: wellknown_fungible_accounts,
+            well_known_fungible_accounts: well_known_fungible_tokens(),
         },
     )
     .await;
@@ -284,10 +267,8 @@ async fn test_search_by_owner_with_show_zero_balance() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     // API shouldn't return zero NonFungible accounts ("3rzjtWZc"). "showZeroBalance": true is working only for Fungible tokens
@@ -321,7 +302,7 @@ async fn test_search_by_owner_with_show_zero_balance() {
     "#;
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -346,7 +327,7 @@ async fn test_search_by_owner_with_show_zero_balance() {
     "#;
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -363,23 +344,17 @@ async fn test_search_by_owner_with_show_zero_balance() {
     insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_search_by_owner_with_show_zero_balance_false() {
     let name = trim_test_name(function_name!());
-    let mut wellknown_fungible_accounts = HashMap::new();
-    wellknown_fungible_accounts
-        .insert(String::from("HxhWkVpk5NS4Ltg5nij2G671CKXFRKPK8vy271Ub4uEK"), String::from("Hxro"));
-    wellknown_fungible_accounts
-        .insert(String::from("METAewgxyPbgwsseH8T16a39CQ5VyVxZi9zXiDPY18m"), String::from("MPLX"));
-
     let setup = TestSetup::new_with_options(
         name.clone(),
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            well_known_fungible_accounts: wellknown_fungible_accounts,
+            well_known_fungible_accounts: well_known_fungible_tokens(),
         },
     )
     .await;
@@ -418,10 +393,8 @@ async fn test_search_by_owner_with_show_zero_balance_false() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -450,7 +423,7 @@ async fn test_search_by_owner_with_show_zero_balance_false() {
     "#;
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -475,7 +448,7 @@ async fn test_search_by_owner_with_show_zero_balance_false() {
     "#;
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -488,7 +461,7 @@ async fn test_search_by_owner_with_show_zero_balance_false() {
     insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processing_sequence() {
@@ -537,10 +510,8 @@ async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processin
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     // API shouldn't return zero NonFungible accounts ("3rzjtWZc"). "showZeroBalance": true is working only for Fungible tokens
@@ -574,7 +545,7 @@ async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processin
     "#;
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -599,7 +570,7 @@ async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processin
     "#;
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -616,7 +587,7 @@ async fn test_search_by_owner_with_show_zero_balance_with_reverse_data_processin
     insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_processing_sequence() {
@@ -665,10 +636,8 @@ async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_pro
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -697,7 +666,7 @@ async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_pro
     "#;
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -722,7 +691,7 @@ async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_pro
     "#;
 
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
     let res_obj: AssetList = serde_json::from_value(response.clone()).unwrap();
 
     assert_eq!(res_obj.items.is_empty(), false);
@@ -735,7 +704,7 @@ async fn test_search_by_owner_with_show_zero_balance_false_with_reverse_data_pro
     insta::assert_json_snapshot!(format!("{}_token_type_fungible", name), response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_search_assets_by_owner_with_pages() {
@@ -781,10 +750,8 @@ async fn test_search_assets_by_owner_with_pages() {
             }
         }"#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
 
     let name_all_assets = format!("{}_all_assets", test_name);
 
@@ -804,10 +771,8 @@ async fn test_search_assets_by_owner_with_pages() {
             }
         }"#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
 
     let name_page_1 = format!("{}_page_1", test_name);
 
@@ -827,10 +792,8 @@ async fn test_search_assets_by_owner_with_pages() {
             }
         }"#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
 
     let name_page_2 = format!("{}_page_2", test_name);
 
@@ -850,17 +813,15 @@ async fn test_search_assets_by_owner_with_pages() {
             }
         }"#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
 
     let name_page_3 = format!("{}_page_3", test_name);
 
     insta::assert_json_snapshot!(name_page_3, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn get_asset_nft_token_22_with_metadata() {
@@ -885,15 +846,13 @@ async fn get_asset_nft_token_22_with_metadata() {
     }
     "#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: GetAsset = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset(request).await.unwrap();
 
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_requested_non_fungibles_are_non_fungibles() {
@@ -943,10 +902,8 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
             }
         }"#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
 
     assert_eq!(response["items"].as_array().unwrap().len(), 5);
 
@@ -959,7 +916,7 @@ async fn test_requested_non_fungibles_are_non_fungibles() {
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_requested_fungibles_are_fungibles() {
@@ -1002,10 +959,8 @@ async fn test_requested_fungibles_are_fungibles() {
             }
         }"#;
 
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
     let request: SearchAssets = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.search_assets(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.search_assets(request).await.unwrap();
 
     assert_eq!(response["items"].as_array().unwrap().len(), 1);
 
@@ -1018,25 +973,24 @@ async fn test_requested_fungibles_are_fungibles() {
     insta::assert_json_snapshot!(name, response);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_recognise_popular_fungible_tokens() {
     let name = trim_test_name(function_name!());
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let token_price_fetcher =
         RaydiumTokenPriceFetcher::new(RAYDIUM_API_HOST.to_string(), CACHE_TTL, None);
     token_price_fetcher.warmup().await.unwrap();
-    let wellknown_fungible_accounts = token_price_fetcher.get_all_token_symbols().await.unwrap();
-    assert!(wellknown_fungible_accounts.len() > 0);
+    let well_known_fungible_accounts = token_price_fetcher.get_all_token_symbols().await.unwrap();
+    assert!(well_known_fungible_accounts.len() > 0);
 
     let setup = TestSetup::new_with_options(
         name.clone(),
         TestSetupOptions {
             network: Some(Network::Mainnet),
             clear_db: true,
-            well_known_fungible_accounts: wellknown_fungible_accounts,
+            well_known_fungible_accounts,
         },
     )
     .await;
@@ -1057,7 +1011,7 @@ async fn test_recognise_popular_fungible_tokens() {
         }"#;
 
     let request = serde_json::from_str(request).unwrap();
-    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset_batch(request).await.unwrap();
 
     assert_eq!(response.as_array().unwrap().len(), 2);
     response.as_array().unwrap().iter().all(|i| {
@@ -1068,12 +1022,11 @@ async fn test_recognise_popular_fungible_tokens() {
 
     insta::assert_json_snapshot!(name, response);
 }
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
 async fn test_update_well_known_fungible_tokens() {
     let name = trim_test_name(function_name!());
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let token_price_fetcher =
         RaydiumTokenPriceFetcher::new(RAYDIUM_API_HOST.to_string(), CACHE_TTL, None);
@@ -1107,7 +1060,7 @@ async fn test_update_well_known_fungible_tokens() {
         }"#;
 
     let request = serde_json::from_str(request_str).unwrap();
-    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset_batch(request).await.unwrap();
 
     assert_eq!(response.as_array().unwrap().len(), 2);
     response.as_array().unwrap().iter().all(|i| {
@@ -1116,18 +1069,16 @@ async fn test_update_well_known_fungible_tokens() {
         true
     });
 
-    update_fungible_token_static_details(
+    let _ = update_fungible_token_static_details(
         &setup.rocks_db,
         well_known_fungible_accounts.keys().cloned().collect(),
     );
 
-    // sync data to Postgre
-    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    setup.synchronizer.full_syncronize(&shutdown_rx, Fungible).await.unwrap();
-    setup.synchronizer.full_syncronize(&shutdown_rx, NonFungible).await.unwrap();
+    setup.synchronizer.full_syncronize(CancellationToken::new(), Fungible).await.unwrap();
+    setup.synchronizer.full_syncronize(CancellationToken::new(), NonFungible).await.unwrap();
 
     let request = serde_json::from_str(request_str).unwrap();
-    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset_batch(request).await.unwrap();
 
     assert_eq!(response.as_array().unwrap().len(), 2);
     response.as_array().unwrap().iter().all(|i| {
@@ -1141,11 +1092,10 @@ async fn test_update_well_known_fungible_tokens() {
 
 #[named]
 #[serial]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[tracing_test::traced_test]
 async fn test_update_fungible_token_static_details_job() {
     let name = trim_test_name(function_name!());
-    let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
     let setup = TestSetup::new_with_options(
         name.clone(),
@@ -1173,7 +1123,7 @@ async fn test_update_fungible_token_static_details_job() {
         }"#;
 
     let request = serde_json::from_str(request_str).unwrap();
-    let response = setup.das_api.get_asset_batch(request, mutexed_tasks.clone()).await.unwrap();
+    let response = setup.das_api.get_asset_batch(request).await.unwrap();
 
     assert_eq!(response.as_array().unwrap().len(), 2);
     response.as_array().unwrap().iter().all(|i| {
@@ -1187,15 +1137,13 @@ async fn test_update_fungible_token_static_details_job() {
         String::from("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
     ];
     let sut = Scheduler::new(setup.rocks_db.clone(), Some(well_known_fungible_pks));
-    Scheduler::run_in_background(sut).await;
+    Scheduler::run_in_background(sut, CancellationToken::new()).await;
 
-    // sync data to Postgre
-    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    setup.synchronizer.full_syncronize(&shutdown_rx, Fungible).await.unwrap();
-    setup.synchronizer.full_syncronize(&shutdown_rx, NonFungible).await.unwrap();
+    setup.synchronizer.full_syncronize(CancellationToken::new(), Fungible).await.unwrap();
+    setup.synchronizer.full_syncronize(CancellationToken::new(), NonFungible).await.unwrap();
 
     let request_2 = serde_json::from_str(request_str).unwrap();
-    let response_2 = setup.das_api.get_asset_batch(request_2, mutexed_tasks.clone()).await.unwrap();
+    let response_2 = setup.das_api.get_asset_batch(request_2).await.unwrap();
 
     assert_eq!(response_2.as_array().unwrap().len(), 2);
     response_2.as_array().unwrap().iter().all(|i| {
@@ -1204,5 +1152,259 @@ async fn test_update_fungible_token_static_details_job() {
         true
     });
 
+    insta::assert_json_snapshot!(name, response);
+}
+
+#[named]
+#[serial]
+#[tokio::test(flavor = "multi_thread")]
+#[tracing_test::traced_test]
+async fn test_get_master_editions() {
+    let name = trim_test_name(function_name!());
+    let first_mint_master_edition =
+        Pubkey::from_str("Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL").unwrap();
+    let second_mint_edition =
+        Pubkey::from_str("GJvFDcBWf6aDncd1TBzx2ou1rgLFYaMBdbYLBa9oTAEw").unwrap();
+    let third_mint_edition =
+        Pubkey::from_str("9yQecKKYSHxez7fFjJkUvkz42TLmkoXzhyZxEf2pw8pz").unwrap();
+    let fourth_mint_edition =
+        Pubkey::from_str("7AeRUkukNCpWFtxK2QBZr1PymzPde6qtQYND6CajrE2B").unwrap();
+    let supply = 123;
+    let max_supply = 10000;
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
+    )
+    .await;
+
+    let seeds: Vec<SeedEvent> = seed_nfts([
+        first_mint_master_edition.to_string(), // Master Edition
+        second_mint_edition.to_string(),
+        third_mint_edition.to_string(),
+        fourth_mint_edition.to_string(),
+    ]);
+    index_seed_events(&setup, seeds.iter().collect_vec()).await;
+
+    let first_mint_master_edition_to_save = EditionMetadata {
+        edition: TokenMetadataEdition::MasterEdition {
+            0: MasterEdition {
+                key: first_mint_master_edition,
+                supply,
+                max_supply: Some(max_supply),
+                write_version: 1,
+            },
+        },
+        write_version: 1,
+        slot_updated: 1,
+    };
+    let second_mint_edition_to_save =
+        create_edition_metadata(second_mint_edition, first_mint_master_edition, 1);
+    let third_mint_edition_to_save =
+        create_edition_metadata(third_mint_edition, first_mint_master_edition, 2);
+    let fourth_mint_edition_to_save =
+        create_edition_metadata(fourth_mint_edition, first_mint_master_edition, 3);
+
+    let mut batch_storage =
+        BatchSaveStorage::new(setup.rocks_db, 10, Arc::new(IngesterMetricsConfig::new()));
+    let mplx_accs_parser = MplxAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+
+    mplx_accs_parser
+        .transform_and_store_edition_account(
+            &mut batch_storage,
+            first_mint_master_edition,
+            &first_mint_master_edition_to_save.edition,
+        )
+        .unwrap();
+    mplx_accs_parser
+        .transform_and_store_edition_account(
+            &mut batch_storage,
+            second_mint_edition,
+            &second_mint_edition_to_save.edition,
+        )
+        .unwrap();
+    mplx_accs_parser
+        .transform_and_store_edition_account(
+            &mut batch_storage,
+            third_mint_edition,
+            &third_mint_edition_to_save.edition,
+        )
+        .unwrap();
+    mplx_accs_parser
+        .transform_and_store_edition_account(
+            &mut batch_storage,
+            fourth_mint_edition,
+            &fourth_mint_edition_to_save.edition,
+        )
+        .unwrap();
+
+    batch_storage.flush().unwrap();
+
+    let request = r#"
+        {
+            "page": 1,
+            "limit": 100,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 1);
+    assert_eq!(response["total"], 3);
+    assert_eq!(response["limit"], 100);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 3);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 1);
+    assert_eq!(response["editions"].as_array().unwrap()[1]["edition"], 2);
+    assert_eq!(response["editions"].as_array().unwrap()[2]["edition"], 3);
+    insta::assert_json_snapshot!(format!("{}_all_items_in_sorted_order", name), response);
+
+    let request = r#"
+        {
+            "page": 1,
+            "limit": 2,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 1);
+    assert_eq!(response["total"], 2);
+    assert_eq!(response["limit"], 2);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 2);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 1);
+    assert_eq!(response["editions"].as_array().unwrap()[1]["edition"], 2);
+    insta::assert_json_snapshot!(format!("{}_few_items_in_sorted_order", name), response);
+
+    let request = r#"
+        {
+            "page": 1,
+            "limit": 1,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 1);
+    assert_eq!(response["total"], 1);
+    assert_eq!(response["limit"], 1);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 1);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 1);
+    insta::assert_json_snapshot!(format!("{}_first_page", name), response);
+
+    let request = r#"
+        {
+            "page": 2,
+            "limit": 1,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 2);
+    assert_eq!(response["total"], 1);
+    assert_eq!(response["limit"], 1);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 1);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 2);
+    insta::assert_json_snapshot!(format!("{}_second_page", name), response);
+
+    let request = r#"
+        {
+            "page": 50,
+            "limit": 1,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["page"], 50);
+    assert_eq!(response["total"], 0);
+    assert_eq!(response["limit"], 1);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 0);
+    insta::assert_json_snapshot!(format!("{}_page_out_of_range", name), response);
+
+    let request = r#"
+        {
+            "after": "1",
+            "limit": 100,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["after"], "1");
+    assert_eq!(response["total"], 2);
+    assert_eq!(response["limit"], 100);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 2);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 2);
+    assert_eq!(response["editions"].as_array().unwrap()[1]["edition"], 3);
+    insta::assert_json_snapshot!(format!("{}_page_after_first", name), response);
+
+    let request = r#"
+        {
+            "before": "3",
+            "limit": 100,
+            "mint": "Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL"
+        }"#;
+    let request: GetNftEditions = serde_json::from_str(request).unwrap();
+    let response = setup.das_api.get_nft_editions(request).await.unwrap();
+
+    assert_eq!(response["before"], "3");
+    assert_eq!(response["total"], 2);
+    assert_eq!(response["limit"], 100);
+    assert_eq!(response["supply"], supply);
+    assert_eq!(response["max_supply"], max_supply);
+    assert_eq!(response["editions"].as_array().unwrap().len(), 2);
+    assert_eq!(response["editions"].as_array().unwrap()[0]["edition"], 1);
+    assert_eq!(response["editions"].as_array().unwrap()[1]["edition"], 2);
+    insta::assert_json_snapshot!(format!("{}_page_before_third", name), response);
+}
+
+fn create_edition_metadata(key: Pubkey, parent: Pubkey, edition: u64) -> EditionMetadata {
+    EditionMetadata {
+        edition: TokenMetadataEdition::EditionV1 {
+            0: EditionV1 { key, parent, edition, write_version: 1 },
+        },
+        write_version: 1,
+        slot_updated: 1,
+    }
+}
+
+#[named]
+#[tokio::test(flavor = "multi_thread")]
+#[tracing_test::traced_test]
+async fn test_health_check() {
+    let name = trim_test_name(function_name!());
+
+    let setup = TestSetup::new_with_options(
+        name.clone(),
+        TestSetupOptions {
+            network: Some(Network::Mainnet),
+            clear_db: true,
+            well_known_fungible_accounts: HashMap::new(),
+        },
+    )
+    .await;
+
+    let response = setup.das_api.check_health().await.unwrap();
+
+    assert_eq!(response["status"], "OK");
+    assert_eq!(response["app_version"], "1.0");
+    assert_eq!(response["node_name"], "test");
     insta::assert_json_snapshot!(name, response);
 }

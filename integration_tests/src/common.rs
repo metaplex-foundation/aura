@@ -13,8 +13,8 @@ use mpl_token_metadata::accounts::Metadata;
 use nft_ingester::{
     api::{account_balance::AccountBalanceGetterImpl, DasApi},
     buffer::Buffer,
-    config::JsonMiddlewareConfig,
-    index_syncronizer::Synchronizer,
+    config::{HealthCheckInfo, JsonMiddlewareConfig},
+    index_synchronizer::Synchronizer,
     init::init_index_storage_with_migration,
     json_worker::JsonWorker,
     message_parser::MessageParser,
@@ -46,11 +46,8 @@ use solana_sdk::{
     signature::Signature,
 };
 use solana_transaction_status::{EncodedConfirmedTransactionWithStatusMeta, UiTransactionEncoding};
-use tokio::{
-    sync::{broadcast, Mutex},
-    task::JoinSet,
-    time::{sleep, Instant},
-};
+use tokio::time::{sleep, Instant};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use usecase::proofs::MaybeProofChecker;
 
@@ -99,10 +96,6 @@ pub struct TestSetup {
 }
 
 impl TestSetup {
-    pub async fn new(name: String) -> Self {
-        Self::new_with_options(name, TestSetupOptions::default()).await
-    }
-
     pub async fn new_with_options(name: String, opts: TestSetupOptions) -> Self {
         let red_metrics = Arc::new(metrics_utils::red::RequestErrorDurationMetrics::new());
 
@@ -130,23 +123,18 @@ impl TestSetup {
         };
         let client = Arc::new(RpcClient::new(rpc_url.to_string()));
 
-        let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
         let buffer = Arc::new(Buffer::new());
 
         let metrics_state = MetricState::new();
 
-        let mutexed_tasks = Arc::new(Mutex::new(JoinSet::new()));
-
         let acc_processor = AccountsProcessor::build(
-            shutdown_rx.resubscribe(),
+            CancellationToken::new(),
             ACC_PROCESSOR_FETCH_BATCH_SIZE,
             buffer.clone(),
             metrics_state.ingester_metrics.clone(),
             None,
             index_storage.clone(),
             client.clone(),
-            mutexed_tasks.clone(),
             None,
             opts.well_known_fungible_accounts,
         )
@@ -160,13 +148,7 @@ impl TestSetup {
         }
 
         let storage = Arc::new(
-            Storage::open(
-                rocks_db_dir.path(),
-                mutexed_tasks.clone(),
-                red_metrics.clone(),
-                MigrationState::Last,
-            )
-            .unwrap(),
+            Storage::open(rocks_db_dir.path(), red_metrics.clone(), MigrationState::Last).unwrap(),
         );
 
         let tx_processor =
@@ -175,6 +157,11 @@ impl TestSetup {
         let das_api = DasApi::new(
             index_storage.clone(),
             storage.clone(),
+            HealthCheckInfo {
+                node_name: Some("test".to_string()),
+                app_version: "1.0".to_string(),
+                image_info: None,
+            },
             metrics_state.api_metrics.clone(),
             None,
             None,
@@ -412,10 +399,18 @@ pub async fn get_token_largest_account(client: &RpcClient, mint: Pubkey) -> anyh
 pub async fn index_and_sync_account_bytes(setup: &TestSetup, account_bytes: Vec<u8>) {
     process_and_save_accounts_to_rocks(setup, account_bytes).await;
 
-    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
+    let cancellation_token = CancellationToken::new();
     // copy data to Postgre
-    setup.synchronizer.synchronize_nft_asset_indexes(&shutdown_rx, 1000).await.unwrap();
-    setup.synchronizer.synchronize_fungible_asset_indexes(&shutdown_rx, 1000).await.unwrap();
+    setup
+        .synchronizer
+        .synchronize_nft_asset_indexes(cancellation_token.child_token(), 1000)
+        .await
+        .unwrap();
+    setup
+        .synchronizer
+        .synchronize_fungible_asset_indexes(cancellation_token.child_token(), 1000)
+        .await
+        .unwrap();
 }
 
 async fn process_and_save_accounts_to_rocks(setup: &TestSetup, account_bytes: Vec<u8>) {
@@ -444,6 +439,7 @@ async fn process_and_save_accounts_to_rocks(setup: &TestSetup, account_bytes: Ve
             &mut vec![],
             &mut interval,
             &mut batch_fill_instant,
+            &interface::unprocessed_data_getter::AccountSource::Stream,
         )
         .await;
 
@@ -512,10 +508,13 @@ pub async fn index_transaction(setup: &TestSetup, sig: Signature) {
         .await
         .unwrap();
 
-    let (_shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-    setup.synchronizer.synchronize_nft_asset_indexes(&shutdown_rx, 1000).await.unwrap();
+    setup.synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 1000).await.unwrap();
 
-    setup.synchronizer.synchronize_fungible_asset_indexes(&shutdown_rx, 1000).await.unwrap();
+    setup
+        .synchronizer
+        .synchronize_fungible_asset_indexes(CancellationToken::new(), 1000)
+        .await
+        .unwrap();
 }
 
 async fn cached_fetch_largest_token_account_id(client: &RpcClient, mint: Pubkey) -> Pubkey {
@@ -550,6 +549,7 @@ pub enum Network {
     Mainnet,
     Devnet,
     EclipseMainnet,
+    #[allow(unused)]
     EclipseDevnet,
 }
 

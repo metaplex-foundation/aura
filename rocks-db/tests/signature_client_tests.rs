@@ -5,7 +5,7 @@ mod tests {
     use setup::rocks::*;
     use solana_sdk::{pubkey::Pubkey, signature::Signature};
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_first_persisted_signature_for_empty_db() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let program_id = Pubkey::new_unique();
@@ -16,7 +16,7 @@ mod tests {
         assert!(response.is_none());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_persist_and_get_first_for_different_keys() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let first_program_id = Pubkey::new_unique();
@@ -63,7 +63,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_drop_signatures_before_for_empty_db() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let program_id = Pubkey::new_unique();
@@ -72,7 +72,7 @@ mod tests {
         assert!(response.is_ok());
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_drop_signatures_before_on_generated_records_for_2_accounts() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let first_program_id = Pubkey::new_unique();
@@ -132,7 +132,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_drop_signatures_before_in_the_same_slot_faking_signature() {
         let storage = RocksTestEnvironment::new(&[]).storage;
         let first_program_id = Pubkey::new_unique();

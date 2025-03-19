@@ -1,7 +1,5 @@
 use plerkle_serialization::deserializer::*;
-use solana_program::{instruction::CompiledInstruction, pubkey::Pubkey};
-use solana_sdk::signature::Signature;
-use solana_transaction_status::InnerInstructions;
+use solana_program::pubkey::Pubkey;
 
 #[derive(thiserror::Error, Clone, Debug, PartialEq)]
 pub enum PlerkleDeserializerError {
@@ -21,15 +19,6 @@ pub struct AccountInfo {
     pub executable: bool,
     pub write_version: u64,
     pub data: Vec<u8>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TransactionInfo {
-    pub slot: u64,
-    pub signature: Signature,
-    pub account_keys: Vec<Pubkey>,
-    pub message_instructions: Vec<CompiledInstruction>,
-    pub meta_inner_instructions: Vec<InnerInstructions>,
 }
 
 pub struct PlerkleAccountInfo<'a>(pub plerkle_serialization::AccountInfo<'a>);
@@ -55,7 +44,7 @@ impl TryFrom<PlerkleAccountInfo<'_>> for AccountInfo {
 
 pub struct PlerkleTransactionInfo<'a>(pub plerkle_serialization::TransactionInfo<'a>);
 
-impl<'a> TryFrom<PlerkleTransactionInfo<'a>> for TransactionInfo {
+impl<'a> TryFrom<PlerkleTransactionInfo<'a>> for entities::models::TransactionInfo {
     type Error = PlerkleDeserializerError;
 
     fn try_from(value: PlerkleTransactionInfo<'a>) -> Result<Self, Self::Error> {

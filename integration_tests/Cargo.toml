@@ -2,7 +2,7 @@
 edition = "2021"
 name = "integration_tests"
 publish = false
-version = "0.5.0"
+version = "0.6.0"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -27,6 +27,7 @@ spl-token = { workspace = true, features = ["no-entrypoint"] }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
 rocksdb = { workspace = true }
 tempfile = {workspace = true}
 env_logger = { workspace = true }
@@ -38,3 +39,4 @@ metrics-utils = { path = "../metrics_utils" }
 rocks-db = { path = "../rocks-db", features = ["integration_tests"] }
 usecase = { path = "../usecase" }
 entities = { path = "../entities" }
+interface = { path = "../interface" }

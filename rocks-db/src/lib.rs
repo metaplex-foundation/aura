@@ -53,10 +53,10 @@ use entities::{
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use inflector::Inflector;
 use metrics_utils::red::RequestErrorDurationMetrics;
-use rocksdb::{ColumnFamilyDescriptor, Options, DB};
-use tokio::{sync::Mutex, task::JoinSet};
+use rocksdb::{ColumnFamilyDescriptor, Options, SliceTransform, DB};
 
 use crate::{
+    columns::asset::TokenMetadataEditionParentIndex,
     errors::StorageError,
     migrator::{MigrationState, MigrationVersions},
     tree_seq::{TreeSeqIdx, TreesGaps},
@@ -66,51 +66,42 @@ pub type Result<T> = std::result::Result<T, StorageError>;
 
 const ROCKS_COMPONENT: &str = "rocks_db";
 const DROP_ACTION: &str = "drop";
-const RAW_BLOCKS_CBOR_ENDPOINT: &str = "raw_blocks_cbor";
+const RAW_BLOCKS_ENDPOINT: &str = "raw_blocks";
 const FULL_ITERATION_ACTION: &str = "full_iteration";
 const BATCH_ITERATION_ACTION: &str = "batch_iteration";
 const BATCH_GET_ACTION: &str = "batch_get";
 const ITERATOR_TOP_ACTION: &str = "iterator_top";
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
+#[derive(Clone)]
 pub struct SlotStorage {
     pub db: Arc<DB>,
-    pub raw_blocks_cbor: Column<RawBlock>,
-    join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
+    pub raw_blocks: Column<RawBlock>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl SlotStorage {
-    pub fn new(
-        db: Arc<DB>,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Self {
-        let raw_blocks_cbor = Storage::column(db.clone(), red_metrics.clone());
-        Self { db, raw_blocks_cbor, red_metrics, join_set }
+    pub fn new(db: Arc<DB>, red_metrics: Arc<RequestErrorDurationMetrics>) -> Self {
+        let raw_blocks = Storage::column(db.clone(), red_metrics.clone());
+        Self { db, raw_blocks, red_metrics }
     }
 
     pub fn cf_names() -> Vec<&'static str> {
         vec![RawBlock::NAME, MigrationVersions::NAME, OffChainDataDeprecated::NAME]
     }
 
-    pub fn open<P>(
-        db_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Result<Self>
+    pub fn open<P>(db_path: P, red_metrics: Arc<RequestErrorDurationMetrics>) -> Result<Self>
     where
         P: AsRef<Path>,
     {
         let cf_descriptors = Storage::cfs_to_column_families(Self::cf_names());
         let db =
             Arc::new(DB::open_cf_descriptors(&Storage::get_db_options(), db_path, cf_descriptors)?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 
     pub fn open_secondary<P>(
         primary_path: P,
         secondary_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self>
     where
@@ -123,11 +114,10 @@ impl SlotStorage {
             secondary_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
     pub fn open_readonly<P>(
         db_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self>
     where
@@ -135,7 +125,7 @@ impl SlotStorage {
     {
         let db = Arc::new(Storage::open_readonly_with_cfs_only_db(db_path, Self::cf_names())?);
 
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 }
 
@@ -170,6 +160,7 @@ pub struct Storage {
     pub tree_seq_idx: Column<TreeSeqIdx>,
     pub trees_gaps: Column<TreesGaps>,
     pub token_metadata_edition_cbor: Column<TokenMetadataEdition>,
+    pub token_metadata_edition_parent_index: Column<TokenMetadataEditionParentIndex>,
     pub token_accounts: Column<TokenAccount>,
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
@@ -188,16 +179,11 @@ pub struct Storage {
     pub spl_mints: Column<SplMint>,
     assets_update_last_seq: AtomicU64,
     fungible_assets_update_last_seq: AtomicU64,
-    join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl Storage {
-    fn new(
-        db: Arc<DB>,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
-        red_metrics: Arc<RequestErrorDurationMetrics>,
-    ) -> Self {
+    fn new(db: Arc<DB>, red_metrics: Arc<RequestErrorDurationMetrics>) -> Self {
         let asset_static_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data = Self::column(db.clone(), red_metrics.clone());
         let asset_dynamic_data_deprecated = Self::column(db.clone(), red_metrics.clone());
@@ -225,6 +211,7 @@ impl Storage {
         let tree_seq_idx = Self::column(db.clone(), red_metrics.clone());
         let trees_gaps = Self::column(db.clone(), red_metrics.clone());
         let token_metadata_edition_cbor = Self::column(db.clone(), red_metrics.clone());
+        let token_metadata_edition_parent_index = Self::column(db.clone(), red_metrics.clone());
         let asset_static_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_signature = Self::column(db.clone(), red_metrics.clone());
         let token_accounts = Self::column(db.clone(), red_metrics.clone());
@@ -270,10 +257,10 @@ impl Storage {
             slot_asset_idx,
             assets_update_last_seq: AtomicU64::new(0),
             fungible_assets_update_last_seq: AtomicU64::new(0),
-            join_set,
             tree_seq_idx,
             trees_gaps,
             token_metadata_edition_cbor,
+            token_metadata_edition_parent_index,
             token_accounts,
             token_account_owner_idx,
             asset_static_data_deprecated,
@@ -297,7 +284,6 @@ impl Storage {
 
     pub fn open<P>(
         db_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         migration_state: MigrationState,
     ) -> Result<Self>
@@ -307,13 +293,13 @@ impl Storage {
         let cf_descriptors = Self::create_cf_descriptors(&migration_state);
         let db =
             Arc::new(DB::open_cf_descriptors(&Self::get_db_options(), db_path, cf_descriptors)?);
-        Ok(Self::new(db, join_set, red_metrics))
+
+        Ok(Self::new(db, red_metrics))
     }
 
     pub fn open_secondary<P>(
         primary_path: P,
         secondary_path: P,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
         migration_state: MigrationState,
     ) -> Result<Self>
@@ -327,13 +313,12 @@ impl Storage {
             secondary_path,
             cf_descriptors,
         )?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 
     pub fn open_cfs<P>(
         db_path: P,
         c_names: Vec<&str>,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self>
     where
@@ -342,23 +327,22 @@ impl Storage {
         let cf_descriptors = Self::cfs_to_column_families(c_names);
         let db =
             Arc::new(DB::open_cf_descriptors(&Self::get_db_options(), db_path, cf_descriptors)?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 
     pub fn open_readonly_with_cfs<P>(
         db_path: P,
         c_names: Vec<&str>,
-        join_set: Arc<Mutex<JoinSet<core::result::Result<(), tokio::task::JoinError>>>>,
         red_metrics: Arc<RequestErrorDurationMetrics>,
     ) -> Result<Self>
     where
         P: AsRef<Path>,
     {
         let db = Arc::new(Self::open_readonly_with_cfs_only_db(db_path, c_names)?);
-        Ok(Self::new(db, join_set, red_metrics))
+        Ok(Self::new(db, red_metrics))
     }
 
-    fn cfs_to_column_families(cfs: Vec<&str>) -> Vec<ColumnFamilyDescriptor> {
+    pub fn cfs_to_column_families(cfs: Vec<&str>) -> Vec<ColumnFamilyDescriptor> {
         cfs.iter()
             .map(|name| ColumnFamilyDescriptor::new(*name, Self::get_default_cf_options()))
             .collect()
@@ -393,6 +377,7 @@ impl Storage {
             Self::new_cf_descriptor::<TreeSeqIdx>(migration_state),
             Self::new_cf_descriptor::<TreesGaps>(migration_state),
             Self::new_cf_descriptor::<TokenMetadataEdition>(migration_state),
+            Self::new_cf_descriptor::<TokenMetadataEditionParentIndex>(migration_state),
             Self::new_cf_descriptor::<AssetSignature>(migration_state),
             Self::new_cf_descriptor::<TokenAccount>(migration_state),
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(migration_state),
@@ -428,7 +413,7 @@ impl Storage {
         Column { backend, column: PhantomData, red_metrics }
     }
 
-    fn get_db_options() -> Options {
+    pub fn get_db_options() -> Options {
         let mut options = Options::default();
 
         // Create missing items to support a clean start
@@ -642,7 +627,14 @@ impl Storage {
             TokenMetadataEdition::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_token_metadata_edition_keep_existing",
-                    crate::columns::editions::merge_token_metadata_edition,
+                    columns::editions::merge_token_metadata_edition,
+                );
+            },
+            TokenMetadataEditionParentIndex::NAME => {
+                cf_options.set_prefix_extractor(SliceTransform::create_fixed_prefix(32));
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_token_metadata_edition_parent_index_keep_existing",
+                    columns::editions::merge_token_metadata_parent_index_edition,
                 );
             },
             AssetStaticDetailsDeprecated::NAME => {
@@ -755,6 +747,7 @@ impl Storage {
             TreeSeqIdx::NAME,
             TreesGaps::NAME,
             TokenMetadataEdition::NAME,
+            TokenMetadataEditionParentIndex::NAME,
             TokenAccount::NAME,
             TokenAccountOwnerIdx::NAME,
             TokenAccountMintOwnerIdx::NAME,

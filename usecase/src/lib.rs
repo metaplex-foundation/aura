@@ -1,5 +1,6 @@
 pub mod asset_streamer;
 pub mod bigtable;
+pub mod executor;
 pub mod graceful_stop;
 pub mod merkle_tree;
 pub mod proofs;

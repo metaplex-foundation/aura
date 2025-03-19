@@ -5,7 +5,7 @@ mod tests {
     use setup::{await_async_for, rocks::*};
     use solana_sdk::keccak;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_get_urls_to_download() {
         // prepare
@@ -37,7 +37,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_successful_download() {
         // prepare
@@ -64,7 +64,7 @@ mod tests {
         assert_eq!(preview_rul, Some(AssetPreviews { size: 400, failed: None }))
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_submit_absent_url() {
         // prepare
@@ -80,7 +80,7 @@ mod tests {
         storage.submit_download_results(vec![download_result]).unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[tracing_test::traced_test]
     async fn test_remove_url_after_max_failed_attempts_to_dwonload() {
         // prepare

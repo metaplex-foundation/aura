@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use entities::models::{BatchMintToVerify, BufferedTransaction, SignatureWithSlot};
+use entities::models::{BatchMintToVerify, SignatureWithSlot, TransactionInfo};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::{events::ChangeLogEventV1, state::PathNode};
@@ -13,7 +13,7 @@ use crate::{
 pub trait TransactionProcessor: Sync + Send + 'static {
     fn get_ingest_transaction_results(
         &self,
-        tx: BufferedTransaction,
+        tx: TransactionInfo,
     ) -> Result<TransactionResult, StorageError>;
 }
 

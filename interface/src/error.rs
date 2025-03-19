@@ -47,7 +47,15 @@ pub enum UsecaseError {
     #[error("EmptyPriceFetcherResponse {0}")]
     EmptyPriceFetcherResponse(String),
     #[error("Messenger {0}")]
-    Messenger(String),
+    Messenger(MessengerError),
+}
+
+#[derive(Debug, Error, PartialEq)]
+pub enum MessengerError {
+    #[error("Stream {0} is empty")]
+    Empty(String),
+    #[error("Redis error: {0}")]
+    Redis(String),
 }
 
 impl From<ClientError> for UsecaseError {

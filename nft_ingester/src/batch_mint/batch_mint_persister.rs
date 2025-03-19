@@ -9,7 +9,8 @@ use entities::{
 use interface::{batch_mint::BatchMintDownloader, error::UsecaseError};
 use metrics_utils::{BatchMintPersisterMetricsConfig, MetricStatus};
 use rocks_db::columns::batch_mint::BatchMintWithStaker;
-use tokio::{sync::broadcast::Receiver, task::JoinError, time::Instant};
+use tokio::{task::JoinError, time::Instant};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::{
@@ -58,8 +59,11 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         Self { rocks_client, downloader, metrics }
     }
 
-    pub async fn persist_batch_mints(&self, mut rx: Receiver<()>) -> Result<(), JoinError> {
-        while rx.is_empty() {
+    pub async fn persist_batch_mints(
+        &self,
+        cancellation_token: CancellationToken,
+    ) -> Result<(), JoinError> {
+        while !cancellation_token.is_cancelled() {
             let (batch_mint_to_verify, batch_mint) = match self.get_batch_mint_to_verify().await {
                 Ok(res) => res,
                 Err(_) => {
@@ -70,13 +74,18 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
                 // no batch_mints to persist
                 continue;
             };
-            self.persist_batch_mint(&rx, batch_mint_to_verify, batch_mint).await;
+            self.persist_batch_mint(
+                cancellation_token.child_token(),
+                batch_mint_to_verify,
+                batch_mint,
+            )
+            .await;
             tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(5)) => {},
-                _ = rx.recv() => {
-                    info!("Received stop signal, stopping ...");
-                    return Ok(());
-                },
+                _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                _ = cancellation_token.cancelled() => {
+                        info!("Received stop signal, stopping ...");
+                        break;
+                }
             }
         }
         Ok(())
@@ -84,13 +93,13 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
 
     pub async fn persist_batch_mint(
         &self,
-        rx: &Receiver<()>,
+        cancellation_token: CancellationToken,
         mut batch_mint_to_verify: BatchMintToVerify,
         mut batch_mint: Option<Box<BatchMint>>,
     ) {
         let start_time = Instant::now();
         info!("Persisting {} batch_mint", &batch_mint_to_verify.url);
-        while rx.is_empty() {
+        while !cancellation_token.is_cancelled() {
             match &batch_mint_to_verify.persisting_state {
                 &PersistingBatchMintState::ReceivedTransaction => {
                     if let Err(err) =

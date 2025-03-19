@@ -1,11 +1,12 @@
 [package]
 name = "grpc"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bincode = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 prost = { workspace = true }
@@ -16,7 +17,6 @@ entities = { path = "../entities" }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 solana-transaction-status = { workspace = true }
-serde_cbor = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

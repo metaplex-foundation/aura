@@ -8,7 +8,7 @@ The Metaplex Aura Network has three main components:
 *   **Multi-Program Consistent Indexing across any SVM:** Enhanced Digital Asset Standard (DAS) API for performant indexing across any protocols on Solana and the broader SVM.
 *   **Elastic State Management:** Ability to transition assets between SVM account space and different levels of state compression on demand, increasing flexibility and optimizing asset performance and scalability.
 
-For more background information, please see [our blog](http://www.metaplex.com/posts/aura-network).
+For more background information, please see [our blog](https://www.metaplex.com/blog/articles/aura-announcement).
 
 ## Aura Infrastructure
 

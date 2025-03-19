@@ -13,8 +13,8 @@ pub enum GrpcError {
     UriCreate(String),
     #[error("TonicTransport: {0}")]
     TonicTransport(String),
-    #[error("Cbor: {0}")]
-    Cbor(String),
+    #[error("Bincode error: {0}")]
+    Bincode(String),
 }
 impl From<tonic::transport::Error> for GrpcError {
     fn from(value: Error) -> Self {
@@ -22,8 +22,8 @@ impl From<tonic::transport::Error> for GrpcError {
     }
 }
 
-impl From<serde_cbor::error::Error> for GrpcError {
-    fn from(value: serde_cbor::error::Error) -> Self {
-        Self::Cbor(value.to_string())
+impl From<bincode::Error> for GrpcError {
+    fn from(value: bincode::Error) -> Self {
+        Self::Bincode(value.to_string())
     }
 }

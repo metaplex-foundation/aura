@@ -70,7 +70,6 @@ fn ingest_benchmark(c: &mut Criterion) {
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let transactions_storage = Storage::open(
         &format!("{}{}", tx_storage_dir.path().to_str().unwrap(), "/test_rocks"),
-        mutexed_tasks.clone(),
         red_metrics,
         MigrationState::Last,
     )

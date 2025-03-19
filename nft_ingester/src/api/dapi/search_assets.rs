@@ -13,10 +13,6 @@ use interface::{
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::{errors::StorageError, Storage};
 use solana_sdk::pubkey::Pubkey;
-use tokio::{
-    sync::Mutex,
-    task::{JoinError, JoinSet},
-};
 use tracing::error;
 
 use super::asset_preview::populate_previews;
@@ -47,7 +43,6 @@ pub async fn search_assets<
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     account_balance_getter: Arc<impl AccountBalanceGetter>,
     storage_service_base_path: Option<String>,
     token_price_fetcher: Arc<TPF>,
@@ -74,7 +69,6 @@ pub async fn search_assets<
             json_downloader,
             json_persister,
             max_json_to_download,
-            tasks,
             token_price_fetcher.clone(),
             metrics,
             tree_gaps_checker,
@@ -121,7 +115,6 @@ async fn fetch_assets<
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     token_price_fetcher: Arc<TPF>,
     metrics: Arc<ApiMetricsConfig>,
     tree_gaps_checker: &Option<Arc<PPC>>,
@@ -181,7 +174,6 @@ async fn fetch_assets<
         json_downloader,
         json_persister,
         max_json_to_download,
-        tasks,
         &owner_address,
         token_price_fetcher,
         metrics,

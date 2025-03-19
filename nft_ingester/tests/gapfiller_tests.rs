@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use entities::models::{AssetCompleteDetailsGrpc, Updated};
+use entities::models::{AssetCompleteDetailsGrpc, RawBlockWithTransactions, Updated};
 use futures::stream;
 use interface::asset_streaming_and_discovery::{
     AsyncError, MockAssetDetailsConsumer, MockRawBlocksConsumer,
@@ -12,9 +12,8 @@ use rocks_db::{
     generated::asset_generated::asset as fb, migrator::MigrationState, SlotStorage, Storage,
 };
 use solana_sdk::pubkey::Pubkey;
-use solana_transaction_status::UiConfirmedBlock;
 use tempfile::TempDir;
-use tokio::{sync::Mutex, task::JoinSet};
+use tokio_util::sync::CancellationToken;
 
 fn create_test_complete_asset_details(pubkey: Pubkey) -> AssetCompleteDetailsGrpc {
     AssetCompleteDetailsGrpc {
@@ -24,18 +23,13 @@ fn create_test_complete_asset_details(pubkey: Pubkey) -> AssetCompleteDetailsGrp
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_process_asset_details_stream() {
     let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let storage = Arc::new(
-        Storage::open(
-            temp_dir.path().to_str().unwrap(),
-            Arc::new(Mutex::new(JoinSet::new())),
-            red_metrics.clone(),
-            MigrationState::Last,
-        )
-        .expect("Failed to create a database"),
+        Storage::open(temp_dir.path().to_str().unwrap(), red_metrics.clone(), MigrationState::Last)
+            .expect("Failed to create a database"),
     );
 
     let first_key = Pubkey::new_unique();
@@ -44,7 +38,6 @@ async fn test_process_asset_details_stream() {
     let details1 = create_test_complete_asset_details(first_key.clone());
     let details2 = create_test_complete_asset_details(second_key.clone());
 
-    let (_, rx) = tokio::sync::broadcast::channel::<()>(1);
     let mut mock = MockAssetDetailsConsumer::new();
     mock.expect_get_asset_details_consumable_stream_in_range().returning(move |_, _| {
         Ok(Box::pin(stream::iter(vec![
@@ -53,7 +46,7 @@ async fn test_process_asset_details_stream() {
             Err(AsyncError::from("test error")),
         ])))
     });
-    process_asset_details_stream(rx, storage.clone(), 100, 200, mock).await;
+    process_asset_details_stream(CancellationToken::new(), storage.clone(), 100, 200, mock).await;
     let selected_data = storage
         .db
         .get_pinned_cf(
@@ -79,32 +72,25 @@ async fn test_process_asset_details_stream() {
     assert_eq!(selected_data.dynamic_details.unwrap().supply, Some(Updated::new(1, None, 10)));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 #[ignore = "TODO: unignore when process_raw_blocks_stream is fixed"]
 async fn test_process_raw_blocks_stream() {
     let temp_dir = TempDir::new().expect("Failed to create a temporary directory");
     let red_metrics = Arc::new(RequestErrorDurationMetrics::new());
     let storage = Arc::new(
-        SlotStorage::open(
-            temp_dir.path().to_str().unwrap(),
-            Arc::new(Mutex::new(JoinSet::new())),
-            red_metrics.clone(),
-        )
-        .expect("Failed to create a database"),
+        SlotStorage::open(temp_dir.path().to_str().unwrap(), red_metrics.clone())
+            .expect("Failed to create a database"),
     );
     let slot = 153;
     let blockhash = "blockhash";
     let block = entities::models::RawBlock {
         slot,
-        block: UiConfirmedBlock {
+        block: RawBlockWithTransactions {
             previous_blockhash: "".to_string(),
             blockhash: blockhash.to_string(),
             parent_slot: 0,
-            transactions: None,
-            signatures: None,
-            rewards: None,
+            transactions: Default::default(),
             block_time: None,
-            block_height: None,
         },
     };
     let mut mock = MockRawBlocksConsumer::new();
@@ -116,6 +102,6 @@ async fn test_process_raw_blocks_stream() {
 
     // process_raw_blocks_stream(rx, storage.clone(), 100, 200, mock).await;
 
-    let selected_data = storage.raw_blocks_cbor.get_async(slot).await.unwrap().unwrap();
+    let selected_data = storage.raw_blocks.get_async(slot).await.unwrap().unwrap();
     assert_eq!(selected_data.block.blockhash, blockhash.to_string());
 }

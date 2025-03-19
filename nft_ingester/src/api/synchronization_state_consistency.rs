@@ -13,11 +13,7 @@ use postgre_client::{storage_traits::AssetIndexStorage, PgClient};
 use rocks_db::{
     key_encoders::decode_u64x2_pubkey, storage_traits::AssetUpdateIndexStorage, Storage,
 };
-use tokio::{
-    sync::Mutex,
-    task::{JoinError, JoinSet},
-};
-use tracing::info;
+use tokio_util::sync::CancellationToken;
 
 pub(crate) const CATCH_UP_SEQUENCES_TIMEOUT_SEC: u64 = 30;
 const INDEX_STORAGE_DEPENDS_METHODS: &[&str] = &[
@@ -50,8 +46,7 @@ impl SynchronizationStateConsistencyChecker {
 
     pub(crate) async fn run(
         &self,
-        tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
-        rx: tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
         pg_client: Arc<PgClient>,
         rocks_db: Arc<Storage>,
         synchronization_api_threshold: u64,
@@ -63,10 +58,11 @@ impl SynchronizationStateConsistencyChecker {
             };
             let pg_client = pg_client.clone();
             let rocks_db = rocks_db.clone();
-            let mut rx = rx.resubscribe();
-            tasks.lock().await.spawn(async move {
-                while rx.is_empty() {
-                    let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id(asset_type).await else {
+            let cancellation_token = cancellation_token.child_token();
+            usecase::executor::spawn(async move {
+                while !cancellation_token.is_cancelled() {
+                    let Ok(Some(index_seq)) = pg_client.fetch_last_synced_id(asset_type).await
+                    else {
                         continue;
                     };
                     let Ok(decoded_index_update_key) = decode_u64x2_pubkey(index_seq) else {
@@ -82,21 +78,18 @@ impl SynchronizationStateConsistencyChecker {
                     };
 
                     overwhelm_seq_gap.store(
-                        primary_update_key
-                            .seq
-                            .saturating_sub(decoded_index_update_key.seq)
+                        primary_update_key.seq.saturating_sub(decoded_index_update_key.seq)
                             >= synchronization_api_threshold,
                         Ordering::Relaxed,
                     );
+
                     tokio::select! {
                         _ = tokio::time::sleep(Duration::from_secs(CATCH_UP_SEQUENCES_TIMEOUT_SEC))=> {},
-                        _ = rx.recv() => {
-                            info!("Received stop signal, stopping SynchronizationStateConsistencyChecker...");
-                            return Ok(());
+                        _ = cancellation_token.cancelled() => {
+                            tracing::info!("Received stop signal, stopping SynchronizationStateConsistencyChecker...");
                         }
                     }
                 }
-                Ok(())
             });
         }
     }

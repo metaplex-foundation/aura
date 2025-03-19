@@ -1,6 +1,6 @@
 [package]
 name = "nft_ingester"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 publish = false
 
@@ -66,7 +66,6 @@ xxhash-rust = { workspace = true }
 hex = { workspace = true }
 jemallocator = { workspace = true }
 arweave-rs = { workspace = true }
-serde_cbor = { workspace = true }
 bubblegum-batch-sdk = { workspace = true }
 jsonpath_lib = { workspace = true }
 mime_guess = { workspace = true }
@@ -80,11 +79,12 @@ tokio-retry = { workspace = true }
 axum = { workspace = true }
 rocksdb = { workspace = true }
 num-bigint = "0.4"
+tracing-test = { workspace = true }
+assert-json-diff = "2.0"
 
 [dev-dependencies]
 setup = { path = "../tests/setup" }
 testcontainers = { workspace = true }
-tracing-test = { workspace = true }
 criterion = { workspace = true }
 zip-extract = { workspace = true }
 assertables = "7"

@@ -21,7 +21,7 @@ impl RawBlocksStreamer for SlotStorage {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         let backend = self.db.clone();
         let metrics = self.red_metrics.clone();
-        self.join_set.lock().await.spawn(tokio::spawn(async move {
+        usecase::executor::spawn(async move {
             let _ = process_raw_blocks_range(
                 backend,
                 start_slot,
@@ -30,7 +30,7 @@ impl RawBlocksStreamer for SlotStorage {
                 tx.clone(),
             )
             .await;
-        }));
+        });
 
         Ok(Box::pin(ReceiverStream::new(rx)) as RawBlocksStream)
     }
@@ -48,8 +48,7 @@ async fn process_raw_blocks_range(
 
     for pair in iterator {
         let (key, value) = pair.map_err(|e| Box::new(e) as AsyncError)?;
-        let block = serde_cbor::from_slice::<RawBlock>(value.as_ref())
-            .map_err(|e| Box::new(e) as AsyncError)?;
+        let block = RawBlock::decode(value.as_ref()).map_err(|e| Box::new(e) as AsyncError)?;
         let slot = RawBlock::decode_key(key.to_vec()).map_err(|e| Box::new(e) as AsyncError)?;
         if slot > end_slot {
             break;
@@ -70,7 +69,7 @@ impl RawBlockGetter for Storage {
             .map_err(|e| Box::new(e) as AsyncError)
             .and_then(|res| {
                 let err_msg = format!("Cannot get raw block with slot: '{slot}'!");
-                res.and_then(|r| serde_cbor::from_slice::<RawBlock>(r.as_slice()).ok())
+                res.and_then(|r| RawBlock::decode(r.as_slice()).ok())
                     .ok_or(Box::new(StorageError::NotFound(err_msg)) as AsyncError)
             })
     }

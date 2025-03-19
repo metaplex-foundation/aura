@@ -5,7 +5,7 @@ use entities::models::{ClItem, ForkedItem, LeafSignatureAllData, RawBlock};
 use interface::fork_cleaner::{CompressedTreeChangesManager, ForkChecker};
 use rocksdb::IteratorMode;
 use solana_sdk::{pubkey::Pubkey, signature::Signature};
-use tokio::sync::broadcast::Receiver;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     column::TypedColumn,
     columns::{cl_items::ClItemV2, leaf_signatures::LeafSignature},
     SlotStorage, Storage, DROP_ACTION, FULL_ITERATION_ACTION, ITERATOR_TOP_ACTION,
-    RAW_BLOCKS_CBOR_ENDPOINT, ROCKS_COMPONENT,
+    RAW_BLOCKS_ENDPOINT, ROCKS_COMPONENT,
 };
 
 #[async_trait]
@@ -103,7 +103,7 @@ impl CompressedTreeChangesManager for Storage {
 
 #[async_trait]
 impl ForkChecker for SlotStorage {
-    fn get_all_non_forked_slots(&self, rx: Receiver<()>) -> HashSet<u64> {
+    fn get_all_non_forked_slots(&self, cancellation_token: CancellationToken) -> HashSet<u64> {
         let start_time = chrono::Utc::now();
         let mut all_keys = HashSet::new();
         for (key, _) in self
@@ -111,7 +111,7 @@ impl ForkChecker for SlotStorage {
             .full_iterator_cf(&self.db.cf_handle(RawBlock::NAME).unwrap(), IteratorMode::Start)
             .filter_map(Result::ok)
         {
-            if !rx.is_empty() {
+            if cancellation_token.is_cancelled() {
                 info!("Stop iteration over raw_blocks_cbor iterator...");
                 return all_keys;
             }
@@ -126,7 +126,7 @@ impl ForkChecker for SlotStorage {
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
             FULL_ITERATION_ACTION,
-            RAW_BLOCKS_CBOR_ENDPOINT,
+            RAW_BLOCKS_ENDPOINT,
             start_time,
         );
 
@@ -141,7 +141,7 @@ impl ForkChecker for SlotStorage {
             self.red_metrics.observe_request(
                 ROCKS_COMPONENT,
                 ITERATOR_TOP_ACTION,
-                RAW_BLOCKS_CBOR_ENDPOINT,
+                RAW_BLOCKS_ENDPOINT,
                 start_time,
             );
             // if there are no saved blocks - we can not do any checks
@@ -150,7 +150,7 @@ impl ForkChecker for SlotStorage {
         self.red_metrics.observe_request(
             ROCKS_COMPONENT,
             ITERATOR_TOP_ACTION,
-            RAW_BLOCKS_CBOR_ENDPOINT,
+            RAW_BLOCKS_ENDPOINT,
             start_time,
         );
         it.key().and_then(|b| RawBlock::decode_key(b.to_vec()).ok()).unwrap_or_default()

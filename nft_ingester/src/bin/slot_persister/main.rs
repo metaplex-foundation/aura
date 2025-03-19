@@ -4,15 +4,24 @@ use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
 use entities::models::RawBlock;
 use futures::future::join_all;
-use interface::{signature_persistence::BlockProducer, slot_getter::FinalizedSlotGetter};
+use interface::{
+    error::StorageError, signature_persistence::BlockProducer, slot_getter::FinalizedSlotGetter,
+};
 use metrics_utils::{utils::start_metrics, MetricState, MetricsTrait};
-use nft_ingester::{backfiller::BackfillSource, inmemory_slots_dumper::InMemorySlotsDumper};
+use nft_ingester::{
+    backfiller::BackfillSource,
+    config::{parse_json, BigTableConfig},
+    inmemory_slots_dumper::InMemorySlotsDumper,
+};
 use rocks_db::{column::TypedColumn, SlotStorage};
-use tokio::sync::{broadcast, Semaphore};
+use tokio::{sync::Semaphore, task::JoinSet};
 use tokio_retry::{strategy::ExponentialBackoff, RetryIf};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
+use usecase::{
+    bigtable::{get_blocks, BigTableClient},
+    slots_collector::SlotsCollector,
+};
 
 const MAX_RETRIES: usize = 5;
 const INITIAL_DELAY_MS: u64 = 100;
@@ -42,13 +51,9 @@ struct Args {
     #[arg(short, long)]
     start_slot: Option<u64>,
 
-    /// Big table credentials file path
-    #[arg(short, long, env = "BIG_TABLE_CREDENTIALS")]
-    big_table_credentials: Option<String>,
-
-    /// Optional big table timeout (default: 1000)
-    #[arg(short = 'B', long, default_value_t = 1000)]
-    big_table_timeout: u32,
+    /// Big table config (best passed from env)
+    #[arg(short, long, env, value_parser = parse_json::<BigTableConfig>)]
+    big_table_config: Option<BigTableConfig>,
 
     /// Metrics port
     /// Default: 9090
@@ -143,14 +148,17 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     metrics_state.register_metrics();
 
     start_metrics(metrics_state.registry, Some(args.metrics_port)).await;
+    let cancellation_token = CancellationToken::new();
+    let stop_handle = tokio::task::spawn({
+        let cancellation_token = cancellation_token.clone();
+        async move {
+            usecase::graceful_stop::graceful_shutdown(cancellation_token).await;
+        }
+    });
     // Open target RocksDB
     let target_db = Arc::new(
-        SlotStorage::open(
-            &args.target_db_path,
-            Arc::new(tokio::sync::Mutex::new(tokio::task::JoinSet::new())),
-            metrics_state.red_metrics.clone(),
-        )
-        .expect("Failed to open target RocksDB"),
+        SlotStorage::open(&args.target_db_path, metrics_state.red_metrics.clone())
+            .expect("Failed to open target RocksDB"),
     );
 
     let last_persisted_slot = get_last_persisted_slot(target_db.clone());
@@ -165,33 +173,17 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         last_persisted_slot
     };
 
-    let shutdown_token = CancellationToken::new();
-    let shutdown_token_clone = shutdown_token.clone();
-    let (shutdown_tx, shutdown_rx) = broadcast::channel::<()>(1);
-
-    // Spawn a task to handle graceful shutdown on Ctrl+C
-    tokio::spawn(async move {
-        // Wait for Ctrl+C signal
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => {
-                info!("Received Ctrl+C, shutting down gracefully...");
-                shutdown_token_clone.cancel();
-                shutdown_tx.send(()).unwrap();
-            },
-            Err(err) => {
-                error!("Unable to listen for shutdown signal: {}", err);
-            },
-        }
-    });
-
     let rpc_client = Arc::new(BackfillRPC::connect(args.rpc_host.clone()));
 
     let backfill_source = {
-        if let Some(ref bg_creds) = args.big_table_credentials {
+        if let Some(ref big_table_config) = args.big_table_config {
             Arc::new(BackfillSource::Bigtable(Arc::new(
-                BigTableClient::connect_new_with(bg_creds.clone(), args.big_table_timeout)
-                    .await
-                    .expect("expected to connect to big table"),
+                BigTableClient::connect_new_with(
+                    big_table_config.get_big_table_creds_key().expect("get big table greds"),
+                    big_table_config.get_big_table_timeout_key().expect("get big table timeout"),
+                )
+                .await
+                .expect("expected to connect to big table"),
             )))
         } else {
             Arc::new(BackfillSource::Rpc(rpc_client.clone()))
@@ -231,13 +223,19 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Total slots to process: {}", provided_slots.len());
 
         // Proceed to process the provided slots
-        process_slots(provided_slots, backfill_source, target_db, &args, shutdown_token.clone())
-            .await;
+        process_slots(
+            provided_slots,
+            backfill_source,
+            target_db,
+            &args,
+            cancellation_token.child_token(),
+        )
+        .await;
         return Ok(()); // Exit after processing provided slots
     }
     let mut start_slot = start_slot;
     loop {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received, exiting main loop...");
             break;
         }
@@ -254,7 +252,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &blockbuster::programs::bubblegum::ID,
                         last_slot_to_check,
                         start_slot,
-                        &shutdown_rx,
+                        cancellation_token.child_token(),
                     )
                     .await;
                 if let Some(slot) = top_collected_slot {
@@ -275,7 +273,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     tokio::select! {
                         _ = sleep => {},
-                        _ = shutdown_token.cancelled() => {
+                        _ = cancellation_token.cancelled() => {
                             info!("Received shutdown signal, stopping loop...");
                             break;
                         },
@@ -288,7 +286,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     backfill_source.clone(),
                     target_db.clone(),
                     &args,
-                    shutdown_token.clone(),
+                    cancellation_token.child_token(),
                 )
                 .await;
             },
@@ -300,11 +298,15 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let sleep = tokio::time::sleep(wait_period);
         tokio::select! {
             _ = sleep => {},
-            _ = shutdown_token.cancelled() => {
+            _ = cancellation_token.cancelled() => {
                 info!("Received shutdown signal, stopping loop...");
                 break;
             },
         };
+    }
+
+    if stop_handle.await.is_err() {
+        error!("Error joining graceful shutdown!");
     }
     info!("Slot persister has stopped.");
     Ok(())
@@ -315,11 +317,11 @@ async fn process_slots(
     backfill_source: Arc<BackfillSource>,
     target_db: Arc<SlotStorage>,
     args: &Args,
-    shutdown_token: CancellationToken,
+    cancellation_token: CancellationToken,
 ) {
     // Process slots in batches
     for batch in slots.chunks(args.chunk_size) {
-        if shutdown_token.is_cancelled() {
+        if cancellation_token.is_cancelled() {
             info!("Shutdown signal received during batch processing, exiting...");
             break;
         }
@@ -333,76 +335,153 @@ async fn process_slots(
 
         // Retry loop for the batch
         loop {
-            if shutdown_token.is_cancelled() {
+            if cancellation_token.is_cancelled() {
                 info!("Shutdown signal received during batch processing, exiting...");
                 break;
             }
 
-            let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
-
-            let fetch_futures = slots_to_fetch.iter().map(|&slot| {
-                let backfill_source = backfill_source.clone();
-                let semaphore = semaphore.clone();
-                let shutdown_token = shutdown_token.clone();
-
-                async move {
-                    let _permit = semaphore.acquire().await;
-                    fetch_block_with_retries(backfill_source, slot, shutdown_token).await
-                }
-            });
-
-            let results = join_all(fetch_futures).await;
-
             let mut new_failed_slots = Vec::new();
 
-            for result in results {
-                match result {
-                    Ok((slot, raw_block)) => {
-                        successful_blocks.insert(slot, raw_block);
-                    },
-                    Err((slot, e)) => {
-                        new_failed_slots.push(slot);
-                        error!("Failed to fetch slot {}: {:?}", slot, e);
-                    },
-                }
+            let backfill_source = backfill_source.clone();
+            let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
+            let shutdown_token = cancellation_token.clone();
+
+            match &*backfill_source {
+                // ------------------------------------------------------------------
+                // 1) Bigtable path: split the batch into sub-chunks, fetch in parallel
+                // ------------------------------------------------------------------
+                BackfillSource::Bigtable(bigtable_client) => {
+                    let total = slots_to_fetch.len();
+                    // Force sub_chunk_size to at least 1
+                    let sub_chunk_size = std::cmp::max(total / args.max_concurrency, 1);
+                    let sub_chunks: Vec<&[u64]> = slots_to_fetch.chunks(sub_chunk_size).collect();
+
+                    info!(
+                        "Bigtable path: Splitting {} slots into {} sub-chunks (max_concurrency={}).",
+                        total,
+                        sub_chunks.len(),
+                        args.max_concurrency
+                    );
+                    let mut js = JoinSet::new();
+
+                    sub_chunks.into_iter().for_each(|sub_slots| {
+                        let sub_slots = sub_slots.to_vec();
+                        let bigtable_client = bigtable_client.clone();
+                        let shutdown_token = shutdown_token.clone();
+                        js.spawn(async move {
+                            if shutdown_token.is_cancelled() {
+                                 error!(
+                                     "Failed to fetch sub-chunk of slots (from {:?} to {:?}) due to cancellation",
+                                     sub_slots.first(),
+                                     sub_slots.last()
+                                 );
+                                (sub_slots.clone(), Err(StorageError::Common("shutdown".to_owned())))
+                            } else {
+                            (
+                                sub_slots.clone(),
+                                get_blocks(
+                                    &bigtable_client.big_table_inner_client,
+                                    sub_slots.as_slice(),
+                                )
+                                .await,
+                            )
+                            }
+                        });
+                    });
+                    while let Some(result) = js.join_next().await {
+                        match result {
+                            Ok((_, Ok(blocks_map))) => {
+                                for (slot, confirmed_block) in blocks_map {
+                                    successful_blocks
+                                        .insert(slot, RawBlock { slot, block: confirmed_block });
+                                }
+                            },
+                            Ok((sub_slots, Err(e))) => {
+                                error!("Failed to fetch sub-chunk of slots: {}", e);
+                                new_failed_slots.extend(sub_slots);
+                            },
+                            Err(e) => {
+                                error!("Failed to join a task: {}", e);
+                                new_failed_slots.extend_from_slice(&slots_to_fetch);
+                            },
+                        }
+                    }
+                    new_failed_slots.sort();
+                    new_failed_slots.dedup();
+                },
+
+                // ---------------------------------------------------------
+                // 2) RPC or other: original slot-by-slot concurrency
+                // ---------------------------------------------------------
+                _ => {
+                    let fetch_futures = slots_to_fetch.iter().map(|&slot| {
+                        let backfill_source = backfill_source.clone();
+                        let semaphore = semaphore.clone();
+                        let shutdown_token = shutdown_token.clone();
+
+                        async move {
+                            let _permit = semaphore.acquire().await;
+                            fetch_block_with_retries(backfill_source, slot, shutdown_token).await
+                        }
+                    });
+
+                    let results = join_all(fetch_futures).await;
+                    for result in results {
+                        match result {
+                            Ok((slot, raw_block)) => {
+                                successful_blocks.insert(slot, raw_block);
+                            },
+                            Err((slot, e)) => {
+                                error!("Failed to fetch slot {}: {:?}", slot, e);
+                                new_failed_slots.push(slot);
+                            },
+                        }
+                    }
+                },
             }
 
             if new_failed_slots.is_empty() {
-                // All slots fetched successfully, save to database
                 debug!(
-                    "All slots fetched successfully for current batch. Saving {} slots to RocksDB.",
+                    "All slots fetched in this batch. Attempting to save {} blocks to RocksDB...",
                     successful_blocks.len()
                 );
-                if let Err(e) = target_db.raw_blocks_cbor.put_batch(successful_blocks.clone()).await
-                {
-                    error!("Failed to save blocks to RocksDB: {}", e);
-                    // Handle error or retry saving as needed
-                    batch_retries += 1;
-                    if batch_retries >= MAX_BATCH_RETRIES {
-                        panic!(
-                            "Failed to save batch to RocksDB after {} retries. Discarding batch.",
-                            MAX_BATCH_RETRIES
+
+                let projected_last_slot = successful_blocks.keys().max().copied().unwrap_or(0);
+                let successful_blocks_len = successful_blocks.len();
+                match target_db.raw_blocks.put_batch(std::mem::take(&mut successful_blocks)).await {
+                    Ok(_) => {
+                        info!(
+                            "Successfully saved {} blocks to RocksDB. Last stored slot: {}",
+                            successful_blocks_len, projected_last_slot
                         );
-                    } else {
-                        warn!(
-                            "Retrying batch save {}/{} after {} ms due to error.",
-                            batch_retries, MAX_BATCH_RETRIES, batch_delay_ms
-                        );
-                        tokio::time::sleep(Duration::from_millis(batch_delay_ms)).await;
-                        batch_delay_ms *= 2;
-                    }
-                } else {
-                    // Successfully saved, proceed to next batch
-                    let last_slot = successful_blocks.keys().max().cloned().unwrap_or(0);
-                    info!("Successfully saved batch to RocksDB. Last stored slot: {}", last_slot);
-                    break;
+                        break; // Move on to next chunk of `slots`
+                    },
+                    Err(e) => {
+                        // DB write failed
+                        error!("Failed to save {} blocks to RocksDB: {}", successful_blocks_len, e);
+                        batch_retries += 1;
+                        if batch_retries >= MAX_BATCH_RETRIES {
+                            panic!(
+                                "Failed to save batch to RocksDB after {} retries. Discarding batch.",
+                                MAX_BATCH_RETRIES
+                            );
+                        } else {
+                            warn!(
+                                "Retrying batch save {}/{} after {} ms due to error: {}",
+                                batch_retries, MAX_BATCH_RETRIES, batch_delay_ms, e
+                            );
+                            tokio::time::sleep(Duration::from_millis(batch_delay_ms)).await;
+                            batch_delay_ms *= 2;
+                        }
+                    },
                 }
             } else {
                 batch_retries += 1;
                 if batch_retries >= MAX_BATCH_RETRIES {
                     panic!(
-                        "Failed to fetch all slots in batch after {} retries. Discarding batch.",
-                        MAX_BATCH_RETRIES
+                        "Failed to fetch all slots in batch after {} retries. Discarding batch. \
+                         Slots that failed: {:?}",
+                        MAX_BATCH_RETRIES, new_failed_slots
                     );
                 } else {
                     warn!(

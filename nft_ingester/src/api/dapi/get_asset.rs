@@ -9,10 +9,6 @@ use interface::{
 use metrics_utils::ApiMetricsConfig;
 use rocks_db::{errors::StorageError, Storage};
 use solana_sdk::pubkey::Pubkey;
-use tokio::{
-    sync::Mutex,
-    task::{JoinError, JoinSet},
-};
 
 use super::asset_preview::populate_previews_slice;
 use crate::api::dapi::{asset, rpc_asset_convertors::asset_to_rpc, rpc_asset_models::Asset};
@@ -30,7 +26,6 @@ pub async fn get_asset<
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,
-    tasks: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
     storage_service_base_path: Option<String>,
     token_price_fetcher: Arc<TPF>,
     metrics: Arc<ApiMetricsConfig>,
@@ -43,7 +38,6 @@ pub async fn get_asset<
         json_downloader,
         json_persister,
         max_json_to_download,
-        tasks,
         &None,
         token_price_fetcher,
         metrics,

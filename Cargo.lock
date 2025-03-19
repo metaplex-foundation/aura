@@ -1282,7 +1282,7 @@ dependencies = [
 
 [[package]]
 name = "backfill-rpc"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "entities",
@@ -1676,7 +1676,7 @@ dependencies = [
  "anchor-lang 0.29.0",
  "async-trait",
  "blockbuster",
- "borsh 0.9.3",
+ "borsh 0.10.3",
  "bytemuck",
  "chrono",
  "mpl-bubblegum",
@@ -2067,7 +2067,7 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
 ]
 
 [[package]]
@@ -2082,7 +2082,7 @@ dependencies = [
 
 [[package]]
 name = "consistency_check"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "bincode",
  "clap 4.5.26",
@@ -2107,7 +2107,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tracing",
  "tracing-subscriber",
  "usecase",
@@ -2758,7 +2758,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "entities"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "base64 0.21.7",
  "blockbuster",
@@ -3311,15 +3311,15 @@ dependencies = [
 
 [[package]]
 name = "grpc"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
+ "bincode",
  "entities",
  "futures",
  "interface",
  "mockall 0.13.0",
  "prost 0.12.6",
- "serde_cbor",
  "solana-sdk",
  "solana-transaction-status",
  "thiserror",
@@ -3344,7 +3344,7 @@ dependencies = [
  "indexmap 2.2.6",
  "slab",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tracing",
 ]
 
@@ -3843,7 +3843,7 @@ dependencies = [
 
 [[package]]
 name = "integration_tests"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "borsh 0.10.3",
@@ -3853,6 +3853,7 @@ dependencies = [
  "function_name",
  "futures",
  "insta",
+ "interface",
  "itertools 0.12.1",
  "metrics-utils",
  "mpl-token-metadata",
@@ -3874,6 +3875,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tokio-util 0.7.13",
  "tracing",
  "tracing-test",
  "usecase",
@@ -3881,7 +3883,7 @@ dependencies = [
 
 [[package]]
 name = "integrity-verification"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "assert-json-diff",
@@ -3907,14 +3909,14 @@ dependencies = [
  "spl-concurrent-merkle-tree 0.2.0",
  "thiserror",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tracing",
  "usecase",
 ]
 
 [[package]]
 name = "interface"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "async-trait",
@@ -3923,6 +3925,7 @@ dependencies = [
  "futures",
  "jsonrpc-core 19.0.0",
  "mockall 0.13.0",
+ "plerkle_messenger",
  "plerkle_serialization",
  "reqwest",
  "serde_derive",
@@ -3934,6 +3937,7 @@ dependencies = [
  "solana-transaction-status",
  "thiserror",
  "tokio",
+ "tokio-util 0.7.13",
 ]
 
 [[package]]
@@ -4451,7 +4455,7 @@ dependencies = [
 
 [[package]]
 name = "metrics-utils"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "hyper",
@@ -4781,10 +4785,11 @@ dependencies = [
 
 [[package]]
 name = "nft_ingester"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "arweave-rs",
+ "assert-json-diff",
  "assertables",
  "async-channel 2.3.1",
  "async-trait",
@@ -4836,7 +4841,6 @@ dependencies = [
  "rocksdb",
  "schemars",
  "serde",
- "serde_cbor",
  "serde_json",
  "setup",
  "solana-client",
@@ -4856,7 +4860,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-retry",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tonic 0.10.2",
  "tracing",
  "tracing-subscriber",
@@ -5619,7 +5623,7 @@ dependencies = [
 
 [[package]]
 name = "postgre-client"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
@@ -6326,7 +6330,7 @@ dependencies = [
  "sha1_smol",
  "tokio",
  "tokio-native-tls",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "url",
 ]
 
@@ -6448,7 +6452,7 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.24.1",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -6519,7 +6523,7 @@ dependencies = [
 
 [[package]]
 name = "rocks-db"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "Inflector",
  "async-channel 2.3.1",
@@ -6528,6 +6532,7 @@ dependencies = [
  "bincode",
  "bubblegum-batch-sdk",
  "chrono",
+ "clap 4.5.26",
  "criterion",
  "csv",
  "entities",
@@ -6561,6 +6566,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-util 0.7.13",
  "tracing",
  "tracing-test",
  "usecase",
@@ -7119,7 +7125,7 @@ dependencies = [
 
 [[package]]
 name = "setup"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "entities",
  "flatbuffers 24.3.25",
@@ -7135,6 +7141,7 @@ dependencies = [
  "testcontainers",
  "testcontainers-modules",
  "tokio",
+ "tokio-util 0.7.13",
  "tracing",
  "uuid 1.8.0",
 ]
@@ -9797,9 +9804,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.11"
+version = "0.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
+checksum = "d7fcaa8d55a2bdd6b83ace262b016eca0d79ee02818c5c1bcdf0305114081078"
 dependencies = [
  "bytes",
  "futures-core",
@@ -9900,7 +9907,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.23.4",
  "tokio-stream",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tower",
  "tower-layer",
  "tower-service",
@@ -10019,7 +10026,7 @@ dependencies = [
  "rand 0.8.5",
  "slab",
  "tokio",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -10366,7 +10373,7 @@ dependencies = [
 
 [[package]]
 name = "usecase"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anchor-lang 0.30.1",
  "async-recursion 1.1.1",
@@ -10379,6 +10386,7 @@ dependencies = [
  "mockall 0.13.0",
  "mpl-bubblegum",
  "plerkle_serialization",
+ "prost 0.11.9",
  "rand 0.8.5",
  "serde",
  "serde_derive",
@@ -10388,11 +10396,13 @@ dependencies = [
  "solana-program",
  "solana-sdk",
  "solana-storage-bigtable",
+ "solana-storage-proto",
  "solana-transaction-status",
  "spl-account-compression 0.4.2",
  "spl-concurrent-merkle-tree 0.4.1",
  "thiserror",
  "tokio",
+ "tokio-util 0.7.13",
  "tracing",
 ]
 
@@ -10519,7 +10529,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio",
  "tokio-tungstenite 0.21.0",
- "tokio-util 0.7.11",
+ "tokio-util 0.7.13",
  "tower-service",
  "tracing",
 ]

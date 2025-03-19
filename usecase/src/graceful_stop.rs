@@ -1,8 +1,6 @@
-use tokio::{
-    signal,
-    task::{JoinError, JoinSet},
-};
-use tracing::{error, info};
+use tokio::signal;
+use tokio_util::sync::CancellationToken;
+use tracing::error;
 
 pub async fn listen_shutdown() {
     match signal::ctrl_c().await {
@@ -13,20 +11,8 @@ pub async fn listen_shutdown() {
     }
 }
 
-pub async fn graceful_stop(tasks: &mut JoinSet<Result<(), JoinError>>) {
-    while let Some(task) = tasks.join_next().await {
-        match task {
-            Ok(_) => {
-                info!("One of the tasks was finished")
-            },
-            Err(err) if err.is_panic() => {
-                let err = err.into_panic();
-                error!("Task panic: {:?}", err);
-            },
-            Err(err) => {
-                let err = err.to_string();
-                error!("Task error: {}", err);
-            },
-        }
-    }
+pub async fn graceful_shutdown(cancellation_token: CancellationToken) {
+    listen_shutdown().await;
+    cancellation_token.cancel();
+    crate::executor::shutdown().await;
 }

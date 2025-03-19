@@ -9,11 +9,9 @@ use metrics_utils::IngesterMetricsConfig;
 use postgre_client::PgClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_program::{pubkey::Pubkey, rent::Rent, sysvar::rent};
-use tokio::{
-    sync::{broadcast::Receiver, Mutex, RwLock},
-    task::JoinSet,
-};
-use tracing::{error, info};
+use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
+use tracing::error;
 
 use crate::error::IngesterError;
 
@@ -26,7 +24,6 @@ pub struct MplCoreFeeProcessor {
     pub metrics: Arc<IngesterMetricsConfig>,
     rpc_client: Arc<RpcClient>,
     rent: Arc<RwLock<Rent>>,
-    join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
 }
 
 impl MplCoreFeeProcessor {
@@ -34,35 +31,31 @@ impl MplCoreFeeProcessor {
         storage: Arc<PgClient>,
         metrics: Arc<IngesterMetricsConfig>,
         rpc_client: Arc<RpcClient>,
-        join_set: Arc<Mutex<JoinSet<Result<(), tokio::task::JoinError>>>>,
     ) -> Result<Self, IngesterError> {
         let rent_account = rpc_client.get_account(&rent::ID).await?;
         let rent: Rent = bincode::deserialize(&rent_account.data)?;
-        Ok(Self { storage, metrics, rpc_client, rent: Arc::new(RwLock::new(rent)), join_set })
+        Ok(Self { storage, metrics, rpc_client, rent: Arc::new(RwLock::new(rent)) })
     }
 
     // on-chain programs can fetch rent without RPC call
     // but off-chain indexer need to make such calls in order
     // to get actual rent data
-    pub async fn update_rent(&self, mut rx: Receiver<()>) {
+    pub fn update_rent(&self, cancellation_token: CancellationToken) {
         let rpc_client = self.rpc_client.clone();
         let rent = self.rent.clone();
-        self.join_set.lock().await.spawn(tokio::spawn(async move {
-            while rx.is_empty() {
+        usecase::executor::spawn(async move {
+            loop {
                 if let Err(e) = Self::fetch_actual_rent(rpc_client.clone(), rent.clone()).await {
                     error!("fetch_actual_rent: {}", e);
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
                 }
                 tokio::select! {
-                    _ = rx.recv() => {
-                        info!("Received stop signal, stopping update_rent...");
-                        return;
-                    }
-                    _ = tokio::time::sleep(FETCH_RENT_INTERVAL) => {},
+                    _ = cancellation_token.cancelled() => { break; }
+                    _ = tokio::time::sleep(FETCH_RENT_INTERVAL) => {}
                 }
             }
-        }));
+        });
     }
 
     async fn fetch_actual_rent(
