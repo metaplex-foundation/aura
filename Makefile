@@ -47,3 +47,11 @@ clippy:
 test:
 	@cargo clean -p postgre-client -p rocks-db -p interface
 	@cargo test --features integration_tests
+
+# Ensure git-cliff is installed
+ensure-git-cliff:
+	@which git-cliff > /dev/null || cargo install git-cliff
+
+# Generate a changelog using git-cliff
+changelog:
+	@git-cliff --output CHANGELOG.md

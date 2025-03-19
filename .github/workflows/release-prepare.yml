@@ -1,0 +1,147 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (without v prefix, e.g. 0.5.0)'
+        required: true
+        type: string
+      base_commit:
+        description: 'Base commit SHA (leave empty to use latest develop)'
+        required: false
+        type: string
+        default: ''
+
+# Add permissions for GitHub operations
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ inputs.version }} # Output the version for use in other jobs
+      tag_name: v${{ inputs.version }}
+      release_branch: release/v${{ inputs.version }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_commit || 'develop' }}
+          fetch-depth: 0  # Fetch all history for changelog generation
+
+      - name: Validate input version
+        run: |
+          set -e
+          # Make sure the version follows semantic versioning format
+          if ! echo "${{ inputs.version }}" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "Error: Version must follow semantic versioning format (e.g., 0.5.0)"
+            exit 1
+          fi
+
+      - name: Setup Git Identity
+        run: |
+          set -e
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+        
+      - name: Install dependencies
+        run: |
+          set -e
+          sudo apt-get update && sudo apt-get install -y protobuf-compiler
+          cargo install cargo-edit
+          cargo install git-cliff
+
+      - name: Create release branch
+        run: |
+          set -e
+          # Using standardized format: release/v{version}
+          RELEASE_BRANCH="release/v${{ inputs.version }}"
+          echo "Creating branch $RELEASE_BRANCH"
+          git checkout -b $RELEASE_BRANCH
+          echo "RELEASE_BRANCH=$RELEASE_BRANCH" >> $GITHUB_ENV
+
+      - name: Update version numbers
+        run: |
+          set -e
+          # Update Cargo.toml versions
+          find . -name "Cargo.toml" -type f -exec cargo set-version ${{ inputs.version }} --manifest-path {} \;
+          
+          # Update any other version references (add any other files that contain version numbers)
+          if [ -f "VERSION" ]; then
+            echo "${{ inputs.version }}" > VERSION
+          fi
+          
+          git add -A
+          git commit -m "chore: bump version to ${{ inputs.version }}"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          set -e
+          # Generate changelog using git-cliff
+          git-cliff --config cliff.toml --tag "v${{ inputs.version }}" --output CHANGELOG.md
+          
+          # Generate a shorter version for PR description
+          git-cliff --config cliff.toml --tag "v${{ inputs.version }}" --strip header,footer > .changelog_content
+          
+          git add CHANGELOG.md
+          git commit -m "docs: add changelog for v${{ inputs.version }}"
+
+      - name: Verify changelog
+        run: |
+          set -e
+          # Check that the changelog file exists and has content
+          if [ ! -s CHANGELOG.md ]; then
+            echo "Error: CHANGELOG.md is empty or does not exist"
+            exit 1
+          fi
+          
+          # Check that the changelog contains the version we're releasing
+          if ! grep -q "v${{ inputs.version }}" CHANGELOG.md; then
+            echo "Error: CHANGELOG.md does not contain version v${{ inputs.version }}"
+            echo "Contents of CHANGELOG.md:"
+            cat CHANGELOG.md
+            exit 1
+          fi
+          
+          # Check that the changelog has sections
+          if ! grep -q "###" CHANGELOG.md; then
+            echo "Warning: CHANGELOG.md does not contain any sections (###)"
+            echo "This might be ok if there are no conventional commits, but please verify"
+          fi
+          
+          echo "Changelog verification passed!"
+
+      - name: Push release branch
+        run: |
+          set -e
+          git push -u origin $RELEASE_BRANCH
+
+      - name: Create Pull Request
+        id: create-pr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          head: ${{ env.RELEASE_BRANCH }}
+          title: "Release v${{ inputs.version }}"
+          body-path: .changelog_content
+          draft: false
+          
+      - name: PR info
+        run: |
+          set -e
+          echo "Pull Request created: ${{ steps.create-pr.outputs.pull-request-url }}"
+          echo "Please review the PR, make any necessary adjustments, and merge when ready."
+
+      - name: Upload changelog artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: CHANGELOG.md
