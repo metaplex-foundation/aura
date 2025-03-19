@@ -1,4 +1,4 @@
-.PHONY: ci build start build-integrity-verification start-integrity-verification dev stop clippy test start-backfiller
+.PHONY: ci build start build-integrity-verification start-integrity-verification dev stop clippy test start-backfiller ensure-git-cliff changelog release-changelog release
 SHELL := /bin/bash
 
 ci:
@@ -52,6 +52,19 @@ test:
 ensure-git-cliff:
 	@which git-cliff > /dev/null || cargo install git-cliff
 
-# Generate a changelog using git-cliff
+# Generate a full changelog using git-cliff
 changelog:
 	@git-cliff --output CHANGELOG.md
+
+# Generate an incremental changelog for a specific release
+# Usage: make release-changelog VERSION=0.5.0 [PREV_VERSION=v0.4.0]
+release-changelog:
+	@scripts/update_changelog.sh "v$(VERSION)" $(PREV_VERSION)
+
+# Trigger release preparation workflow
+# Usage: make release VERSION=0.5.0 [BASE_COMMIT=abc123]
+release:
+	@echo "Preparing release v$(VERSION)..."
+	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make release VERSION=0.5.0"; exit 1)
+	@gh workflow run release-prepare.yml -f version=$(VERSION) $(if $(BASE_COMMIT),-f base_commit=$(BASE_COMMIT),)
+	@echo "Release preparation workflow triggered. Check GitHub Actions for progress."
