@@ -40,66 +40,73 @@ impl PgClient {
         let group_clause_required = add_filter_clause(&mut query_builder, filter, options);
 
         let order_reversed = before.is_some() && after.is_none();
-        match &order.sort_by {
-            AssetSortBy::SlotCreated | AssetSortBy::SlotUpdated => {
-                if let Some(before) = before {
-                    let comparison = match order.sort_direction {
-                        AssetSortDirection::Asc => " < ",
-                        AssetSortDirection::Desc => " > ",
-                    };
+        let add_cursor_pagination =
+            |query_builder: &mut QueryBuilder<'_, Postgres>| -> Result<(), IndexDbError> {
+                match &order.sort_by {
+                    AssetSortBy::SlotCreated | AssetSortBy::SlotUpdated => {
+                        if let Some(ref before) = before {
+                            let comparison = match order.sort_direction {
+                                AssetSortDirection::Asc => " < ",
+                                AssetSortDirection::Desc => " > ",
+                            };
 
-                    add_slot_and_key_comparison(
-                        before.as_ref(),
-                        comparison,
-                        &order.sort_by,
-                        &mut query_builder,
-                    )?;
-                }
+                            add_slot_and_key_comparison(
+                                before.as_ref(),
+                                comparison,
+                                &order.sort_by,
+                                query_builder,
+                            )?;
+                        }
 
-                if let Some(after) = after {
-                    let comparison = match order.sort_direction {
-                        AssetSortDirection::Asc => " > ",
-                        AssetSortDirection::Desc => " < ",
-                    };
+                        if let Some(ref after) = after {
+                            let comparison = match order.sort_direction {
+                                AssetSortDirection::Asc => " > ",
+                                AssetSortDirection::Desc => " < ",
+                            };
 
-                    add_slot_and_key_comparison(
-                        after.as_ref(),
-                        comparison,
-                        &order.sort_by,
-                        &mut query_builder,
-                    )?;
-                }
-            },
-            AssetSortBy::Key => {
-                if let Some(before) = before {
-                    let comparison = match order.sort_direction {
-                        AssetSortDirection::Asc => " < ",
-                        AssetSortDirection::Desc => " > ",
-                    };
+                            add_slot_and_key_comparison(
+                                after.as_ref(),
+                                comparison,
+                                &order.sort_by,
+                                query_builder,
+                            )?;
+                        }
+                    },
+                    AssetSortBy::Key => {
+                        if let Some(ref before) = before {
+                            let comparison = match order.sort_direction {
+                                AssetSortDirection::Asc => " < ",
+                                AssetSortDirection::Desc => " > ",
+                            };
 
-                    add_key_comparison(
-                        before.as_ref(),
-                        comparison,
-                        &order.sort_by,
-                        &mut query_builder,
-                    )?;
-                }
+                            add_key_comparison(
+                                before.as_ref(),
+                                comparison,
+                                &order.sort_by,
+                                query_builder,
+                            )?;
+                        }
 
-                if let Some(after) = after {
-                    let comparison = match order.sort_direction {
-                        AssetSortDirection::Asc => " > ",
-                        AssetSortDirection::Desc => " < ",
-                    };
+                        if let Some(ref after) = after {
+                            let comparison = match order.sort_direction {
+                                AssetSortDirection::Asc => " > ",
+                                AssetSortDirection::Desc => " < ",
+                            };
 
-                    add_key_comparison(
-                        after.as_ref(),
-                        comparison,
-                        &order.sort_by,
-                        &mut query_builder,
-                    )?;
-                }
-            },
-        }
+                            add_key_comparison(
+                                after.as_ref(),
+                                comparison,
+                                &order.sort_by,
+                                query_builder,
+                            )?;
+                        }
+                    },
+                };
+                Ok(())
+            };
+
+        // 1. add cursor pagination to the query builder for nfts
+        add_cursor_pagination(&mut query_builder)?;
         // Add GROUP BY clause if necessary
         if group_clause_required {
             query_builder.push(" GROUP BY ast_pubkey, ast_slot_created, ast_slot_updated ");
@@ -162,6 +169,8 @@ impl PgClient {
                                 " AND assets_v3.ast_is_collection_verified IS DISTINCT FROM FALSE",
                             );
                         }
+                        // 2. add cursor pagination to the query builder for fungibles
+                        add_cursor_pagination(&mut query_builder)?;
 
                         query_builder.push(" ORDER BY ");
                         query_builder.push(order.sort_by.to_string());
