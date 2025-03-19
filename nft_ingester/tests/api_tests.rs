@@ -4440,6 +4440,7 @@ mod tests {
         let mut pubkeys_sorted = [nft_mint1, nft_mint2, fungible_token_mint1, fungible_token_mint2];
         pubkeys_sorted.sort();
         pubkeys_sorted.reverse();
+        // 1. test for TokenType::All
         let payload = SearchAssets {
             limit: Some(2),
             owner_address: Some(owner.to_string()),
@@ -4506,7 +4507,152 @@ mod tests {
             res.items.is_empty(),
             "We have retrieved everything. There are no assets left for this owner."
         );
-        assert!(res.cursor.is_none(), "Cursor must be empty after the iteration is finished.")
+        assert!(res.cursor.is_none(), "Cursor must be empty after the iteration is finished.");
+
+        let mut nfts_sorted = [nft_mint1, nft_mint2];
+        nfts_sorted.sort();
+        nfts_sorted.reverse();
+
+        // 2. Test for TokenType::NonFungible
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::NonFungible),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // the default direction of sorting is descending.
+        assert_eq!(
+            res.items[0].id.clone(),
+            nfts_sorted[0].to_string(),
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::NonFungible),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // get the next value after the cursor
+        assert_eq!(
+            res.items[0].id.clone(),
+            nfts_sorted[1].to_string(),
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::NonFungible),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // no more items left
+        assert!(
+            res.items.is_empty(),
+            "We have retrieved everything. There are no assets left for this owner."
+        );
+        assert!(res.cursor.is_none(), "Cursor must be empty after the iteration is finished.");
+        let mut fungibles_sorted = [fungible_token_mint1, fungible_token_mint2];
+        fungibles_sorted.sort();
+        fungibles_sorted.reverse();
+
+        // 3. Test for TokenType::Fungible
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::Fungible),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // the default direction of sorting is descending.
+        assert_eq!(
+            res.items[0].id.clone(),
+            fungibles_sorted[0].to_string(),
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::Fungible),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // get the next value after the cursor
+        assert_eq!(
+            res.items[0].id.clone(),
+            fungibles_sorted[1].to_string(),
+            "Should return the items in descending order"
+        );
+
+        let cursor = res.cursor.unwrap();
+        let payload = SearchAssets {
+            limit: Some(1),
+            owner_address: Some(owner.to_string()),
+            options: SearchAssetsOptions {
+                show_zero_balance: true,
+                show_unverified_collections: true,
+                ..Default::default()
+            },
+            token_type: Some(TokenType::Fungible),
+            cursor: Some(cursor),
+            ..Default::default()
+        };
+        let res = api.search_assets(payload).await.unwrap();
+        let res: AssetList = serde_json::from_value(res).unwrap();
+
+        // no more items left
+        assert!(
+            res.items.is_empty(),
+            "We have retrieved everything. There are no assets left for this owner."
+        );
+        assert!(res.cursor.is_none(), "Cursor must be empty after the iteration is finished.");
     }
 
     /// More test cases covered in the regular_nft_tests.rs/test_search_by_owner_with_show_zero_balance_false
