@@ -301,7 +301,7 @@ impl BubblegumTxProcessor {
             InstructionName::MintV1
             | InstructionName::MintToCollectionV1
             | InstructionName::MintV2 => {
-                Self::get_mint_v1_update(parsing_result, bundle.slot).map(From::from).map(Ok)?
+                Self::get_mint_v1_v2_update(parsing_result, bundle.slot).map(From::from).map(Ok)?
             },
             InstructionName::Redeem => {
                 Self::get_redeem_update(parsing_result, bundle).map(From::from).map(Ok)?
@@ -377,8 +377,17 @@ impl BubblegumTxProcessor {
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
         if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
-            let (id, owner, delegate, _, data_hash, creator_hash, asset_data_hash, flags) =
-                extract_leaf_schema(&le.schema);
+            let (
+                id,
+                owner,
+                delegate,
+                _,
+                data_hash,
+                creator_hash,
+                asset_data_hash,
+                flags,
+                collection_hash,
+            ) = extract_leaf_schema(&le.schema);
 
             let leaf = Some(AssetLeaf {
                 pubkey: id,
@@ -389,6 +398,7 @@ impl BubblegumTxProcessor {
                 creator_hash: Some(creator_hash),
                 leaf_seq: Some(cl.seq),
                 slot_updated: bundle.slot,
+                collection_hash,
                 asset_data_hash,
                 flags,
             });
@@ -480,7 +490,7 @@ impl BubblegumTxProcessor {
         Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
-    pub fn get_mint_v1_update(
+    pub fn get_mint_v1_v2_update(
         parsing_result: &BubblegumInstruction,
         slot: u64,
     ) -> Result<AssetUpdateEvent, IngesterError> {
@@ -489,8 +499,17 @@ impl BubblegumTxProcessor {
         {
             let mut asset_update = AssetUpdateEvent { ..Default::default() };
 
-            let (id, owner, delegate, nonce, data_hash, creator_hash, asset_data_hash, flags) =
-                extract_leaf_schema(&le.schema);
+            let (
+                id,
+                owner,
+                delegate,
+                nonce,
+                data_hash,
+                creator_hash,
+                asset_data_hash,
+                flags,
+                collection_hash,
+            ) = extract_leaf_schema(&le.schema);
 
             let uri = args.uri.trim().replace('\0', "");
 
@@ -547,6 +566,7 @@ impl BubblegumTxProcessor {
                     creator_hash: Some(creator_hash),
                     leaf_seq: Some(cl.seq),
                     slot_updated: slot,
+                    collection_hash,
                     asset_data_hash,
                     flags,
                 }),
@@ -654,8 +674,11 @@ impl BubblegumTxProcessor {
                         nonce: Some(nonce),
                         data_hash: Some(Hash::from([0; 32])),
                         creator_hash: Some(Hash::from([0; 32])),
+                        collection_hash: Some(Hash::from([0; 32])),
+                        asset_data_hash: Some(Hash::from([0; 32])),
                         leaf_seq: Some(cl.seq),
                         slot_updated: bundle.slot,
+                        flags: None,
                         ..Default::default()
                     }),
                     dynamic_data: None,
@@ -716,8 +739,17 @@ impl BubblegumTxProcessor {
                 },
             };
             let mut asset_update = AssetUpdateEvent { ..Default::default() };
-            let (id, owner, delegate, _, data_hash, creator_hash, asset_data_hash, flags) =
-                extract_leaf_schema(&le.schema);
+            let (
+                id,
+                owner,
+                delegate,
+                _,
+                data_hash,
+                creator_hash,
+                asset_data_hash,
+                flags,
+                collection_hash,
+            ) = extract_leaf_schema(&le.schema);
 
             asset_update.update = Some(AssetDynamicUpdate {
                 pk: id,
@@ -731,6 +763,7 @@ impl BubblegumTxProcessor {
                     creator_hash: Some(creator_hash),
                     leaf_seq: Some(cl.seq),
                     slot_updated: bundle.slot,
+                    collection_hash,
                     asset_data_hash,
                     flags,
                 }),
@@ -811,7 +844,7 @@ impl BubblegumTxProcessor {
                 },
             };
 
-            let (id, _, _, _, data_hash, creator_hash, asset_data_hash, flags) =
+            let (id, _, _, _, data_hash, creator_hash, asset_data_hash, flags, collection_hash) =
                 extract_leaf_schema(&le.schema);
 
             asset_update.update = Some(AssetDynamicUpdate {
@@ -826,6 +859,7 @@ impl BubblegumTxProcessor {
                     creator_hash: Some(creator_hash),
                     leaf_seq: Some(cl.seq),
                     slot_updated: bundle.slot,
+                    collection_hash,
                     asset_data_hash,
                     flags,
                 }),
@@ -866,7 +900,7 @@ impl BubblegumTxProcessor {
         {
             let mut asset_update = AssetUpdateEvent { ..Default::default() };
 
-            let (id, _, _, nonce, data_hash, creator_hash, asset_data_hash, flags) =
+            let (id, _, _, nonce, data_hash, creator_hash, asset_data_hash, flags, collection_hash) =
                 extract_leaf_schema(&le.schema);
 
             let uri = if let Some(uri) = &update_args.uri {
@@ -967,6 +1001,7 @@ impl BubblegumTxProcessor {
                     creator_hash: Some(creator_hash),
                     leaf_seq: Some(cl.seq),
                     slot_updated: bundle.slot,
+                    collection_hash,
                     asset_data_hash,
                     flags,
                 }),
@@ -1083,7 +1118,7 @@ fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Updated
 
 fn extract_leaf_schema(
     schema: &LeafSchema,
-) -> (Pubkey, Pubkey, Pubkey, u64, Hash, Hash, Option<Hash>, Option<u8>) {
+) -> (Pubkey, Pubkey, Pubkey, u64, Hash, Hash, Option<Hash>, Option<u8>, Option<Hash>) {
     match schema {
         LeafSchema::V1 { id, owner, delegate, nonce, data_hash, creator_hash, .. } => (
             *id,
@@ -1094,6 +1129,7 @@ fn extract_leaf_schema(
             Hash::new(creator_hash),
             None,
             None,
+            None,
         ),
         LeafSchema::V2 {
             id,
@@ -1101,6 +1137,7 @@ fn extract_leaf_schema(
             delegate,
             nonce,
             data_hash,
+            collection_hash,
             creator_hash,
             asset_data_hash,
             flags,
@@ -1114,6 +1151,7 @@ fn extract_leaf_schema(
             Hash::new(creator_hash),
             Some(Hash::new(asset_data_hash)),
             Some(*flags),
+            Some(Hash::new(collection_hash)),
         ),
     }
 }

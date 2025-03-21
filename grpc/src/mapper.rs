@@ -83,8 +83,6 @@ impl From<AssetCompleteDetailsGrpc> for AssetDetails {
             spl_mint: value.spl_mint.map(|e| e.into()),
             is_current_owner: Some(value.is_current_owner.into()),
             owner_record_pubkey: value.owner_record_pubkey.to_bytes().to_vec(),
-            asset_data_hash: value.asset_data_hash.map(|h| h.to_bytes().to_vec()),
-            bubblegum_flags: value.bubblegum_flags.map(Into::into),
         }
     }
 }
@@ -195,15 +193,6 @@ impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
                 .offchain_data
                 .map(|e| OffChainDataGrpc { url: e.url, metadata: e.metadata }),
             spl_mint: value.spl_mint.map(TryInto::try_into).transpose()?,
-            asset_data_hash: value
-                .asset_data_hash
-                .map(|h| {
-                    Ok::<_, GrpcError>(Hash::from(
-                        <[u8; 32]>::try_from(h).map_err(GrpcError::PubkeyFrom)?,
-                    ))
-                })
-                .transpose()?,
-            bubblegum_flags: value.bubblegum_flags.map(Into::into),
         })
     }
 }
@@ -414,6 +403,7 @@ impl From<Updated<entities::models::AssetLeaf>> for AssetLeaf {
             leaf_seq: value.value.leaf_seq,
             slot_updated: value.slot_updated,
             update_version: value.update_version.map(Into::into),
+            collection_hash: value.value.collection_hash.map(|h| h.to_bytes().to_vec()),
             asset_data_hash: value.value.asset_data_hash.map(|h| h.to_bytes().to_vec()),
             flags: value.value.flags.map(|v| v.into()),
         }
@@ -554,6 +544,14 @@ impl TryFrom<AssetLeaf> for Updated<entities::models::AssetLeaf> {
                     })
                     .transpose()?,
                 leaf_seq: value.leaf_seq,
+                collection_hash: value
+                    .collection_hash
+                    .map(|h| {
+                        Ok::<_, GrpcError>(Hash::from(
+                            <[u8; 32]>::try_from(h).map_err(GrpcError::PubkeyFrom)?,
+                        ))
+                    })
+                    .transpose()?,
                 asset_data_hash: value
                     .asset_data_hash
                     .map(|h| {
