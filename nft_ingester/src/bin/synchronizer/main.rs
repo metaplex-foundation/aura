@@ -14,6 +14,7 @@ use prometheus_client::registry::Registry;
 use rocks_db::{migrator::MigrationState, Storage};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
+use tracing::error;
 
 #[cfg(feature = "profiling")]
 #[global_allocator]
@@ -51,7 +52,10 @@ pub async fn main() -> Result<(), IngesterError> {
             Some(PathBuf::from(args.rocks_dump_path.clone())),
             Some(args.pg_max_query_statement_timeout_secs),
         )
-        .await?,
+        .await
+        .inspect_err(
+            |e| error!(error = %e, "Failed to init index storage with migration: {e:?}"),
+        )?,
     );
 
     let cancellation_token = CancellationToken::new();
@@ -147,7 +151,7 @@ pub async fn main() -> Result<(), IngesterError> {
         });
     }
     while let Some(task) = sync_tasks.join_next().await {
-        task.map_err(|e| {
+        task.inspect_err(|e| error!(error = %e, "Failed to join task: {e:?}")).map_err(|e| {
             IngesterError::UnrecoverableTaskError(format!("joining task failed: {}", e))
         })?;
     }

@@ -94,7 +94,10 @@ pub async fn main() -> Result<(), IngesterError> {
         red_metrics.clone(),
         Some(args.pg_max_query_statement_timeout_secs),
     )
-    .await?;
+    .await
+    .inspect_err(|e| {
+        error!(error = %e, "Error creating postgres client: {e:?}");
+    })?;
     let pg_client = Arc::new(pg_client);
 
     let storage = Storage::open_secondary(
