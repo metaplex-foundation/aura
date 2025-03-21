@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{ops::Deref, sync::Arc};
 
 use async_trait::async_trait;
 use bubblegum_batch_sdk::model::BatchMint;
@@ -9,14 +9,10 @@ use entities::{
 use interface::{batch_mint::BatchMintDownloader, error::UsecaseError};
 use metrics_utils::{BatchMintPersisterMetricsConfig, MetricStatus};
 use rocks_db::columns::batch_mint::BatchMintWithStaker;
-use tokio::{task::JoinError, time::Instant};
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tokio::{time::Instant};
+use tracing::{error};
 
-use crate::{
-    error::IngesterError,
-    processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
-};
+use crate::error::IngesterError;
 
 pub const MAX_BATCH_MINT_DOWNLOAD_ATTEMPTS: u8 = 5;
 
@@ -59,99 +55,99 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         Self { rocks_client, downloader, metrics }
     }
 
-    pub async fn persist_batch_mints(
-        &self,
-        cancellation_token: CancellationToken,
-    ) -> Result<(), JoinError> {
-        while !cancellation_token.is_cancelled() {
-            let (batch_mint_to_verify, batch_mint) = match self.get_batch_mint_to_verify().await {
-                Ok(res) => res,
-                Err(_) => {
-                    continue;
-                },
-            };
-            let Some(batch_mint_to_verify) = batch_mint_to_verify else {
-                // no batch_mints to persist
-                continue;
-            };
-            self.persist_batch_mint(
-                cancellation_token.child_token(),
-                batch_mint_to_verify,
-                batch_mint,
-            )
-            .await;
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(5)) => {}
-                _ = cancellation_token.cancelled() => {
-                        info!("Received stop signal, stopping ...");
-                        break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub async fn persist_batch_mint(
-        &self,
-        cancellation_token: CancellationToken,
-        mut batch_mint_to_verify: BatchMintToVerify,
-        mut batch_mint: Option<Box<BatchMint>>,
-    ) {
-        let start_time = Instant::now();
-        info!("Persisting {} batch_mint", &batch_mint_to_verify.url);
-        while !cancellation_token.is_cancelled() {
-            match &batch_mint_to_verify.persisting_state {
-                &PersistingBatchMintState::ReceivedTransaction => {
-                    if let Err(err) =
-                        self.download_batch_mint(&mut batch_mint_to_verify, &mut batch_mint).await
-                    {
-                        error!("Error during batch_mint downloading: {}", err)
-                    };
-                },
-                &PersistingBatchMintState::SuccessfullyDownload => {
-                    if let Some(r) = &batch_mint {
-                        self.validate_batch_mint(&mut batch_mint_to_verify, r).await;
-                    } else {
-                        error!(
-                            "Trying to validate non downloaded batch_mint: {:#?}",
-                            &batch_mint_to_verify
-                        )
-                    }
-                },
-                &PersistingBatchMintState::SuccessfullyValidate => {
-                    if let Some(r) = &batch_mint {
-                        self.store_batch_mint_update(&mut batch_mint_to_verify, r).await;
-                    } else {
-                        error!(
-                            "Trying to store update for non downloaded batch_mint: {:#?}",
-                            &batch_mint_to_verify
-                        )
-                    }
-                },
-                &PersistingBatchMintState::FailedToPersist
-                | &PersistingBatchMintState::StoredUpdate => {
-                    self.drop_batch_mint_from_queue(batch_mint_to_verify.file_hash.clone()).await;
-                    info!(
-                        "Finish processing {} batch_mint file with {:?} state",
-                        &batch_mint_to_verify.url, &batch_mint_to_verify.persisting_state
-                    );
-                    self.metrics.set_persisting_latency(
-                        "batch_mint_persisting",
-                        start_time.elapsed().as_millis() as f64,
-                    );
-                    return;
-                },
-            }
-        }
-        if let Err(e) = self
-            .rocks_client
-            .batch_mint_to_verify
-            .put_async(batch_mint_to_verify.file_hash.clone(), batch_mint_to_verify.clone())
-            .await
-        {
-            error!("Update batch_mint to verify state: {}", e)
-        };
-    }
+    // pub async fn persist_batch_mints(
+    //     &self,
+    //     cancellation_token: CancellationToken,
+    // ) -> Result<(), JoinError> {
+    //     while !cancellation_token.is_cancelled() {
+    //         let (batch_mint_to_verify, batch_mint) = match self.get_batch_mint_to_verify().await {
+    //             Ok(res) => res,
+    //             Err(_) => {
+    //                 continue;
+    //             },
+    //         };
+    //         let Some(batch_mint_to_verify) = batch_mint_to_verify else {
+    //             // no batch_mints to persist
+    //             continue;
+    //         };
+    //         self.persist_batch_mint(
+    //             cancellation_token.child_token(),
+    //             batch_mint_to_verify,
+    //             batch_mint,
+    //         )
+    //         .await;
+    //         tokio::select! {
+    //             _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+    //             _ = cancellation_token.cancelled() => {
+    //                     info!("Received stop signal, stopping ...");
+    //                     break;
+    //             }
+    //         }
+    //     }
+    //     Ok(())
+    // }
+    //
+    // pub async fn persist_batch_mint(
+    //     &self,
+    //     cancellation_token: CancellationToken,
+    //     mut batch_mint_to_verify: BatchMintToVerify,
+    //     mut batch_mint: Option<Box<BatchMint>>,
+    // ) {
+    //     let start_time = Instant::now();
+    //     info!("Persisting {} batch_mint", &batch_mint_to_verify.url);
+    //     while !cancellation_token.is_cancelled() {
+    //         match &batch_mint_to_verify.persisting_state {
+    //             &PersistingBatchMintState::ReceivedTransaction => {
+    //                 if let Err(err) =
+    //                     self.download_batch_mint(&mut batch_mint_to_verify, &mut batch_mint).await
+    //                 {
+    //                     error!("Error during batch_mint downloading: {}", err)
+    //                 };
+    //             },
+    //             &PersistingBatchMintState::SuccessfullyDownload => {
+    //                 if let Some(r) = &batch_mint {
+    //                     self.validate_batch_mint(&mut batch_mint_to_verify, r).await;
+    //                 } else {
+    //                     error!(
+    //                         "Trying to validate non downloaded batch_mint: {:#?}",
+    //                         &batch_mint_to_verify
+    //                     )
+    //                 }
+    //             },
+    //             &PersistingBatchMintState::SuccessfullyValidate => {
+    //                 if let Some(r) = &batch_mint {
+    //                     self.store_batch_mint_update(&mut batch_mint_to_verify, r).await;
+    //                 } else {
+    //                     error!(
+    //                         "Trying to store update for non downloaded batch_mint: {:#?}",
+    //                         &batch_mint_to_verify
+    //                     )
+    //                 }
+    //             },
+    //             &PersistingBatchMintState::FailedToPersist
+    //             | &PersistingBatchMintState::StoredUpdate => {
+    //                 self.drop_batch_mint_from_queue(batch_mint_to_verify.file_hash.clone()).await;
+    //                 info!(
+    //                     "Finish processing {} batch_mint file with {:?} state",
+    //                     &batch_mint_to_verify.url, &batch_mint_to_verify.persisting_state
+    //                 );
+    //                 self.metrics.set_persisting_latency(
+    //                     "batch_mint_persisting",
+    //                     start_time.elapsed().as_millis() as f64,
+    //                 );
+    //                 return;
+    //             },
+    //         }
+    //     }
+    //     if let Err(e) = self
+    //         .rocks_client
+    //         .batch_mint_to_verify
+    //         .put_async(batch_mint_to_verify.file_hash.clone(), batch_mint_to_verify.clone())
+    //         .await
+    //     {
+    //         error!("Update batch_mint to verify state: {}", e)
+    //     };
+    // }
 
     async fn get_batch_mint_to_verify(
         &self,
@@ -310,32 +306,32 @@ impl<D: BatchMintDownloader> BatchMintPersister<D> {
         batch_mint_to_verify.persisting_state = PersistingBatchMintState::SuccessfullyValidate;
     }
 
-    async fn store_batch_mint_update(
-        &self,
-        batch_mint_to_verify: &mut BatchMintToVerify,
-        batch_mint: &BatchMint,
-    ) {
-        let begin_processing = Instant::now();
-        if BubblegumTxProcessor::store_batch_mint_update(
-            batch_mint_to_verify.created_at_slot,
-            batch_mint,
-            self.rocks_client.clone(),
-            batch_mint_to_verify.signature,
-        )
-        .await
-        .is_err()
-        {
-            self.metrics.inc_batch_mints_with_status("batch_mint_persist", MetricStatus::FAILURE);
-            batch_mint_to_verify.persisting_state = PersistingBatchMintState::FailedToPersist;
-            return;
-        }
-        self.metrics.inc_batch_mints_with_status("batch_mint_persist", MetricStatus::SUCCESS);
-        self.metrics.set_persisting_latency(
-            "batch_mint_store_into_db",
-            begin_processing.elapsed().as_millis() as f64,
-        );
-        batch_mint_to_verify.persisting_state = PersistingBatchMintState::StoredUpdate;
-    }
+    // async fn store_batch_mint_update(
+    //     &self,
+    //     batch_mint_to_verify: &mut BatchMintToVerify,
+    //     batch_mint: &BatchMint,
+    // ) {
+    //     let begin_processing = Instant::now();
+    //     if BubblegumTxProcessor::store_batch_mint_update(
+    //         batch_mint_to_verify.created_at_slot,
+    //         batch_mint,
+    //         self.rocks_client.clone(),
+    //         batch_mint_to_verify.signature,
+    //     )
+    //     .await
+    //     .is_err()
+    //     {
+    //         self.metrics.inc_batch_mints_with_status("batch_mint_persist", MetricStatus::FAILURE);
+    //         batch_mint_to_verify.persisting_state = PersistingBatchMintState::FailedToPersist;
+    //         return;
+    //     }
+    //     self.metrics.inc_batch_mints_with_status("batch_mint_persist", MetricStatus::SUCCESS);
+    //     self.metrics.set_persisting_latency(
+    //         "batch_mint_store_into_db",
+    //         begin_processing.elapsed().as_millis() as f64,
+    //     );
+    //     batch_mint_to_verify.persisting_state = PersistingBatchMintState::StoredUpdate;
+    // }
 
     async fn save_batch_mint_as_failed(
         &self,

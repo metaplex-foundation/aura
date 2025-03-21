@@ -1,6 +1,5 @@
 use std::{
     collections::{HashSet, VecDeque},
-    str::FromStr,
     sync::Arc,
 };
 
@@ -12,16 +11,15 @@ use blockbuster::{
         ProgramParseResult,
     },
 };
-use bubblegum_batch_sdk::model::BatchMint;
 use chrono::Utc;
 use entities::{
     enums::{
-        ChainMutability, OwnerType, PersistingBatchMintState, RoyaltyTargetType,
-        SpecificationAssetClass, TokenStandard, UseMethod,
+        ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, TokenStandard,
+        UseMethod,
     },
     models::{
-        BatchMintToVerify, BufferedTransaction, ChainDataV1, Creator, SignatureWithSlot,
-        TransactionInfo, UpdateVersion, Updated, Uses,
+        BufferedTransaction, ChainDataV1, Creator, SignatureWithSlot, TransactionInfo,
+        UpdateVersion, Updated, Uses,
     },
 };
 use lazy_static::lazy_static;
@@ -29,21 +27,17 @@ use metrics_utils::IngesterMetricsConfig;
 use mpl_bubblegum::{types::LeafSchema, InstructionName};
 use num_traits::FromPrimitive;
 use rocks_db::{
-    columns::{
-        asset::{
-            AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner,
-            AssetStaticDetails,
-        },
-        offchain_data::OffChainData,
+    columns::asset::{
+        AssetAuthority, AssetCollection, AssetDynamicDetails, AssetLeaf, AssetOwner,
+        AssetStaticDetails,
     },
     transaction::{
         AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
         TreeUpdate,
-    },
-    Storage,
+    }
 };
 use serde_json::json;
-use solana_sdk::{hash::Hash, pubkey::Pubkey, signature::Signature};
+use solana_sdk::{hash::Hash, pubkey::Pubkey};
 use tokio::time::Instant;
 use tracing::{debug, error};
 use usecase::save_metrics::result_to_metrics;
@@ -139,12 +133,28 @@ impl BubblegumTxProcessor {
             InstructionName::SetAndVerifyCollection => "SetAndVerifyCollection",
             InstructionName::SetDecompressibleState => "SetDecompressibleState",
             InstructionName::UpdateMetadata => "UpdateMetadata",
-            InstructionName::PrepareTree => "PrepareTree",
-            InstructionName::AddCanopy => "AddCanopy",
-            InstructionName::FinalizeTreeWithRoot => "FinalizeTreeWithRoot",
-            InstructionName::FinalizeTreeWithRootAndCollection => {
-                "FinalizeTreeWithRootAndCollection"
-            },
+            // Instructions V2
+            InstructionName::BurnV2 => "BurnV2",
+            InstructionName::DelegateV2 => "DelegateV2",
+            InstructionName::DelegateAndFreezeV2 => "DelegateAndFreezeV2",
+            InstructionName::FreezeV2 => "FreezeV2",
+            InstructionName::MintV2 => "MintV2",
+            InstructionName::SetCollectionV2 => "SetCollectionV2",
+            InstructionName::SetNonTransferableV2 => "SetNonTransferableV2",
+            InstructionName::ThawV2 => "ThawV2",
+            InstructionName::ThawAndRevokeV2 => "ThawAndRevokeV2",
+            InstructionName::TransferV2 => "TransferV2",
+            InstructionName::UnverifyCreatorV2 => "UnverifyCreatorV2",
+            InstructionName::VerifyCreatorV2 => "VerifyCreatorV2",
+            InstructionName::UpdateMetadataV2 => "UpdateMetadataV2",
+            InstructionName::UpdateAssetDataV2 => "UpdateAssetDataV2",
+            // This feature is not released by MPL yet
+            // InstructionName::PrepareTree => "PrepareTree",
+            // InstructionName::AddCanopy => "AddCanopy",
+            // InstructionName::FinalizeTreeWithRoot => "FinalizeTreeWithRoot",
+            // InstructionName::FinalizeTreeWithRootAndCollection => {
+            //     "FinalizeTreeWithRootAndCollection"
+            // },
         }
     }
 
@@ -274,42 +284,55 @@ impl BubblegumTxProcessor {
 
         let instruction: Result<InstructionResult, IngesterError> = match ix_type {
             InstructionName::Transfer
+            | InstructionName::TransferV2
             | InstructionName::CancelRedeem
-            | InstructionName::Delegate => {
+            | InstructionName::Delegate
+            | InstructionName::DelegateV2
+            | InstructionName::DelegateAndFreezeV2
+            | InstructionName::FreezeV2
+            | InstructionName::SetNonTransferableV2
+            | InstructionName::ThawV2
+            | InstructionName::ThawAndRevokeV2 => {
                 Self::get_update_owner_update(parsing_result, bundle).map(From::from).map(Ok)?
             },
-            InstructionName::Burn => {
+            InstructionName::Burn | InstructionName::BurnV2 => {
                 Self::get_burn_update(parsing_result, bundle).map(From::from).map(Ok)?
             },
-            InstructionName::MintV1 | InstructionName::MintToCollectionV1 => {
+            InstructionName::MintV1
+            | InstructionName::MintToCollectionV1
+            | InstructionName::MintV2 => {
                 Self::get_mint_v1_update(parsing_result, bundle.slot).map(From::from).map(Ok)?
             },
             InstructionName::Redeem => {
                 Self::get_redeem_update(parsing_result, bundle).map(From::from).map(Ok)?
             },
             InstructionName::DecompressV1 => Ok(Self::get_decompress_update(bundle).into()), // no change log here? really?
-            InstructionName::VerifyCreator | InstructionName::UnverifyCreator => {
+            InstructionName::VerifyCreator
+            | InstructionName::UnverifyCreator
+            | InstructionName::VerifyCreatorV2
+            | InstructionName::UnverifyCreatorV2 => {
                 Self::get_creator_verification_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
             },
             InstructionName::VerifyCollection
             | InstructionName::UnverifyCollection
-            | InstructionName::SetAndVerifyCollection => {
+            | InstructionName::SetAndVerifyCollection
+            | InstructionName::SetCollectionV2 => {
                 Self::get_collection_verification_update(parsing_result, bundle)
                     .map(From::from)
                     .map(Ok)?
             },
-            InstructionName::UpdateMetadata => {
+            InstructionName::UpdateMetadata | InstructionName::UpdateMetadataV2 => {
                 Self::get_update_metadata_update(parsing_result, bundle).map(From::from).map(Ok)?
             },
-            InstructionName::FinalizeTreeWithRoot
-            | InstructionName::FinalizeTreeWithRootAndCollection => {
-                Self::get_create_tree_with_root_update(parsing_result, bundle)
-                    .map(From::from)
-                    .map(Ok)?
-            },
-            _ => {
+            // InstructionName::FinalizeTreeWithRoot
+            // | InstructionName::FinalizeTreeWithRootAndCollection => {
+            //     Self::get_create_tree_with_root_update(parsing_result, bundle)
+            //         .map(From::from)
+            //         .map(Ok)?
+            // },
+            InstructionName::UpdateAssetDataV2 | _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
                 Ok(InstructionResult::default())
             }, // InstructionName::Unknown => todo!(),
@@ -322,86 +345,88 @@ impl BubblegumTxProcessor {
         Ok(instruction)
     }
 
-    pub fn get_create_tree_with_root_update(
-        parsing_result: &BubblegumInstruction,
-        bundle: &InstructionBundle,
-    ) -> Result<AssetUpdateEvent, IngesterError> {
-        if let Some(Payload::FinalizeTreeWithRoot { args, .. }) = &parsing_result.payload {
-            let upd = AssetUpdateEvent {
-                batch_mint_creation_update: Some(BatchMintToVerify {
-                    file_hash: args.metadata_hash.clone(),
-                    url: args.metadata_url.clone(),
-                    created_at_slot: bundle.slot,
-                    signature: Signature::from_str(bundle.txn_id)
-                        .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
-                    download_attempts: 0,
-                    persisting_state: PersistingBatchMintState::ReceivedTransaction,
-                    staker: args.staker,
-                    collection_mint: args.collection_mint,
-                }),
-                ..Default::default()
-            };
-
-            return Ok(upd);
-        }
-
-        Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
-    }
+    // Mint Batch feature is not yet released to MPL
+    // pub fn get_create_tree_with_root_update(
+    //     parsing_result: &BubblegumInstruction,
+    //     bundle: &InstructionBundle,
+    // ) -> Result<AssetUpdateEvent, IngesterError> {
+    //     if let Some(Payload::FinalizeTreeWithRoot { args, .. }) = &parsing_result.payload {
+    //         let upd = AssetUpdateEvent {
+    //             batch_mint_creation_update: Some(BatchMintToVerify {
+    //                 file_hash: args.metadata_hash.clone(),
+    //                 url: args.metadata_url.clone(),
+    //                 created_at_slot: bundle.slot,
+    //                 signature: Signature::from_str(bundle.txn_id)
+    //                     .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
+    //                 download_attempts: 0,
+    //                 persisting_state: PersistingBatchMintState::ReceivedTransaction,
+    //                 staker: args.staker,
+    //                 collection_mint: args.collection_mint,
+    //             }),
+    //             ..Default::default()
+    //         };
+    //
+    //         return Ok(upd);
+    //     }
+    //
+    //     Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
+    // }
 
     pub fn get_update_owner_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
         if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
-            match le.schema {
-                LeafSchema::V1 { id, owner, delegate, .. } => {
-                    let leaf = Some(AssetLeaf {
-                        pubkey: id,
-                        tree_id: cl.id,
-                        leaf: Some(le.leaf_hash.to_vec()),
-                        nonce: Some(cl.index as u64),
-                        data_hash: Some(Hash::from(le.schema.data_hash())),
-                        creator_hash: Some(Hash::from(le.schema.creator_hash())),
-                        leaf_seq: Some(cl.seq),
-                        slot_updated: bundle.slot,
-                    });
-                    let owner = AssetOwner {
-                        pubkey: id,
-                        owner: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            Some(owner),
-                        ),
-                        delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
-                        owner_type: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            OwnerType::Single,
-                        ),
-                        owner_delegate_seq: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            Some(cl.seq),
-                        ),
-                        is_current_owner: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            true,
-                        ),
-                    };
-                    let asset_update = AssetUpdateEvent {
-                        update: Some(AssetDynamicUpdate {
-                            pk: id,
-                            slot: bundle.slot,
-                            leaf,
-                            dynamic_data: None,
-                        }),
-                        owner_update: Some(AssetUpdate { pk: id, details: owner }),
-                        ..Default::default()
-                    };
-                    return Ok(asset_update);
-                },
-            }
+            let (id, owner, delegate, _, data_hash, creator_hash, asset_data_hash, flags) =
+                extract_leaf_schema(&le.schema);
+
+            let leaf = Some(AssetLeaf {
+                pubkey: id,
+                tree_id: cl.id,
+                leaf: Some(le.leaf_hash.to_vec()),
+                nonce: Some(cl.index as u64),
+                data_hash: Some(data_hash),
+                creator_hash: Some(creator_hash),
+                leaf_seq: Some(cl.seq),
+                slot_updated: bundle.slot,
+                asset_data_hash,
+                flags,
+            });
+            let owner = AssetOwner {
+                pubkey: id,
+                owner: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    Some(owner),
+                ),
+                delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
+                owner_type: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    OwnerType::Single,
+                ),
+                owner_delegate_seq: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    Some(cl.seq),
+                ),
+                is_current_owner: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    true,
+                ),
+            };
+            let asset_update = AssetUpdateEvent {
+                update: Some(AssetDynamicUpdate {
+                    pk: id,
+                    slot: bundle.slot,
+                    leaf,
+                    dynamic_data: None,
+                }),
+                owner_update: Some(AssetUpdate { pk: id, details: owner }),
+                ..Default::default()
+            };
+            return Ok(asset_update);
         }
         Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
@@ -459,176 +484,145 @@ impl BubblegumTxProcessor {
         parsing_result: &BubblegumInstruction,
         slot: u64,
     ) -> Result<AssetUpdateEvent, IngesterError> {
-        if let (Some(le), Some(cl), Some(Payload::MintV1 { args, authority, tree_id })) =
+        if let (Some(le), Some(cl), Some(Payload::Mint { args, authority, tree_id })) =
             (&parsing_result.leaf_update, &parsing_result.tree_update, &parsing_result.payload)
         {
             let mut asset_update = AssetUpdateEvent { ..Default::default() };
 
+            let (id, owner, delegate, nonce, data_hash, creator_hash, asset_data_hash, flags) =
+                extract_leaf_schema(&le.schema);
+
             let uri = args.uri.trim().replace('\0', "");
-            match le.schema {
-                LeafSchema::V1 { id, delegate, owner, nonce, .. } => {
-                    let chain_mutability = match args.is_mutable {
-                        true => ChainMutability::Mutable,
-                        false => ChainMutability::Immutable,
-                    };
 
-                    let mut chain_data = ChainDataV1 {
-                        name: args.name.clone(),
-                        symbol: args.symbol.clone(),
-                        edition_nonce: args.edition_nonce,
-                        primary_sale_happened: args.primary_sale_happened,
-                        token_standard: Some(TokenStandard::NonFungible),
-                        uses: args.uses.clone().map(|u| Uses {
-                            use_method: use_method_from_mpl_bubblegum_state(&u.use_method),
-                            remaining: u.remaining,
-                            total: u.total,
-                        }),
-                    };
-                    chain_data.sanitize();
+            let chain_mutability = match args.is_mutable {
+                true => ChainMutability::Mutable,
+                false => ChainMutability::Immutable,
+            };
 
-                    let chain_data = json!(chain_data);
-                    let asset_static_details = AssetStaticDetails {
-                        pubkey: id,
-                        specification_asset_class: SpecificationAssetClass::Nft,
-                        royalty_target_type: RoyaltyTargetType::Creators,
-                        created_at: slot as i64,
-                        edition_address: None,
-                    };
-                    asset_update.static_update =
-                        Some(AssetUpdate { pk: id, details: asset_static_details });
+            let mut chain_data = ChainDataV1 {
+                name: args.name.clone(),
+                symbol: args.symbol.clone(),
+                edition_nonce: args.edition_nonce,
+                primary_sale_happened: args.primary_sale_happened,
+                token_standard: Some(TokenStandard::NonFungible),
+                uses: args.uses.clone().map(|u| Uses {
+                    use_method: use_method_from_mpl_bubblegum_state(&u.use_method),
+                    remaining: u.remaining,
+                    total: u.total,
+                }),
+            };
+            chain_data.sanitize();
 
-                    let creators = {
-                        let mut creators = vec![];
-                        for creator in args.creators.iter() {
-                            creators.push(Creator {
-                                creator: creator.address,
-                                creator_verified: creator.verified,
-                                creator_share: creator.share,
-                            });
-                        }
-                        creators
-                    };
-                    asset_update.update = Some(AssetDynamicUpdate {
-                        pk: id,
-                        slot,
-                        leaf: Some(AssetLeaf {
-                            pubkey: id,
-                            tree_id: *tree_id,
-                            leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
-                            data_hash: Some(Hash::from(le.schema.data_hash())),
-                            creator_hash: Some(Hash::from(le.schema.creator_hash())),
-                            leaf_seq: Some(cl.seq),
-                            slot_updated: slot,
-                        }),
-                        dynamic_data: Some(AssetDynamicDetails {
-                            pubkey: id,
-                            is_compressed: Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                true,
-                            ),
-                            is_compressible: Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                false,
-                            ),
-                            supply: Some(Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                1,
-                            )),
-                            seq: Some(Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                cl.seq,
-                            )),
-                            onchain_data: Some(Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                chain_data.to_string(),
-                            )),
-                            creators: Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                creators,
-                            ),
-                            royalty_amount: Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                args.seller_fee_basis_points,
-                            ),
-                            url: Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                uri.clone(),
-                            ),
-                            chain_mutability: Some(Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                chain_mutability,
-                            )),
-                            ..Default::default()
-                        }),
+            let chain_data = json!(chain_data);
+            let asset_static_details = AssetStaticDetails {
+                pubkey: id,
+                specification_asset_class: SpecificationAssetClass::Nft,
+                royalty_target_type: RoyaltyTargetType::Creators,
+                created_at: slot as i64,
+                edition_address: None,
+            };
+            asset_update.static_update =
+                Some(AssetUpdate { pk: id, details: asset_static_details });
+
+            let creators = {
+                let mut creators = vec![];
+                for creator in args.creators.iter() {
+                    creators.push(Creator {
+                        creator: creator.address,
+                        creator_verified: creator.verified,
+                        creator_share: creator.share,
                     });
+                }
+                creators
+            };
+            asset_update.update = Some(AssetDynamicUpdate {
+                pk: id,
+                slot,
+                leaf: Some(AssetLeaf {
+                    pubkey: id,
+                    tree_id: *tree_id,
+                    leaf: Some(le.leaf_hash.to_vec()),
+                    nonce: Some(nonce),
+                    data_hash: Some(data_hash),
+                    creator_hash: Some(creator_hash),
+                    leaf_seq: Some(cl.seq),
+                    slot_updated: slot,
+                    asset_data_hash,
+                    flags,
+                }),
+                dynamic_data: Some(AssetDynamicDetails {
+                    pubkey: id,
+                    is_compressed: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), true),
+                    is_compressible: Updated::new(
+                        slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        false,
+                    ),
+                    supply: Some(Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), 1)),
+                    seq: Some(Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), cl.seq)),
+                    onchain_data: Some(Updated::new(
+                        slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        chain_data.to_string(),
+                    )),
+                    creators: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), creators),
+                    royalty_amount: Updated::new(
+                        slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        args.seller_fee_basis_points,
+                    ),
+                    url: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), uri.clone()),
+                    chain_mutability: Some(Updated::new(
+                        slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        chain_mutability,
+                    )),
+                    ..Default::default()
+                }),
+            });
 
-                    let asset_authority = AssetAuthority {
-                        pubkey: id,
-                        authority: *authority,
-                        slot_updated: slot,
-                        write_version: None,
-                    };
-                    asset_update.authority_update =
-                        Some(AssetUpdate { pk: id, details: asset_authority });
-                    let owner = AssetOwner {
-                        pubkey: id,
-                        owner: Updated::new(
-                            slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            Some(owner),
-                        ),
-                        delegate: get_delegate(delegate, owner, slot, cl.seq),
-                        owner_type: Updated::new(
-                            slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            OwnerType::Single,
-                        ),
-                        owner_delegate_seq: Updated::new(
-                            slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            Some(cl.seq),
-                        ),
-                        is_current_owner: Updated::new(
-                            slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            true,
-                        ),
-                    };
-                    asset_update.owner_update = Some(AssetUpdate { pk: id, details: owner });
+            let asset_authority = AssetAuthority {
+                pubkey: id,
+                authority: *authority,
+                slot_updated: slot,
+                write_version: None,
+            };
+            asset_update.authority_update = Some(AssetUpdate { pk: id, details: asset_authority });
+            let owner = AssetOwner {
+                pubkey: id,
+                owner: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), Some(owner)),
+                delegate: get_delegate(delegate, owner, slot, cl.seq),
+                owner_type: Updated::new(
+                    slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    OwnerType::Single,
+                ),
+                owner_delegate_seq: Updated::new(
+                    slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    Some(cl.seq),
+                ),
+                is_current_owner: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), true),
+            };
+            asset_update.owner_update = Some(AssetUpdate { pk: id, details: owner });
 
-                    if let Some(collection) = &args.collection {
-                        let asset_collection = AssetCollection {
-                            pubkey: id,
-                            collection: Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                collection.key,
-                            ),
-                            is_collection_verified: Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                collection.verified,
-                            ),
-                            authority: Updated::new(
-                                slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                None,
-                            ),
-                        };
-                        asset_update.collection_update =
-                            Some(AssetUpdate { pk: id, details: asset_collection });
-                    }
-                },
+            if let Some(collection) = &args.collection {
+                let asset_collection = AssetCollection {
+                    pubkey: id,
+                    collection: Updated::new(
+                        slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        collection.key,
+                    ),
+                    is_collection_verified: Updated::new(
+                        slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        collection.verified,
+                    ),
+                    authority: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), None),
+                };
+                asset_update.collection_update =
+                    Some(AssetUpdate { pk: id, details: asset_collection });
             }
 
             return Ok(asset_update);
@@ -662,6 +656,7 @@ impl BubblegumTxProcessor {
                         creator_hash: Some(Hash::from([0; 32])),
                         leaf_seq: Some(cl.seq),
                         slot_updated: bundle.slot,
+                        ..Default::default()
                     }),
                     dynamic_data: None,
                 }),
@@ -721,74 +716,75 @@ impl BubblegumTxProcessor {
                 },
             };
             let mut asset_update = AssetUpdateEvent { ..Default::default() };
-            match le.schema {
-                LeafSchema::V1 { id, owner, delegate, .. } => {
-                    asset_update.update = Some(AssetDynamicUpdate {
-                        pk: id,
-                        slot: bundle.slot,
-                        leaf: Some(AssetLeaf {
-                            pubkey: id,
-                            tree_id: cl.id,
-                            leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(cl.index as u64),
-                            data_hash: Some(Hash::from(le.schema.data_hash())),
-                            creator_hash: Some(Hash::from(le.schema.creator_hash())),
-                            leaf_seq: Some(cl.seq),
-                            slot_updated: bundle.slot,
-                        }),
-                        dynamic_data: Some(AssetDynamicDetails {
-                            pubkey: id,
-                            is_compressed: Updated::new(
-                                bundle.slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                true,
-                            ),
-                            supply: Some(Updated::new(
-                                bundle.slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                1,
-                            )),
-                            seq: Some(Updated::new(
-                                bundle.slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                cl.seq,
-                            )),
-                            creators: Updated::new(
-                                bundle.slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                updated_creators,
-                            ),
-                            ..Default::default()
-                        }),
-                    });
+            let (id, owner, delegate, _, data_hash, creator_hash, asset_data_hash, flags) =
+                extract_leaf_schema(&le.schema);
 
-                    let owner = AssetOwner {
-                        pubkey: id,
-                        owner: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            Some(owner),
-                        ),
-                        delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
-                        owner_type: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            OwnerType::Single,
-                        ),
-                        owner_delegate_seq: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            Some(cl.seq),
-                        ),
-                        is_current_owner: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            true,
-                        ),
-                    };
-                    asset_update.owner_update = Some(AssetUpdate { pk: id, details: owner });
-                },
-            }
+            asset_update.update = Some(AssetDynamicUpdate {
+                pk: id,
+                slot: bundle.slot,
+                leaf: Some(AssetLeaf {
+                    pubkey: id,
+                    tree_id: cl.id,
+                    leaf: Some(le.leaf_hash.to_vec()),
+                    nonce: Some(cl.index as u64),
+                    data_hash: Some(data_hash),
+                    creator_hash: Some(creator_hash),
+                    leaf_seq: Some(cl.seq),
+                    slot_updated: bundle.slot,
+                    asset_data_hash,
+                    flags,
+                }),
+                dynamic_data: Some(AssetDynamicDetails {
+                    pubkey: id,
+                    is_compressed: Updated::new(
+                        bundle.slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        true,
+                    ),
+                    supply: Some(Updated::new(
+                        bundle.slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        1,
+                    )),
+                    seq: Some(Updated::new(
+                        bundle.slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        cl.seq,
+                    )),
+                    creators: Updated::new(
+                        bundle.slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        updated_creators,
+                    ),
+                    ..Default::default()
+                }),
+            });
+
+            let owner = AssetOwner {
+                pubkey: id,
+                owner: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    Some(owner),
+                ),
+                delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
+                owner_type: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    OwnerType::Single,
+                ),
+                owner_delegate_seq: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    Some(cl.seq),
+                ),
+                is_current_owner: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    true,
+                ),
+            };
+            asset_update.owner_update = Some(AssetUpdate { pk: id, details: owner });
 
             return Ok(asset_update);
         }
@@ -815,47 +811,43 @@ impl BubblegumTxProcessor {
                 },
             };
 
-            match le.schema {
-                LeafSchema::V1 { id, .. } => {
-                    asset_update.update = Some(AssetDynamicUpdate {
-                        pk: id,
-                        slot: bundle.slot,
-                        leaf: Some(AssetLeaf {
-                            pubkey: id,
-                            tree_id: cl.id,
-                            leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(cl.index as u64),
-                            data_hash: Some(Hash::from(le.schema.data_hash())),
-                            creator_hash: Some(Hash::from(le.schema.creator_hash())),
-                            leaf_seq: Some(cl.seq),
-                            slot_updated: bundle.slot,
-                        }),
-                        dynamic_data: None,
-                    });
+            let (id, _, _, _, data_hash, creator_hash, asset_data_hash, flags) =
+                extract_leaf_schema(&le.schema);
 
-                    let collection = AssetCollection {
-                        pubkey: id,
-                        collection: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            collection,
-                        ),
-                        is_collection_verified: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            verify,
-                        ),
-                        authority: Updated::new(
-                            bundle.slot,
-                            Some(UpdateVersion::Sequence(cl.seq)),
-                            None,
-                        ),
-                    };
+            asset_update.update = Some(AssetDynamicUpdate {
+                pk: id,
+                slot: bundle.slot,
+                leaf: Some(AssetLeaf {
+                    pubkey: id,
+                    tree_id: cl.id,
+                    leaf: Some(le.leaf_hash.to_vec()),
+                    nonce: Some(cl.index as u64),
+                    data_hash: Some(data_hash),
+                    creator_hash: Some(creator_hash),
+                    leaf_seq: Some(cl.seq),
+                    slot_updated: bundle.slot,
+                    asset_data_hash,
+                    flags,
+                }),
+                dynamic_data: None,
+            });
 
-                    asset_update.collection_update =
-                        Some(AssetUpdate { pk: id, details: collection });
-                },
-            }
+            let collection = AssetCollection {
+                pubkey: id,
+                collection: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    collection,
+                ),
+                is_collection_verified: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    verify,
+                ),
+                authority: Updated::new(bundle.slot, Some(UpdateVersion::Sequence(cl.seq)), None),
+            };
+
+            asset_update.collection_update = Some(AssetUpdate { pk: id, details: collection });
 
             return Ok(asset_update);
         };
@@ -874,204 +866,202 @@ impl BubblegumTxProcessor {
         {
             let mut asset_update = AssetUpdateEvent { ..Default::default() };
 
-            return match le.schema {
-                LeafSchema::V1 { id, nonce, .. } => {
-                    let uri = if let Some(uri) = &update_args.uri {
-                        uri.replace('\0', "")
-                    } else {
-                        current_metadata.uri.replace('\0', "")
-                    };
+            let (id, _, _, nonce, data_hash, creator_hash, asset_data_hash, flags) =
+                extract_leaf_schema(&le.schema);
 
-                    let name = if let Some(name) = update_args.name.clone() {
-                        name
-                    } else {
-                        current_metadata.name.clone()
-                    };
-
-                    let symbol = if let Some(symbol) = update_args.symbol.clone() {
-                        symbol
-                    } else {
-                        current_metadata.symbol.clone()
-                    };
-
-                    let primary_sale_happened =
-                        if let Some(primary_sale_happened) = update_args.primary_sale_happened {
-                            primary_sale_happened
-                        } else {
-                            current_metadata.primary_sale_happened
-                        };
-
-                    let is_mutable = if let Some(is_mutable) = update_args.is_mutable {
-                        is_mutable
-                    } else {
-                        current_metadata.is_mutable
-                    };
-
-                    let chain_mutability = if is_mutable {
-                        ChainMutability::Mutable
-                    } else {
-                        ChainMutability::Immutable
-                    };
-
-                    let mut chain_data = ChainDataV1 {
-                        name: name.clone(),
-                        symbol: symbol.clone(),
-                        edition_nonce: current_metadata.edition_nonce,
-                        primary_sale_happened,
-                        token_standard: Some(TokenStandard::NonFungible),
-                        uses: current_metadata
-                            .uses
-                            .clone()
-                            .map(|u| {
-                                Ok::<_, IngesterError>(Uses {
-                                    use_method: UseMethod::from_u8(u.use_method.clone() as u8)
-                                        .ok_or(IngesterError::ParsingError(format!(
-                                            "Invalid use_method: {}",
-                                            u.use_method as u8
-                                        )))?,
-                                    remaining: u.remaining,
-                                    total: u.total,
-                                })
-                            })
-                            .transpose()?,
-                    };
-                    chain_data.sanitize();
-                    let chain_data_json = serde_json::to_value(chain_data)
-                        .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
-
-                    let seller_fee_basis_points = if let Some(seller_fee_basis_points) =
-                        update_args.seller_fee_basis_points
-                    {
-                        seller_fee_basis_points
-                    } else {
-                        current_metadata.seller_fee_basis_points
-                    };
-
-                    let creators_input = if let Some(creators) = &update_args.creators {
-                        creators
-                    } else {
-                        &current_metadata.creators
-                    };
-
-                    let creators = {
-                        let mut creators = vec![];
-                        for creator in creators_input.iter() {
-                            creators.push(Creator {
-                                creator: creator.address,
-                                creator_verified: creator.verified,
-                                creator_share: creator.share,
-                            });
-                        }
-                        creators
-                    };
-
-                    asset_update.update = Some(AssetDynamicUpdate {
-                        pk: id,
-                        slot: bundle.slot,
-                        leaf: Some(AssetLeaf {
-                            pubkey: id,
-                            tree_id: *tree_id,
-                            leaf: Some(le.leaf_hash.to_vec()),
-                            nonce: Some(nonce),
-                            data_hash: Some(Hash::from(le.schema.data_hash())),
-                            creator_hash: Some(Hash::from(le.schema.creator_hash())),
-                            leaf_seq: Some(cl.seq),
-                            slot_updated: bundle.slot,
-                        }),
-                        dynamic_data: Some(AssetDynamicDetails {
-                            pubkey: id,
-                            onchain_data: Some(Updated::new(
-                                bundle.slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                chain_data_json.to_string(),
-                            )),
-                            url: Updated::new(
-                                bundle.slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                uri.clone(),
-                            ),
-                            creators: Updated::new(
-                                bundle.slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                creators,
-                            ),
-                            royalty_amount: Updated::new(
-                                bundle.slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                seller_fee_basis_points,
-                            ),
-                            chain_mutability: Some(Updated::new(
-                                bundle.slot,
-                                Some(UpdateVersion::Sequence(cl.seq)),
-                                chain_mutability,
-                            )),
-                            ..Default::default()
-                        }),
-                    });
-
-                    Ok(asset_update)
-                },
+            let uri = if let Some(uri) = &update_args.uri {
+                uri.replace('\0', "")
+            } else {
+                current_metadata.uri.replace('\0', "")
             };
+
+            let name = if let Some(name) = update_args.name.clone() {
+                name
+            } else {
+                current_metadata.name.clone()
+            };
+
+            let symbol = if let Some(symbol) = update_args.symbol.clone() {
+                symbol
+            } else {
+                current_metadata.symbol.clone()
+            };
+
+            let primary_sale_happened =
+                if let Some(primary_sale_happened) = update_args.primary_sale_happened {
+                    primary_sale_happened
+                } else {
+                    current_metadata.primary_sale_happened
+                };
+
+            let is_mutable = if let Some(is_mutable) = update_args.is_mutable {
+                is_mutable
+            } else {
+                current_metadata.is_mutable
+            };
+
+            let chain_mutability =
+                if is_mutable { ChainMutability::Mutable } else { ChainMutability::Immutable };
+
+            let mut chain_data = ChainDataV1 {
+                name: name.clone(),
+                symbol: symbol.clone(),
+                edition_nonce: current_metadata.edition_nonce,
+                primary_sale_happened,
+                token_standard: Some(TokenStandard::NonFungible),
+                uses: current_metadata
+                    .uses
+                    .clone()
+                    .map(|u| {
+                        Ok::<_, IngesterError>(Uses {
+                            use_method: UseMethod::from_u8(u.use_method.clone() as u8).ok_or(
+                                IngesterError::ParsingError(format!(
+                                    "Invalid use_method: {}",
+                                    u.use_method as u8
+                                )),
+                            )?,
+                            remaining: u.remaining,
+                            total: u.total,
+                        })
+                    })
+                    .transpose()?,
+            };
+            chain_data.sanitize();
+            let chain_data_json = serde_json::to_value(chain_data)
+                .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
+
+            let seller_fee_basis_points =
+                if let Some(seller_fee_basis_points) = update_args.seller_fee_basis_points {
+                    seller_fee_basis_points
+                } else {
+                    current_metadata.seller_fee_basis_points
+                };
+
+            let creators_input = if let Some(creators) = &update_args.creators {
+                creators
+            } else {
+                &current_metadata.creators
+            };
+
+            let creators = {
+                let mut creators = vec![];
+                for creator in creators_input.iter() {
+                    creators.push(Creator {
+                        creator: creator.address,
+                        creator_verified: creator.verified,
+                        creator_share: creator.share,
+                    });
+                }
+                creators
+            };
+
+            asset_update.update = Some(AssetDynamicUpdate {
+                pk: id,
+                slot: bundle.slot,
+                leaf: Some(AssetLeaf {
+                    pubkey: id,
+                    tree_id: *tree_id,
+                    leaf: Some(le.leaf_hash.to_vec()),
+                    nonce: Some(nonce),
+                    data_hash: Some(data_hash),
+                    creator_hash: Some(creator_hash),
+                    leaf_seq: Some(cl.seq),
+                    slot_updated: bundle.slot,
+                    asset_data_hash,
+                    flags,
+                }),
+                dynamic_data: Some(AssetDynamicDetails {
+                    pubkey: id,
+                    onchain_data: Some(Updated::new(
+                        bundle.slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        chain_data_json.to_string(),
+                    )),
+                    url: Updated::new(
+                        bundle.slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        uri.clone(),
+                    ),
+                    creators: Updated::new(
+                        bundle.slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        creators,
+                    ),
+                    royalty_amount: Updated::new(
+                        bundle.slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        seller_fee_basis_points,
+                    ),
+                    chain_mutability: Some(Updated::new(
+                        bundle.slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        chain_mutability,
+                    )),
+                    ..Default::default()
+                }),
+            });
+
+            return Ok(asset_update);
         }
         Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
 
-    pub async fn store_batch_mint_update(
-        slot: u64,
-        batch_mint: &BatchMint,
-        rocks_db: Arc<Storage>,
-        signature: Signature,
-    ) -> Result<(), IngesterError> {
-        let mut transaction_result = TransactionResult {
-            instruction_results: vec![],
-            transaction_signature: Some((
-                mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
-                SignatureWithSlot { signature, slot },
-            )),
-        };
-        for batched_mint in batch_mint.batch_mints.iter() {
-            let seq = batched_mint.tree_update.seq;
-            let event = (&spl_account_compression::events::ChangeLogEventV1::from(
-                &batched_mint.tree_update,
-            ))
-                .into();
-            let mut update = Self::get_mint_v1_update(&batched_mint.into(), slot)?;
-
-            if let Some(dynamic_info) = &update.update {
-                if let Some(data) = &dynamic_info.dynamic_data {
-                    let url = data.url.value.clone();
-
-                    if let Some(metadata) = batch_mint.raw_metadata_map.get(&url) {
-                        update.offchain_data_update = Some(OffChainData {
-                            url: Some(url.clone()),
-                            metadata: Some(metadata.to_string()),
-                            storage_mutability: url.as_str().into(),
-                            last_read_at: Utc::now().timestamp(),
-                        });
-                    }
-                }
-            }
-
-            let mut ix: InstructionResult = update.into();
-            ix.tree_update = Some(TreeUpdate {
-                tree: batched_mint.tree_update.id,
-                seq,
-                slot,
-                event,
-                instruction: "".to_string(),
-                tx: signature.to_string(),
-            });
-
-            transaction_result.instruction_results.push(ix);
-            if transaction_result.instruction_results.len() >= BATCH_MINT_BATCH_FLUSH_SIZE {
-                rocks_db.store_transaction_result(&transaction_result, false, false).await?;
-                transaction_result.instruction_results.clear();
-            }
-        }
-        rocks_db.store_transaction_result(&transaction_result, true, false).await?;
-
-        Ok(())
-    }
+    // pub async fn store_batch_mint_update(
+    //     slot: u64,
+    //     batch_mint: &BatchMint,
+    //     rocks_db: Arc<Storage>,
+    //     signature: Signature,
+    // ) -> Result<(), IngesterError> {
+    //     let mut transaction_result = TransactionResult {
+    //         instruction_results: vec![],
+    //         transaction_signature: Some((
+    //             mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
+    //             SignatureWithSlot { signature, slot },
+    //         )),
+    //     };
+    //     for batched_mint in batch_mint.batch_mints.iter() {
+    //         let seq = batched_mint.tree_update.seq;
+    //         let event = (&spl_account_compression::events::ChangeLogEventV1::from(
+    //             &batched_mint.tree_update,
+    //         ))
+    //             .into();
+    //         let mut update = Self::get_mint_v1_update(&batched_mint.into(), slot)?;
+    //
+    //         if let Some(dynamic_info) = &update.update {
+    //             if let Some(data) = &dynamic_info.dynamic_data {
+    //                 let url = data.url.value.clone();
+    //
+    //                 if let Some(metadata) = batch_mint.raw_metadata_map.get(&url) {
+    //                     update.offchain_data_update = Some(OffChainData {
+    //                         url: Some(url.clone()),
+    //                         metadata: Some(metadata.to_string()),
+    //                         storage_mutability: url.as_str().into(),
+    //                         last_read_at: Utc::now().timestamp(),
+    //                     });
+    //                 }
+    //             }
+    //         }
+    //
+    //         let mut ix: InstructionResult = update.into();
+    //         ix.tree_update = Some(TreeUpdate {
+    //             tree: batched_mint.tree_update.id,
+    //             seq,
+    //             slot,
+    //             event,
+    //             instruction: "".to_string(),
+    //             tx: signature.to_string(),
+    //         });
+    //
+    //         transaction_result.instruction_results.push(ix);
+    //         if transaction_result.instruction_results.len() >= BATCH_MINT_BATCH_FLUSH_SIZE {
+    //             rocks_db.store_transaction_result(&transaction_result, false, false).await?;
+    //             transaction_result.instruction_results.clear();
+    //         }
+    //     }
+    //     rocks_db.store_transaction_result(&transaction_result, true, false).await?;
+    //
+    //     Ok(())
+    // }
 }
 
 fn use_method_from_mpl_bubblegum_state(
@@ -1089,4 +1079,41 @@ fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Updated
         if owner == delegate || delegate.to_bytes() == [0; 32] { None } else { Some(delegate) };
 
     Updated::new(slot, Some(UpdateVersion::Sequence(seq)), delegate)
+}
+
+fn extract_leaf_schema(
+    schema: &LeafSchema,
+) -> (Pubkey, Pubkey, Pubkey, u64, Hash, Hash, Option<Hash>, Option<u8>) {
+    match schema {
+        LeafSchema::V1 { id, owner, delegate, nonce, data_hash, creator_hash, .. } => (
+            *id,
+            *owner,
+            *delegate,
+            *nonce,
+            Hash::new(data_hash),
+            Hash::new(creator_hash),
+            None,
+            None,
+        ),
+        LeafSchema::V2 {
+            id,
+            owner,
+            delegate,
+            nonce,
+            data_hash,
+            creator_hash,
+            asset_data_hash,
+            flags,
+            ..
+        } => (
+            *id,
+            *owner,
+            *delegate,
+            *nonce,
+            Hash::new(data_hash),
+            Hash::new(creator_hash),
+            Some(Hash::new(asset_data_hash)),
+            Some(*flags),
+        ),
+    }
 }

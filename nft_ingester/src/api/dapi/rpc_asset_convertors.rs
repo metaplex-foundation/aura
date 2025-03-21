@@ -7,6 +7,7 @@ use entities::{
 };
 use jsonpath_lib::JsonPathError;
 use mime_guess::Mime;
+use mpl_bubblegum::Flags;
 use num_traits::Pow;
 use rocks_db::{
     columns::{
@@ -397,6 +398,13 @@ pub fn asset_to_rpc(
         _ => None,
     };
 
+    let non_transferable = if let Some(flags) = full_asset.asset_leaf.flags {
+        let flags_bitfield = Flags::from_bytes([flags]);
+        Some(flags_bitfield.asset_lvl_frozen() || flags_bitfield.permanent_lvl_frozen())
+    } else {
+        None
+    };
+
     Ok(Some(RpcAsset {
         interface,
         id: full_asset.asset_static.pubkey.to_string(),
@@ -422,6 +430,7 @@ pub fn asset_to_rpc(
         creators: Some(rpc_creators),
         ownership: Ownership {
             frozen,
+            non_transferable,
             delegated: full_asset.asset_owner.delegate.value.is_some(),
             delegate: full_asset.asset_owner.delegate.value.map(|u| u.to_string()),
             ownership_model: full_asset.asset_owner.owner_type.value.into(),
@@ -536,6 +545,8 @@ pub fn get_compression_info(full_asset: &FullAsset) -> Compression {
             .unwrap_or_default(),
         data_hash: full_asset.asset_leaf.data_hash.map(|e| e.to_string()).unwrap_or_default(),
         creator_hash: full_asset.asset_leaf.creator_hash.map(|e| e.to_string()).unwrap_or_default(),
+        asset_data_hash: full_asset.asset_leaf.asset_data_hash.map(|e| e.to_string()),
+        flags: full_asset.asset_leaf.flags,
     }
 }
 

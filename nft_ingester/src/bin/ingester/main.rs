@@ -685,41 +685,41 @@ pub async fn main() -> Result<(), IngesterError> {
     )
     .await;
 
-    if let Ok(arweave) = Arweave::from_keypair_path(
-        PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),
-        ARWEAVE_BASE_URL.parse().unwrap(),
-    ) {
-        info!("Running batch mint processor...");
-
-        let arweave = Arc::new(arweave);
-        let batch_mint_processor = Arc::new(BatchMintProcessor::new(
-            index_pg_storage.clone(),
-            primary_rocks_storage.clone(),
-            Arc::new(NoopBatchMintTxSender),
-            arweave,
-            file_storage_path,
-            metrics_state.batch_mint_processor_metrics.clone(),
-        ));
-        let processor_clone = batch_mint_processor.clone();
-        usecase::executor::spawn(process_batch_mints(
-            processor_clone,
-            cancellation_token.child_token(),
-        ));
-    }
-
-    let batch_mint_persister = BatchMintPersister::new(
-        primary_rocks_storage.clone(),
-        BatchMintDownloaderForPersister,
-        metrics_state.batch_mint_persisting_metrics.clone(),
-    );
-
-    usecase::executor::spawn({
-        let cancellation_token = cancellation_token.child_token();
-        async move {
-            info!("Start batch_mint persister...");
-            batch_mint_persister.persist_batch_mints(cancellation_token).await
-        }
-    });
+    // if let Ok(arweave) = Arweave::from_keypair_path(
+    //     PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),
+    //     ARWEAVE_BASE_URL.parse().unwrap(),
+    // ) {
+    //     info!("Running batch mint processor...");
+    //
+    //     let arweave = Arc::new(arweave);
+    //     let batch_mint_processor = Arc::new(BatchMintProcessor::new(
+    //         index_pg_storage.clone(),
+    //         primary_rocks_storage.clone(),
+    //         Arc::new(NoopBatchMintTxSender),
+    //         arweave,
+    //         file_storage_path,
+    //         metrics_state.batch_mint_processor_metrics.clone(),
+    //     ));
+    //     let processor_clone = batch_mint_processor.clone();
+    //     usecase::executor::spawn(process_batch_mints(
+    //         processor_clone,
+    //         cancellation_token.child_token(),
+    //     ));
+    // }
+    //
+    // let batch_mint_persister = BatchMintPersister::new(
+    //     primary_rocks_storage.clone(),
+    //     BatchMintDownloaderForPersister,
+    //     metrics_state.batch_mint_persisting_metrics.clone(),
+    // );
+    //
+    // usecase::executor::spawn({
+    //     let cancellation_token = cancellation_token.child_token();
+    //     async move {
+    //         info!("Start batch_mint persister...");
+    //         batch_mint_persister.persist_batch_mints(cancellation_token).await
+    //     }
+    // });
 
     // clean indexes
     for asset_type in ASSET_TYPES {
