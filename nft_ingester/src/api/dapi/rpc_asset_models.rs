@@ -15,6 +15,7 @@ use rocks_db::columns::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use solana_program::hash::Hash;
 
 use crate::api::dapi::response::InscriptionResponse;
 
@@ -141,6 +142,8 @@ pub struct Compression {
     pub compressed: bool,
     pub data_hash: String,
     pub creator_hash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection_hash: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub asset_data_hash: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

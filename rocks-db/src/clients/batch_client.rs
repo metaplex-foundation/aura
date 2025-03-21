@@ -509,6 +509,7 @@ impl Storage {
                         creator_hash: leaf.value.creator_hash,
                         leaf_seq: leaf.value.leaf_seq,
                         slot_updated: leaf.slot_updated,
+                        collection_hash: leaf.value.collection_hash,
                         asset_data_hash: leaf.value.asset_data_hash,
                         flags: leaf.value.flags,
                     },

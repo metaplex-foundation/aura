@@ -57,9 +57,11 @@ pub struct AssetLeaf {
     pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "8")]
     pub slot_updated: u64,
-    #[prost(message, optional, tag = "46")]
+    #[prost(message, optional, tag = "9")]
+    pub collection_hash: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    #[prost(message, optional, tag = "10")]
     pub asset_data_hash: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
-    #[prost(message, optional, tag = "47")]
+    #[prost(message, optional, tag = "11")]
     pub flags: ::core::option::Option<DynamicUint32Field>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -199,10 +201,6 @@ pub struct AssetDetails {
     pub is_current_owner: ::core::option::Option<DynamicBoolField>,
     #[prost(bytes = "vec", tag = "45")]
     pub owner_record_pubkey: ::prost::alloc::vec::Vec<u8>,
-    #[prost(message, optional, tag = "46")]
-    pub asset_data_hash: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
-    #[prost(message, optional, tag = "47")]
-    pub bubblegum_flags: ::core::option::Option<DynamicUint32Field>,
 }
 /// This field is a bincode encoded object of RawBlock type defined in `entities`.
 #[allow(clippy::derive_partial_eq_without_eq)]

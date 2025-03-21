@@ -265,6 +265,7 @@ async fn get_complete_asset_details(
                     data_hash: leaf.data_hash,
                     creator_hash: leaf.creator_hash,
                     leaf_seq: leaf.leaf_seq,
+                    collection_hash: leaf.collection_hash,
                     asset_data_hash: leaf.asset_data_hash,
                     flags: leaf.flags,
                 },
@@ -289,8 +290,6 @@ async fn get_complete_asset_details(
         master_edition,
         offchain_data: off_chain_data_grpc,
         spl_mint,
-        asset_data_hash: asset_leaf.clone().map(|leaf| leaf.asset_data_hash.unwrap()),
-        bubblegum_flags: asset_leaf.clone().map(|leaf| leaf.flags.unwrap()),
     })
 }
 

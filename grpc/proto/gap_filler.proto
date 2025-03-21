@@ -89,8 +89,9 @@ message AssetLeaf {
     google.protobuf.UInt64Value leaf_seq = 6;
     UpdateVersionValue update_version = 7;
     uint64 slot_updated = 8;
-    google.protobuf.BytesValue asset_data_hash = 46;
-    DynamicUint32Field flags = 47;
+    google.protobuf.BytesValue collection_hash = 9;
+    google.protobuf.BytesValue asset_data_hash = 10;
+    DynamicUint32Field flags = 11;
 }
 
 message AssetCollection {
@@ -170,8 +171,6 @@ message AssetDetails {
     SplMint spl_mint = 43;
     DynamicBoolField is_current_owner = 44;
     bytes owner_record_pubkey = 45;
-    google.protobuf.BytesValue asset_data_hash = 46;
-    DynamicUint32Field bubblegum_flags = 47;
 }
 
 // This field is a bincode encoded object of RawBlock type defined in `entities`.

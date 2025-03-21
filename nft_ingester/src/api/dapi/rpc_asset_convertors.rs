@@ -545,6 +545,7 @@ pub fn get_compression_info(full_asset: &FullAsset) -> Compression {
             .unwrap_or_default(),
         data_hash: full_asset.asset_leaf.data_hash.map(|e| e.to_string()).unwrap_or_default(),
         creator_hash: full_asset.asset_leaf.creator_hash.map(|e| e.to_string()).unwrap_or_default(),
+        collection_hash: full_asset.asset_leaf.collection_hash.map(|e| e.to_string()),
         asset_data_hash: full_asset.asset_leaf.asset_data_hash.map(|e| e.to_string()),
         flags: full_asset.asset_leaf.flags,
     }
