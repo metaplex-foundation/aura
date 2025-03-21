@@ -21,6 +21,7 @@ mod tests {
         red::RequestErrorDurationMetrics, ApiMetricsConfig, BackfillerMetricsConfig,
         IngesterMetricsConfig,
     };
+    use mpl_bubblegum::utils::get_asset_id;
     use nft_ingester::{
         backfiller::DirectBlockParser,
         buffer::Buffer,
@@ -472,6 +473,20 @@ mod tests {
         assert_eq!(asset_info["burnt"], expected_results["burnt"]);
 
         env.teardown().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[tracing_test::traced_test]
+    async fn test_get_asset_id() {
+        let tree_address =
+            Pubkey::from_str("CnBt2TJrw1dXUBfVBf2Ah4Cz5s84jhBG7cejdPF19Eyh").unwrap();
+        let leaf_index: u64 = 0;
+        let asset_id = get_asset_id(&tree_address, leaf_index);
+
+        assert_eq!(
+            Pubkey::from_str("8vw7tdLGE3FBjaetsJrZAarwsbc8UESsegiLyvWXxs5A").unwrap(),
+            asset_id
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

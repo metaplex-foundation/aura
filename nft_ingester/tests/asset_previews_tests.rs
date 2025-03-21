@@ -101,6 +101,7 @@ mod tests {
                 delegate: None,
                 ownership_model: OwnershipModel::Single,
                 owner: "".to_string(),
+                non_transferable: None,
             },
             uses: None,
             supply: None,

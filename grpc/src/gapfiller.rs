@@ -57,6 +57,12 @@ pub struct AssetLeaf {
     pub update_version: ::core::option::Option<UpdateVersionValue>,
     #[prost(uint64, tag = "8")]
     pub slot_updated: u64,
+    #[prost(message, optional, tag = "9")]
+    pub collection_hash: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    #[prost(message, optional, tag = "10")]
+    pub asset_data_hash: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    #[prost(message, optional, tag = "11")]
+    pub flags: ::core::option::Option<DynamicUint32Field>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -99,7 +105,6 @@ pub struct SplMint {
     #[prost(uint64, tag = "8")]
     pub write_version: u64,
 }
-/// TODO: need also gapfill tokenAccounts and related indexes
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AssetDetails {

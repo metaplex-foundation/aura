@@ -194,6 +194,9 @@ pub struct AssetLeaf {
     pub data_hash: Option<Hash>,
     pub creator_hash: Option<Hash>,
     pub leaf_seq: Option<u64>,
+    pub collection_hash: Option<Hash>,
+    pub asset_data_hash: Option<Hash>,
+    pub flags: Option<u8>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
