@@ -9,8 +9,8 @@ use entities::{
 use interface::{batch_mint::BatchMintDownloader, error::UsecaseError};
 use metrics_utils::{BatchMintPersisterMetricsConfig, MetricStatus};
 use rocks_db::columns::batch_mint::BatchMintWithStaker;
-use tokio::{time::Instant};
-use tracing::{error};
+use tokio::time::Instant;
+use tracing::error;
 
 use crate::error::IngesterError;
 

@@ -34,7 +34,7 @@ use rocks_db::{
     transaction::{
         AssetDynamicUpdate, AssetUpdate, AssetUpdateEvent, InstructionResult, TransactionResult,
         TreeUpdate,
-    }
+    },
 };
 use serde_json::json;
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
