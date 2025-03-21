@@ -509,6 +509,8 @@ impl Storage {
                         creator_hash: leaf.value.creator_hash,
                         leaf_seq: leaf.value.leaf_seq,
                         slot_updated: leaf.slot_updated,
+                        asset_data_hash: leaf.value.asset_data_hash,
+                        flags: leaf.value.flags,
                     },
                     // todo: probably that's a finalized source, needs to be checked
                     is_from_finalized_source: false,

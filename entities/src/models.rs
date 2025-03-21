@@ -181,6 +181,10 @@ pub struct AssetCompleteDetailsGrpc {
 
     // SplMint
     pub spl_mint: Option<SplMint>,
+
+    //Bublegum
+    pub asset_data_hash: Option<Hash>,
+    pub bubblegum_flags: Option<u8>,
 }
 
 /// Leaf information about compressed asset
@@ -194,6 +198,8 @@ pub struct AssetLeaf {
     pub data_hash: Option<Hash>,
     pub creator_hash: Option<Hash>,
     pub leaf_seq: Option<u64>,
+    pub asset_data_hash: Option<Hash>,
+    pub flags: Option<u8>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

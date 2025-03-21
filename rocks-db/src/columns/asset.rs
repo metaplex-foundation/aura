@@ -1182,6 +1182,8 @@ pub struct AssetLeaf {
     pub creator_hash: Option<Hash>,
     pub leaf_seq: Option<u64>,
     pub slot_updated: u64,
+    pub asset_data_hash: Option<Hash>,
+    pub flags: Option<u8>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
