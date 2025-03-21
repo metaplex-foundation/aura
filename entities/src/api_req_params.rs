@@ -78,43 +78,9 @@ pub enum AssetSortDirection {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Options {
+pub struct DisplayOptions {
     #[serde(default)]
     pub show_unverified_collections: bool,
-    #[serde(default)]
-    pub show_collection_metadata: bool,
-    #[serde(default)]
-    pub show_inscription: bool,
-    // this option is present in displayOptions but in fact do not cause
-    // any effect in reference API
-    #[serde(default)]
-    pub show_fungible: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct SearchAssetsOptions {
-    #[serde(default)]
-    pub show_unverified_collections: bool,
-    #[serde(default)]
-    pub show_grand_total: bool,
-    #[serde(default)]
-    pub show_native_balance: bool,
-    #[serde(default)]
-    pub show_collection_metadata: bool,
-    #[serde(default)]
-    pub show_inscription: bool,
-    #[serde(default)]
-    pub show_zero_balance: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema, Default)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct GetByMethodsOptions {
-    #[serde(default)]
-    pub show_unverified_collections: bool,
-    #[serde(default)]
-    pub show_grand_total: bool,
     #[serde(default)]
     pub show_native_balance: bool,
     #[serde(default)]
@@ -125,17 +91,8 @@ pub struct GetByMethodsOptions {
     pub show_zero_balance: bool,
     #[serde(default)]
     pub show_fungible: bool,
-}
-
-impl From<&SearchAssetsOptions> for Options {
-    fn from(value: &SearchAssetsOptions) -> Self {
-        Self {
-            show_unverified_collections: value.show_unverified_collections,
-            show_collection_metadata: value.show_collection_metadata,
-            show_inscription: value.show_inscription,
-            show_fungible: false,
-        }
-    }
+    #[serde(default)]
+    pub show_grand_total: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
@@ -156,8 +113,9 @@ pub struct GetAssetsByGroup {
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
     #[serde(default)]
-    pub options: GetByMethodsOptions,
     pub cursor: Option<String>,
 }
 
@@ -170,8 +128,9 @@ pub struct GetAssetsByOwner {
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
     #[serde(default)]
-    pub options: GetByMethodsOptions,
     pub cursor: Option<String>,
 }
 
@@ -183,6 +142,7 @@ pub struct GetNftEditions {
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    #[serde(default)]
     pub cursor: Option<String>,
 }
 
@@ -190,16 +150,16 @@ pub struct GetNftEditions {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetAsset {
     pub id: String,
-    #[serde(default)]
-    pub options: Options,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetAssetBatch {
     pub ids: Vec<String>,
-    #[serde(default)]
-    pub options: Options,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -225,7 +185,8 @@ pub struct GetAssetsByCreator {
     pub before: Option<String>,
     pub after: Option<String>,
     #[serde(default)]
-    pub options: GetByMethodsOptions,
+    pub options: Option<DisplayOptions>,
+    #[serde(default)]
     pub cursor: Option<String>,
 }
 
@@ -238,8 +199,9 @@ pub struct GetAssetsByAuthority {
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
     #[serde(default)]
-    pub options: GetByMethodsOptions,
     pub cursor: Option<String>,
 }
 
@@ -264,26 +226,22 @@ pub struct GetAssetSignatures {
     pub leaf_index: Option<u64>,
     #[serde(default)]
     pub sort_direction: Option<AssetSortDirection>,
+    #[serde(default)]
     pub cursor: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct DisplayOptions {
-    pub show_zero_balance: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct GetTokenAccounts {
+    pub owner_address: Option<String>,
+    pub mint_address: Option<String>,
     pub limit: Option<u32>,
     pub page: Option<u32>,
-    pub owner: Option<String>,
-    pub mint: Option<String>,
-    #[serde(default, alias = "displayOptions")]
-    pub options: Option<DisplayOptions>,
     pub before: Option<String>,
     pub after: Option<String>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
+    #[serde(default)]
     pub cursor: Option<String>,
 }
 
@@ -318,15 +276,12 @@ pub struct SearchAssets {
     pub after: Option<String>,
     #[serde(default)]
     pub json_uri: Option<String>,
-    // todo: skipping displayOptions for now
-    // #[serde(default, alias = "displayOptions")]
-    // pub options: Option<Options>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
     #[serde(default)]
     pub cursor: Option<String>,
     #[serde(default)]
     pub name: Option<String>,
-    #[serde(default)]
-    pub options: SearchAssetsOptions,
     #[serde(default)]
     pub token_type: Option<TokenType>,
 }
@@ -338,6 +293,7 @@ pub struct GetCoreFees {
     pub page: Option<u32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    #[serde(default)]
     pub cursor: Option<String>,
 }
 
@@ -582,31 +538,6 @@ impl From<GetAssetsByGroupV0> for GetAssetsByGroup {
             after: value.after,
             cursor: None,
             options: Default::default(),
-        }
-    }
-}
-
-impl From<SearchAssetsOptions> for GetByMethodsOptions {
-    fn from(value: SearchAssetsOptions) -> Self {
-        Self {
-            show_unverified_collections: value.show_unverified_collections,
-            show_grand_total: value.show_grand_total,
-            show_native_balance: value.show_native_balance,
-            show_collection_metadata: value.show_collection_metadata,
-            show_inscription: value.show_inscription,
-            show_zero_balance: value.show_zero_balance,
-            show_fungible: false,
-        }
-    }
-}
-
-impl From<GetByMethodsOptions> for Options {
-    fn from(value: GetByMethodsOptions) -> Self {
-        Self {
-            show_unverified_collections: value.show_unverified_collections,
-            show_collection_metadata: value.show_collection_metadata,
-            show_inscription: value.show_inscription,
-            show_fungible: value.show_fungible,
         }
     }
 }

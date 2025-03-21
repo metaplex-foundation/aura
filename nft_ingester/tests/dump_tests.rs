@@ -4,7 +4,7 @@ mod tests {
     use std::sync::Arc;
 
     use entities::{
-        api_req_params::GetByMethodsOptions,
+        api_req_params::DisplayOptions,
         enums::ASSET_TYPES,
         models::{TokenAccount, UrlWithStatus},
     };
@@ -104,7 +104,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
+                &DisplayOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -123,7 +123,7 @@ mod mtg_441_tests {
     use std::sync::Arc;
 
     use entities::{
-        api_req_params::{GetAsset, Options},
+        api_req_params::{DisplayOptions, GetAsset},
         enums::SpecificationAssetClass,
     };
     use interface::account_balance::MockAccountBalanceGetter;
@@ -209,7 +209,10 @@ mod mtg_441_tests {
         let api_res = get_das_api(&env)
             .get_asset(GetAsset {
                 id: first_pubkey.to_string(),
-                options: Options { show_unverified_collections: true, ..Default::default() },
+                options: Some(DisplayOptions {
+                    show_unverified_collections: true,
+                    ..Default::default()
+                }),
             })
             .await;
 
@@ -241,7 +244,10 @@ mod mtg_441_tests {
         let api_res = get_das_api(&env)
             .get_asset(GetAsset {
                 id: first_pubkey.to_string(),
-                options: Options { show_unverified_collections: true, ..Default::default() },
+                options: Some(DisplayOptions {
+                    show_unverified_collections: true,
+                    ..Default::default()
+                }),
             })
             .await;
         assert!(api_res.is_ok());
@@ -272,7 +278,10 @@ mod mtg_441_tests {
         let api_res = get_das_api(&env)
             .get_asset(GetAsset {
                 id: first_pubkey.to_string(),
-                options: Options { show_unverified_collections: true, ..Default::default() },
+                options: Some(DisplayOptions {
+                    show_unverified_collections: true,
+                    ..Default::default()
+                }),
             })
             .await;
         assert!(api_res.is_ok());
@@ -303,7 +312,10 @@ mod mtg_441_tests {
         let api_res = get_das_api(&env)
             .get_asset(GetAsset {
                 id: first_pubkey.to_string(),
-                options: Options { show_unverified_collections: true, ..Default::default() },
+                options: Some(DisplayOptions {
+                    show_unverified_collections: true,
+                    ..Default::default()
+                }),
             })
             .await;
         assert!(api_res.is_ok());

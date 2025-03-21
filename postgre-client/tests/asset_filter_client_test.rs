@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod tests {
     use entities::{
-        api_req_params::GetByMethodsOptions,
+        api_req_params::DisplayOptions,
         enums::{AssetType, TokenType},
     };
     use postgre_client::{
@@ -56,7 +56,7 @@ mod tests {
                 page,
                 before,
                 after,
-                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
+                &DisplayOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -125,7 +125,7 @@ mod tests {
                 page,
                 None,
                 None,
-                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
+                &DisplayOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -147,10 +147,7 @@ mod tests {
                     page,
                     None,
                     None,
-                    &GetByMethodsOptions {
-                        show_unverified_collections: true,
-                        ..Default::default()
-                    },
+                    &DisplayOptions { show_unverified_collections: true, ..Default::default() },
                 )
                 .await
                 .unwrap();
@@ -177,10 +174,7 @@ mod tests {
                     page,
                     None,
                     after,
-                    &GetByMethodsOptions {
-                        show_unverified_collections: true,
-                        ..Default::default()
-                    },
+                    &DisplayOptions { show_unverified_collections: true, ..Default::default() },
                 )
                 .await
                 .unwrap();
@@ -202,10 +196,7 @@ mod tests {
                     page,
                     before,
                     None,
-                    &GetByMethodsOptions {
-                        show_unverified_collections: true,
-                        ..Default::default()
-                    },
+                    &DisplayOptions { show_unverified_collections: true, ..Default::default() },
                 )
                 .await
                 .unwrap();
@@ -230,7 +221,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
+                &DisplayOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -250,7 +241,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
+                &DisplayOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -310,7 +301,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &GetByMethodsOptions { show_unverified_collections: true, ..Default::default() },
+                &DisplayOptions { show_unverified_collections: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -371,7 +362,7 @@ mod tests {
                 None,
                 None,
                 None,
-                &GetByMethodsOptions {
+                &DisplayOptions {
                     show_zero_balance: true,
                     show_unverified_collections: true,
                     ..Default::default()

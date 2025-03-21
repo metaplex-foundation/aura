@@ -5,7 +5,7 @@ use std::{
 
 use bincode::serialize;
 use entities::{
-    api_req_params::{Options, PaginationQuery},
+    api_req_params::{DisplayOptions, PaginationQuery},
     enums::{AssetType, SpecificationAssetClass, TokenMetadataEdition},
     models::{EditionData, PubkeyWithSlot},
 };
@@ -154,7 +154,7 @@ impl Storage {
         &self,
         asset_ids: Vec<Pubkey>,
         owner_address: &Option<Pubkey>,
-        options: &Options,
+        options: &DisplayOptions,
     ) -> Result<AssetSelectedMaps> {
         let token_accounts_fut = if let Some(owner_address) = owner_address {
             Either::Left(self.get_raw_token_accounts(
