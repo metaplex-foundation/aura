@@ -1,6 +1,6 @@
 [package]
 name = "nft_ingester"
-version = "0.5.1-dev"
+version = "0.6.1-dev"
 edition = "2021"
 publish = false
 
