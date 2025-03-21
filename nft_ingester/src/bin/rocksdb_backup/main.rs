@@ -9,7 +9,7 @@ use rocks_db::{
     migrator::MigrationState,
     Storage,
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), RocksDbBackupServiceError> {
@@ -46,9 +46,14 @@ async fn main() -> Result<(), RocksDbBackupServiceError> {
             rocks_backup_archives_dir: args.backup_archives_dir,
             rocks_flush_before_backup: args.flush_before_backup,
         },
-    )?;
+    )
+    .inspect_err(|e| {
+        error!(error = %e, "Failed to create rocksdb backup service: {e:?}");
+    })?;
 
-    backup_service.perform_backup().await?;
+    backup_service.perform_backup().await.inspect_err(|e| {
+        error!(error = %e, "Failed to perform rocksdb backup: {e:?}");
+    })?;
 
     Ok(())
 }

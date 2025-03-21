@@ -154,7 +154,10 @@ pub async fn main() -> Result<(), IngesterError> {
             .expect("invalid rocks backup archives dir"),
             &PathBuf::from_str(&args.rocks_db_path).expect("invalid rocks backup archives dir"),
         )
-        .await?;
+        .await
+        .inspect_err(|e| {
+            error!(error = %e, "Failed to restore rocksdb: {e:?}");
+        })?;
     }
 
     info!("Init primary storage...");
@@ -165,7 +168,10 @@ pub async fn main() -> Result<(), IngesterError> {
             &args.rocks_migration_storage_path,
             &metrics_state,
         )
-        .await?,
+        .await
+        .inspect_err(|e| {
+            error!(error = %e, "Failed to init primary storage: {e:?}");
+        })?,
     );
 
     info!("Init PG storage...");
@@ -179,7 +185,10 @@ pub async fn main() -> Result<(), IngesterError> {
             None,
             Some(args.pg_max_query_statement_timeout_secs),
         )
-        .await?,
+        .await
+        .inspect_err(|e| {
+            error!(error = %e, "Failed to init index storage with migration: {e:?}");
+        })?,
     );
 
     let geyser_bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
@@ -198,7 +207,7 @@ pub async fn main() -> Result<(), IngesterError> {
 
     cancellation_token.run_until_cancelled(async move {
         if let Err(e) = tpf.warmup().await {
-            warn!(error = %e, "Failed to warm up Raydium token price fetcher, cache is empty: {:?}", e);
+            error!(error = %e, "Failed to warm up Raydium token price fetcher, cache is empty: {:?}", e);
         }
         let (symbol_cache_size, _) = tpf.get_cache_sizes();
         info!(%symbol_cache_size, "Warmed up Raydium token price fetcher with {} symbols", symbol_cache_size);
@@ -241,7 +250,10 @@ pub async fn main() -> Result<(), IngesterError> {
                 ack_channel.clone(),
                 metrics_state.redis_receiver_metrics.clone(),
             )
-            .await?,
+            .await
+            .inspect_err(|e| {
+                error!(error = %e, "Failed to create redis receiver: {e:?}");
+            })?,
         );
 
         run_accounts_processor(
@@ -286,7 +298,10 @@ pub async fn main() -> Result<(), IngesterError> {
                 ack_channel.clone(),
                 metrics_state.redis_receiver_metrics.clone(),
             )
-            .await?,
+            .await
+            .inspect_err(|e| {
+                error!(error = %e, "Failed to create redis receiver: {e:?}");
+            })?,
         );
 
         run_accounts_processor(
@@ -330,7 +345,10 @@ pub async fn main() -> Result<(), IngesterError> {
                 ack_channel.clone(),
                 metrics_state.redis_receiver_metrics.clone(),
             )
-            .await?,
+            .await
+            .inspect_err(|e| {
+                error!(error = %e, "Failed to create redis receiver: {e:?}");
+            })?,
         );
 
         run_transaction_processor(
@@ -344,7 +362,12 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("MessageSource Redis FINISH");
 
     //todo Add starting from particular block
-    let last_saved_slot = primary_rocks_storage.last_saved_slot()?.unwrap_or_default();
+    let last_saved_slot = primary_rocks_storage
+        .last_saved_slot()
+        .inspect_err(|e| {
+            error!(error = %e, "Failed to get last saved slot: {e:?}");
+        })?
+        .unwrap_or_default();
     let first_processed_slot = Arc::new(AtomicU64::new(0));
     let first_processed_slot_clone = first_processed_slot.clone();
     let cloned_rocks_storage = primary_rocks_storage.clone();
@@ -521,7 +544,10 @@ pub async fn main() -> Result<(), IngesterError> {
                     .delete_parameter::<u64>(
                         rocks_db::columns::parameters::Parameter::LastBackfilledSlot,
                     )
-                    .await?;
+                    .await
+                    .inspect_err(|e| {
+                        error!(error = %e, "Failed to delete last saved slot: {e:?}");
+                    })?;
             }
 
             let consumer = Arc::new(DirectBlockParser::new(
@@ -578,7 +604,9 @@ pub async fn main() -> Result<(), IngesterError> {
             primary_rocks_storage.clone(),
         );
         let asset_url_serv = AssetUrlServiceImpl::new(primary_rocks_storage.clone());
-        let addr = format!("0.0.0.0:{}", args.peer_grpc_port).parse()?;
+        let addr = format!("0.0.0.0:{}", args.peer_grpc_port).parse().inspect_err(|e| {
+            error!(error = %e, "Failed to parse peer grpc address: {e:?}");
+        })?;
         // Spawn the gRPC server task and add to JoinSet
 
         usecase::executor::spawn({
