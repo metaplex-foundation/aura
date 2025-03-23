@@ -160,7 +160,6 @@ mod tests {
 
     // Import functions from the parent module
     use super::*;
-    use crate::errors::StorageError;
 
     #[test]
     fn test_encode_decode_u64_pubkey() {
