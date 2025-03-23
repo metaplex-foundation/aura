@@ -667,7 +667,6 @@ async fn test_mint_v2_delegate_v2() {
     insta::assert_json_snapshot!(format!("{}__delegate", setup.name.clone()), asset_after);
 }
 
-// Data is not changes because asset is not frosen and doesn't have delegate.
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
@@ -683,9 +682,10 @@ async fn test_mint_v2_thaw_and_revoke_v2() {
     )
     .await;
 
-    let asset_id = "4mR5wxNQjrUgaJZeVdVG55uB4CKm2CUejTXxLgGNm6Vv";
+    let asset_id = "E59c8LNXhYD9Gh93UqKoQXdKD7qCUmKnzT3p3EQLYeHj";
     let seeds: Vec<SeedEvent> = seed_txns([
-        "5jaBJEcb4TMsGyPeeQArgJo2FKMiQcvY9LGuu7vStLnUMqPd6RBpTH2qinuGWqkNCUgSsJuYuxHda5CuNBy4vgY8", // Mint
+        "rBMrxLUJqy2veGRSy82MLEYqcAo6FrvsovSkFTwRoKWJJXjzgZkrrU7YqGXitLNAaPoiaf7ETCyENcQdxe3qyfL", // Mint
+        "3bMpRY9Eq8eLMsq4WzpVTPXM8PHFauPH7DjNQCQca8qtrRihmSgCUrsUaVx7Nydn76m2mCUzDMKs327TeQps2jdP", // delegateAndFreezeV2
     ]);
 
     let asset = run_get_asset_scenario_test(
@@ -698,12 +698,17 @@ async fn test_mint_v2_thaw_and_revoke_v2() {
     .await
     .unwrap();
 
-    assert_eq!(asset["compression"]["seq"], 1);
+    assert_eq!(asset["compression"]["seq"], 2);
+    assert_eq!(asset["compression"]["flags"], 1);
     assert_eq!(asset["ownership"]["frozen"], false);
-    assert_eq!(asset["ownership"]["delegate"], Value::Null);
+    assert_eq!(asset["ownership"]["non_transferable"], true);
+    assert_eq!(asset["ownership"]["delegated"], true);
+    assert_eq!(asset["ownership"]["delegate"], "5LgXYsnFpBC7mhS9aSbKSRc7sUmyFPun6kHazgvnuBvE");
+
+    insta::assert_json_snapshot!(format!("{}__delegate", setup.name.clone()), asset);
 
     let seeds: Vec<SeedEvent> = seed_txns([
-        "4ZPJw5pN3KfaTsaxR5Ci3F4UEHkvL8KVuP6AMkLTyWWjF9zNjYHBqKp9rqYESomgoa6D6Dc8LU3FpbvsUGEckFfk", // thawAndRevokeV2
+        "5QMtikA2DUNWrAESBgwvS8zTHhj6rAejpgQg3HCuURiYdAB4XLvJT7xrj9NkKPN7vTXcDjXWzLP9J4oxiW2JipMJ", // thawAndRevokeV2
     ]);
     let asset_after = run_get_asset_scenario_test(
         &setup,
@@ -714,11 +719,15 @@ async fn test_mint_v2_thaw_and_revoke_v2() {
     )
     .await
     .unwrap();
+
     assert_eq!(asset_after["compression"]["seq"], 3);
     assert_eq!(asset_after["ownership"]["frozen"], false);
+    assert_eq!(asset_after["compression"]["flags"], 0);
+    assert_eq!(asset_after["ownership"]["non_transferable"], false);
+    assert_eq!(asset_after["ownership"]["delegated"], false);
     assert_eq!(asset_after["ownership"]["delegate"], Value::Null);
 
-    insta::assert_json_snapshot!(setup.name.clone(), asset_after);
+    insta::assert_json_snapshot!(format!("{}__revoke", setup.name.clone()), asset);
 }
 
 // FREEZE_V2 USING PERMANENT DELEGATE (RESULTS IN PERMANENT LVL FREEZE BIT SET)
