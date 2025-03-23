@@ -1188,6 +1188,18 @@ pub struct AssetLeaf {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
+pub struct AssetLeafDeprecated {
+    pub pubkey: Pubkey,
+    pub tree_id: Pubkey,
+    pub leaf: Option<Vec<u8>>,
+    pub nonce: Option<u64>,
+    pub data_hash: Option<Hash>,
+    pub creator_hash: Option<Hash>,
+    pub leaf_seq: Option<u64>,
+    pub slot_updated: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct SourcedAssetLeaf {
     pub leaf: AssetLeaf,
     pub is_from_finalized_source: bool,
@@ -3067,10 +3079,24 @@ impl AssetOwner {
     }
 }
 
-impl TypedColumn for AssetLeaf {
+impl TypedColumn for AssetLeafDeprecated {
     type KeyType = Pubkey;
     type ValueType = Self;
     const NAME: &'static str = "ASSET_LEAF";
+
+    fn encode_key(pubkey: Pubkey) -> Vec<u8> {
+        encode_pubkey(pubkey)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> Result<Self::KeyType> {
+        decode_pubkey(bytes)
+    }
+}
+
+impl TypedColumn for AssetLeaf {
+    type KeyType = Pubkey;
+    type ValueType = Self;
+    const NAME: &'static str = "ASSET_LEAF_V2";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)

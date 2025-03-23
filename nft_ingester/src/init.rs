@@ -12,6 +12,7 @@ use tempfile::TempDir;
 use tokio::process::Command;
 #[cfg(feature = "profiling")]
 use tracing::error;
+use tracing::log::info;
 
 use crate::error::IngesterError;
 
@@ -56,6 +57,8 @@ pub async fn init_primary_storage(
     )?;
 
     if enable_migration_rocksdb {
+        info!("Start migration rocksdb process...");
+
         let migration_version_manager_dir = TempDir::new()?;
         let migration_version_manager = Storage::open_secondary(
             db_path,
@@ -72,6 +75,8 @@ pub async fn init_primary_storage(
             Arc::new(migration_version_manager),
         )
         .await?;
+
+        info!("The migration rocksdb process was successful");
     }
 
     Ok(Storage::open(db_path, metrics_state.red_metrics.clone(), MigrationState::Last)?)

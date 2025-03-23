@@ -92,6 +92,7 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Back Filler: {}", args.run_backfiller.unwrap_or(false));
     info!("Bubblegum BackFiller: {}", args.run_bubblegum_backfiller.unwrap_or(false));
     info!("Gap Filler: {}", args.run_gapfiller);
+    info!("Enable rocks migration: {}", args.enable_rocks_migration.unwrap_or(false));
     info!("Run Profiling: {}", args.run_profiling);
     info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker);
     info!("Account redis parsing workers: {}", args.redis_accounts_parsing_workers);
