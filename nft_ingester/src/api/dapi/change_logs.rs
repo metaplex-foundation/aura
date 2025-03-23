@@ -270,6 +270,7 @@ fn get_asset_proof(
     let tree_id = Pubkey::try_from(leaf_data.model.tree.clone()).unwrap_or_default();
     let initial_proofs = proof.iter().filter_map(|k| Pubkey::try_from(k.clone()).ok()).collect();
     let leaf_b58 = bs58::encode(&leaf_hash).into_string();
+
     if let Some(proof_checker) = proof_checker {
         let lf = Pubkey::from_str(leaf_b58.as_str()).unwrap_or_default();
         let metrics = metrics.clone();

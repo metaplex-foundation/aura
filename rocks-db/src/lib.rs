@@ -35,7 +35,6 @@ use columns::{
         self, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
     },
     asset_previews::{AssetPreviews, UrlToDownload},
-    batch_mint::{self, BatchMintWithStaker},
     bubblegum_slots, cl_items,
     inscriptions::{Inscription, InscriptionData},
     leaf_signatures::LeafSignature,
@@ -47,7 +46,7 @@ use columns::{
 };
 use entities::{
     enums::TokenMetadataEdition,
-    models::{AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount},
+    models::{AssetSignature, RawBlock, SplMint, TokenAccount},
     schedule::ScheduledJob,
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
@@ -165,9 +164,6 @@ pub struct Storage {
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     pub asset_signature: Column<AssetSignature>,
-    pub batch_mint_to_verify: Column<BatchMintToVerify>,
-    pub failed_batch_mints: Column<FailedBatchMint>,
-    pub batch_mints: Column<BatchMintWithStaker>,
     pub migration_version: Column<MigrationVersions>,
     pub token_prices: Column<TokenPrice>,
     pub asset_previews: Column<AssetPreviews>,
@@ -217,9 +213,6 @@ impl Storage {
         let token_accounts = Self::column(db.clone(), red_metrics.clone());
         let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
-        let batch_mint_to_verify = Self::column(db.clone(), red_metrics.clone());
-        let failed_batch_mints = Self::column(db.clone(), red_metrics.clone());
-        let batch_mints = Self::column(db.clone(), red_metrics.clone());
         let migration_version = Self::column(db.clone(), red_metrics.clone());
         let token_prices = Self::column(db.clone(), red_metrics.clone());
         let asset_previews = Self::column(db.clone(), red_metrics.clone());
@@ -267,9 +260,6 @@ impl Storage {
             red_metrics,
             asset_signature,
             token_account_mint_owner_idx,
-            batch_mint_to_verify,
-            failed_batch_mints,
-            batch_mints,
             migration_version,
             token_prices,
             asset_previews,
@@ -383,9 +373,6 @@ impl Storage {
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(migration_state),
             Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(migration_state),
             Self::new_cf_descriptor::<MigrationVersions>(migration_state),
-            Self::new_cf_descriptor::<BatchMintToVerify>(migration_state),
-            Self::new_cf_descriptor::<FailedBatchMint>(migration_state),
-            Self::new_cf_descriptor::<BatchMintWithStaker>(migration_state),
             Self::new_cf_descriptor::<TokenPrice>(migration_state),
             Self::new_cf_descriptor::<AssetPreviews>(migration_state),
             Self::new_cf_descriptor::<UrlToDownload>(migration_state),
@@ -672,24 +659,6 @@ impl Storage {
                     TokenAccountMintOwnerIdx::merge_values,
                 );
             },
-            BatchMintToVerify::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_batch_mint_to_verify",
-                    batch_mint::merge_batch_mint_to_verify,
-                );
-            },
-            FailedBatchMint::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_failed_batch_mint",
-                    batch_mint::merge_failed_batch_mint,
-                );
-            },
-            BatchMintWithStaker::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_downloaded_batch_mint",
-                    asset::AssetStaticDetails::merge_keep_existing,
-                );
-            },
             MigrationVersions::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_migration_versions",
@@ -752,9 +721,6 @@ impl Storage {
             TokenAccountOwnerIdx::NAME,
             TokenAccountMintOwnerIdx::NAME,
             AssetSignature::NAME,
-            BatchMintToVerify::NAME,
-            FailedBatchMint::NAME,
-            BatchMintWithStaker::NAME,
             MigrationVersions::NAME,
             TokenPrice::NAME,
             AssetPreviews::NAME,

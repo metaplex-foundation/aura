@@ -153,26 +153,6 @@ impl From<entities::api_req_params::AssetSortDirection> for AssetSortDirection {
     }
 }
 
-impl From<BatchMintState> for entities::enums::BatchMintState {
-    fn from(value: BatchMintState) -> Self {
-        match value {
-            BatchMintState::Uploaded => entities::enums::BatchMintState::Uploaded,
-            BatchMintState::ValidationFail => entities::enums::BatchMintState::ValidationFail,
-            BatchMintState::ValidationComplete => {
-                entities::enums::BatchMintState::ValidationComplete
-            },
-            BatchMintState::UploadedToArweave => entities::enums::BatchMintState::UploadedToArweave,
-            BatchMintState::FailUploadToArweave => {
-                entities::enums::BatchMintState::FailUploadToArweave
-            },
-            BatchMintState::FailSendingTransaction => {
-                entities::enums::BatchMintState::FailSendingTransaction
-            },
-            BatchMintState::Complete => entities::enums::BatchMintState::Complete,
-        }
-    }
-}
-
 pub(crate) enum VerificationRequiredField {
     Owner,
     Authority,

@@ -1,22 +1,15 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use hyper::{header::CONTENT_TYPE, Body, Method, Request, Response, Server, StatusCode};
 use interface::consistency_check::ConsistencyChecker;
 use jsonrpc_http_server::{
-    cors::AccessControlAllowHeaders,
-    hyper,
-    hyper::service::{make_service_fn, service_fn},
-    AccessControlAllowOrigin, DomainsValidation, ServerBuilder,
+    cors::AccessControlAllowHeaders, AccessControlAllowOrigin, DomainsValidation, ServerBuilder,
 };
 use metrics_utils::ApiMetricsConfig;
-use multer::Multipart;
 use postgre_client::PgClient;
 use rocks_db::Storage;
-use tokio::{fs::File, io::AsyncWriteExt};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::info;
 use usecase::proofs::MaybeProofChecker;
-use uuid::Uuid;
 
 use crate::{
     api::{
@@ -37,8 +30,6 @@ pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10);
 // 50kB
 pub const RUNTIME_WORKER_THREAD_COUNT: usize = 2000;
 pub const MAX_CORS_AGE: u32 = 86400;
-const BATCH_MINT_REQUEST_PATH: &str = "/batch_mint";
-
 #[derive(Clone)]
 pub(crate) struct MiddlewaresData {
     response_middleware: RpcResponseMiddleware,
@@ -63,8 +54,6 @@ pub async fn start_api(
     archives_dir: &str,
     consistence_synchronization_api_threshold: Option<u64>,
     consistence_backfilling_slots_threshold: Option<u64>,
-    batch_mint_service_port: Option<u16>,
-    file_storage_path: &str,
     account_balance_getter: Arc<AccountBalanceGetterImpl>,
     storage_service_base_url: Option<String>,
     native_mint_pubkey: String,
@@ -127,9 +116,6 @@ pub async fn start_api(
         api,
         Some(MiddlewaresData { response_middleware, request_middleware, consistency_checkers }),
         addr,
-        batch_mint_service_port,
-        file_storage_path,
-        pg_client,
         cancellation_token.child_token(),
     )
     .await
@@ -147,9 +133,6 @@ async fn run_api(
     >,
     middlewares_data: Option<MiddlewaresData>,
     addr: SocketAddr,
-    batch_mint_service_port: Option<u16>,
-    file_storage_path: &str,
-    pg_client: Arc<PgClient>,
     cancellation_token: CancellationToken,
 ) -> Result<(), DasApiError> {
     let rpc = RpcApiBuilder::build(
@@ -176,18 +159,8 @@ async fn run_api(
     if let Some(mw) = middlewares_data {
         builder = builder.response_middleware(mw.response_middleware);
     }
-    let server = builder.start_http(&addr);
-    if let Some(port) = batch_mint_service_port {
-        run_batch_mint_service(
-            cancellation_token.child_token(),
-            port,
-            file_storage_path.to_string(),
-            pg_client,
-        )
-        .await;
-    }
+    let server = builder.start_http(&addr).unwrap();
 
-    let server = server.unwrap();
     info!("API Server Started {}", server.address().to_string());
 
     loop {
@@ -204,117 +177,4 @@ async fn run_api(
     info!("API Server ended");
 
     Ok(())
-}
-
-struct BatchMintService {
-    pg_client: Arc<PgClient>,
-    file_storage_path: String,
-}
-
-impl BatchMintService {
-    fn new(pg_client: Arc<PgClient>, file_storage_path: String) -> Self {
-        Self { pg_client, file_storage_path }
-    }
-
-    fn upload_file_page() -> Response<Body> {
-        let html = r#"<!DOCTYPE html>
-                        <html>
-                        <body>
-
-                        <form action="/batch_mint" method="post" enctype="multipart/form-data">
-                          <input type="file" name="file" id="file">
-                          <input type="submit" value="Upload file">
-                        </form>
-
-                        </body>
-                        </html>"#;
-        Response::new(Body::from(html))
-    }
-
-    async fn save_file(file_name: &str, file_bytes: &[u8]) -> std::io::Result<()> {
-        let mut file = File::create(file_name).await?;
-        file.write_all(file_bytes).await?;
-        Ok(())
-    }
-
-    async fn request_handler(
-        self: Arc<Self>,
-        req: Request<Body>,
-    ) -> Result<Response<Body>, hyper::Error> {
-        match (req.method(), req.uri().path()) {
-            (&Method::GET, BATCH_MINT_REQUEST_PATH) => Ok(Self::upload_file_page()),
-            (&Method::POST, BATCH_MINT_REQUEST_PATH) => {
-                let boundary = req
-                    .headers()
-                    .get(CONTENT_TYPE)
-                    .and_then(|ct| ct.to_str().ok())
-                    .and_then(|ct| multer::parse_boundary(ct).ok());
-
-                match boundary {
-                    Some(boundary) => {
-                        let mut multipart = Multipart::new(req.into_body(), boundary);
-                        let file_name = format!("{}.json", Uuid::new_v4());
-                        let full_file_path = format!("{}/{}", self.file_storage_path, &file_name);
-                        while let Ok(Some(field)) = multipart.next_field().await {
-                            let bytes = match field.bytes().await {
-                                Ok(bytes) => bytes,
-                                Err(e) => {
-                                    return Ok(Response::builder()
-                                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                        .body(Body::from(format!("Failed to read file: {}", e)))
-                                        .unwrap())
-                                },
-                            };
-                            if let Err(e) = Self::save_file(&full_file_path, bytes.as_ref()).await {
-                                return Ok(Response::builder()
-                                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                    .body(Body::from(format!("Failed to save file: {}", e)))
-                                    .unwrap());
-                            }
-                        }
-                        if let Err(e) = self.pg_client.insert_new_batch_mint(&file_name).await {
-                            error!("Failed to save batch mint state: {}", e);
-                            return Ok(Response::builder()
-                                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                .body(Body::from("Failed to save file"))
-                                .unwrap());
-                        }
-                        Ok(Response::new(Body::from("File uploaded successfully")))
-                    },
-                    None => Ok(Response::builder()
-                        .status(StatusCode::BAD_REQUEST)
-                        .body(Body::from("BAD REQUEST"))
-                        .unwrap()),
-                }
-            },
-            _ => Ok(Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Body::from("Page not found"))
-                .unwrap()),
-        }
-    }
-}
-
-async fn run_batch_mint_service(
-    cancellation_token: CancellationToken,
-    port: u16,
-    file_storage_path: String,
-    pg_client: Arc<PgClient>,
-) {
-    let addr = ([0, 0, 0, 0], port).into();
-    let batch_mint_service = Arc::new(BatchMintService::new(pg_client, file_storage_path));
-    let make_svc = make_service_fn(move |_conn| {
-        let batch_mint_service = batch_mint_service.clone();
-        async {
-            Ok::<_, hyper::Error>(service_fn(move |req| {
-                batch_mint_service.clone().request_handler(req)
-            }))
-        }
-    });
-    let server = Server::bind(&addr).serve(make_svc).with_graceful_shutdown(async {
-        cancellation_token.cancelled().await;
-    });
-    if let Err(e) = server.await {
-        error!("server error: {}", e);
-    }
 }

@@ -168,7 +168,6 @@ mpl-bubblegum = { version = "2.0.0-beta.5", features = ["serde"] }
 #blockbuster = { git = "https://github.com/metaplex-foundation/blockbuster", rev = "35a2e84" }
 #mpl-bubblegum = { git = "https://github.com/metaplex-foundation/mpl-bubblegum.git", rev = "07678e6", features = ["serde"] }
 
-bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "c9d3ad4" }
 mpl-token-metadata = "4.1.1"
 libreplex_inscriptions = "0.5.1"
 

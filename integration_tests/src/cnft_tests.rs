@@ -1272,7 +1272,7 @@ async fn test_mint_v2_and_update_metadata_v2() {
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
 #[named]
-#[ignore] // parsing error: arsing_result.leaf_update is None, (Debug/FIX)
+#[ignore] //  TransactionParsingError "Failed to parse transaction:  arsing_result.leaf_update is None, (Debug/FIX)
 async fn test_mint_v2_set_non_transferable_v2() {
     let name = trim_test_name(function_name!());
     let setup = TestSetup::new_with_options(
@@ -1301,7 +1301,7 @@ async fn test_mint_v2_set_non_transferable_v2() {
     .await
     .unwrap();
 
-    // assert_eq!(asset["compression"]["seq"], 1);
+    assert_eq!(asset["compression"]["seq"], 1);
     //
     // insta::assert_json_snapshot!(format!("{}__mint", setup.name.clone()), asset);
 
@@ -1317,7 +1317,7 @@ async fn test_mint_v2_set_non_transferable_v2() {
     )
     .await
     .unwrap();
-    // assert_eq!(asset_after["compression"]["seq"], 2);
+    assert_eq!(asset_after["compression"]["seq"], 2);
     //
     // insta::assert_json_snapshot!(format!("{}__set_non_transferable", setup.name.clone()), asset_after);
 }

@@ -438,7 +438,6 @@ pub async fn main() -> Result<(), IngesterError> {
         args.check_proofs_probability,
         args.check_proofs_commitment,
     )));
-    let file_storage_path = args.file_storage_path_container.clone();
 
     if args.run_api.unwrap_or_default() {
         info!("Starting API (Ingester)...");
@@ -479,8 +478,6 @@ pub async fn main() -> Result<(), IngesterError> {
                     &args.archives_dir,
                     args.consistence_synchronization_api_threshold,
                     args.consistence_backfilling_slots_threshold,
-                    args.batch_mint_service_port,
-                    args.file_storage_path_container.as_str(),
                     account_balance_getter,
                     args.storage_service_base_url,
                     args.native_mint_pubkey,
@@ -681,42 +678,6 @@ pub async fn main() -> Result<(), IngesterError> {
         cancellation_token.child_token(),
     )
     .await;
-
-    // if let Ok(arweave) = Arweave::from_keypair_path(
-    //     PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),
-    //     ARWEAVE_BASE_URL.parse().unwrap(),
-    // ) {
-    //     info!("Running batch mint processor...");
-    //
-    //     let arweave = Arc::new(arweave);
-    //     let batch_mint_processor = Arc::new(BatchMintProcessor::new(
-    //         index_pg_storage.clone(),
-    //         primary_rocks_storage.clone(),
-    //         Arc::new(NoopBatchMintTxSender),
-    //         arweave,
-    //         file_storage_path,
-    //         metrics_state.batch_mint_processor_metrics.clone(),
-    //     ));
-    //     let processor_clone = batch_mint_processor.clone();
-    //     usecase::executor::spawn(process_batch_mints(
-    //         processor_clone,
-    //         cancellation_token.child_token(),
-    //     ));
-    // }
-    //
-    // let batch_mint_persister = BatchMintPersister::new(
-    //     primary_rocks_storage.clone(),
-    //     BatchMintDownloaderForPersister,
-    //     metrics_state.batch_mint_persisting_metrics.clone(),
-    // );
-    //
-    // usecase::executor::spawn({
-    //     let cancellation_token = cancellation_token.child_token();
-    //     async move {
-    //         info!("Start batch_mint persister...");
-    //         batch_mint_persister.persist_batch_mints(cancellation_token).await
-    //     }
-    // });
 
     // clean indexes
     for asset_type in ASSET_TYPES {

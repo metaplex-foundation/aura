@@ -1,7 +1,6 @@
 use std::net::AddrParseError;
 
 use blockbuster::error::BlockbusterError;
-use bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError;
 use flatbuffers::InvalidFlatbuffer;
 use interface::error::UsecaseError;
 use plerkle_messenger::MessengerError;
@@ -120,8 +119,6 @@ pub enum IngesterError {
     SolanaSDK(#[from] solana_sdk::program_error::ProgramError),
     #[error("SolanaClient: {0}")]
     SolanaClient(String),
-    #[error("BatchMintValidationError: {0}")]
-    BatchMintValidation(String),
     #[error("FileChecksumMismatch: expected {0}, actual file hash {1}")]
     FileChecksumMismatch(String, String),
     #[error("Anchor {0}")]
@@ -290,12 +287,6 @@ impl From<std::convert::Infallible> for IngesterError {
 impl From<solana_client::client_error::ClientError> for IngesterError {
     fn from(err: solana_client::client_error::ClientError) -> Self {
         IngesterError::SolanaClient(err.to_string())
-    }
-}
-
-impl From<BatchMintValidationError> for IngesterError {
-    fn from(err: BatchMintValidationError) -> Self {
-        IngesterError::BatchMintValidation(err.to_string())
     }
 }
 

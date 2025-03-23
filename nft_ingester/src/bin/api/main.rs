@@ -190,8 +190,6 @@ pub async fn main() -> Result<(), IngesterError> {
                 &args.rocks_archives_dir,
                 args.consistence_synchronization_api_threshold,
                 args.consistence_backfilling_slots_threshold,
-                args.batch_mint_service_port,
-                args.file_storage_path_container.as_str(),
                 account_balance_getter,
                 args.storage_service_base_url,
                 args.native_mint_pubkey,

@@ -1,8 +1,7 @@
 ---
 source: integration_tests/src/cnft_tests.rs
-assertion_line: 41
+assertion_line: 52
 expression: response
-snapshot_kind: text
 ---
 {
   "interface": "V1_NFT",
@@ -31,6 +30,8 @@ snapshot_kind: text
     "compressed": true,
     "data_hash": "11111111111111111111111111111111",
     "creator_hash": "11111111111111111111111111111111",
+    "collection_hash": "11111111111111111111111111111111",
+    "asset_data_hash": "11111111111111111111111111111111",
     "asset_hash": "11111111111111111111111111111111",
     "tree": "tree9kmh23Qwa9K8sZ9rQtYshSwKA85CTEvw5bvTrau",
     "seq": 62,

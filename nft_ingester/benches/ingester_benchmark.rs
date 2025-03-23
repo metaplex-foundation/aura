@@ -5,12 +5,11 @@ use metrics_utils::{
     red::RequestErrorDurationMetrics, BackfillerMetricsConfig, IngesterMetricsConfig,
 };
 use nft_ingester::{
-    backfiller::{DirectBlockParser, TransactionsParser},
-    buffer::Buffer,
+    backfiller::DirectBlockParser, buffer::Buffer,
     processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
     transaction_ingester,
 };
-use rocks_db::{bubblegum_slots::BubblegumSlotGetter, migrator::MigrationState, Storage};
+use rocks_db::{migrator::MigrationState, Storage};
 use setup::TestEnvironment;
 use testcontainers::clients::Cli;
 use tokio::{sync::Mutex, task::JoinSet};
@@ -33,7 +32,6 @@ async fn bench_ingest(
     let bubblegum_updates_processor = Arc::new(BubblegumTxProcessor::new(
         rocks_dest.clone(),
         Arc::new(IngesterMetricsConfig::new()),
-        buffer.json_tasks.clone(),
     ));
 
     let tx_ingester = Arc::new(transaction_ingester::BackfillTransactionIngester::new(

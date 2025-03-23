@@ -47,7 +47,6 @@ use crate::{
 };
 
 pub const BUFFER_PROCESSING_COUNTER: i32 = 10;
-const BATCH_MINT_BATCH_FLUSH_SIZE: usize = 10_000;
 lazy_static! {
     static ref KEY_SET: HashSet<Pubkey> = {
         let mut m = HashSet::new();
@@ -177,13 +176,11 @@ impl BubblegumTxProcessor {
             let tx_update =
                     utils::flatbuffer::transaction_info_generated::transaction_info::root_as_transaction_info(
                         &data.transaction,
-                    ).unwrap();
-            transaction_info_bytes =
-                transaction_parser.map_tx_fb_bytes(tx_update, seen_at).unwrap();
+                    )?;
+            transaction_info_bytes = transaction_parser.map_tx_fb_bytes(tx_update, seen_at)?;
         }
         let transaction_info =
-            plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())
-                .unwrap();
+            plerkle_serialization::root_as_transaction_info(transaction_info_bytes.as_slice())?;
 
         Ok(PlerkleTransactionInfo(transaction_info).try_into()?)
     }
@@ -326,90 +323,57 @@ impl BubblegumTxProcessor {
             InstructionName::UpdateMetadata | InstructionName::UpdateMetadataV2 => {
                 Self::get_update_metadata_update(parsing_result, bundle).map(From::from).map(Ok)?
             },
-            // InstructionName::FinalizeTreeWithRoot
-            // | InstructionName::FinalizeTreeWithRootAndCollection => {
-            //     Self::get_create_tree_with_root_update(parsing_result, bundle)
-            //         .map(From::from)
-            //         .map(Ok)?
-            // },
-            InstructionName::UpdateAssetDataV2 | _ => {
+            InstructionName::UpdateAssetDataV2 => {
+                debug!("Bubblegum: UpdateAssetDataV2 Not Implemented Instruction");
+                Ok(InstructionResult::default())
+            },
+            _ => {
                 debug!("Bubblegum: Not Implemented Instruction");
                 Ok(InstructionResult::default())
-            }, // InstructionName::Unknown => todo!(),
-               // InstructionName::Compress => todo!(),
-               // InstructionName::CreateTree => todo!(),
-               // InstructionName::SetDecompressibleState => todo!(),
+            },
+            // InstructionName::Unknown => todo!(),
+            // InstructionName::Compress => todo!(),
+            // InstructionName::CreateTree => todo!(),
+            // InstructionName::SetDecompressibleState => todo!(),
         };
         let mut instruction = instruction?;
         instruction.tree_update = tree_update;
         Ok(instruction)
     }
 
-    // Mint Batch feature is not yet released to MPL
-    // pub fn get_create_tree_with_root_update(
-    //     parsing_result: &BubblegumInstruction,
-    //     bundle: &InstructionBundle,
-    // ) -> Result<AssetUpdateEvent, IngesterError> {
-    //     if let Some(Payload::FinalizeTreeWithRoot { args, .. }) = &parsing_result.payload {
-    //         let upd = AssetUpdateEvent {
-    //             batch_mint_creation_update: Some(BatchMintToVerify {
-    //                 file_hash: args.metadata_hash.clone(),
-    //                 url: args.metadata_url.clone(),
-    //                 created_at_slot: bundle.slot,
-    //                 signature: Signature::from_str(bundle.txn_id)
-    //                     .map_err(|e| IngesterError::ParseSignatureError(e.to_string()))?,
-    //                 download_attempts: 0,
-    //                 persisting_state: PersistingBatchMintState::ReceivedTransaction,
-    //                 staker: args.staker,
-    //                 collection_mint: args.collection_mint,
-    //             }),
-    //             ..Default::default()
-    //         };
-    //
-    //         return Ok(upd);
-    //     }
-    //
-    //     Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
-    // }
-
     pub fn get_update_owner_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
         if let (Some(le), Some(cl)) = (&parsing_result.leaf_update, &parsing_result.tree_update) {
-            let (
-                id,
-                owner,
-                delegate,
-                _,
-                data_hash,
-                creator_hash,
-                asset_data_hash,
-                flags,
-                collection_hash,
-            ) = extract_leaf_schema(&le.schema);
+            let leaf_schema_model: LeafSchemaModel = extract_leaf_schema(&le.schema);
 
             let leaf = Some(AssetLeaf {
-                pubkey: id,
+                pubkey: leaf_schema_model.id,
                 tree_id: cl.id,
                 leaf: Some(le.leaf_hash.to_vec()),
                 nonce: Some(cl.index as u64),
-                data_hash: Some(data_hash),
-                creator_hash: Some(creator_hash),
+                data_hash: Some(leaf_schema_model.data_hash),
+                creator_hash: Some(leaf_schema_model.creator_hash),
                 leaf_seq: Some(cl.seq),
                 slot_updated: bundle.slot,
-                collection_hash,
-                asset_data_hash,
-                flags,
+                collection_hash: leaf_schema_model.collection_hash,
+                asset_data_hash: leaf_schema_model.asset_data_hash,
+                flags: leaf_schema_model.flags,
             });
             let owner = AssetOwner {
-                pubkey: id,
+                pubkey: leaf_schema_model.id,
                 owner: Updated::new(
                     bundle.slot,
                     Some(UpdateVersion::Sequence(cl.seq)),
-                    Some(owner),
+                    Some(leaf_schema_model.owner),
                 ),
-                delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
+                delegate: get_delegate(
+                    leaf_schema_model.delegate,
+                    leaf_schema_model.owner,
+                    bundle.slot,
+                    cl.seq,
+                ),
                 owner_type: Updated::new(
                     bundle.slot,
                     Some(UpdateVersion::Sequence(cl.seq)),
@@ -428,12 +392,12 @@ impl BubblegumTxProcessor {
             };
             let asset_update = AssetUpdateEvent {
                 update: Some(AssetDynamicUpdate {
-                    pk: id,
+                    pk: leaf_schema_model.id,
                     slot: bundle.slot,
                     leaf,
                     dynamic_data: None,
                 }),
-                owner_update: Some(AssetUpdate { pk: id, details: owner }),
+                owner_update: Some(AssetUpdate { pk: leaf_schema_model.id, details: owner }),
                 ..Default::default()
             };
             return Ok(asset_update);
@@ -499,17 +463,7 @@ impl BubblegumTxProcessor {
         {
             let mut asset_update = AssetUpdateEvent { ..Default::default() };
 
-            let (
-                id,
-                owner,
-                delegate,
-                nonce,
-                data_hash,
-                creator_hash,
-                asset_data_hash,
-                flags,
-                collection_hash,
-            ) = extract_leaf_schema(&le.schema);
+            let leaf_schema_model: LeafSchemaModel = extract_leaf_schema(&le.schema);
 
             let uri = args.uri.trim().replace('\0', "");
 
@@ -534,14 +488,14 @@ impl BubblegumTxProcessor {
 
             let chain_data = json!(chain_data);
             let asset_static_details = AssetStaticDetails {
-                pubkey: id,
+                pubkey: leaf_schema_model.id,
                 specification_asset_class: SpecificationAssetClass::Nft,
                 royalty_target_type: RoyaltyTargetType::Creators,
                 created_at: slot as i64,
                 edition_address: None,
             };
             asset_update.static_update =
-                Some(AssetUpdate { pk: id, details: asset_static_details });
+                Some(AssetUpdate { pk: leaf_schema_model.id, details: asset_static_details });
 
             let creators = {
                 let mut creators = vec![];
@@ -555,23 +509,23 @@ impl BubblegumTxProcessor {
                 creators
             };
             asset_update.update = Some(AssetDynamicUpdate {
-                pk: id,
+                pk: leaf_schema_model.id,
                 slot,
                 leaf: Some(AssetLeaf {
-                    pubkey: id,
+                    pubkey: leaf_schema_model.id,
                     tree_id: *tree_id,
                     leaf: Some(le.leaf_hash.to_vec()),
-                    nonce: Some(nonce),
-                    data_hash: Some(data_hash),
-                    creator_hash: Some(creator_hash),
+                    nonce: Some(leaf_schema_model.nonce),
+                    data_hash: Some(leaf_schema_model.data_hash),
+                    creator_hash: Some(leaf_schema_model.creator_hash),
                     leaf_seq: Some(cl.seq),
                     slot_updated: slot,
-                    collection_hash,
-                    asset_data_hash,
-                    flags,
+                    collection_hash: leaf_schema_model.collection_hash,
+                    asset_data_hash: leaf_schema_model.asset_data_hash,
+                    flags: leaf_schema_model.flags,
                 }),
                 dynamic_data: Some(AssetDynamicDetails {
-                    pubkey: id,
+                    pubkey: leaf_schema_model.id,
                     is_compressed: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), true),
                     is_compressible: Updated::new(
                         slot,
@@ -602,16 +556,26 @@ impl BubblegumTxProcessor {
             });
 
             let asset_authority = AssetAuthority {
-                pubkey: id,
+                pubkey: leaf_schema_model.id,
                 authority: *authority,
                 slot_updated: slot,
                 write_version: None,
             };
-            asset_update.authority_update = Some(AssetUpdate { pk: id, details: asset_authority });
+            asset_update.authority_update =
+                Some(AssetUpdate { pk: leaf_schema_model.id, details: asset_authority });
             let owner = AssetOwner {
-                pubkey: id,
-                owner: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), Some(owner)),
-                delegate: get_delegate(delegate, owner, slot, cl.seq),
+                pubkey: leaf_schema_model.id,
+                owner: Updated::new(
+                    slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    Some(leaf_schema_model.owner),
+                ),
+                delegate: get_delegate(
+                    leaf_schema_model.delegate,
+                    leaf_schema_model.owner,
+                    slot,
+                    cl.seq,
+                ),
                 owner_type: Updated::new(
                     slot,
                     Some(UpdateVersion::Sequence(cl.seq)),
@@ -624,11 +588,12 @@ impl BubblegumTxProcessor {
                 ),
                 is_current_owner: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), true),
             };
-            asset_update.owner_update = Some(AssetUpdate { pk: id, details: owner });
+            asset_update.owner_update =
+                Some(AssetUpdate { pk: leaf_schema_model.id, details: owner });
 
             if let Some(collection) = &args.collection {
                 let asset_collection = AssetCollection {
-                    pubkey: id,
+                    pubkey: leaf_schema_model.id,
                     collection: Updated::new(
                         slot,
                         Some(UpdateVersion::Sequence(cl.seq)),
@@ -642,7 +607,7 @@ impl BubblegumTxProcessor {
                     authority: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), None),
                 };
                 asset_update.collection_update =
-                    Some(AssetUpdate { pk: id, details: asset_collection });
+                    Some(AssetUpdate { pk: leaf_schema_model.id, details: asset_collection });
             }
 
             return Ok(asset_update);
@@ -679,7 +644,6 @@ impl BubblegumTxProcessor {
                         leaf_seq: Some(cl.seq),
                         slot_updated: bundle.slot,
                         flags: None,
-                        ..Default::default()
                     }),
                     dynamic_data: None,
                 }),
@@ -739,36 +703,26 @@ impl BubblegumTxProcessor {
                 },
             };
             let mut asset_update = AssetUpdateEvent { ..Default::default() };
-            let (
-                id,
-                owner,
-                delegate,
-                _,
-                data_hash,
-                creator_hash,
-                asset_data_hash,
-                flags,
-                collection_hash,
-            ) = extract_leaf_schema(&le.schema);
+            let leaf_schema_model: LeafSchemaModel = extract_leaf_schema(&le.schema);
 
             asset_update.update = Some(AssetDynamicUpdate {
-                pk: id,
+                pk: leaf_schema_model.id,
                 slot: bundle.slot,
                 leaf: Some(AssetLeaf {
-                    pubkey: id,
+                    pubkey: leaf_schema_model.id,
                     tree_id: cl.id,
                     leaf: Some(le.leaf_hash.to_vec()),
                     nonce: Some(cl.index as u64),
-                    data_hash: Some(data_hash),
-                    creator_hash: Some(creator_hash),
+                    data_hash: Some(leaf_schema_model.data_hash),
+                    creator_hash: Some(leaf_schema_model.creator_hash),
                     leaf_seq: Some(cl.seq),
                     slot_updated: bundle.slot,
-                    collection_hash,
-                    asset_data_hash,
-                    flags,
+                    collection_hash: leaf_schema_model.collection_hash,
+                    asset_data_hash: leaf_schema_model.asset_data_hash,
+                    flags: leaf_schema_model.flags,
                 }),
                 dynamic_data: Some(AssetDynamicDetails {
-                    pubkey: id,
+                    pubkey: leaf_schema_model.id,
                     is_compressed: Updated::new(
                         bundle.slot,
                         Some(UpdateVersion::Sequence(cl.seq)),
@@ -794,13 +748,18 @@ impl BubblegumTxProcessor {
             });
 
             let owner = AssetOwner {
-                pubkey: id,
+                pubkey: leaf_schema_model.id,
                 owner: Updated::new(
                     bundle.slot,
                     Some(UpdateVersion::Sequence(cl.seq)),
-                    Some(owner),
+                    Some(leaf_schema_model.owner),
                 ),
-                delegate: get_delegate(delegate, owner, bundle.slot, cl.seq),
+                delegate: get_delegate(
+                    leaf_schema_model.delegate,
+                    leaf_schema_model.owner,
+                    bundle.slot,
+                    cl.seq,
+                ),
                 owner_type: Updated::new(
                     bundle.slot,
                     Some(UpdateVersion::Sequence(cl.seq)),
@@ -817,7 +776,8 @@ impl BubblegumTxProcessor {
                     true,
                 ),
             };
-            asset_update.owner_update = Some(AssetUpdate { pk: id, details: owner });
+            asset_update.owner_update =
+                Some(AssetUpdate { pk: leaf_schema_model.id, details: owner });
 
             return Ok(asset_update);
         }
@@ -844,30 +804,29 @@ impl BubblegumTxProcessor {
                 },
             };
 
-            let (id, _, _, _, data_hash, creator_hash, asset_data_hash, flags, collection_hash) =
-                extract_leaf_schema(&le.schema);
+            let leaf_schema_model: LeafSchemaModel = extract_leaf_schema(&le.schema);
 
             asset_update.update = Some(AssetDynamicUpdate {
-                pk: id,
+                pk: leaf_schema_model.id,
                 slot: bundle.slot,
                 leaf: Some(AssetLeaf {
-                    pubkey: id,
+                    pubkey: leaf_schema_model.id,
                     tree_id: cl.id,
                     leaf: Some(le.leaf_hash.to_vec()),
                     nonce: Some(cl.index as u64),
-                    data_hash: Some(data_hash),
-                    creator_hash: Some(creator_hash),
+                    data_hash: Some(leaf_schema_model.data_hash),
+                    creator_hash: Some(leaf_schema_model.creator_hash),
                     leaf_seq: Some(cl.seq),
                     slot_updated: bundle.slot,
-                    collection_hash,
-                    asset_data_hash,
-                    flags,
+                    collection_hash: leaf_schema_model.collection_hash,
+                    asset_data_hash: leaf_schema_model.asset_data_hash,
+                    flags: leaf_schema_model.flags,
                 }),
                 dynamic_data: None,
             });
 
             let collection = AssetCollection {
-                pubkey: id,
+                pubkey: leaf_schema_model.id,
                 collection: Updated::new(
                     bundle.slot,
                     Some(UpdateVersion::Sequence(cl.seq)),
@@ -881,7 +840,8 @@ impl BubblegumTxProcessor {
                 authority: Updated::new(bundle.slot, Some(UpdateVersion::Sequence(cl.seq)), None),
             };
 
-            asset_update.collection_update = Some(AssetUpdate { pk: id, details: collection });
+            asset_update.collection_update =
+                Some(AssetUpdate { pk: leaf_schema_model.id, details: collection });
 
             return Ok(asset_update);
         };
@@ -900,8 +860,7 @@ impl BubblegumTxProcessor {
         {
             let mut asset_update = AssetUpdateEvent { ..Default::default() };
 
-            let (id, _, _, nonce, data_hash, creator_hash, asset_data_hash, flags, collection_hash) =
-                extract_leaf_schema(&le.schema);
+            let leaf_schema_model: LeafSchemaModel = extract_leaf_schema(&le.schema);
 
             let uri = if let Some(uri) = &update_args.uri {
                 uri.replace('\0', "")
@@ -990,23 +949,23 @@ impl BubblegumTxProcessor {
             };
 
             asset_update.update = Some(AssetDynamicUpdate {
-                pk: id,
+                pk: leaf_schema_model.id,
                 slot: bundle.slot,
                 leaf: Some(AssetLeaf {
-                    pubkey: id,
+                    pubkey: leaf_schema_model.id,
                     tree_id: *tree_id,
                     leaf: Some(le.leaf_hash.to_vec()),
-                    nonce: Some(nonce),
-                    data_hash: Some(data_hash),
-                    creator_hash: Some(creator_hash),
+                    nonce: Some(leaf_schema_model.nonce),
+                    data_hash: Some(leaf_schema_model.data_hash),
+                    creator_hash: Some(leaf_schema_model.creator_hash),
                     leaf_seq: Some(cl.seq),
                     slot_updated: bundle.slot,
-                    collection_hash,
-                    asset_data_hash,
-                    flags,
+                    collection_hash: leaf_schema_model.collection_hash,
+                    asset_data_hash: leaf_schema_model.asset_data_hash,
+                    flags: leaf_schema_model.flags,
                 }),
                 dynamic_data: Some(AssetDynamicDetails {
-                    pubkey: id,
+                    pubkey: leaf_schema_model.id,
                     onchain_data: Some(Updated::new(
                         bundle.slot,
                         Some(UpdateVersion::Sequence(cl.seq)),
@@ -1040,63 +999,6 @@ impl BubblegumTxProcessor {
         }
         Err(IngesterError::ParsingError("Ix not parsed correctly".to_string()))
     }
-
-    // pub async fn store_batch_mint_update(
-    //     slot: u64,
-    //     batch_mint: &BatchMint,
-    //     rocks_db: Arc<Storage>,
-    //     signature: Signature,
-    // ) -> Result<(), IngesterError> {
-    //     let mut transaction_result = TransactionResult {
-    //         instruction_results: vec![],
-    //         transaction_signature: Some((
-    //             mpl_bubblegum::programs::MPL_BUBBLEGUM_ID,
-    //             SignatureWithSlot { signature, slot },
-    //         )),
-    //     };
-    //     for batched_mint in batch_mint.batch_mints.iter() {
-    //         let seq = batched_mint.tree_update.seq;
-    //         let event = (&spl_account_compression::events::ChangeLogEventV1::from(
-    //             &batched_mint.tree_update,
-    //         ))
-    //             .into();
-    //         let mut update = Self::get_mint_v1_update(&batched_mint.into(), slot)?;
-    //
-    //         if let Some(dynamic_info) = &update.update {
-    //             if let Some(data) = &dynamic_info.dynamic_data {
-    //                 let url = data.url.value.clone();
-    //
-    //                 if let Some(metadata) = batch_mint.raw_metadata_map.get(&url) {
-    //                     update.offchain_data_update = Some(OffChainData {
-    //                         url: Some(url.clone()),
-    //                         metadata: Some(metadata.to_string()),
-    //                         storage_mutability: url.as_str().into(),
-    //                         last_read_at: Utc::now().timestamp(),
-    //                     });
-    //                 }
-    //             }
-    //         }
-    //
-    //         let mut ix: InstructionResult = update.into();
-    //         ix.tree_update = Some(TreeUpdate {
-    //             tree: batched_mint.tree_update.id,
-    //             seq,
-    //             slot,
-    //             event,
-    //             instruction: "".to_string(),
-    //             tx: signature.to_string(),
-    //         });
-    //
-    //         transaction_result.instruction_results.push(ix);
-    //         if transaction_result.instruction_results.len() >= BATCH_MINT_BATCH_FLUSH_SIZE {
-    //             rocks_db.store_transaction_result(&transaction_result, false, false).await?;
-    //             transaction_result.instruction_results.clear();
-    //         }
-    //     }
-    //     rocks_db.store_transaction_result(&transaction_result, true, false).await?;
-    //
-    //     Ok(())
-    // }
 }
 
 fn use_method_from_mpl_bubblegum_state(
@@ -1116,21 +1018,33 @@ fn get_delegate(delegate: Pubkey, owner: Pubkey, slot: u64, seq: u64) -> Updated
     Updated::new(slot, Some(UpdateVersion::Sequence(seq)), delegate)
 }
 
-fn extract_leaf_schema(
-    schema: &LeafSchema,
-) -> (Pubkey, Pubkey, Pubkey, u64, Hash, Hash, Option<Hash>, Option<u8>, Option<Hash>) {
+struct LeafSchemaModel {
+    id: Pubkey,
+    owner: Pubkey,
+    delegate: Pubkey,
+    nonce: u64,
+    data_hash: Hash,
+    creator_hash: Hash,
+    asset_data_hash: Option<Hash>,
+    flags: Option<u8>,
+    collection_hash: Option<Hash>,
+}
+
+fn extract_leaf_schema(schema: &LeafSchema) -> LeafSchemaModel {
     match schema {
-        LeafSchema::V1 { id, owner, delegate, nonce, data_hash, creator_hash, .. } => (
-            *id,
-            *owner,
-            *delegate,
-            *nonce,
-            Hash::new(data_hash),
-            Hash::new(creator_hash),
-            None,
-            None,
-            None,
-        ),
+        LeafSchema::V1 { id, owner, delegate, nonce, data_hash, creator_hash, .. } => {
+            LeafSchemaModel {
+                id: *id,
+                owner: *owner,
+                delegate: *delegate,
+                nonce: *nonce,
+                data_hash: Hash::new(data_hash),
+                creator_hash: Hash::new(creator_hash),
+                asset_data_hash: None,
+                flags: None,
+                collection_hash: None,
+            }
+        },
         LeafSchema::V2 {
             id,
             owner,
@@ -1142,16 +1056,16 @@ fn extract_leaf_schema(
             asset_data_hash,
             flags,
             ..
-        } => (
-            *id,
-            *owner,
-            *delegate,
-            *nonce,
-            Hash::new(data_hash),
-            Hash::new(creator_hash),
-            Some(Hash::new(asset_data_hash)),
-            Some(*flags),
-            Some(Hash::new(collection_hash)),
-        ),
+        } => LeafSchemaModel {
+            id: *id,
+            owner: *owner,
+            delegate: *delegate,
+            nonce: *nonce,
+            data_hash: Hash::new(data_hash),
+            creator_hash: Hash::new(creator_hash),
+            asset_data_hash: Some(Hash::new(asset_data_hash)),
+            flags: Some(*flags),
+            collection_hash: Some(Hash::new(collection_hash)),
+        },
     }
 }

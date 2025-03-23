@@ -1,8 +1,6 @@
 pub mod asset;
 pub mod asset_previews;
 pub mod asset_signatures;
-
-pub mod batch_mint;
 pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod editions;

@@ -22,9 +22,8 @@ use solana_transaction_status::{
 use sqlx::types::chrono;
 
 use crate::enums::{
-    BatchMintState, ChainMutability, FailedBatchMintState, OwnerType, PersistingBatchMintState,
-    RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions, TaskStatus,
-    TokenMetadataEdition, TokenStandard, UnprocessedAccount, UseMethod,
+    ChainMutability, OwnerType, RoyaltyTargetType, SpecificationAssetClass, SpecificationVersions,
+    TaskStatus, TokenMetadataEdition, TokenStandard, UnprocessedAccount, UseMethod,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq, Hash)]
@@ -519,38 +518,6 @@ pub struct JsonDownloadTask {
     pub status: TaskStatus,
     pub attempts: i16,
     pub max_attempts: i16,
-}
-
-#[derive(Debug, Clone)]
-pub struct BatchMintWithState {
-    pub file_name: String,
-    pub state: BatchMintState,
-    pub error: Option<String>,
-    pub url: Option<String>,
-    pub created_at: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BatchMintToVerify {
-    pub file_hash: String,
-    pub url: String,
-    pub created_at_slot: u64,
-    pub signature: Signature,
-    pub download_attempts: u8,
-    pub persisting_state: PersistingBatchMintState,
-    pub staker: Pubkey,
-    pub collection_mint: Option<Pubkey>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct FailedBatchMint {
-    pub status: FailedBatchMintState,
-    pub file_hash: String,
-    pub url: String,
-    pub created_at_slot: u64,
-    pub signature: Signature,
-    pub download_attempts: u8,
-    pub staker: Pubkey,
 }
 
 impl Default for JsonDownloadTask {

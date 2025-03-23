@@ -54,8 +54,6 @@ pub struct MetricState {
     pub sequence_consistent_gapfill_metrics: Arc<SequenceConsistentGapfillMetricsConfig>,
     pub red_metrics: Arc<RequestErrorDurationMetrics>,
     pub fork_cleaner_metrics: Arc<ForkCleanerMetricsConfig>,
-    pub batch_mint_processor_metrics: Arc<BatchMintProcessorMetricsConfig>,
-    pub batch_mint_persisting_metrics: Arc<BatchMintPersisterMetricsConfig>,
     pub redis_receiver_metrics: Arc<RedisReceiverMetricsConfig>,
     pub registry: Registry,
 }
@@ -81,8 +79,6 @@ impl MetricState {
                 SequenceConsistentGapfillMetricsConfig::new(),
             ),
             fork_cleaner_metrics: Arc::new(ForkCleanerMetricsConfig::new()),
-            batch_mint_processor_metrics: Arc::new(BatchMintProcessorMetricsConfig::new()),
-            batch_mint_persisting_metrics: Arc::new(BatchMintPersisterMetricsConfig::new()),
             red_metrics: Arc::new(RequestErrorDurationMetrics::new()),
             redis_receiver_metrics: Arc::new(RedisReceiverMetricsConfig::new()),
             registry: Registry::default(),
@@ -520,7 +516,6 @@ impl MetricsTrait for MetricState {
         self.json_downloader_metrics.start_time();
         self.sequence_consistent_gapfill_metrics.start_time();
         self.fork_cleaner_metrics.start_time();
-        self.batch_mint_processor_metrics.start_time();
 
         self.api_metrics.register(&mut self.registry);
         self.message_process_metrics.register(&mut self.registry);
@@ -559,7 +554,6 @@ impl MetricsTrait for MetricState {
         self.sequence_consistent_gapfill_metrics.register(&mut self.registry);
         self.red_metrics.register(&mut self.registry);
         self.fork_cleaner_metrics.register(&mut self.registry);
-        self.batch_mint_processor_metrics.register(&mut self.registry);
         self.redis_receiver_metrics.register(&mut self.registry);
     }
 }
@@ -1144,129 +1138,6 @@ impl ForkCleanerMetricsConfig {
             "deleted_items",
             "Total count of deleted cl items",
             self.deleted_items.clone(),
-        );
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BatchMintProcessorMetricsConfig {
-    start_time: Gauge,
-    total_batch_mints: Family<MetricLabel, Counter>,
-    processing_latency: Family<MetricLabel, Histogram>,
-}
-
-impl Default for BatchMintProcessorMetricsConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BatchMintProcessorMetricsConfig {
-    pub fn new() -> Self {
-        Self {
-            start_time: Default::default(),
-            total_batch_mints: Default::default(),
-            processing_latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.0, 12))
-            }),
-        }
-    }
-    pub fn start_time(&self) -> i64 {
-        self.start_time.set(Utc::now().timestamp())
-    }
-    pub fn inc_total_batch_mints(&self, label: &str) -> u64 {
-        self.total_batch_mints.get_or_create(&MetricLabel { name: label.to_owned() }).inc()
-    }
-    pub fn set_processing_latency(&self, label: &str, duration: f64) {
-        self.processing_latency
-            .get_or_create(&MetricLabel { name: label.to_owned() })
-            .observe(duration);
-    }
-    pub fn register(&self, registry: &mut Registry) {
-        registry.register(
-            "batch_mint_processor_start_time",
-            "Batch mint processor start time",
-            self.start_time.clone(),
-        );
-
-        registry.register(
-            "total_batch_mints",
-            "Total batch mints processed",
-            self.total_batch_mints.clone(),
-        );
-
-        registry.register(
-            "batch_mints_processing_latency",
-            "A histogram of fork batch mints processing latency",
-            self.processing_latency.clone(),
-        );
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BatchMintPersisterMetricsConfig {
-    start_time: Gauge,
-    batch_mints_with_status: Family<MetricLabelWithStatus, Counter>,
-    batch_mints: Family<MetricLabel, Counter>,
-    persisting_latency: Family<MetricLabel, Histogram>,
-}
-
-impl Default for BatchMintPersisterMetricsConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BatchMintPersisterMetricsConfig {
-    pub fn new() -> Self {
-        Self {
-            start_time: Default::default(),
-            batch_mints_with_status: Default::default(),
-            batch_mints: Default::default(),
-            persisting_latency: Family::<MetricLabel, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(1.0, 2.0, 12))
-            }),
-        }
-    }
-    pub fn start_time(&self) -> i64 {
-        self.start_time.set(Utc::now().timestamp())
-    }
-    pub fn inc_batch_mints_with_status(&self, label: &str, status: MetricStatus) -> u64 {
-        self.batch_mints_with_status
-            .get_or_create(&MetricLabelWithStatus { name: label.to_owned(), status })
-            .inc()
-    }
-    pub fn inc_batch_mints(&self, label: &str) -> u64 {
-        self.batch_mints.get_or_create(&MetricLabel { name: label.to_owned() }).inc()
-    }
-    pub fn set_persisting_latency(&self, label: &str, duration: f64) {
-        self.persisting_latency
-            .get_or_create(&MetricLabel { name: label.to_owned() })
-            .observe(duration);
-    }
-    pub fn register(&self, registry: &mut Registry) {
-        registry.register(
-            "batch_mint_processor_start_time",
-            "Batch mints processor start time",
-            self.start_time.clone(),
-        );
-
-        registry.register(
-            "batch_mints_with_status",
-            "Batch mints counter with status",
-            self.batch_mints_with_status.clone(),
-        );
-
-        registry.register(
-            "batch_mints",
-            "Batch mints counter without status",
-            self.batch_mints_with_status.clone(),
-        );
-
-        registry.register(
-            "batch_mints_processing_latency",
-            "A histogram of batch mints persisting latency",
-            self.persisting_latency.clone(),
         );
     }
 }

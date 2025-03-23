@@ -1,7 +1,6 @@
 pub mod ack;
 pub mod api;
 pub mod backfiller;
-pub mod batch_mint;
 pub mod buffer;
 pub mod cleaners;
 pub mod config;

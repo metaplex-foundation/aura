@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use entities::models::{BatchMintToVerify, SignatureWithSlot, TransactionInfo};
+use entities::models::{SignatureWithSlot, TransactionInfo};
 use interface::error::StorageError;
 use solana_sdk::pubkey::Pubkey;
 use spl_account_compression::{events::ChangeLogEventV1, state::PathNode};
@@ -30,7 +30,6 @@ pub struct AssetUpdateEvent {
     pub authority_update: Option<AssetUpdate<AssetAuthority>>,
     pub collection_update: Option<AssetUpdate<AssetCollection>>,
     pub offchain_data_update: Option<OffChainData>,
-    pub batch_mint_creation_update: Option<BatchMintToVerify>,
 }
 
 #[derive(Clone, Default)]
