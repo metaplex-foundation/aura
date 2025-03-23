@@ -6,7 +6,7 @@ use itertools::Itertools;
 use nft_ingester::api::error::DasApiError;
 use serde_json::Value;
 use serial_test::serial;
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use solana_sdk::signature::Signature;
 
 use super::common::*;
 

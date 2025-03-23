@@ -28,10 +28,6 @@ use nft_ingester::{
     ack::create_ack_channel,
     api::{account_balance::AccountBalanceGetterImpl, service::start_api},
     backfiller::{BackfillSource, DirectBlockParser},
-    batch_mint::{
-        batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister},
-        batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender},
-    },
     cleaners::indexer_cleaner::clean_syncronized_idxs,
     config::{init_logger, read_version_info, HealthCheckInfo, IngesterClapArgs},
     consts::{RAYDIUM_API_HOST, VERSION_FILE_PATH},

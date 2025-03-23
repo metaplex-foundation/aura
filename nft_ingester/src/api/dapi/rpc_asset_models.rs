@@ -15,7 +15,6 @@ use rocks_db::columns::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use solana_program::hash::Hash;
 
 use crate::api::dapi::response::InscriptionResponse;
 
