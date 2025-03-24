@@ -357,6 +357,7 @@ impl Storage {
             Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
             Self::new_cf_descriptor::<MplCoreCollectionAuthority>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
+            Self::new_cf_descriptor::<asset::AssetLeafDeprecated>(migration_state),
             Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItemDeprecated>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItemV2>(migration_state),

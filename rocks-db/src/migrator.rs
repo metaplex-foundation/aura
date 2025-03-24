@@ -88,6 +88,9 @@ impl Storage {
         migration_applier
             .apply_migration(crate::migrations::clitems_v2::ClItemsV2Migration)
             .await?;
+        migration_applier
+            .apply_migration(crate::migrations::asset_leaf_v2::AssetLeafV2Migration)
+            .await?;
 
         Ok(())
     }
