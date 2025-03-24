@@ -518,17 +518,16 @@ impl BubblegumTxProcessor {
             asset_update.static_update =
                 Some(AssetUpdate { pk: leaf_schema_model.id, details: asset_static_details });
 
-            let creators = {
-                let mut creators = vec![];
-                for creator in args.creators.iter() {
-                    creators.push(Creator {
-                        creator: creator.address,
-                        creator_verified: creator.verified,
-                        creator_share: creator.share,
-                    });
-                }
-                creators
-            };
+            let creators: Vec<Creator> = args
+                .creators
+                .iter()
+                .map(|creator| Creator {
+                    creator: creator.address,
+                    creator_verified: creator.verified,
+                    creator_share: creator.share,
+                })
+                .collect();
+
             asset_update.update = Some(AssetDynamicUpdate {
                 pk: leaf_schema_model.id,
                 slot,
@@ -962,17 +961,14 @@ impl BubblegumTxProcessor {
                 &current_metadata.creators
             };
 
-            let creators = {
-                let mut creators = vec![];
-                for creator in creators_input.iter() {
-                    creators.push(Creator {
-                        creator: creator.address,
-                        creator_verified: creator.verified,
-                        creator_share: creator.share,
-                    });
-                }
-                creators
-            };
+            let creators: Vec<Creator> = creators_input
+                .iter()
+                .map(|creator| Creator {
+                    creator: creator.address,
+                    creator_verified: creator.verified,
+                    creator_share: creator.share,
+                })
+                .collect();
 
             asset_update.update = Some(AssetDynamicUpdate {
                 pk: leaf_schema_model.id,
