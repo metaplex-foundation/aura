@@ -537,7 +537,7 @@ impl Storage {
             },
             asset::AssetLeafDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
-                    "merge_fn_merge_asset_leaf",
+                    "merge_fn_merge_asset_leaf_deprecated",
                     asset::AssetLeafDeprecated::merge_asset_leaf,
                 );
             },
