@@ -7,7 +7,6 @@ use crate::{
     Result,
 };
 
-#[deprecated]
 #[derive(Debug, Clone)]
 pub struct BatchMintWithState {
     pub file_name: String,
@@ -16,7 +15,7 @@ pub struct BatchMintWithState {
     pub url: Option<String>,
     pub created_at: u64,
 }
-#[deprecated]
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum BatchMintState {
     Uploaded,
@@ -28,7 +27,6 @@ pub enum BatchMintState {
     Complete,
 }
 
-#[deprecated]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BatchMintToVerify {
     pub file_hash: String,
@@ -40,7 +38,7 @@ pub struct BatchMintToVerify {
     pub staker: Pubkey,
     pub collection_mint: Option<Pubkey>,
 }
-#[deprecated]
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum PersistingBatchMintState {
     ReceivedTransaction,
@@ -50,7 +48,6 @@ pub enum PersistingBatchMintState {
     StoredUpdate,
 }
 
-#[deprecated]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FailedBatchMint {
     pub status: FailedBatchMintState,
@@ -61,7 +58,7 @@ pub struct FailedBatchMint {
     pub download_attempts: u8,
     pub staker: Pubkey,
 }
-#[deprecated]
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum FailedBatchMintState {
     DownloadFailed,
@@ -107,7 +104,6 @@ impl TypedColumn for FailedBatchMint {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BatchMint {}
 
-#[deprecated]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BatchMintWithStaker {
     pub batch_mint: BatchMint,
