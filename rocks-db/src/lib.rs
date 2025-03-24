@@ -55,7 +55,10 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{ColumnFamilyDescriptor, Options, SliceTransform, DB};
 
 use crate::{
-    columns::asset::TokenMetadataEditionParentIndex,
+    columns::{
+        asset::TokenMetadataEditionParentIndex,
+        batch_mint::{BatchMintToVerify, BatchMintWithStaker, FailedBatchMint},
+    },
     errors::StorageError,
     migrator::{MigrationState, MigrationVersions},
     tree_seq::{TreeSeqIdx, TreesGaps},
@@ -373,6 +376,9 @@ impl Storage {
             Self::new_cf_descriptor::<TokenAccountOwnerIdx>(migration_state),
             Self::new_cf_descriptor::<TokenAccountMintOwnerIdx>(migration_state),
             Self::new_cf_descriptor::<MigrationVersions>(migration_state),
+            Self::new_cf_descriptor::<BatchMintToVerify>(migration_state),
+            Self::new_cf_descriptor::<FailedBatchMint>(migration_state),
+            Self::new_cf_descriptor::<BatchMintWithStaker>(migration_state),
             Self::new_cf_descriptor::<TokenPrice>(migration_state),
             Self::new_cf_descriptor::<AssetPreviews>(migration_state),
             Self::new_cf_descriptor::<UrlToDownload>(migration_state),
@@ -701,6 +707,10 @@ impl Storage {
                     token_accounts::merge_mints,
                 );
             },
+            // Deprecated
+            "FAILED_BATCH_MINT" => {},
+            "BATCH_MINTS" => {},
+            "BATCH_MINT_TO_VERIFY" => {},
             _ => {},
         }
         cf_options
@@ -738,6 +748,10 @@ impl Storage {
             SplMint::NAME,
             AssetCompleteDetails::NAME,
             MplCoreCollectionAuthority::NAME,
+            //Deprecated
+            "FAILED_BATCH_MINT",
+            "BATCH_MINTS",
+            "BATCH_MINT_TO_VERIFY",
         ];
 
         for cf in column_families_to_remove {

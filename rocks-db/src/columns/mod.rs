@@ -5,6 +5,7 @@ pub mod bubblegum_slots;
 pub mod cl_items;
 pub mod editions;
 
+pub mod batch_mint;
 pub mod inscriptions;
 pub mod leaf_signatures;
 pub mod offchain_data;

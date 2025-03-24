@@ -76,7 +76,7 @@ pub async fn init_primary_storage(
         )
         .await?;
 
-        info!("The migration rocksdb process was successful");
+        info!("Migration rocksdb process was successful.");
     }
 
     Ok(Storage::open(db_path, metrics_state.red_metrics.clone(), MigrationState::Last)?)
