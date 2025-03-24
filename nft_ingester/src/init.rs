@@ -12,7 +12,7 @@ use tempfile::TempDir;
 use tokio::process::Command;
 #[cfg(feature = "profiling")]
 use tracing::error;
-use tracing::log::info;
+use tracing::info;
 
 use crate::error::IngesterError;
 

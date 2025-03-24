@@ -525,6 +525,12 @@ impl Storage {
                     asset::AssetLeaf::merge_asset_leaf,
                 );
             },
+            asset::AssetLeafDeprecated::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_leaf",
+                    asset::AssetLeaf::merge_asset_leaf,
+                );
+            },
             asset::AssetCollection::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_collection",

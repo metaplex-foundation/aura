@@ -9,7 +9,7 @@ use rocks_db::{
 };
 use solana_sdk::pubkey::Pubkey;
 use tempfile::TempDir;
-use tracing::log::info;
+use tracing::info;
 
 async fn bench_batch_get_keys(storage: Arc<Storage>, pubkeys: Vec<Pubkey>) {
     storage.asset_dynamic_data.batch_get(pubkeys).await.unwrap();
