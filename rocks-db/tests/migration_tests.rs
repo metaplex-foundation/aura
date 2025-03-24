@@ -1,21 +1,21 @@
 #[cfg(test)]
 mod tests {
     use std::{str::FromStr, sync::Arc};
-    use solana_sdk::hash::Hash;
+
     use entities::models::Updated;
     use metrics_utils::red::RequestErrorDurationMetrics;
     use rocks_db::{
         column::TypedColumn,
         columns::{
+            asset::{AssetLeaf, AssetLeafDeprecated},
             cl_items::{ClItemDeprecated, ClItemKey, ClItemV2},
             offchain_data::{OffChainData, OffChainDataDeprecated},
         },
         migrator::MigrationState,
         Storage,
     };
-    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::{hash::Hash, pubkey::Pubkey};
     use tempfile::TempDir;
-    use rocks_db::columns::asset::{AssetLeaf, AssetLeafDeprecated};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_migration() {
@@ -218,7 +218,7 @@ mod tests {
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(0),
         )
-            .unwrap();
+        .unwrap();
         old_storage.asset_leaf_data_deprecated.put(key.clone(), v0.clone()).expect("should put");
         drop(old_storage);
 
@@ -229,7 +229,7 @@ mod tests {
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(6),
         )
-            .unwrap();
+        .unwrap();
 
         let binding = TempDir::new().unwrap();
         let migration_storage_path = binding.path().to_str().unwrap();
@@ -238,15 +238,15 @@ mod tests {
             migration_storage_path,
             Arc::new(migration_version_manager),
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         let new_storage = Storage::open(
             path,
             Arc::new(RequestErrorDurationMetrics::new()),
             MigrationState::Version(6),
         )
-            .unwrap();
+        .unwrap();
         let migrated_v1 = new_storage
             .db
             .get_pinned_cf(
@@ -265,6 +265,6 @@ mod tests {
         assert_eq!(migrated_v1.flags, None);
         assert_eq!(migrated_v1.collection_hash, None);
         assert_eq!(migrated_v1.asset_data_hash, None);
-        assert_eq!(migrated_v1.pubkey,v0.pubkey,);
+        assert_eq!(migrated_v1.pubkey, v0.pubkey,);
     }
 }

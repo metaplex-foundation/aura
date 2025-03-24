@@ -150,7 +150,6 @@ pub struct Storage {
     pub cl_items_deprecated: Column<cl_items::ClItemDeprecated>,
     pub asset_leaf_data_deprecated: Column<asset::AssetLeafDeprecated>,
     // Deprecated, remove end
-
     pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_offchain_data: Column<OffChainData>,
