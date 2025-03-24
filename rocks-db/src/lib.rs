@@ -148,7 +148,9 @@ pub struct Storage {
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
     pub asset_offchain_data_deprecated: Column<OffChainDataDeprecated>,
     pub cl_items_deprecated: Column<cl_items::ClItemDeprecated>,
+    pub asset_leaf_data_deprecated: Column<asset::AssetLeafDeprecated>,
     // Deprecated, remove end
+
     pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
     pub asset_offchain_data: Column<OffChainData>,
@@ -194,6 +196,7 @@ impl Storage {
         let asset_owner_data = Self::column(db.clone(), red_metrics.clone());
         let asset_owner_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_leaf_data = Self::column(db.clone(), red_metrics.clone());
+        let asset_leaf_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_offchain_data_deprecated = Self::column(db.clone(), red_metrics.clone());
@@ -240,6 +243,7 @@ impl Storage {
             asset_owner_data,
             asset_owner_data_deprecated,
             asset_leaf_data,
+            asset_leaf_data_deprecated,
             asset_collection_data,
             asset_collection_data_deprecated,
             cl_items_deprecated,
