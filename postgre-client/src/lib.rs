@@ -6,7 +6,7 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use sqlx::{
     migrate::Migrator,
     postgres::{PgConnectOptions, PgPoolOptions},
-    ConnectOptions, Error, PgPool, Postgres, QueryBuilder, Row, Transaction,
+    ConnectOptions, Error, Executor, PgPool, Postgres, QueryBuilder, Row, Transaction,
 };
 use tracing::log::LevelFilter;
 
