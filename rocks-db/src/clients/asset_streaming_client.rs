@@ -254,7 +254,7 @@ async fn get_complete_asset_details(
             cli_tree_key: leaf.cli_tree_key,
             cli_node_idx: leaf.cli_node_idx,
         }),
-        asset_leaf: asset_leaf.clone().map(|leaf| {
+        asset_leaf: asset_leaf.map(|leaf| {
             Updated::new(
                 leaf.slot_updated,
                 None,

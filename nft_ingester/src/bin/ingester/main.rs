@@ -10,7 +10,6 @@ use std::{
     time::Duration,
 };
 
-// use arweave_rs::{consts::ARWEAVE_BASE_URL, Arweave};
 use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
 use entities::enums::ASSET_TYPES;

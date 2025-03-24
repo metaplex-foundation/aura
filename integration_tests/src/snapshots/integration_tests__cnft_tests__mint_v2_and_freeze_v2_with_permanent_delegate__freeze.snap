@@ -1,7 +1,7 @@
 ---
 source: integration_tests/src/cnft_tests.rs
-assertion_line: 755
-expression: asset_after_transfer
+assertion_line: 793
+expression: asset_after
 ---
 {
   "interface": "V1_NFT",
@@ -55,7 +55,7 @@ expression: asset_after_transfer
   },
   "creators": [],
   "ownership": {
-    "frozen": false,
+    "frozen": true,
     "non_transferable": true,
     "delegated": false,
     "delegate": null,

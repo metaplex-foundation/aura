@@ -24,7 +24,7 @@ use entities::{
 };
 use lazy_static::lazy_static;
 use metrics_utils::IngesterMetricsConfig;
-use mpl_bubblegum::{types::LeafSchema, InstructionName};
+use mpl_bubblegum::{types::LeafSchema, Flags, InstructionName};
 use num_traits::FromPrimitive;
 use rocks_db::{
     columns::asset::{
@@ -290,7 +290,7 @@ impl BubblegumTxProcessor {
             | InstructionName::SetNonTransferableV2
             | InstructionName::ThawV2
             | InstructionName::ThawAndRevokeV2 => {
-                Self::get_update_owner_update(parsing_result, bundle).map(From::from).map(Ok)?
+                Self::get_cnft_properties_update(parsing_result, bundle).map(From::from).map(Ok)?
             },
             InstructionName::Burn | InstructionName::BurnV2 => {
                 Self::get_burn_update(parsing_result, bundle).map(From::from).map(Ok)?
@@ -341,7 +341,7 @@ impl BubblegumTxProcessor {
         Ok(instruction)
     }
 
-    pub fn get_update_owner_update(
+    pub fn get_cnft_properties_update(
         parsing_result: &BubblegumInstruction,
         bundle: &InstructionBundle,
     ) -> Result<AssetUpdateEvent, IngesterError> {
@@ -361,6 +361,7 @@ impl BubblegumTxProcessor {
                 asset_data_hash: leaf_schema_model.asset_data_hash,
                 flags: leaf_schema_model.flags,
             });
+
             let owner = AssetOwner {
                 pubkey: leaf_schema_model.id,
                 owner: Updated::new(
@@ -390,14 +391,34 @@ impl BubblegumTxProcessor {
                     true,
                 ),
             };
+
+            let is_frozen = is_asset_frozen(leaf_schema_model.flags);
+            let dynamic_data = is_frozen.map(|is_frozen| AssetDynamicDetails {
+                pubkey: leaf_schema_model.id,
+                is_frozen: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    is_frozen,
+                ),
+                is_compressed: Updated::new(
+                    bundle.slot,
+                    Some(UpdateVersion::Sequence(cl.seq)),
+                    true,
+                ),
+                supply: Some(Updated::new(bundle.slot, Some(UpdateVersion::Sequence(cl.seq)), 1)),
+                seq: Some(Updated::new(bundle.slot, Some(UpdateVersion::Sequence(cl.seq)), cl.seq)),
+                ..Default::default()
+            });
+
             let asset_update = AssetUpdateEvent {
                 update: Some(AssetDynamicUpdate {
                     pk: leaf_schema_model.id,
                     slot: bundle.slot,
                     leaf,
-                    dynamic_data: None,
+                    dynamic_data,
                 }),
                 owner_update: Some(AssetUpdate { pk: leaf_schema_model.id, details: owner }),
+
                 ..Default::default()
             };
             return Ok(asset_update);
@@ -526,6 +547,11 @@ impl BubblegumTxProcessor {
                 }),
                 dynamic_data: Some(AssetDynamicDetails {
                     pubkey: leaf_schema_model.id,
+                    is_frozen: Updated::new(
+                        slot,
+                        Some(UpdateVersion::Sequence(cl.seq)),
+                        is_asset_frozen(leaf_schema_model.flags).unwrap_or(false),
+                    ),
                     is_compressed: Updated::new(slot, Some(UpdateVersion::Sequence(cl.seq)), true),
                     is_compressible: Updated::new(
                         slot,
@@ -1030,6 +1056,18 @@ struct LeafSchemaModel {
     collection_hash: Option<Hash>,
 }
 
+fn is_asset_frozen(flags: Option<u8>) -> Option<bool> {
+    if let Some(flags) = flags {
+        let flags_bitfield = Flags::from_bytes([flags]);
+        if flags_bitfield.asset_lvl_frozen() || flags_bitfield.permanent_lvl_frozen() {
+            Some(true)
+        } else {
+            Some(false)
+        }
+    } else {
+        None
+    }
+}
 fn extract_leaf_schema(schema: &LeafSchema) -> LeafSchemaModel {
     match schema {
         LeafSchema::V1 { id, owner, delegate, nonce, data_hash, creator_hash, .. } => {

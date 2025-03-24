@@ -740,7 +740,7 @@ async fn test_process_forked_transaction() {
     };
 
     let mut tx_1_resp: InstructionResult =
-        BubblegumTxProcessor::get_update_owner_update(&normal_tx, &tx_bundle)
+        BubblegumTxProcessor::get_cnft_properties_update(&normal_tx, &tx_bundle)
             .map(From::from)
             .unwrap();
 
@@ -765,7 +765,7 @@ async fn test_process_forked_transaction() {
     };
 
     let mut tx_2_resp: InstructionResult =
-        BubblegumTxProcessor::get_update_owner_update(&forked_tx, &tx_bundle)
+        BubblegumTxProcessor::get_cnft_properties_update(&forked_tx, &tx_bundle)
             .map(From::from)
             .unwrap();
 
