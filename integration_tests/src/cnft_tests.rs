@@ -537,7 +537,7 @@ async fn test_mint_v2_delegate_and_freeze_v2() {
     assert_eq!(asset_after["compression"]["seq"], 2);
     assert_eq!(asset_after["compression"]["flags"], 1);
     assert_eq!(asset_after["ownership"]["frozen"], true);
-    assert_eq!(asset_after["ownership"]["non_transferable"], true);
+    assert_eq!(asset_after["ownership"]["non_transferable"], false);
     assert_eq!(asset_after["ownership"]["delegated"], true);
     assert_eq!(
         asset_after["ownership"]["delegate"],
@@ -604,7 +604,7 @@ async fn test_mint_v2_and_freeze_v2() {
     assert_eq!(asset_after["compression"]["seq"], 3);
     assert_eq!(asset_after["compression"]["flags"], 1);
     assert_eq!(asset_after["ownership"]["frozen"], true);
-    assert_eq!(asset_after["ownership"]["non_transferable"], true);
+    assert_eq!(asset_after["ownership"]["non_transferable"], false);
     assert_eq!(asset_after["ownership"]["delegated"], true);
     assert_eq!(
         asset_after["ownership"]["delegate"],
@@ -705,7 +705,7 @@ async fn test_mint_v2_thaw_and_revoke_v2() {
     assert_eq!(asset["compression"]["seq"], 2);
     assert_eq!(asset["compression"]["flags"], 1);
     assert_eq!(asset["ownership"]["frozen"], true);
-    assert_eq!(asset["ownership"]["non_transferable"], true);
+    assert_eq!(asset["ownership"]["non_transferable"], false);
     assert_eq!(asset["ownership"]["delegated"], true);
     assert_eq!(asset["ownership"]["delegate"], "5LgXYsnFpBC7mhS9aSbKSRc7sUmyFPun6kHazgvnuBvE");
 
@@ -788,7 +788,7 @@ async fn test_mint_v2_and_freeze_v2_with_permanent_delegate() {
     assert_eq!(asset_after["compression"]["seq"], 2);
     assert_eq!(asset_after["compression"]["flags"], 2);
     assert_eq!(asset_after["ownership"]["frozen"], true);
-    assert_eq!(asset_after["ownership"]["non_transferable"], true);
+    assert_eq!(asset_after["ownership"]["non_transferable"], false);
 
     insta::assert_json_snapshot!(format!("{}__freeze", setup.name.clone()), asset_after);
 }

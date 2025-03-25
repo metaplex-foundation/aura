@@ -398,12 +398,7 @@ pub fn asset_to_rpc(
         _ => None,
     };
 
-    let non_transferable = if let Some(flags) = full_asset.asset_leaf.flags {
-        let flags_bitfield = Flags::from_bytes([flags]);
-        Some(flags_bitfield.asset_lvl_frozen() || flags_bitfield.permanent_lvl_frozen())
-    } else {
-        None
-    };
+    let non_transferable = full_asset.asset_leaf.flags.map(|flags| Flags::from_bytes([flags]).non_transferable());
 
     Ok(Some(RpcAsset {
         interface,
