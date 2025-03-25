@@ -8,6 +8,7 @@ use tokio::{
     sync::mpsc::Receiver,
     time::{sleep, Duration},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 
 pub const JSON_BATCH: usize = 300;
@@ -17,24 +18,24 @@ pub const SLEEP_TIME_SECS: u64 = 1;
 pub struct TasksPersister<T: JsonPersister + Send + Sync + 'static> {
     pub persister: Arc<T>,
     pub json_receiver: Receiver<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
-    pub shutdown_rx: tokio::sync::broadcast::Receiver<()>,
+    pub cancellation_token: CancellationToken,
 }
 
 impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
     pub fn new(
         persister: Arc<T>,
         json_receiver: Receiver<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
-        shutdown_rx: tokio::sync::broadcast::Receiver<()>,
+        cancellation_token: CancellationToken,
     ) -> Self {
-        Self { persister, json_receiver, shutdown_rx }
+        Self { persister, json_receiver, cancellation_token }
     }
 
-    pub async fn run(mut self) {
+    pub async fn run(self) {
         let mut buffer = vec![];
         let persister = self.persister.clone();
 
         tokio::select! {
-            _ = self.shutdown_rx.recv() => {
+            _ = self.cancellation_token.cancelled() => {
                 if let Err(e) = self.persister.persist_response(buffer).await {
                     error!("Could not save JSONs to the storage: {:?}", e);
                 } else {

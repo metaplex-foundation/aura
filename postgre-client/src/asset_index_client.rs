@@ -386,7 +386,7 @@ impl AssetIndexStorage for PgClient {
                 file_path,
                 "tasks",
                 temp_postfix.as_str(),
-                "metadata_hash, metadata_url, task_status",
+                "tasks_metadata_hash, tasks_metadata_url, tasks_task_status",
                 true,
                 Some(semaphore),
             )
@@ -534,7 +534,7 @@ impl PgClient {
 
         // Declare the cursor
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "DECLARE all_tasks CURSOR FOR SELECT metadata_hash FROM tasks WHERE metadata_hash IS NOT NULL",
+            "DECLARE all_tasks CURSOR FOR SELECT tasks_metadata_hash FROM tasks WHERE tasks_metadata_hash IS NOT NULL",
         );
         self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, "cursor")
             .await?;

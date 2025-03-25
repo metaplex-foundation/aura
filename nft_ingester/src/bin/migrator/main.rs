@@ -236,18 +236,17 @@ impl JsonMigrator {
 
                     drop(tasks_buffer);
 
-                    let res =
-                        cloned_pg_client.insert_json_download_tasks(&mut tasks_to_insert).await;
+                    let res = pg_client.insert_new_tasks(&mut tasks_to_insert).await;
                     match res {
                         Ok(_) => {
-                            cloned_metrics.inc_tasks_set(
+                            metrics.inc_tasks_set(
                                 "tasks_set",
                                 MetricStatus::SUCCESS,
                                 tasks_to_insert.len() as u64,
                             );
                         },
                         Err(e) => {
-                            cloned_metrics.inc_tasks_set(
+                            metrics.inc_tasks_set(
                                 "tasks_set",
                                 MetricStatus::FAILURE,
                                 tasks_to_insert.len() as u64,

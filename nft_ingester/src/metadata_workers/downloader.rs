@@ -7,13 +7,12 @@ use interface::{
 };
 use tokio::{
     sync::{
-        broadcast::Receiver as ShutdownReceiver,
         mpsc::{error::TryRecvError, Receiver, Sender},
         Mutex,
     },
-    task::{JoinError, JoinSet},
     time::{Duration, Instant},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 
 use crate::metadata_workers::{json_worker::JsonWorker, TaskType};
@@ -27,8 +26,7 @@ pub struct MetadataDownloader {
         Sender<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
     pub pending_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
     pub refresh_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
-    pub shutdown_rx: ShutdownReceiver<()>,
-    pub worker_pool: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+    pub cancellation_token: CancellationToken,
 }
 
 impl MetadataDownloader {
@@ -40,16 +38,14 @@ impl MetadataDownloader {
         )>,
         pending_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
         refresh_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
-        shutdown_rx: ShutdownReceiver<()>,
-        worker_pool: Arc<Mutex<JoinSet<Result<(), JoinError>>>>,
+        cancellation_token: CancellationToken,
     ) -> Self {
         Self {
             json_worker,
             metadata_to_persist_tx,
             pending_metadata_tasks_rx,
             refresh_metadata_tasks_rx,
-            shutdown_rx,
-            worker_pool,
+            cancellation_token,
         }
     }
 
@@ -72,19 +68,17 @@ impl MetadataDownloader {
         };
 
         for _ in 0..parallel_tasks {
-            let mut shutdown_rx = self.shutdown_rx.resubscribe();
+            let cancellation_token = self.cancellation_token.child_token();
             let task_receiver = task_receiver.clone();
             let metadata_to_persist_tx = self.metadata_to_persist_tx.clone();
             let json_worker = self.json_worker.clone();
-            self.worker_pool.lock().await.spawn(async move {
+            usecase::executor::spawn(async move {
                 tokio::select! {
-                    _ = shutdown_rx.recv() => {
+                    _ = cancellation_token.cancelled() => {
                         debug!("Shutting down metadata downloader worker");
                     },
                     _ = Self::process_downloading(task_receiver, metadata_to_persist_tx, json_worker) => {},
                 }
-
-                Ok(())
             });
         }
     }

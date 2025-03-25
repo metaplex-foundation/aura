@@ -246,7 +246,7 @@ fn add_filter_clause<'a>(
         group_clause_required = true;
     }
     if filter.json_uri.is_some() {
-        query_builder.push(" INNER JOIN tasks ON ast_metadata_url_id = metadata_hash ");
+        query_builder.push(" INNER JOIN tasks ON ast_metadata_url_id = tasks_metadata_hash ");
         group_clause_required = true;
     }
     if filter.authority_address.is_some() {
@@ -437,7 +437,7 @@ fn add_filter_clause<'a>(
     }
 
     if let Some(json_uri) = &filter.json_uri {
-        query_builder.push(" AND metadata_url = ");
+        query_builder.push(" AND tasks_metadata_url = ");
         query_builder.push_bind(json_uri);
     }
     group_clause_required
