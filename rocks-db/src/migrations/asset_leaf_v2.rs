@@ -1,19 +1,16 @@
-use std::{cmp::Ordering, sync::Arc};
+use std::cmp::Ordering;
 
 use bincode::{deserialize, serialize};
-use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::MergeOperands;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{hash::Hash, pubkey::Pubkey};
-use tempfile::TempDir;
 use tracing::error;
 
 use crate::{
     column::TypedColumn,
-    columns::asset::{AssetLeaf, SourcedAssetLeaf},
+    columns::asset::AssetLeaf,
     key_encoders::{decode_pubkey, encode_pubkey},
-    migrator::{MigrationState, RocksMigration, SerializationType},
-    Storage,
+    migrator::{RocksMigration, SerializationType},
 };
 
 pub(crate) struct AssetLeafV2Migration;
