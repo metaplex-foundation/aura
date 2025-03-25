@@ -19,8 +19,8 @@ mod tests {
             AssetSortBy, AssetSortDirection, AssetSorting, DisplayOptions, GetAsset, GetAssetBatch,
             GetAssetBatchV0, GetAssetProof, GetAssetSignatures, GetAssetV0, GetAssetsByAuthority,
             GetAssetsByAuthorityV0, GetAssetsByCreator, GetAssetsByCreatorV0, GetAssetsByGroup,
-            GetAssetsByGroupV0, GetAssetsByOwner, GetAssetsByOwnerV0, GetByMethodsOptions,
-            GetCoreFees, GetTokenAccounts, Options, SearchAssets, SearchAssetsOptions,
+            GetAssetsByGroupV0, GetAssetsByOwner, GetAssetsByOwnerV0, GetCoreFees,
+            GetTokenAccounts, SearchAssets,
         },
         enums::{
             AssetType, ChainMutability, Interface, OwnerType, OwnershipModel, RoyaltyModel,
@@ -108,10 +108,10 @@ mod tests {
         {
             let payload = SearchAssets {
                 limit: Some(limit),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -139,10 +139,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 page: Some(1),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -160,10 +160,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 page: Some(2),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -181,10 +181,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 page: Some(3),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -196,10 +196,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 after,
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -217,10 +217,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 before,
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -245,10 +245,10 @@ mod tests {
                     sort_by: AssetSortBy::Created,
                     sort_direction: Some(AssetSortDirection::Desc),
                 }),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -267,10 +267,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 owner_address: ref_value.owner.value.map(|owner| owner.to_string()),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -289,10 +289,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_address: Some(ref_value.creators.value[0].creator.to_string()),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -311,10 +311,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 creator_verified: Some(true),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -334,10 +334,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 authority_address: Some(ref_value.authority.to_string()),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -356,10 +356,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 grouping: Some(("collection".to_string(), ref_value.collection.value.to_string())),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -378,10 +378,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 delegate: Some(ref_value.delegate.value.unwrap().to_string()),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -400,10 +400,10 @@ mod tests {
             let payload = SearchAssets {
                 limit: Some(limit),
                 supply_mint: Some(ref_value.pubkey.to_string()),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -424,10 +424,10 @@ mod tests {
                 royalty_target: Some(ref_value.creators.value[0].creator.to_string()),
                 royalty_target_type: Some(RoyaltyModel::Creators),
                 royalty_amount: Some(ref_value.royalty_amount.value as u32),
-                options: SearchAssetsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 ..Default::default()
             };
             let res = api.search_assets(payload).await.unwrap();
@@ -551,7 +551,10 @@ mod tests {
 
         let payload = GetAsset {
             id: pb.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -672,7 +675,10 @@ mod tests {
 
             let payload = GetAsset {
                 id: pb.to_string(),
-                options: Options { show_unverified_collections: true, ..Default::default() },
+                options: Some(DisplayOptions {
+                    show_unverified_collections: true,
+                    ..Default::default()
+                }),
             };
             let response = api.get_asset(payload).await.unwrap();
             assert_eq!(
@@ -766,7 +772,10 @@ mod tests {
 
         let payload = GetAsset {
             id: pb.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -885,7 +894,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -917,7 +929,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -1060,7 +1075,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_accs[0].pubkey.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -1069,7 +1087,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_accs[1].pubkey.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -1203,7 +1224,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let response = api.get_asset(payload).await.unwrap();
 
@@ -1526,8 +1550,8 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(10),
             page: None,
-            owner: Some(first_owner.to_string()),
-            mint: None,
+            owner_address: Some(first_owner.to_string()),
+            mint_address: None,
             options: None,
             after: None,
             before: None,
@@ -1541,8 +1565,8 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(1000),
             page: Some(2),
-            owner: Some(first_owner.to_string()),
-            mint: None,
+            owner_address: Some(first_owner.to_string()),
+            mint_address: None,
             options: None,
             after: None,
             before: None,
@@ -1556,9 +1580,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(1000),
             page: Some(2),
-            owner: Some(first_owner.to_string()),
-            mint: None,
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: Some(first_owner.to_string()),
+            mint_address: None,
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: None,
             before: None,
             cursor: None,
@@ -1571,9 +1595,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(1000),
             page: Some(1),
-            owner: Some(second_owner.to_string()),
-            mint: Some(second_mint.to_string()),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: Some(second_owner.to_string()),
+            mint_address: Some(second_mint.to_string()),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: None,
             before: None,
             cursor: None,
@@ -1586,9 +1610,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: None,
             page: None,
-            owner: Some(second_owner.to_string()),
-            mint: Some(first_mint.to_string()),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: Some(second_owner.to_string()),
+            mint_address: Some(first_mint.to_string()),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: None,
             before: None,
             cursor: None,
@@ -1702,9 +1726,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(10),
             page: None,
-            owner: owner.clone(),
-            mint: mint.clone(),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: owner.clone(),
+            mint_address: mint.clone(),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: None,
             before: None,
             cursor: None,
@@ -1715,9 +1739,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(10),
             page: None,
-            owner: owner.clone(),
-            mint: mint.clone(),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: owner.clone(),
+            mint_address: mint.clone(),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: None,
             before: None,
             cursor: first_10.cursor.clone(),
@@ -1728,9 +1752,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(20),
             page: None,
-            owner: owner.clone(),
-            mint: mint.clone(),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: owner.clone(),
+            mint_address: mint.clone(),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: None,
             before: None,
             cursor: None,
@@ -1746,9 +1770,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(9),
             page: None,
-            owner: owner.clone(),
-            mint: mint.clone(),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: owner.clone(),
+            mint_address: mint.clone(),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: None,
             // it's safe to do it in test because we want to check how reverse work
             before: first_20.cursor.clone(),
@@ -1767,9 +1791,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: None,
             page: None,
-            owner: owner.clone(),
-            mint: mint.clone(),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: owner.clone(),
+            mint_address: mint.clone(),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             // it's safe to do it in test because we want to check how reverse work
             after: first_10.cursor.clone(),
             before: first_20.cursor,
@@ -1783,9 +1807,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(10),
             page: None,
-            owner: owner.clone(),
-            mint: mint.clone(),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: owner.clone(),
+            mint_address: mint.clone(),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: first_10.cursor,
             before: None,
             cursor: None,
@@ -1796,9 +1820,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(10),
             page: None,
-            owner: owner.clone(),
-            mint: mint.clone(),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: owner.clone(),
+            mint_address: mint.clone(),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: after_first_10.after,
             before: None,
             cursor: None,
@@ -1809,9 +1833,9 @@ mod tests {
         let payload = GetTokenAccounts {
             limit: Some(30),
             page: None,
-            owner: owner.clone(),
-            mint: mint.clone(),
-            options: Some(DisplayOptions { show_zero_balance: true }),
+            owner_address: owner.clone(),
+            mint_address: mint.clone(),
+            options: Some(DisplayOptions { show_zero_balance: true, ..Default::default() }),
             after: None,
             before: None,
             cursor: None,
@@ -1842,10 +1866,10 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: GetByMethodsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
         };
         let res = api.get_assets_by_owner(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
@@ -1877,10 +1901,10 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: GetByMethodsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
         };
         let res = api.get_assets_by_group(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
@@ -1912,10 +1936,10 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: GetByMethodsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
         };
         let res = api.get_assets_by_creator(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
@@ -1947,10 +1971,10 @@ mod tests {
             before: None,
             after: None,
             cursor: None,
-            options: GetByMethodsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
         };
         let res = api.get_assets_by_authority(payload).await.unwrap();
         let res_obj: AssetList = serde_json::from_value(res).unwrap();
@@ -1981,10 +2005,10 @@ mod tests {
                 page: None,
                 before: None,
                 after: None,
-                options: GetByMethodsOptions {
+                options: Some(DisplayOptions {
                     show_unverified_collections: true,
                     ..Default::default()
-                },
+                }),
                 cursor: None
             }
         );
@@ -2142,7 +2166,10 @@ mod tests {
 
         let payload = GetAsset {
             id: pb.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
 
         let response = api.get_asset(payload).await.unwrap();
@@ -2303,11 +2330,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(1000),
             page: Some(1),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 show_grand_total: true,
                 ..Default::default()
-            },
+            }),
             ..Default::default()
         };
         let res = api.search_assets(payload).await.unwrap();
@@ -2317,11 +2344,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(1000),
             page: Some(1),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: false,
                 show_grand_total: true,
                 ..Default::default()
-            },
+            }),
             ..Default::default()
         };
         let res = api.search_assets(payload).await.unwrap();
@@ -2331,10 +2358,10 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(1000),
             page: Some(1),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             ..Default::default()
         };
         let res = api.search_assets(payload).await.unwrap();
@@ -2390,11 +2417,11 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(Pubkey::new_unique().to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 show_native_balance: true,
                 ..Default::default()
-            },
+            }),
             ..Default::default()
         };
         let res = api.search_assets(payload).await.unwrap();
@@ -2489,11 +2516,11 @@ mod tests {
         let api = create_api(&env, None);
         let payload = GetAsset {
             id: generated_assets.collections.first().unwrap().pubkey.to_string(),
-            options: Options {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 show_collection_metadata: true,
                 ..Default::default()
-            },
+            }),
         };
         let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
@@ -2571,7 +2598,10 @@ mod tests {
 
         let payload = GetAsset {
             id: generated_assets.collections.first().unwrap().pubkey.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
@@ -2617,11 +2647,11 @@ mod tests {
         let api = create_api(&env, None);
         let payload = GetAsset {
             id: asset_pk.to_string(),
-            options: Options {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 show_inscription: true,
                 ..Default::default()
-            },
+            }),
         };
         let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
@@ -2633,11 +2663,11 @@ mod tests {
 
         let payload = GetAsset {
             id: asset_pk.to_string(),
-            options: Options {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 show_inscription: false,
                 ..Default::default()
-            },
+            }),
         };
         let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
@@ -2677,10 +2707,10 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::All),
             ..Default::default()
         };
@@ -2810,11 +2840,11 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
@@ -3012,11 +3042,11 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
@@ -3057,11 +3087,11 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_unverified_collections: true,
                 show_zero_balance: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::All),
             ..Default::default()
         };
@@ -3077,11 +3107,11 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: false,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
@@ -3172,7 +3202,10 @@ mod tests {
         let api = create_api(&env, None);
         let payload = GetAsset {
             id: fungible_token_mint1.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let res = api.get_asset(payload).await.unwrap();
         let res: Asset = serde_json::from_value(res).unwrap();
@@ -3331,11 +3364,11 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             // They will be stored as non-fungible tokens
             // because they didn't get into the list of popular fungible tokens
             token_type: Some(TokenType::Fungible),
@@ -3799,7 +3832,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint_key.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let response = api.get_asset(payload.clone()).await.unwrap();
 
@@ -4049,11 +4085,11 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
@@ -4070,11 +4106,11 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::All),
             ..Default::default()
         };
@@ -4089,11 +4125,11 @@ mod tests {
             limit: Some(1000),
             page: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::NonFungible),
             ..Default::default()
         };
@@ -4444,11 +4480,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(2),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::All),
             ..Default::default()
         };
@@ -4467,11 +4503,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(2),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::All),
             cursor: Some(cursor),
             ..Default::default()
@@ -4490,11 +4526,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(2),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::All),
             cursor: Some(cursor),
             ..Default::default()
@@ -4517,11 +4553,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::NonFungible),
             ..Default::default()
         };
@@ -4540,11 +4576,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::NonFungible),
             cursor: Some(cursor),
             ..Default::default()
@@ -4563,11 +4599,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::NonFungible),
             cursor: Some(cursor),
             ..Default::default()
@@ -4589,11 +4625,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::Fungible),
             ..Default::default()
         };
@@ -4612,11 +4648,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::Fungible),
             cursor: Some(cursor),
             ..Default::default()
@@ -4635,11 +4671,11 @@ mod tests {
         let payload = SearchAssets {
             limit: Some(1),
             owner_address: Some(owner.to_string()),
-            options: SearchAssetsOptions {
+            options: Some(DisplayOptions {
                 show_zero_balance: true,
                 show_unverified_collections: true,
                 ..Default::default()
-            },
+            }),
             token_type: Some(TokenType::Fungible),
             cursor: Some(cursor),
             ..Default::default()
@@ -4755,7 +4791,7 @@ mod tests {
             "DASPQfEAVcHp55eFmfstRduMT3dSfoTirFFsMHwUaWaz".to_owned()
         );
         assert_eq!(params_deserialized.only_verified, Some(true));
-        assert_eq!(params_deserialized.options.show_collection_metadata, true);
+        assert_eq!(params_deserialized.options.unwrap().show_collection_metadata, true);
         assert_eq!(params_deserialized.page, Some(1));
 
         // getAssets

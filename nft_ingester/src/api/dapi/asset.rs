@@ -1,7 +1,7 @@
 use std::{collections::HashMap, string::ToString, sync::Arc, time::Duration};
 
 use entities::{
-    api_req_params::{AssetSortDirection, Options},
+    api_req_params::{AssetSortDirection, DisplayOptions},
     enums::SpecificationAssetClass,
     models::AssetSignatureWithPagination,
 };
@@ -122,7 +122,7 @@ fn asset_selected_maps_into_full_asset(
     asset_selected_maps: &AssetSelectedMaps,
     token_prices: &HashMap<String, f64>,
     token_symbols: &HashMap<String, String>,
-    options: &Options,
+    options: &DisplayOptions,
 ) -> Option<FullAsset> {
     if !options.show_unverified_collections {
         if let Some(asset_complete_details) = asset_selected_maps.asset_complete_details.get(id) {
@@ -161,7 +161,7 @@ pub async fn get_by_ids<
 >(
     rocks_db: Arc<Storage>,
     asset_ids: Vec<Pubkey>,
-    options: Options,
+    options: DisplayOptions,
     json_downloader: Option<Arc<JD>>,
     json_persister: Option<Arc<JP>>,
     max_json_to_download: usize,

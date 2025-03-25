@@ -13,7 +13,7 @@ mod tests {
         types::{Collection, Creator, Key},
     };
     use entities::{
-        api_req_params::{GetAsset, Options},
+        api_req_params::{DisplayOptions, GetAsset},
         models::{MetadataInfo, Mint, TokenAccount},
     };
     use interface::account_balance::MockAccountBalanceGetter;
@@ -282,7 +282,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let asset_info = api.get_asset(payload).await.unwrap();
 
@@ -370,7 +373,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let asset_info = api.get_asset(payload).await.unwrap();
 
@@ -458,7 +464,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let asset_info = api.get_asset(payload).await.unwrap();
 
@@ -546,7 +555,10 @@ mod tests {
 
         let payload = GetAsset {
             id: mint.to_string(),
-            options: Options { show_unverified_collections: true, ..Default::default() },
+            options: Some(DisplayOptions {
+                show_unverified_collections: true,
+                ..Default::default()
+            }),
         };
         let asset_info = api.get_asset(payload).await.unwrap();
 

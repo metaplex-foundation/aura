@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use entities::{api_req_params::GetByMethodsOptions, enums::TokenType};
+use entities::{api_req_params::DisplayOptions, enums::TokenType};
 use solana_sdk::{bs58, pubkey::Pubkey};
 use sqlx::{Execute, Postgres, QueryBuilder, Row};
 use tracing::log::debug;
@@ -32,7 +32,7 @@ impl PgClient {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
-        options: &'a GetByMethodsOptions,
+        options: &'a DisplayOptions,
     ) -> Result<(QueryBuilder<'a, Postgres>, bool), IndexDbError> {
         let mut query_builder = QueryBuilder::new(
             "(SELECT ast_pubkey pubkey, ast_slot_created slot_created, ast_slot_updated slot_updated FROM assets_v3 ",
@@ -218,7 +218,7 @@ impl PgClient {
     // Querying total count of records for such request
     pub fn build_grand_total_query<'a>(
         filter: &'a SearchAssetsFilter,
-        options: &'a GetByMethodsOptions,
+        options: &'a DisplayOptions,
     ) -> Result<QueryBuilder<'a, Postgres>, IndexDbError> {
         let mut query_builder = QueryBuilder::new(
             "SELECT COUNT(DISTINCT (assets_v3.ast_pubkey)) AS total_groups FROM assets_v3 ",
@@ -233,7 +233,7 @@ impl PgClient {
 fn add_filter_clause<'a>(
     query_builder: &mut QueryBuilder<'a, Postgres>,
     filter: &'a SearchAssetsFilter,
-    options: &'a GetByMethodsOptions,
+    options: &'a DisplayOptions,
 ) -> bool {
     // todo: remove the inner join with tasks and only perform it if the metadata_url_id is present in the filter
     let mut group_clause_required = false;
@@ -513,7 +513,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
         page: Option<u64>,
         before: Option<String>,
         after: Option<String>,
-        options: &GetByMethodsOptions,
+        options: &DisplayOptions,
     ) -> Result<Vec<AssetSortedIndex>, IndexDbError> {
         let (mut query_builder, order_reversed) =
             Self::build_search_query(filter, order, limit, page, before, after, options)?;
@@ -536,7 +536,7 @@ impl AssetPubkeyFilteredFetcher for PgClient {
     async fn get_grand_total(
         &self,
         filter: &SearchAssetsFilter,
-        options: &GetByMethodsOptions,
+        options: &DisplayOptions,
     ) -> Result<u32, IndexDbError> {
         let mut query_builder = Self::build_grand_total_query(filter, options)?;
         let query = query_builder.build();
