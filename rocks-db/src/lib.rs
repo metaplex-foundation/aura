@@ -60,6 +60,7 @@ use crate::{
         batch_mint::{BatchMintToVerify, BatchMintWithStaker, FailedBatchMint},
     },
     errors::StorageError,
+    migrations::asset_leaf_v2::AssetLeafDeprecated,
     migrator::{MigrationState, MigrationVersions},
     tree_seq::{TreeSeqIdx, TreesGaps},
 };
@@ -148,7 +149,7 @@ pub struct Storage {
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
     pub asset_offchain_data_deprecated: Column<OffChainDataDeprecated>,
     pub cl_items_deprecated: Column<cl_items::ClItemDeprecated>,
-    pub asset_leaf_data_deprecated: Column<asset::AssetLeafDeprecated>,
+    pub asset_leaf_data_deprecated: Column<AssetLeafDeprecated>,
     // Deprecated, remove end
     pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
@@ -360,7 +361,7 @@ impl Storage {
             Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
             Self::new_cf_descriptor::<MplCoreCollectionAuthority>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
-            Self::new_cf_descriptor::<asset::AssetLeafDeprecated>(migration_state),
+            Self::new_cf_descriptor::<AssetLeafDeprecated>(migration_state),
             Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItemDeprecated>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItemV2>(migration_state),
@@ -535,10 +536,10 @@ impl Storage {
                     asset::AssetLeaf::merge_asset_leaf,
                 );
             },
-            asset::AssetLeafDeprecated::NAME => {
+            AssetLeafDeprecated::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_merge_asset_leaf_deprecated",
-                    asset::AssetLeafDeprecated::merge_asset_leaf,
+                    AssetLeafDeprecated::merge_asset_leaf,
                 );
             },
             asset::AssetCollection::NAME => {
