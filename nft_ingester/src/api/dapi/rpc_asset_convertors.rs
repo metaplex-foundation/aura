@@ -398,7 +398,8 @@ pub fn asset_to_rpc(
         _ => None,
     };
 
-    let non_transferable = full_asset.asset_leaf.flags.map(|flags| Flags::from_bytes([flags]).non_transferable());
+    let non_transferable =
+        full_asset.asset_leaf.flags.map(|flags| Flags::from_bytes([flags]).non_transferable());
 
     Ok(Some(RpcAsset {
         interface,
