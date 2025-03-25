@@ -3,9 +3,10 @@ use std::sync::Arc;
 use entities::models::MetadataDownloadTask;
 use postgre_client::PgClient;
 use tokio::{
-    sync::{broadcast::Receiver, mpsc::Sender},
+    sync::mpsc::Sender,
     time::{sleep, Duration},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 use crate::metadata_workers::TaskType;
@@ -14,7 +15,7 @@ pub const SLEEP_TIME_SECS: u64 = 1;
 
 pub struct TasksStreamer {
     pub db_conn: Arc<PgClient>,
-    pub shutdown_rx: Receiver<()>,
+    pub cancellation_token: CancellationToken,
     pub pending_tasks_sender: Sender<MetadataDownloadTask>,
     pub refresh_tasks_sender: Sender<MetadataDownloadTask>,
 }
@@ -22,11 +23,11 @@ pub struct TasksStreamer {
 impl TasksStreamer {
     pub fn new(
         db_conn: Arc<PgClient>,
-        shutdown_rx: Receiver<()>,
+        cancellation_token: CancellationToken,
         pending_tasks_sender: Sender<MetadataDownloadTask>,
         refresh_tasks_sender: Sender<MetadataDownloadTask>,
     ) -> Self {
-        Self { db_conn, shutdown_rx, pending_tasks_sender, refresh_tasks_sender }
+        Self { db_conn, cancellation_token, pending_tasks_sender, refresh_tasks_sender }
     }
 
     pub async fn run(self, num_of_tasks: i32) {
@@ -37,7 +38,6 @@ impl TasksStreamer {
     }
 
     async fn stream_tasks(&self, task_type: TaskType, num_of_tasks: i32) {
-        let mut shutdown_rx = self.shutdown_rx.resubscribe();
         let db_conn = self.db_conn.clone();
         let tasks_sender = match task_type {
             TaskType::Pending => self.pending_tasks_sender.clone(),
@@ -72,7 +72,7 @@ impl TasksStreamer {
                 sleep(Duration::from_secs(SLEEP_TIME_SECS)).await;
                 }
             } => {},
-            _ = shutdown_rx.recv() => {},
+            _ = self.cancellation_token.cancelled() => {},
         }
     }
 }

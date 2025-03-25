@@ -105,7 +105,7 @@ impl PgClient {
             "
             UPDATE tasks 
             SET 
-                tasks_task_status = tmp.task_status, 
+                tasks_task_status = tmp.tasks_task_status, 
                 tasks_etag = tmp.etag, 
                 tasks_last_modified_at = tmp.last_modified_at, 
                 tasks_mutability = tmp.mutability, 
@@ -123,7 +123,7 @@ impl PgClient {
             b.push_bind(task.mutability);
         });
 
-        query_builder.push(") as tmp (task_status, etag, last_modified_at, mutability) WHERE tasks.metadata_hash = tmp.metadata_hash;");
+        query_builder.push(") as tmp (task_status, etag, last_modified_at, mutability) WHERE tasks.tasks_metadata_hash = tmp.tasks_metadata_hash;");
 
         let query = query_builder.build();
         query.execute(&self.pool).await?;
@@ -137,7 +137,7 @@ impl PgClient {
             UPDATE tasks 
             SET
                 tasks_next_try_at = NOW + INTERVAL '1 day' 
-                WHERE tasks.metadata_url IN (
+                WHERE tasks.tasks_metadata_url IN (
         ",
         );
 
@@ -158,23 +158,31 @@ impl PgClient {
         &self,
         tasks_count: i32,
     ) -> Result<Vec<MetadataDownloadTask>, IndexDbError> {
+        // skip locked not to intersect with synchronizer work
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "WITH selected_tasks AS (
-                                    SELECT t.tasks_metadata_hash FROM tasks AS t
-                                    WHERE t.tasks_task_status = 'pending' AND NOW() > t.tasks_next_try_at
-                                    FOR UPDATE SKIP LOCKED
-                                    LIMIT ",
+                SELECT t.tasks_metadata_hash FROM tasks AS t
+                WHERE t.tasks_task_status = 'pending' AND NOW() > t.tasks_next_try_at
+                ORDER BY t.tasks_last_modified_at ASC
+                FOR UPDATE SKIP LOCKED
+                LIMIT ",
         );
         query_builder.push_bind(tasks_count);
 
         query_builder.push(
-                ")
+            ")
             UPDATE tasks t
-            SET tasks_next_try_at = NOW() + INTERVAL '1 day'
-            FROM selected_tasks
-            WHERE t.tasks_metadata_hash = selected_tasks.metadata_hash
-            RETURNING t.tasks_metadata_url, t.tasks_task_status, t.tasks_etag, t.tasks_last_modified_at
-            ORDER BY t.tasks_last_modified_at ASC;",
+            SET
+                tasks_next_try_at = NOW() + INTERVAL '1 day'
+            FROM
+                selected_tasks
+            WHERE
+                t.tasks_metadata_hash = selected_tasks.tasks_metadata_hash
+            RETURNING
+                t.tasks_metadata_url,
+                t.tasks_task_status,
+                t.tasks_etag,
+                t.tasks_last_modified_at;",
         );
 
         let query = query_builder.build();
@@ -210,7 +218,7 @@ impl PgClient {
         query_builder.push(
             ")
             UPDATE tasks t
-            SET next_try_at = NOW() + INTERVAL '1 day'
+            SET tasks_next_try_at = NOW() + INTERVAL '1 day'
             FROM selected_tasks
             WHERE t.tasks_metadata_hash = selected_tasks.tasks_metadata_hash
             RETURNING t.tasks_metadata_url, t.tasks_task_status, t.tasks_etag, t.tasks_last_modified_at;",

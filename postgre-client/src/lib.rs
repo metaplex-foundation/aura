@@ -142,7 +142,7 @@ impl PgClient {
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("INSERT INTO ");
         query_builder.push(table);
-        query_builder.push(" (metadata_hash, metadata_url, task_status) ");
+        query_builder.push(" (tasks_metadata_hash, tasks_metadata_url, tasks_task_status) ");
         query_builder.push_values(metadata_urls.iter(), |mut builder, metadata_url| {
             builder.push_bind(metadata_url.get_metadata_id());
             builder.push_bind(metadata_url.metadata_url.trim().to_owned());
