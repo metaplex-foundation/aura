@@ -68,7 +68,7 @@ pub struct AssetSortedIndex {
     pub sorting_id: String,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SearchAssetsFilter {
     pub specification_version: Option<SpecificationVersions>,
     pub specification_asset_class: Option<SpecificationAssetClass>,
@@ -92,6 +92,7 @@ pub struct SearchAssetsFilter {
     pub token_type: Option<TokenType>,
 }
 
+#[derive(Debug)]
 pub enum AssetSupply {
     Greater(u64),
     Equal(u64),
