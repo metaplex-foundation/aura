@@ -1182,6 +1182,9 @@ pub struct AssetLeaf {
     pub creator_hash: Option<Hash>,
     pub leaf_seq: Option<u64>,
     pub slot_updated: u64,
+    pub collection_hash: Option<Hash>,
+    pub asset_data_hash: Option<Hash>,
+    pub flags: Option<u8>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -3067,7 +3070,7 @@ impl AssetOwner {
 impl TypedColumn for AssetLeaf {
     type KeyType = Pubkey;
     type ValueType = Self;
-    const NAME: &'static str = "ASSET_LEAF";
+    const NAME: &'static str = "ASSET_LEAF_V2";
 
     fn encode_key(pubkey: Pubkey) -> Vec<u8> {
         encode_pubkey(pubkey)
@@ -3158,7 +3161,7 @@ impl AssetLeaf {
             if newer || finalized_newer {
                 // If this new_val outranks the existing value:
                 // store only the AssetLeaf portion
-                match bincode::serialize(&new_val.leaf) {
+                match serialize(&new_val.leaf) {
                     Ok(serialized) => {
                         result = serialized;
                         slot = new_slot;
@@ -3353,7 +3356,6 @@ impl SlotAssetIdxKey {
 }
 #[cfg(test)]
 mod tests {
-
     use std::str::FromStr;
 
     use entities::models::Creator;

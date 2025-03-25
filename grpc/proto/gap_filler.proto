@@ -89,6 +89,9 @@ message AssetLeaf {
     google.protobuf.UInt64Value leaf_seq = 6;
     UpdateVersionValue update_version = 7;
     uint64 slot_updated = 8;
+    google.protobuf.BytesValue collection_hash = 9;
+    google.protobuf.BytesValue asset_data_hash = 10;
+    DynamicUint32Field flags = 11;
 }
 
 message AssetCollection {
@@ -114,7 +117,6 @@ message SplMint {
     uint64 write_version = 8;
 }
 
-// TODO: need also gapfill tokenAccounts and related indexes
 message AssetDetails {
     // From AssetStaticDetails
     bytes pubkey = 1;

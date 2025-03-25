@@ -121,16 +121,6 @@ impl Storage {
                 }
             }
 
-            if let Some(ref batch_mint_update) = update.batch_mint_creation_update {
-                if let Err(e) = self.batch_mint_to_verify.merge_with_batch(
-                    batch,
-                    batch_mint_update.file_hash.clone(),
-                    batch_mint_update,
-                ) {
-                    tracing::error!("Failed to merge batch mint update data: {}", e);
-                }
-            }
-
             if let Some(ref offchain_data) = update.offchain_data_update {
                 if let Err(e) = self.asset_offchain_data.merge_with_batch(
                     batch,

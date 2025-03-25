@@ -2236,6 +2236,9 @@ mod tests {
                     creator_hash: None,
                     leaf_seq: None,
                     slot_updated: 0,
+                    collection_hash: None,
+                    asset_data_hash: None,
+                    flags: None,
                 },
             )
             .await

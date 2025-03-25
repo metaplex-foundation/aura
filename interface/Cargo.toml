@@ -15,14 +15,11 @@ solana-sdk = { workspace = true }
 solana-client = { workspace = true }
 plerkle_serialization = { workspace = true }
 plerkle_messenger = { workspace = true }
-solana-transaction-status = { workspace = true }
 solana-storage-bigtable = { workspace = true }
 solana-program = { workspace = true }
 reqwest = { workspace = true }
 anchor-lang = { workspace = true }
 serde_json = { workspace = true }
-serde_derive = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 jsonrpc-core = { workspace = true }
-bubblegum-batch-sdk = { workspace = true }

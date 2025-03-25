@@ -12,7 +12,6 @@ use tracing::log::LevelFilter;
 
 pub mod asset_filter_client;
 pub mod asset_index_client;
-pub mod batch_mints;
 pub mod converters;
 pub mod core_fees;
 pub mod error;

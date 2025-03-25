@@ -88,6 +88,9 @@ impl Storage {
         migration_applier
             .apply_migration(crate::migrations::clitems_v2::ClItemsV2Migration)
             .await?;
+        migration_applier
+            .apply_migration(crate::migrations::asset_leaf_v2::AssetLeafV2Migration)
+            .await?;
 
         Ok(())
     }
@@ -295,12 +298,12 @@ impl<'a> MigrationApplier<'a> {
     {
         match M::DESERIALIZATION_TYPE {
             SerializationType::Bincode => deserialize::<M::OldDataType>(value).map_err(|e| {
-                error!("migration data deserialize: {:?}, {}", key_decoded, e);
+                error!("migration data deserialize: {:?}, {:?}, {}", key_decoded, value, e);
                 e.into()
             }),
             SerializationType::Cbor => {
                 serde_cbor::from_slice::<M::OldDataType>(value).map_err(|e| {
-                    error!("migration data deserialize: {:?}, {}", key_decoded, e);
+                    error!("migration data deserialize: {:?}, {:?}, {}", key_decoded, value, e);
                     StorageError::Common(e.to_string())
                 })
             },

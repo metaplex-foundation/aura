@@ -35,7 +35,6 @@ use columns::{
         self, AssetAuthority, AssetDynamicDetails, AssetOwner, AssetStaticDetails, AssetsUpdateIdx,
     },
     asset_previews::{AssetPreviews, UrlToDownload},
-    batch_mint::{self, BatchMintWithStaker},
     bubblegum_slots, cl_items,
     inscriptions::{Inscription, InscriptionData},
     leaf_signatures::LeafSignature,
@@ -47,7 +46,7 @@ use columns::{
 };
 use entities::{
     enums::TokenMetadataEdition,
-    models::{AssetSignature, BatchMintToVerify, FailedBatchMint, RawBlock, SplMint, TokenAccount},
+    models::{AssetSignature, RawBlock, SplMint, TokenAccount},
     schedule::ScheduledJob,
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
@@ -56,8 +55,12 @@ use metrics_utils::red::RequestErrorDurationMetrics;
 use rocksdb::{ColumnFamilyDescriptor, Options, SliceTransform, DB};
 
 use crate::{
-    columns::asset::TokenMetadataEditionParentIndex,
+    columns::{
+        asset::TokenMetadataEditionParentIndex,
+        batch_mint::{BatchMintToVerify, BatchMintWithStaker, FailedBatchMint},
+    },
     errors::StorageError,
+    migrations::asset_leaf_v2::AssetLeafDeprecated,
     migrator::{MigrationState, MigrationVersions},
     tree_seq::{TreeSeqIdx, TreesGaps},
 };
@@ -146,6 +149,7 @@ pub struct Storage {
     pub asset_collection_data_deprecated: Column<AssetCollectionDeprecated>,
     pub asset_offchain_data_deprecated: Column<OffChainDataDeprecated>,
     pub cl_items_deprecated: Column<cl_items::ClItemDeprecated>,
+    pub asset_leaf_data_deprecated: Column<AssetLeafDeprecated>,
     // Deprecated, remove end
     pub metadata_mint_map: Column<MetadataMintMap>,
     pub asset_leaf_data: Column<asset::AssetLeaf>,
@@ -165,9 +169,6 @@ pub struct Storage {
     pub token_account_owner_idx: Column<TokenAccountOwnerIdx>,
     pub token_account_mint_owner_idx: Column<TokenAccountMintOwnerIdx>,
     pub asset_signature: Column<AssetSignature>,
-    pub batch_mint_to_verify: Column<BatchMintToVerify>,
-    pub failed_batch_mints: Column<FailedBatchMint>,
-    pub batch_mints: Column<BatchMintWithStaker>,
     pub migration_version: Column<MigrationVersions>,
     pub token_prices: Column<TokenPrice>,
     pub asset_previews: Column<AssetPreviews>,
@@ -195,6 +196,7 @@ impl Storage {
         let asset_owner_data = Self::column(db.clone(), red_metrics.clone());
         let asset_owner_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_leaf_data = Self::column(db.clone(), red_metrics.clone());
+        let asset_leaf_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data = Self::column(db.clone(), red_metrics.clone());
         let asset_collection_data_deprecated = Self::column(db.clone(), red_metrics.clone());
         let asset_offchain_data_deprecated = Self::column(db.clone(), red_metrics.clone());
@@ -217,9 +219,6 @@ impl Storage {
         let token_accounts = Self::column(db.clone(), red_metrics.clone());
         let token_account_owner_idx = Self::column(db.clone(), red_metrics.clone());
         let token_account_mint_owner_idx = Self::column(db.clone(), red_metrics.clone());
-        let batch_mint_to_verify = Self::column(db.clone(), red_metrics.clone());
-        let failed_batch_mints = Self::column(db.clone(), red_metrics.clone());
-        let batch_mints = Self::column(db.clone(), red_metrics.clone());
         let migration_version = Self::column(db.clone(), red_metrics.clone());
         let token_prices = Self::column(db.clone(), red_metrics.clone());
         let asset_previews = Self::column(db.clone(), red_metrics.clone());
@@ -244,6 +243,7 @@ impl Storage {
             asset_owner_data,
             asset_owner_data_deprecated,
             asset_leaf_data,
+            asset_leaf_data_deprecated,
             asset_collection_data,
             asset_collection_data_deprecated,
             cl_items_deprecated,
@@ -267,9 +267,6 @@ impl Storage {
             red_metrics,
             asset_signature,
             token_account_mint_owner_idx,
-            batch_mint_to_verify,
-            failed_batch_mints,
-            batch_mints,
             migration_version,
             token_prices,
             asset_previews,
@@ -364,6 +361,7 @@ impl Storage {
             Self::new_cf_descriptor::<AssetCompleteDetails>(migration_state),
             Self::new_cf_descriptor::<MplCoreCollectionAuthority>(migration_state),
             Self::new_cf_descriptor::<MetadataMintMap>(migration_state),
+            Self::new_cf_descriptor::<AssetLeafDeprecated>(migration_state),
             Self::new_cf_descriptor::<asset::AssetLeaf>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItemDeprecated>(migration_state),
             Self::new_cf_descriptor::<cl_items::ClItemV2>(migration_state),
@@ -538,6 +536,12 @@ impl Storage {
                     asset::AssetLeaf::merge_asset_leaf,
                 );
             },
+            AssetLeafDeprecated::NAME => {
+                cf_options.set_merge_operator_associative(
+                    "merge_fn_merge_asset_leaf_deprecated",
+                    AssetLeafDeprecated::merge_asset_leaf,
+                );
+            },
             asset::AssetCollection::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_asset_collection",
@@ -672,24 +676,6 @@ impl Storage {
                     TokenAccountMintOwnerIdx::merge_values,
                 );
             },
-            BatchMintToVerify::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_batch_mint_to_verify",
-                    batch_mint::merge_batch_mint_to_verify,
-                );
-            },
-            FailedBatchMint::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_failed_batch_mint",
-                    batch_mint::merge_failed_batch_mint,
-                );
-            },
-            BatchMintWithStaker::NAME => {
-                cf_options.set_merge_operator_associative(
-                    "merge_fn_downloaded_batch_mint",
-                    asset::AssetStaticDetails::merge_keep_existing,
-                );
-            },
             MigrationVersions::NAME => {
                 cf_options.set_merge_operator_associative(
                     "merge_fn_migration_versions",
@@ -726,6 +712,10 @@ impl Storage {
                     token_accounts::merge_mints,
                 );
             },
+            // Deprecated
+            "FAILED_BATCH_MINT" => {},
+            "BATCH_MINTS" => {},
+            "BATCH_MINT_TO_VERIFY" => {},
             _ => {},
         }
         cf_options
@@ -752,9 +742,6 @@ impl Storage {
             TokenAccountOwnerIdx::NAME,
             TokenAccountMintOwnerIdx::NAME,
             AssetSignature::NAME,
-            BatchMintToVerify::NAME,
-            FailedBatchMint::NAME,
-            BatchMintWithStaker::NAME,
             MigrationVersions::NAME,
             TokenPrice::NAME,
             AssetPreviews::NAME,
@@ -766,6 +753,10 @@ impl Storage {
             SplMint::NAME,
             AssetCompleteDetails::NAME,
             MplCoreCollectionAuthority::NAME,
+            //Deprecated
+            "FAILED_BATCH_MINT",
+            "BATCH_MINTS",
+            "BATCH_MINT_TO_VERIFY",
         ];
 
         for cf in column_families_to_remove {

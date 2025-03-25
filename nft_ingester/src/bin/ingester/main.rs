@@ -10,7 +10,6 @@ use std::{
     time::Duration,
 };
 
-use arweave_rs::{consts::ARWEAVE_BASE_URL, Arweave};
 use backfill_rpc::rpc::BackfillRPC;
 use clap::Parser;
 use entities::enums::ASSET_TYPES;
@@ -28,10 +27,6 @@ use nft_ingester::{
     ack::create_ack_channel,
     api::{account_balance::AccountBalanceGetterImpl, service::start_api},
     backfiller::{BackfillSource, DirectBlockParser},
-    batch_mint::{
-        batch_mint_persister::{BatchMintDownloaderForPersister, BatchMintPersister},
-        batch_mint_processor::{process_batch_mints, BatchMintProcessor, NoopBatchMintTxSender},
-    },
     cleaners::indexer_cleaner::clean_syncronized_idxs,
     config::{init_logger, read_version_info, HealthCheckInfo, IngesterClapArgs},
     consts::{RAYDIUM_API_HOST, VERSION_FILE_PATH},
@@ -96,6 +91,7 @@ pub async fn main() -> Result<(), IngesterError> {
     info!("Back Filler: {}", args.run_backfiller.unwrap_or(false));
     info!("Bubblegum BackFiller: {}", args.run_bubblegum_backfiller.unwrap_or(false));
     info!("Gap Filler: {}", args.run_gapfiller);
+    info!("Enable rocks migration: {}", args.enable_rocks_migration.unwrap_or(false));
     info!("Run Profiling: {}", args.run_profiling);
     info!("Sequence Consistent Checker: {}", args.run_sequence_consistent_checker);
     info!("Account redis parsing workers: {}", args.redis_accounts_parsing_workers);
@@ -441,7 +437,6 @@ pub async fn main() -> Result<(), IngesterError> {
         args.check_proofs_probability,
         args.check_proofs_commitment,
     )));
-    let file_storage_path = args.file_storage_path_container.clone();
 
     if args.run_api.unwrap_or_default() {
         info!("Starting API (Ingester)...");
@@ -482,8 +477,6 @@ pub async fn main() -> Result<(), IngesterError> {
                     &args.archives_dir,
                     args.consistence_synchronization_api_threshold,
                     args.consistence_backfilling_slots_threshold,
-                    args.batch_mint_service_port,
-                    args.file_storage_path_container.as_str(),
                     account_balance_getter,
                     args.storage_service_base_url,
                     args.native_mint_pubkey,
@@ -684,42 +677,6 @@ pub async fn main() -> Result<(), IngesterError> {
         cancellation_token.child_token(),
     )
     .await;
-
-    if let Ok(arweave) = Arweave::from_keypair_path(
-        PathBuf::from_str(ARWEAVE_WALLET_PATH).unwrap(),
-        ARWEAVE_BASE_URL.parse().unwrap(),
-    ) {
-        info!("Running batch mint processor...");
-
-        let arweave = Arc::new(arweave);
-        let batch_mint_processor = Arc::new(BatchMintProcessor::new(
-            index_pg_storage.clone(),
-            primary_rocks_storage.clone(),
-            Arc::new(NoopBatchMintTxSender),
-            arweave,
-            file_storage_path,
-            metrics_state.batch_mint_processor_metrics.clone(),
-        ));
-        let processor_clone = batch_mint_processor.clone();
-        usecase::executor::spawn(process_batch_mints(
-            processor_clone,
-            cancellation_token.child_token(),
-        ));
-    }
-
-    let batch_mint_persister = BatchMintPersister::new(
-        primary_rocks_storage.clone(),
-        BatchMintDownloaderForPersister,
-        metrics_state.batch_mint_persisting_metrics.clone(),
-    );
-
-    usecase::executor::spawn({
-        let cancellation_token = cancellation_token.child_token();
-        async move {
-            info!("Start batch_mint persister...");
-            batch_mint_persister.persist_batch_mints(cancellation_token).await
-        }
-    });
 
     // clean indexes
     for asset_type in ASSET_TYPES {

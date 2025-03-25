@@ -1,7 +1,7 @@
-use entities::{enums::FailedBatchMintState, models::AssetSignatureKey};
+use entities::models::AssetSignatureKey;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::{batch_mint::FailedBatchMintKey, storage_traits::AssetUpdatedKey, Result};
+use crate::{storage_traits::AssetUpdatedKey, Result};
 
 pub fn encode_u64x2_pubkey(seq: u64, slot: u64, pubkey: Pubkey) -> Vec<u8> {
     // create a key that is a concatenation of the seq, slot and the pubkey allocating memory immediately
@@ -154,29 +154,12 @@ pub fn encode_pubkeyx3(ask: (Pubkey, Pubkey, Pubkey)) -> Vec<u8> {
     key
 }
 
-pub fn encode_failed_batch_mint_key(key: FailedBatchMintKey) -> Vec<u8> {
-    let state = key.status as u8;
-    let hash = key.hash.into_bytes();
-    [vec![state], hash].concat()
-}
-
-pub fn decode_failed_batch_mint_key(key: Vec<u8>) -> Result<FailedBatchMintKey> {
-    Ok(FailedBatchMintKey {
-        status: FailedBatchMintState::try_from(
-            *key.first().ok_or(crate::StorageError::InvalidKeyLength)?,
-        )
-        .map_err(crate::StorageError::Common)?,
-        hash: String::from_utf8(key[1..].to_vec()).unwrap_or_default(),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use solana_sdk::pubkey::Pubkey;
 
     // Import functions from the parent module
     use super::*;
-    use crate::errors::StorageError;
 
     #[test]
     fn test_encode_decode_u64_pubkey() {
@@ -265,38 +248,4 @@ mod tests {
         assert_eq!(decoded.leaf_idx, leaf);
         assert_eq!(decoded.seq, seq);
     }
-
-    #[test]
-    fn test_encode_decode_failed_batch_mint_key() {
-        let key = FailedBatchMintKey {
-            status: FailedBatchMintState::DownloadFailed,
-            hash: "".to_string(),
-        };
-
-        let encoded_key = encode_failed_batch_mint_key(key.clone());
-        let decoded_key = decode_failed_batch_mint_key(encoded_key).unwrap();
-
-        assert_eq!(decoded_key.status, key.status);
-        assert_eq!(decoded_key.hash, key.hash);
-
-        let key2 = FailedBatchMintKey {
-            status: FailedBatchMintState::BatchMintVerifyFailed,
-            hash: "asdfasdf".to_string(),
-        };
-
-        let encoded_key = encode_failed_batch_mint_key(key2.clone());
-        let decoded_key = decode_failed_batch_mint_key(encoded_key).unwrap();
-
-        assert_eq!(decoded_key.status, key2.status);
-        assert_eq!(decoded_key.hash, key2.hash);
-    }
-
-    #[test]
-    fn test_invalid_encode_decode_failed_batch_mint_key() {
-        assert_eq!(
-            matches!(decode_failed_batch_mint_key(vec![]), Err(StorageError::InvalidKeyLength)),
-            true
-        )
-    }
-    // Add more tests as needed...
 }

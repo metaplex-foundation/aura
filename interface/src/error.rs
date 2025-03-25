@@ -40,14 +40,12 @@ pub enum UsecaseError {
     Serialization(String),
     #[error("Anchor {0}")]
     Anchor(String),
-    #[error("BatchMintValidation {0}")]
-    BatchMintValidation(
-        #[from] bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError,
-    ),
     #[error("EmptyPriceFetcherResponse {0}")]
     EmptyPriceFetcherResponse(String),
     #[error("Messenger {0}")]
     Messenger(MessengerError),
+    #[error("Unexpected tree depth={0} and max size={1}")]
+    UnexpectedTreeSize(u32, u32),
 }
 
 #[derive(Debug, Error, PartialEq)]

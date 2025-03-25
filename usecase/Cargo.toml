@@ -30,7 +30,6 @@ anchor-lang = { workspace = true }
 plerkle_serialization = { workspace = true }
 async-recursion = { workspace = true }
 thiserror = { workspace = true }
-bubblegum-batch-sdk = { workspace = true }
 solana-storage-proto = { workspace = true }
 prost = "0.11.9"
 futures = { workspace = true }

@@ -265,6 +265,9 @@ async fn get_complete_asset_details(
                     data_hash: leaf.data_hash,
                     creator_hash: leaf.creator_hash,
                     leaf_seq: leaf.leaf_seq,
+                    collection_hash: leaf.collection_hash,
+                    asset_data_hash: leaf.asset_data_hash,
+                    flags: leaf.flags,
                 },
             )
         }),

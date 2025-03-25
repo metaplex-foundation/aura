@@ -197,6 +197,18 @@ impl TryFrom<AssetDetails> for AssetCompleteDetailsGrpc {
     }
 }
 
+impl From<u8> for DynamicUint32Field {
+    fn from(value: u8) -> Self {
+        Self { value: value as u32, slot_updated: 0, update_version: None }
+    }
+}
+
+impl From<DynamicUint32Field> for u8 {
+    fn from(value: DynamicUint32Field) -> Self {
+        value.value as u8
+    }
+}
+
 impl TryFrom<SplMint> for entities::models::SplMint {
     type Error = GrpcError;
 
@@ -391,6 +403,9 @@ impl From<Updated<entities::models::AssetLeaf>> for AssetLeaf {
             leaf_seq: value.value.leaf_seq,
             slot_updated: value.slot_updated,
             update_version: value.update_version.map(Into::into),
+            collection_hash: value.value.collection_hash.map(|h| h.to_bytes().to_vec()),
+            asset_data_hash: value.value.asset_data_hash.map(|h| h.to_bytes().to_vec()),
+            flags: value.value.flags.map(|v| v.into()),
         }
     }
 }
@@ -529,6 +544,23 @@ impl TryFrom<AssetLeaf> for Updated<entities::models::AssetLeaf> {
                     })
                     .transpose()?,
                 leaf_seq: value.leaf_seq,
+                collection_hash: value
+                    .collection_hash
+                    .map(|h| {
+                        Ok::<_, GrpcError>(Hash::from(
+                            <[u8; 32]>::try_from(h).map_err(GrpcError::PubkeyFrom)?,
+                        ))
+                    })
+                    .transpose()?,
+                asset_data_hash: value
+                    .asset_data_hash
+                    .map(|h| {
+                        Ok::<_, GrpcError>(Hash::from(
+                            <[u8; 32]>::try_from(h).map_err(GrpcError::PubkeyFrom)?,
+                        ))
+                    })
+                    .transpose()?,
+                flags: value.flags.map(|v| v.into()),
             },
         })
     }

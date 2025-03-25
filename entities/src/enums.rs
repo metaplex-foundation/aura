@@ -291,59 +291,6 @@ pub enum TaskStatus {
     Failed,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
-pub enum BatchMintState {
-    Uploaded,
-    ValidationFail,
-    ValidationComplete,
-    UploadedToArweave,
-    FailUploadToArweave,
-    FailSendingTransaction,
-    Complete,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive)]
-pub enum PersistingBatchMintState {
-    ReceivedTransaction,
-    FailedToPersist,
-    SuccessfullyDownload,
-    SuccessfullyValidate,
-    StoredUpdate,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, FromPrimitive, PartialEq)]
-pub enum FailedBatchMintState {
-    DownloadFailed,
-    ChecksumVerifyFailed,
-    BatchMintVerifyFailed,
-    FileSerialization,
-}
-
-impl From<FailedBatchMintState> for u8 {
-    fn from(value: FailedBatchMintState) -> Self {
-        match value {
-            FailedBatchMintState::DownloadFailed => 0,
-            FailedBatchMintState::ChecksumVerifyFailed => 1,
-            FailedBatchMintState::BatchMintVerifyFailed => 2,
-            FailedBatchMintState::FileSerialization => 3,
-        }
-    }
-}
-
-impl TryFrom<u8> for FailedBatchMintState {
-    type Error = String;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(FailedBatchMintState::DownloadFailed),
-            1 => Ok(FailedBatchMintState::ChecksumVerifyFailed),
-            2 => Ok(FailedBatchMintState::BatchMintVerifyFailed),
-            3 => Ok(FailedBatchMintState::FileSerialization),
-            _ => Err("Wrong enum value".to_string()),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum TokenMetadataEdition {
     EditionV1(EditionV1),

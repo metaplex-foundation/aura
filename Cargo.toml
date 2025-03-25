@@ -38,7 +38,6 @@ borsh = "~0.10.3"
 
 # Database infrastructure
 rocksdb = { version = "0.21.0", features = ["multi-threaded-cf"] }
-redis = { version = "0.22.3", features = ["aio", "tokio-comp", "streams", "tokio-native-tls-comp"] }
 sqlx = { version = "0.6.2", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json", "chrono"] }
 uuid = { version = "1.6.1", features = ["v4"] }
 
@@ -71,7 +70,6 @@ tonic = "0.10.2"
 tonic-build = "0.10.2"
 prost = "0.12.3"
 jsonrpc-core = { version = "19.0.0", git = "https://github.com/RequescoS/jsonrpc-response-middleware.git" }
-open-rpc-schema = { version = "0.0.4" }
 axum = "0.6"
 
 
@@ -163,9 +161,13 @@ solana-account-decoder = "~1.18.15"
 anchor-lang = "=0.30.1"
 
 # Metaplex ecosystem
-blockbuster = { git = "https://github.com/metaplex-foundation/blockbuster", rev = "35a2e84" }
-mpl-bubblegum = { git = "https://github.com/metaplex-foundation/mpl-bubblegum.git", rev = "07678e6", features = ["serde"] }
-bubblegum-batch-sdk = { git = "https://github.com/metaplex-foundation/bubblegum-batch-sdk.git", rev = "c9d3ad4" }
+
+blockbuster = "2.4.0-beta.1"
+mpl-bubblegum = { version = "2.0.0-beta.5", features = ["serde"] }
+
+#blockbuster = { git = "https://github.com/metaplex-foundation/blockbuster", rev = "35a2e84" }
+#mpl-bubblegum = { git = "https://github.com/metaplex-foundation/mpl-bubblegum.git", rev = "07678e6", features = ["serde"] }
+
 mpl-token-metadata = "4.1.1"
 libreplex_inscriptions = "0.5.1"
 

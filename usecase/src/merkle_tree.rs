@@ -56,7 +56,7 @@ macro_rules! process_merkle_tree {
             (30, 512) => $macro_name!(30, 512, $($arg)*),
             (30, 1024) => $macro_name!(30, 1024, $($arg)*),
             (30, 2048) => $macro_name!(30, 2048, $($arg)*),
-            _ => Err(bubblegum_batch_sdk::batch_mint_validations::BatchMintValidationError::UnexpectedTreeSize($max_depth, $max_buffer_size).into()),
+            _ => Err(UsecaseError::UnexpectedTreeSize($max_depth, $max_buffer_size).into()),
         }
     };
 }
