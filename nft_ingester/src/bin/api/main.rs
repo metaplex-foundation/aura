@@ -194,6 +194,7 @@ pub async fn main() -> Result<(), IngesterError> {
                 args.storage_service_base_url,
                 args.native_mint_pubkey,
                 token_price_fetcher,
+                args.maximum_healthy_desync,
             )
             .await
             .inspect_err(|e| error!(error = %e, "Start API: {}", e));

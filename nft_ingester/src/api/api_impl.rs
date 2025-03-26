@@ -34,9 +34,10 @@ use crate::{
     api::{
         dapi::{
             converters::SearchAssetsQuery,
+            health::check_health,
             response::{
-                AssetList, Check, GetGroupingResponse, HealthCheckResponse,
-                MasterAssetEditionsInfoResponse, Status, TransactionSignatureListDeprecated,
+                AssetList, GetGroupingResponse, MasterAssetEditionsInfoResponse,
+                TransactionSignatureListDeprecated,
             },
             rpc_asset_models::Asset,
         },
@@ -73,6 +74,7 @@ where
     storage_service_base_path: Option<String>,
     token_price_fetcher: Arc<TPF>,
     native_mint_pubkey: String,
+    maximum_healthy_desync: u64,
 }
 
 pub fn not_found() -> DasApiError {
@@ -104,6 +106,7 @@ where
         storage_service_base_path: Option<String>,
         token_price_fetcher: Arc<TPF>,
         native_mint_pubkey: String,
+        maximum_healthy_desync: u64,
     ) -> Self {
         DasApi {
             pg_client,
@@ -120,6 +123,7 @@ where
             storage_service_base_path,
             token_price_fetcher,
             native_mint_pubkey,
+            maximum_healthy_desync,
         }
     }
 
@@ -127,24 +131,14 @@ where
         let label = "check_health";
         self.metrics.inc_requests(label);
         let latency_timer = Instant::now();
-        let mut overall_status = Status::Ok;
 
-        //List of Checks
-        let mut check = Check::new("PostgresDB".to_string());
-
-        if self.pg_client.check_health().await.is_err() {
-            overall_status = Status::Unhealthy;
-            check.status = Status::Unhealthy;
-            check.description = Some(DasApiError::InternalDbError.to_string());
-        }
-
-        let response = HealthCheckResponse {
-            status: overall_status,
-            app_version: self.health_check_info.app_version.clone(),
-            node_name: self.health_check_info.node_name.clone(),
-            checks: vec![check],
-            image_info: self.health_check_info.image_info.clone(),
-        };
+        let response = check_health(
+            self.health_check_info.clone(),
+            self.pg_client.clone(),
+            self.rocks_db.clone(),
+            self.maximum_healthy_desync,
+        )
+        .await?;
 
         self.metrics.set_latency(label, latency_timer.elapsed().as_millis() as f64);
 

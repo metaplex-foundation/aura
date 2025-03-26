@@ -23,7 +23,7 @@ pub struct GetGroupingResponse {
     pub group_size: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq)]
 pub struct HealthCheckResponse {
     pub status: Status,
     pub app_version: String,
@@ -32,9 +32,10 @@ pub struct HealthCheckResponse {
     pub checks: Vec<Check>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_info: Option<String>,
+    pub sync_info: SyncInfo,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq)]
 pub struct Check {
     pub status: Status,
     pub name: String,
@@ -48,12 +49,20 @@ impl Check {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Status {
     Ok,
     Degraded,
     Unhealthy,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, JsonSchema)]
+pub struct SyncInfo {
+    pub last_sync_seq_pg_fungible: Option<u64>,
+    pub last_sync_seq_pg_nft: Option<u64>,
+    pub last_sync_seq_rocksdb_fungible: Option<u64>,
+    pub last_sync_seq_rocksdb_nft: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default, JsonSchema)]

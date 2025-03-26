@@ -50,6 +50,7 @@ mod tests {
         },
         cleaners::indexer_cleaner::clean_syncronized_idxs,
         config::{HealthCheckInfo, JsonMiddlewareConfig},
+        consts::DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         json_worker::JsonWorker,
         price_fetcher::{CoinGeckoPriceFetcher, SolanaPriceUpdater},
         processors::account_based::{
@@ -2068,6 +2069,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         );
 
         let pb = Pubkey::new_unique();
@@ -2218,6 +2220,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         );
 
         let asset_id = Pubkey::new_unique();
@@ -2387,6 +2390,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         );
 
         let payload = SearchAssets {
@@ -3663,6 +3667,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         )
     }
 
@@ -3702,6 +3707,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         );
 
         let token_updates_processor =
@@ -4656,6 +4662,268 @@ mod tests {
             "We have retrieved everything. There are no assets left for this owner."
         );
         assert!(res.cursor.is_none(), "Cursor must be empty after the iteration is finished.");
+    }
+
+    // A little explainer about the numbers 100, 4, and 104.
+    // Initially, we generate 100 assets, which all get counted as
+    // AssetType::NonFungible. Then, we process 2 more mint accounts and
+    // 2 more token accounts. They get counted as NonFungible too.
+    //
+    // When performing the first check before any synchronizations,
+    // postgres has synchronized the 100 updates done in setup,
+    // and rocks has 4 more updates from the operations we perform in the test.
+    //
+    // When performing the second check, having ran the syncronization,
+    // postgres gets correctly updated and gets synchronized with rocksdb in the healthcheck.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_full_healthcheck() {
+        use nft_ingester::api::dapi::response::*;
+        let cnt = 100;
+        let cli = Cli::default();
+        let (env, _) = setup::TestEnvironment::create_noise(&cli, cnt, 100).await;
+
+        let synchronizer = nft_ingester::index_synchronizer::Synchronizer::new(
+            env.rocks_env.storage.clone(),
+            env.pg_env.client.clone(),
+            200_000,
+            "".to_string(),
+            Arc::new(SynchronizerMetricsConfig::new()),
+            1,
+        );
+
+        // create two real fungible tokens
+        let fungible_token_mint1 = Pubkey::new_unique();
+        let fungible_token_mint2 = Pubkey::new_unique();
+        let mint3 = Mint {
+            pubkey: fungible_token_mint1,
+            supply: 1_000,
+            decimals: 4,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 10,
+            write_version: 10,
+            extensions: None,
+        };
+        let mint4 = Mint {
+            pubkey: fungible_token_mint2,
+            supply: 1_000,
+            decimals: 4,
+            mint_authority: None,
+            freeze_authority: None,
+            token_program: Default::default(),
+            slot_updated: 7,
+            write_version: 10,
+            extensions: None,
+        };
+
+        let owner = Pubkey::new_unique();
+        let fungible_token_account1 = Pubkey::new_unique();
+        let fungible_token_account2 = Pubkey::new_unique();
+        let token_account3 = TokenAccount {
+            pubkey: fungible_token_account1,
+            mint: fungible_token_mint1,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 0,
+            write_version: 10,
+        };
+        let token_account4 = TokenAccount {
+            pubkey: fungible_token_account2,
+            mint: fungible_token_mint2,
+            delegate: None,
+            owner,
+            extensions: None,
+            frozen: false,
+            delegated_amount: 0,
+            slot_updated: 10,
+            amount: 30000,
+            write_version: 10,
+        };
+
+        let ftm_complete1 = AssetCompleteDetails {
+            pubkey: fungible_token_mint1,
+            static_details: Some(AssetStaticDetails {
+                pubkey: fungible_token_mint1,
+                specification_asset_class: SpecificationAssetClass::FungibleToken,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: fungible_token_mint1,
+                owner: Updated::new(100, Some(UpdateVersion::WriteVersion(100)), Some(owner)),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            }),
+            ..Default::default()
+        };
+
+        let ftm_complete2 = AssetCompleteDetails {
+            pubkey: fungible_token_mint2,
+            static_details: Some(AssetStaticDetails {
+                pubkey: fungible_token_mint2,
+                specification_asset_class: SpecificationAssetClass::FungibleAsset,
+                royalty_target_type: RoyaltyTargetType::Single,
+                created_at: 10,
+                edition_address: None,
+            }),
+            owner: Some(AssetOwner {
+                pubkey: fungible_token_mint2,
+                owner: Updated::new(100, Some(UpdateVersion::WriteVersion(100)), Some(owner)),
+                delegate: Default::default(),
+                owner_type: Default::default(),
+                owner_delegate_seq: Default::default(),
+                is_current_owner: Updated::new(12, Some(UpdateVersion::Sequence(12)), true),
+            }),
+            ..Default::default()
+        };
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                fungible_token_mint1,
+                ftm_complete1.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        env.rocks_env
+            .storage
+            .db
+            .put_cf(
+                &env.rocks_env.storage.db.cf_handle(AssetCompleteDetails::NAME).unwrap(),
+                fungible_token_mint2,
+                ftm_complete2.convert_to_fb_bytes(),
+            )
+            .unwrap();
+
+        let mut batch_storage = BatchSaveStorage::new(
+            env.rocks_env.storage.clone(),
+            10,
+            Arc::new(IngesterMetricsConfig::new()),
+        );
+        let token_accounts_processor =
+            TokenAccountsProcessor::new(Arc::new(IngesterMetricsConfig::new()));
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                fungible_token_account1,
+                &token_account3,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_fungible_token_account(
+                &mut batch_storage,
+                fungible_token_account2,
+                &token_account4,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account1,
+                &token_account3,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_token_account(
+                &mut batch_storage,
+                fungible_token_account2,
+                &token_account4,
+            )
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint3, &Default::default())
+            .unwrap();
+        token_accounts_processor
+            .transform_and_save_mint_account(&mut batch_storage, &mint4, &Default::default())
+            .unwrap();
+        batch_storage.flush().unwrap();
+
+        let api = create_api(&env, None);
+
+        let response = api.check_health().await.unwrap();
+        let expected_response = HealthCheckResponse {
+            status: Status::Unhealthy,
+            app_version: "1.0".to_string(),
+            node_name: Some("test".to_string()),
+            checks: vec![
+                Check { status: Status::Ok, name: "PostgresDB".to_string(), description: None },
+                Check {
+                    status: Status::Unhealthy,
+                    name: "FungibleSync".to_string(),
+                    description: Some(DasApiError::InternalPostgresError.to_string()),
+                },
+                Check {
+                    status: Status::Ok,
+                    name: "NonFungibleSync".to_string(),
+                    description: None,
+                },
+            ],
+            image_info: None,
+            sync_info: nft_ingester::api::dapi::response::SyncInfo {
+                last_sync_seq_pg_fungible: None,
+                last_sync_seq_pg_nft: Some(100),
+                last_sync_seq_rocksdb_fungible: None,
+                last_sync_seq_rocksdb_nft: Some(104),
+            },
+        };
+
+        assert_eq!(
+            serde_json::from_value::<HealthCheckResponse>(response).unwrap(),
+            expected_response
+        );
+
+        let synchronizer = Arc::new(synchronizer);
+        for asset_type in ASSET_TYPES {
+            let synchronizer = synchronizer.clone();
+            let _ = match asset_type {
+                AssetType::Fungible => {
+                    synchronizer
+                        .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
+                        .await
+                },
+                AssetType::NonFungible => {
+                    synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await
+                },
+            };
+        }
+
+        let response = api.check_health().await.unwrap();
+        let expected_response = HealthCheckResponse {
+            status: Status::Ok,
+            app_version: "1.0".to_string(),
+            node_name: Some("test".to_string()),
+            checks: vec![
+                Check { status: Status::Ok, name: "PostgresDB".to_string(), description: None },
+                Check { status: Status::Ok, name: "FungibleSync".to_string(), description: None },
+                Check {
+                    status: Status::Ok,
+                    name: "NonFungibleSync".to_string(),
+                    description: None,
+                },
+            ],
+            image_info: None,
+            sync_info: nft_ingester::api::dapi::response::SyncInfo {
+                last_sync_seq_pg_fungible: Some(4),
+                last_sync_seq_pg_nft: Some(104),
+                last_sync_seq_rocksdb_fungible: Some(4),
+                last_sync_seq_rocksdb_nft: Some(104),
+            },
+        };
+
+        assert_eq!(
+            serde_json::from_value::<HealthCheckResponse>(response).unwrap(),
+            expected_response
+        );
     }
 
     /// More test cases covered in the regular_nft_tests.rs/test_search_by_owner_with_show_zero_balance_false

@@ -7,6 +7,7 @@ mod get_asset_batch;
 pub mod get_asset_signatures;
 pub mod get_core_fees;
 pub mod get_token_accounts;
+pub mod health;
 mod model;
 pub mod response;
 pub mod rpc_asset_convertors;
