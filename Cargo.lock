@@ -3887,6 +3887,7 @@ dependencies = [
  "plerkle_messenger",
  "plerkle_serialization",
  "reqwest",
+ "reqwest-middleware",
  "serde_json",
  "solana-client",
  "solana-program",
@@ -3895,6 +3896,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.7.14",
+ "url",
 ]
 
 [[package]]

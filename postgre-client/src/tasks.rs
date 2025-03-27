@@ -109,7 +109,7 @@ impl PgClient {
                 tasks_etag = tmp.etag, 
                 tasks_last_modified_at = tmp.last_modified_at, 
                 tasks_mutability = tmp.mutability, 
-                tasks_next_try_at = NOW + INTERVAL '1 day'
+                tasks_next_try_at = NOW() + INTERVAL '1 day'
                 FROM (
         ",
         );
@@ -120,10 +120,17 @@ impl PgClient {
             b.push_bind(task.status);
             b.push_bind(task.etag.clone());
             b.push_bind(task.last_modified_at);
-            b.push_bind(task.mutability);
+            b.push_bind(task.mutability.clone());
+
+            let tasks_next_try_at = if &task.mutability == "mutable" {
+                Some(Utc::now() + chrono::Duration::days(1))
+            } else {
+                None
+            };
+            b.push_bind(tasks_next_try_at);
         });
 
-        query_builder.push(") as tmp (task_status, etag, last_modified_at, mutability) WHERE tasks.tasks_metadata_hash = tmp.tasks_metadata_hash;");
+        query_builder.push(") as tmp (task_status, etag, last_modified_at, mutability, tasks_next_try_at) WHERE tasks.tasks_metadata_hash = tmp.tasks_metadata_hash;");
 
         let query = query_builder.build();
         query.execute(&self.pool).await?;
@@ -136,7 +143,7 @@ impl PgClient {
             "
             UPDATE tasks 
             SET
-                tasks_next_try_at = NOW + INTERVAL '1 day' 
+                tasks_next_try_at = NOW() + INTERVAL '1 day' 
                 WHERE tasks.tasks_metadata_url IN (
         ",
         );
