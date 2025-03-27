@@ -489,8 +489,8 @@ impl AssetIndexStorage for PgClient {
 }
 
 #[derive(sqlx::FromRow, Debug)]
-struct TaskIdRawResponse {
-    pub(crate) metadata_hash: Vec<u8>,
+struct TasksMetadataHashRawResponse {
+    pub(crate) tasks_metadata_hash: Vec<u8>,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -543,7 +543,7 @@ impl PgClient {
         loop {
             let mut query_builder: QueryBuilder<'_, Postgres> =
                 QueryBuilder::new("FETCH 10000 FROM all_tasks");
-            let query = query_builder.build_query_as::<TaskIdRawResponse>();
+            let query = query_builder.build_query_as::<TasksMetadataHashRawResponse>();
             let rows = query.fetch_all(&mut *transaction).await.map_err(|e| {
                 self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "FETCH_CURSOR");
                 IndexDbError::QueryExecErr(e)
@@ -555,7 +555,7 @@ impl PgClient {
             }
 
             for row in rows {
-                set.insert(row.metadata_hash);
+                set.insert(row.tasks_metadata_hash);
             }
         }
 
