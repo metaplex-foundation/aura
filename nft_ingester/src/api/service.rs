@@ -58,6 +58,7 @@ pub async fn start_api(
     storage_service_base_url: Option<String>,
     native_mint_pubkey: String,
     token_price_fetcher: Arc<RaydiumTokenPriceFetcher>,
+    maximum_healthy_desync: u64,
 ) -> Result<(), DasApiError> {
     let response_middleware = RpcResponseMiddleware {};
     let request_middleware = RpcRequestMiddleware::new(archives_dir);
@@ -110,6 +111,7 @@ pub async fn start_api(
         storage_service_base_url,
         token_price_fetcher,
         native_mint_pubkey,
+        maximum_healthy_desync,
     );
 
     run_api(

@@ -131,6 +131,7 @@ mod mtg_441_tests {
     use nft_ingester::{
         api::{dapi::rpc_asset_models::Asset, DasApi},
         config::{HealthCheckInfo, JsonMiddlewareConfig},
+        consts::DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         json_worker::JsonWorker,
         raydium_price_fetcher::RaydiumTokenPriceFetcher,
     };
@@ -180,6 +181,7 @@ mod mtg_441_tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         )
     }
 

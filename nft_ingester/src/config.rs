@@ -7,7 +7,7 @@ use serde::Deserialize;
 use solana_sdk::commitment_config::CommitmentLevel;
 use tracing_subscriber::fmt;
 
-use crate::error::IngesterError;
+use crate::{consts::DEFAULT_MAXIMUM_HEALTHY_DESYNC, error::IngesterError};
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -86,6 +86,13 @@ pub struct IngesterClapArgs {
         help = "Skip inline json refreshes if the metadata may be stale"
     )]
     pub api_skip_inline_json_refresh: Option<bool>,
+    #[clap(
+        long,
+        env,
+        default_value_t = DEFAULT_MAXIMUM_HEALTHY_DESYNC,
+        help = "Maximum difference between sequence numbers in rocksdb/pg to consider the system synchronized"
+    )]
+    pub api_maximum_healthy_desync: u64,
 
     #[clap(
         long("run-api"),
@@ -533,6 +540,13 @@ pub struct ApiClapArgs {
         help = "Skip inline json refreshes if the metadata may be stale"
     )]
     pub api_skip_inline_json_refresh: Option<bool>,
+    #[clap(
+        long,
+        env = "API_MAXIMUM_HEALTHY_DESYNC",
+        default_value_t = DEFAULT_MAXIMUM_HEALTHY_DESYNC,
+        help = "Maximum difference between sequence numbers in rocksdb/pg to consider the system synchronized"
+    )]
+    pub maximum_healthy_desync: u64,
     #[clap(long, env, default_value = "info", help = "info|debug")]
     pub log_level: String,
 }
@@ -653,6 +667,7 @@ mod tests {
         assert_eq!(args.log_level, "info");
         assert_eq!(args.redis_account_backfill_parsing_workers, 5);
         assert_eq!(args.account_backfill_processor_buffer_size, 1000);
+        assert_eq!(args.api_maximum_healthy_desync, 500_000);
     }
 
     #[test]

@@ -14,6 +14,7 @@ use nft_ingester::{
     api::{account_balance::AccountBalanceGetterImpl, DasApi},
     buffer::Buffer,
     config::{HealthCheckInfo, JsonMiddlewareConfig},
+    consts::DEFAULT_MAXIMUM_HEALTHY_DESYNC,
     index_synchronizer::Synchronizer,
     init::init_index_storage_with_migration,
     json_worker::JsonWorker,
@@ -177,6 +178,7 @@ impl TestSetup {
                 None,
             )),
             "11111111111111111111111111111111".to_string(),
+            DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         );
 
         let message_parser = MessageParser::new();

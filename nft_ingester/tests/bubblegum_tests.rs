@@ -17,6 +17,7 @@ mod tests {
         backfiller::DirectBlockParser,
         buffer::Buffer,
         config::{HealthCheckInfo, JsonMiddlewareConfig},
+        consts::DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         json_worker::JsonWorker,
         processors::transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,
         raydium_price_fetcher::RaydiumTokenPriceFetcher,
@@ -89,6 +90,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         );
 
         let _buffer = Arc::new(Buffer::new());
@@ -194,6 +196,7 @@ mod tests {
             None,
             Arc::new(RaydiumTokenPriceFetcher::default()),
             NATIVE_MINT_PUBKEY.to_string(),
+            DEFAULT_MAXIMUM_HEALTHY_DESYNC,
         );
 
         let _buffer = Arc::new(Buffer::new());
