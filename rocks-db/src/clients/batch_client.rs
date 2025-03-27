@@ -100,11 +100,10 @@ impl AssetUpdateIndexStorage for Storage {
 
         // Get the highest sequence number we should consider
         let highest_seq = if let Some(up_to_key) = &up_to {
-            FungibleAssetsUpdateIdx::decode_key(up_to_key.to_vec())?.seq
+            decode_u64x2_pubkey(FungibleAssetsUpdateIdx::decode_key(up_to_key.to_vec())?)?.seq
         } else {
-            let mut iter = self.fungible_assets_update_idx.iter_end();
-            if let Some((last_key, _)) = iter.next() {
-                FungibleAssetsUpdateIdx::decode_key(last_key.to_vec())?.seq
+            if let Some(key) = self.last_known_fungible_asset_updated_key()?.map(|key| key.seq) {
+                key
             } else {
                 return Ok((unique_pubkeys, last_key));
             }
@@ -121,7 +120,7 @@ impl AssetUpdateIndexStorage for Storage {
             if let Some(ref last_key) = last_key {
                 if decoded_key.seq != last_key.seq + 1 && decoded_key.seq != last_key.seq {
                     // Check if we should continue due to large gap
-                    if highest_seq.seq > last_key.seq + MAX_SEQUENCE_GAP {
+                    if highest_seq > last_key.seq + MAX_SEQUENCE_GAP {
                         warn!(
                             "Large sequence gap detected in fungibles sync. Last processed: {}, Current: {}, Highest: {}. Continuing sync.",
                             last_key.seq, decoded_key.seq, highest_seq
@@ -183,11 +182,10 @@ impl AssetUpdateIndexStorage for Storage {
 
         // Get the highest sequence number we should consider
         let highest_seq = if let Some(up_to_key) = &up_to {
-            AssetsUpdateIdx::decode_key(up_to_key.to_vec())?.seq
+            decode_u64x2_pubkey(AssetsUpdateIdx::decode_key(up_to_key.to_vec())?)?.seq
         } else {
-            let mut iter = self.assets_update_idx.iter_end();
-            if let Some((last_key, _)) = iter.next() {
-                AssetsUpdateIdx::decode_key(last_key.to_vec())?.seq
+            if let Some(key) = self.last_known_nft_asset_updated_key()?.map(|key| key.seq) {
+                key
             } else {
                 return Ok((unique_pubkeys, last_key));
             }
@@ -204,7 +202,7 @@ impl AssetUpdateIndexStorage for Storage {
             if let Some(ref last_key) = last_key {
                 if decoded_key.seq != last_key.seq + 1 && decoded_key.seq != last_key.seq {
                     // Check if we should continue due to large gap
-                    if highest_seq.seq > last_key.seq + MAX_SEQUENCE_GAP {
+                    if highest_seq > last_key.seq + MAX_SEQUENCE_GAP {
                         warn!(
                             "Large sequence gap detected in NFT sync. Last processed: {}, Current: {}, Highest: {}. Continuing sync.",
                             last_key.seq, decoded_key.seq, highest_seq
