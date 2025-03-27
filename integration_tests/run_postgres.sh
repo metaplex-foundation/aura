@@ -2,9 +2,9 @@
 
 CONTAINER_NAME="test_db"
 IMAGE_NAME="postgres:14"
-DB_USER="solana"
-DB_PASSWORD="solana"
-DB_NAME="solana"
+DB_USER="solana_test"
+DB_PASSWORD="solana_test"
+DB_NAME="solana_test"
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 DB_PATH="$SCRIPT_DIR/db-data"
 ROCKS_DUMP_PATH="$SCRIPT_DIR/rocks_dump"
