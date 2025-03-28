@@ -9,8 +9,11 @@ use crate::error::JsonDownloaderError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JsonDownloadResult {
+    /// Holds the actual JSON content as a string.
     JsonContent(String),
+    /// Indicates a media URL and its MIME type (e.g., image/video).
     MediaUrlAndMimeType { url: String, mime_type: String },
+    /// Indicates that the resource has not changed since the last known timestamp.
     NotModified,
 }
 

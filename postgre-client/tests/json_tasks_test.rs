@@ -71,7 +71,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_select_successeful_tasks() {
+    async fn test_select_successful_tasks() {
         let cli = Cli::default();
         let env = TestEnvironment::new(&cli).await;
         let asset_index_storage = &env.client;
@@ -87,7 +87,7 @@ mod tests {
         };
 
         // will not be selected because it's immutable so refresh makes no sense
-        let pending_immmutable_task = Task {
+        let pending_immutable_task = Task {
             metadata_url: "https://url2.com".to_string(),
             etag: None,
             last_modified_at: None,
@@ -96,7 +96,7 @@ mod tests {
             status: TaskStatus::Success,
         };
 
-        let mut tasks = vec![pending_mutable_task.clone(), pending_immmutable_task.clone()];
+        let mut tasks = vec![pending_mutable_task.clone(), pending_immutable_task.clone()];
 
         asset_index_storage.insert_new_tasks(&mut tasks).await.unwrap();
         let selected = asset_index_storage.get_refresh_metadata_tasks(1).await.unwrap();
@@ -105,7 +105,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_select_successeful_tasks_that_shouldnt_be_processed() {
+    async fn test_select_successful_tasks_that_shouldnt_be_processed() {
         let cli = Cli::default();
         let env = TestEnvironment::new(&cli).await;
         let asset_index_storage = &env.client;
