@@ -12,6 +12,7 @@ use entities::{
 use futures::future::Either;
 use mpl_token_metadata::ID as METADATA_PROGRAM_ID;
 use solana_sdk::pubkey::Pubkey;
+use tracing::log;
 
 use crate::{
     asset::{
@@ -22,6 +23,7 @@ use crate::{
     columns::{
         asset::{AssetEditionInfo, MasterAssetEditionsInfo, TokenMetadataEditionParentIndex},
         editions::EditionIndexKey,
+        offchain_data::OffChainData,
     },
     errors::StorageError,
     generated::asset_generated::asset as fb,
@@ -186,8 +188,6 @@ impl Storage {
 
         let (mut assets_data, assets_collection_pks, mut urls) = assets_with_collectios_and_urls?;
 
-        let offchain_data_fut =
-            self.asset_offchain_data.batch_get(urls.clone().into_values().collect::<Vec<_>>());
         let asset_collection_data_fut = if assets_collection_pks.is_empty() {
             Either::Left(async { Ok(Vec::new()) })
         } else {
@@ -220,10 +220,14 @@ impl Storage {
             })
         };
 
+        let offchain_data_fut =
+            self.asset_offchain_data.batch_get(urls.clone().into_values().collect::<Vec<_>>());
         let (offchain_data, asset_collection_data) =
             tokio::join!(offchain_data_fut, asset_collection_data_fut);
 
+        let mut collection_urls: HashMap<Pubkey, String> = HashMap::new();
         let mut mpl_core_collections = HashMap::new();
+
         for asset in asset_collection_data? {
             let asset = asset?;
             if let Some(asset) = asset {
@@ -236,7 +240,7 @@ impl Storage {
                         .dynamic_details()
                         .and_then(|d| d.url())
                         .and_then(|u| u.value())
-                        .map(|u| urls.insert(key, u.to_string()));
+                        .map(|u| collection_urls.insert(key, u.to_string()));
                     assets_data.insert(key, asset.into());
                 }
                 if let Some(collection) = asset.collection() {
@@ -245,21 +249,21 @@ impl Storage {
             }
         }
 
-        let offchain_data = offchain_data
-            .map_err(|e| StorageError::Common(e.to_string()))?
-            .into_iter()
-            .filter_map(|asset| {
-                asset
-                    .filter(|a| {
-                        if let Some(metadata) = a.metadata.as_ref() {
-                            !metadata.is_empty() && a.url.is_some()
-                        } else {
-                            false
-                        }
-                    })
-                    .map(|a| (a.url.clone().unwrap(), a))
-            })
-            .collect::<HashMap<_, _>>();
+        let mut offchain_data = self.process_offchain_data(offchain_data)?;
+
+        if !collection_urls.is_empty() {
+            let collection_offchain_data = self
+                .asset_offchain_data
+                .batch_get(collection_urls.clone().into_values().collect::<Vec<_>>())
+                .await;
+            offchain_data.extend(
+                self.process_offchain_data(collection_offchain_data).unwrap_or_else(|e| {
+                    log::error!("Failed to process offchain colection data: {}", e);
+                    HashMap::new()
+                }),
+            );
+            urls.extend(collection_urls);
+        }
 
         let inscriptions = inscriptions
             .map_err(|e| StorageError::Common(e.to_string()))?
@@ -320,6 +324,27 @@ impl Storage {
                 .flat_map(|ta| ta.map(|ta| (ta.mint, ta)))
                 .collect(),
         })
+    }
+
+    pub fn process_offchain_data(
+        &self,
+        offchain_data: Result<Vec<Option<OffChainData>>>,
+    ) -> Result<HashMap<String, OffChainData>> {
+        Ok(offchain_data
+            .map_err(|e| StorageError::Common(e.to_string()))?
+            .into_iter()
+            .filter_map(|asset| {
+                asset
+                    .filter(|a: &OffChainData| {
+                        if let Some(metadata) = a.metadata.as_ref() {
+                            !metadata.is_empty() && a.url.is_some()
+                        } else {
+                            false
+                        }
+                    })
+                    .map(|a| (a.url.clone().unwrap(), a))
+            })
+            .collect::<HashMap<_, _>>())
     }
 
     pub async fn get_master_edition_child_assets(
