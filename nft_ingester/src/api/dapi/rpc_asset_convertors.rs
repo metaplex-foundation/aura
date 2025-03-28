@@ -220,14 +220,14 @@ fn extract_collection_metadata(
 ) -> MetadataMap {
     let metadata = serde_json::from_str(&offchain_data.metadata.clone().unwrap_or_default())
         .unwrap_or_else(|e| {
-            error!("Failed to parse offchain metadata: {:?}", e);
+            warn!("Failed to parse offchain metadata: {:?}", e);
             Value::Null
         });
 
     let chain_data: Value =
         serde_json::from_str(asset_dynamic.onchain_data.as_ref().map_or("{}", |data| &data.value))
             .unwrap_or_else(|e| {
-                error!("Failed to parse onchain data: {:?}", e);
+                warn!("Failed to parse onchain data: {:?}", e);
                 Value::Null
             });
 
