@@ -103,12 +103,12 @@ impl PgClient {
     pub async fn update_tasks(&self, data: Vec<UpdatedTask>) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "
-            UPDATE tasks 
-            SET 
-                tasks_task_status = tmp.tasks_task_status, 
-                tasks_etag = tmp.etag, 
-                tasks_last_modified_at = tmp.last_modified_at, 
-                tasks_mutability = tmp.mutability, 
+            UPDATE tasks
+            SET
+                tasks_task_status = tmp.tasks_task_status,
+                tasks_etag = tmp.etag,
+                tasks_last_modified_at = tmp.last_modified_at,
+                tasks_mutability = tmp.mutability,
                 tasks_next_try_at = NOW() + INTERVAL '1 day'
                 FROM (
         ",
@@ -116,6 +116,7 @@ impl PgClient {
 
         query_builder.push_values(data, |mut b, task| {
             let url = UrlWithStatus::new(task.metadata_url.as_str(), false); // status is ignored here
+            b.push_bind(url.get_metadata_id());
             b.push_bind(url.metadata_url);
             b.push_bind(task.status);
             b.push_bind(task.etag.clone());
@@ -130,7 +131,7 @@ impl PgClient {
             b.push_bind(tasks_next_try_at);
         });
 
-        query_builder.push(") as tmp (task_status, etag, last_modified_at, mutability, tasks_next_try_at) WHERE tasks.tasks_metadata_hash = tmp.tasks_metadata_hash;");
+        query_builder.push(") as tmp (tasks_metadata_hash, tasks_metadata_url, task_status, etag, last_modified_at, mutability, tasks_next_try_at) WHERE tasks.tasks_metadata_hash = tmp.tasks_metadata_hash;");
 
         let query = query_builder.build();
         query.execute(&self.pool).await?;
@@ -141,9 +142,9 @@ impl PgClient {
     pub async fn update_tasks_attempt_time(&self, data: Vec<String>) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
             "
-            UPDATE tasks 
+            UPDATE tasks
             SET
-                tasks_next_try_at = NOW() + INTERVAL '1 day' 
+                tasks_next_try_at = NOW() + INTERVAL '1 day'
                 WHERE tasks.tasks_metadata_url IN (
         ",
         );

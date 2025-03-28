@@ -14,10 +14,10 @@ use crate::metadata_workers::TaskType;
 pub const SLEEP_TIME_SECS: u64 = 1;
 
 pub struct TasksStreamer {
-    pub db_conn: Arc<PgClient>,
-    pub cancellation_token: CancellationToken,
-    pub pending_tasks_sender: Sender<MetadataDownloadTask>,
-    pub refresh_tasks_sender: Sender<MetadataDownloadTask>,
+    db_conn: Arc<PgClient>,
+    cancellation_token: CancellationToken,
+    pending_tasks_sender: Sender<MetadataDownloadTask>,
+    refresh_tasks_sender: Sender<MetadataDownloadTask>,
 }
 
 impl TasksStreamer {

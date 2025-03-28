@@ -21,12 +21,11 @@ pub const CLIENT_TIMEOUT: Duration = Duration::from_secs(30);
 pub const PENDING_TASKS_WORKERS_RATIO: i32 = 5;
 
 pub struct MetadataDownloader {
-    pub json_worker: Arc<JsonWorker>,
-    pub metadata_to_persist_tx:
-        Sender<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
-    pub pending_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
-    pub refresh_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
-    pub cancellation_token: CancellationToken,
+    json_worker: Arc<JsonWorker>,
+    metadata_to_persist_tx: Sender<(String, Result<MetadataDownloadResult, JsonDownloaderError>)>,
+    pending_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
+    refresh_metadata_tasks_rx: Arc<Mutex<Receiver<MetadataDownloadTask>>>,
+    cancellation_token: CancellationToken,
 }
 
 impl MetadataDownloader {
@@ -112,7 +111,10 @@ impl MetadataDownloader {
                 Err(TryRecvError::Disconnected) => {
                     break;
                 },
-                Err(TryRecvError::Empty) => {},
+                Err(TryRecvError::Empty) => {
+                    // Sleep a short duration to avoid busy-looping.
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                },
             }
         }
     }
