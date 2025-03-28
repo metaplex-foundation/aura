@@ -749,10 +749,7 @@ fn pad_to_32_bytes(bytes: &[u8]) -> [u8; 32] {
 
 #[cfg(test)]
 mod tests {
-    use entities::{
-        enums::ASSET_TYPES,
-        models::{AssetIndex, UrlWithStatus},
-    };
+    use entities::models::{AssetIndex, UrlWithStatus};
     use metrics_utils::{MetricState, MetricsTrait};
     use mockall;
     use postgre_client::storage_traits::MockAssetIndexStorageMock;
@@ -821,28 +818,7 @@ mod tests {
         );
         let synchronizer = Arc::new(synchronizer);
 
-        for asset_type in ASSET_TYPES {
-            let synchronizer = synchronizer.clone();
-
-            match asset_type {
-                AssetType::Fungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-                AssetType::NonFungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-            }
-        }
+        synchronizer.synchronize_fungible_asset_indexes(CancellationToken::new(), 0).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -851,9 +827,7 @@ mod tests {
         let mut index_storage = MockAssetIndexStorageMock::new();
         let mut metrics_state = MetricState::new();
         metrics_state.register_metrics();
-        ASSET_TYPES.iter().for_each(|_e| {
-            index_storage.expect_fetch_last_synced_id().once().return_once(|_| Ok(None));
-        });
+        index_storage.expect_fetch_last_synced_id().once().return_once(|_| Ok(None));
 
         let key = Pubkey::new_from_array([1u8; 32]);
         let index_key = AssetUpdatedKey::new(100, 2, key.clone());
@@ -891,7 +865,10 @@ mod tests {
             .return_once(|_| Ok(()));
         index_storage
             .expect_update_last_synced_key()
-            .with(mockall::predicate::eq(binary_key), mockall::predicate::eq(AssetType::Fungible))
+            .with(
+                mockall::predicate::eq(binary_key),
+                mockall::predicate::eq(AssetType::NonFungible),
+            )
             .once()
             .return_once(|_, _| Ok(()));
         let synchronizer = Synchronizer::new(
@@ -903,28 +880,8 @@ mod tests {
             1,
         );
         let synchronizer = Arc::new(synchronizer);
-        for asset_type in ASSET_TYPES {
-            let synchronizer = synchronizer.clone();
 
-            match asset_type {
-                AssetType::Fungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-                AssetType::NonFungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-            }
-        }
+        synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -935,9 +892,7 @@ mod tests {
         metrics_state.register_metrics();
 
         // Index storage starts empty
-        ASSET_TYPES.iter().for_each(|_| {
-            index_storage.expect_fetch_last_synced_id().once().return_once(|_| Ok(None));
-        });
+        index_storage.expect_fetch_last_synced_id().once().return_once(|_| Ok(None));
 
         let key = Pubkey::new_from_array([1u8; 32]);
         let index_key = AssetUpdatedKey::new(100, 2, key.clone());
@@ -984,7 +939,10 @@ mod tests {
             .return_once(|_| Ok(()));
         index_storage
             .expect_update_last_synced_key()
-            .with(mockall::predicate::eq(binary_key), mockall::predicate::eq(AssetType::Fungible))
+            .with(
+                mockall::predicate::eq(binary_key),
+                mockall::predicate::eq(AssetType::NonFungible),
+            )
             .once()
             .return_once(|_, _| Ok(()));
 
@@ -997,28 +955,7 @@ mod tests {
             1,
         ); // Small batch size
         let synchronizer = Arc::new(synchronizer);
-        for asset_type in ASSET_TYPES {
-            let synchronizer = synchronizer.clone();
-
-            match asset_type {
-                AssetType::Fungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-                AssetType::NonFungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-            }
-        }
+        synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1032,13 +969,10 @@ mod tests {
         let last_synced_binary_key =
             encode_u64x2_pubkey(index_key.seq, index_key.slot, index_key.pubkey.clone());
 
-        ASSET_TYPES.iter().for_each(|_| {
-            let last_synced_binary_key = last_synced_binary_key.clone();
-            index_storage
-                .expect_fetch_last_synced_id()
-                .once()
-                .return_once(|_| Ok(Some(last_synced_binary_key)));
-        });
+        index_storage
+            .expect_fetch_last_synced_id()
+            .once()
+            .return_once(|_| Ok(Some(last_synced_binary_key)));
 
         let key = Pubkey::new_from_array([1u8; 32]);
         let index_key_first_batch = AssetUpdatedKey::new(100, 2, key.clone());
@@ -1106,7 +1040,7 @@ mod tests {
             .expect_update_last_synced_key()
             .with(
                 mockall::predicate::eq(binary_key_first_batch),
-                mockall::predicate::eq(AssetType::Fungible),
+                mockall::predicate::eq(AssetType::NonFungible),
             )
             .once()
             .return_once(|_, _| Ok(()));
@@ -1120,7 +1054,7 @@ mod tests {
             .expect_update_last_synced_key()
             .with(
                 mockall::predicate::eq(binary_key_second_batch),
-                mockall::predicate::eq(AssetType::Fungible),
+                mockall::predicate::eq(AssetType::NonFungible),
             )
             .once()
             .return_once(|_, _| Ok(()));
@@ -1134,28 +1068,7 @@ mod tests {
             1,
         );
         let synchronizer = Arc::new(synchronizer);
-        for asset_type in ASSET_TYPES {
-            let synchronizer = synchronizer.clone();
-
-            match asset_type {
-                AssetType::Fungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-                AssetType::NonFungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-            }
-        }
+        synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1174,15 +1087,8 @@ mod tests {
             .once()
             .return_once(move || Ok(Some(index_key_clone)));
 
-        ASSET_TYPES.iter().for_each(|_| {
-            let index_key_clone = index_key.clone();
-            index_storage.expect_fetch_last_synced_id().once().return_once(move |_| {
-                Ok(Some(encode_u64x2_pubkey(
-                    index_key_clone.seq,
-                    index_key_clone.slot,
-                    index_key_clone.pubkey.clone(),
-                )))
-            });
+        index_storage.expect_fetch_last_synced_id().once().return_once(move |_| {
+            Ok(Some(encode_u64x2_pubkey(index_key.seq, index_key.slot, index_key.pubkey.clone())))
         });
 
         // Expect no calls to fetch_asset_updated_keys since databases are synced
@@ -1197,28 +1103,7 @@ mod tests {
             1,
         );
         let synchronizer = Arc::new(synchronizer);
-        for asset_type in ASSET_TYPES {
-            let synchronizer = synchronizer.clone();
-
-            match asset_type {
-                AssetType::Fungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_fungible_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-                AssetType::NonFungible => {
-                    usecase::executor::spawn(async move {
-                        synchronizer
-                            .synchronize_nft_asset_indexes(CancellationToken::new(), 0)
-                            .await
-                            .unwrap();
-                    });
-                },
-            }
-        }
+        synchronizer.synchronize_nft_asset_indexes(CancellationToken::new(), 0).await.unwrap();
     }
 
     #[test]

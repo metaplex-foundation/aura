@@ -101,12 +101,10 @@ impl AssetUpdateIndexStorage for Storage {
         // Get the highest sequence number we should consider
         let highest_seq = if let Some(up_to_key) = &up_to {
             decode_u64x2_pubkey(FungibleAssetsUpdateIdx::decode_key(up_to_key.to_vec())?)?.seq
+        } else if let Some(key) = self.last_known_fungible_asset_updated_key()?.map(|key| key.seq) {
+            key
         } else {
-            if let Some(key) = self.last_known_fungible_asset_updated_key()?.map(|key| key.seq) {
-                key
-            } else {
-                return Ok((unique_pubkeys, last_key));
-            }
+            return Ok((unique_pubkeys, last_key));
         };
 
         for pair in iterator {
@@ -183,12 +181,10 @@ impl AssetUpdateIndexStorage for Storage {
         // Get the highest sequence number we should consider
         let highest_seq = if let Some(up_to_key) = &up_to {
             decode_u64x2_pubkey(AssetsUpdateIdx::decode_key(up_to_key.to_vec())?)?.seq
+        } else if let Some(key) = self.last_known_nft_asset_updated_key()?.map(|key| key.seq) {
+            key
         } else {
-            if let Some(key) = self.last_known_nft_asset_updated_key()?.map(|key| key.seq) {
-                key
-            } else {
-                return Ok((unique_pubkeys, last_key));
-            }
+            return Ok((unique_pubkeys, last_key));
         };
 
         for pair in iterator {
