@@ -7,7 +7,7 @@ use entities::{
 };
 use serde_json::json;
 use solana_sdk::pubkey::Pubkey;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     asset::{
@@ -27,6 +27,8 @@ use crate::{
     ToFlatbuffersConverter, BATCH_GET_ACTION, BATCH_ITERATION_ACTION, ITERATOR_TOP_ACTION,
     ROCKS_COMPONENT,
 };
+
+const MAX_SEQUENCE_GAP: u64 = 1_000_000;
 
 impl AssetUpdateIndexStorage for Storage {
     fn last_known_fungible_asset_updated_key(&self) -> Result<Option<AssetUpdatedKey>> {
@@ -96,6 +98,15 @@ impl AssetUpdateIndexStorage for Storage {
         let up_to = up_to
             .map(|up_to_key| encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey));
 
+        // Get the highest sequence number we should consider
+        let highest_seq = if let Some(up_to_key) = &up_to {
+            decode_u64x2_pubkey(FungibleAssetsUpdateIdx::decode_key(up_to_key.to_vec())?)?.seq
+        } else if let Some(key) = self.last_known_fungible_asset_updated_key()?.map(|key| key.seq) {
+            key
+        } else {
+            return Ok((unique_pubkeys, last_key));
+        };
+
         for pair in iterator {
             let (idx_key, _) = pair?;
             let key = FungibleAssetsUpdateIdx::decode_key(idx_key.to_vec())?;
@@ -106,9 +117,16 @@ impl AssetUpdateIndexStorage for Storage {
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
             if let Some(ref last_key) = last_key {
                 if decoded_key.seq != last_key.seq + 1 && decoded_key.seq != last_key.seq {
-                    // we're allowing the same sequence as it's possible to get one on a start of a cycle
-                    info!("Breaking the fungibles sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
-                    break;
+                    // Check if we should continue due to large gap
+                    if highest_seq > last_key.seq + MAX_SEQUENCE_GAP {
+                        warn!(
+                            "Large sequence gap detected in fungibles sync. Last processed: {}, Current: {}, Highest: {}. Continuing sync.",
+                            last_key.seq, decoded_key.seq, highest_seq
+                        );
+                    } else {
+                        info!("Breaking the fungibles sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
+                        break;
+                    }
                 }
             }
             last_key = Some(decoded_key.clone());
@@ -160,6 +178,15 @@ impl AssetUpdateIndexStorage for Storage {
         let up_to = up_to
             .map(|up_to_key| encode_u64x2_pubkey(up_to_key.seq, up_to_key.slot, up_to_key.pubkey));
 
+        // Get the highest sequence number we should consider
+        let highest_seq = if let Some(up_to_key) = &up_to {
+            decode_u64x2_pubkey(AssetsUpdateIdx::decode_key(up_to_key.to_vec())?)?.seq
+        } else if let Some(key) = self.last_known_nft_asset_updated_key()?.map(|key| key.seq) {
+            key
+        } else {
+            return Ok((unique_pubkeys, last_key));
+        };
+
         for pair in iterator {
             let (idx_key, _) = pair?;
             let key = AssetsUpdateIdx::decode_key(idx_key.to_vec())?;
@@ -170,8 +197,16 @@ impl AssetUpdateIndexStorage for Storage {
             let decoded_key = decode_u64x2_pubkey(key.clone()).unwrap();
             if let Some(ref last_key) = last_key {
                 if decoded_key.seq != last_key.seq + 1 && decoded_key.seq != last_key.seq {
-                    info!("Breaking the NFT sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
-                    break;
+                    // Check if we should continue due to large gap
+                    if highest_seq > last_key.seq + MAX_SEQUENCE_GAP {
+                        warn!(
+                            "Large sequence gap detected in NFT sync. Last processed: {}, Current: {}, Highest: {}. Continuing sync.",
+                            last_key.seq, decoded_key.seq, highest_seq
+                        );
+                    } else {
+                        info!("Breaking the NFT sync loop at seq {} as the sequence is not consecutive to the previously handled {}", decoded_key.seq, last_key.seq);
+                        break;
+                    }
                 }
             }
             last_key = Some(decoded_key.clone());
