@@ -386,7 +386,7 @@ impl AssetIndexStorage for PgClient {
                 file_path,
                 "tasks",
                 temp_postfix.as_str(),
-                "tsk_id, tsk_metadata_url, tsk_status",
+                "tasks_metadata_hash, tasks_metadata_url, tasks_task_status",
                 true,
                 Some(semaphore),
             )
@@ -489,8 +489,8 @@ impl AssetIndexStorage for PgClient {
 }
 
 #[derive(sqlx::FromRow, Debug)]
-struct TaskIdRawResponse {
-    pub(crate) tsk_id: Vec<u8>,
+struct TasksMetadataHashRawResponse {
+    pub(crate) tasks_metadata_hash: Vec<u8>,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -534,7 +534,7 @@ impl PgClient {
 
         // Declare the cursor
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "DECLARE all_tasks CURSOR FOR SELECT tsk_id FROM tasks WHERE tsk_id IS NOT NULL",
+            "DECLARE all_tasks CURSOR FOR SELECT tasks_metadata_hash FROM tasks WHERE tasks_metadata_hash IS NOT NULL",
         );
         self.execute_query_with_metrics(transaction, &mut query_builder, CREATE_ACTION, "cursor")
             .await?;
@@ -543,7 +543,7 @@ impl PgClient {
         loop {
             let mut query_builder: QueryBuilder<'_, Postgres> =
                 QueryBuilder::new("FETCH 10000 FROM all_tasks");
-            let query = query_builder.build_query_as::<TaskIdRawResponse>();
+            let query = query_builder.build_query_as::<TasksMetadataHashRawResponse>();
             let rows = query.fetch_all(&mut *transaction).await.map_err(|e| {
                 self.metrics.observe_error(SQL_COMPONENT, SELECT_ACTION, "FETCH_CURSOR");
                 IndexDbError::QueryExecErr(e)
@@ -555,7 +555,7 @@ impl PgClient {
             }
 
             for row in rows {
-                set.insert(row.tsk_id);
+                set.insert(row.tasks_metadata_hash);
             }
         }
 

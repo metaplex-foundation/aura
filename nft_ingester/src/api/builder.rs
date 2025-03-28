@@ -16,7 +16,7 @@ use crate::{
         account_balance::AccountBalanceGetterImpl, error::DasApiError,
         meta_middleware::RpcMetaMiddleware, *,
     },
-    json_worker::JsonWorker,
+    metadata_workers::json_worker::JsonWorker,
     raydium_price_fetcher::RaydiumTokenPriceFetcher,
 };
 

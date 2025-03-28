@@ -17,7 +17,7 @@ use entities::{
 use interface::{
     account_balance::AccountBalanceGetter,
     error::UsecaseError,
-    json::{JsonDownloader, JsonPersister},
+    json_metadata::{JsonDownloader, JsonPersister},
     price_fetcher::TokenPriceFetcher,
     processing_possibility::ProcessingPossibilityChecker,
     proofs::ProofChecker,
