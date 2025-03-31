@@ -20,7 +20,10 @@ pub mod tree_seq;
 use std::{
     marker::PhantomData,
     path::Path,
-    sync::{atomic::AtomicU64, Arc},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 use asset::{
@@ -58,6 +61,7 @@ use crate::{
     columns::{
         asset::TokenMetadataEditionParentIndex,
         batch_mint::{BatchMintToVerify, BatchMintWithStaker, FailedBatchMint},
+        raw_block::{MissedSlotsIdx, SlotConsistencyCheckpoint},
     },
     errors::StorageError,
     migrations::asset_leaf_v2::AssetLeafDeprecated,
@@ -79,17 +83,35 @@ const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 pub struct SlotStorage {
     pub db: Arc<DB>,
     pub raw_blocks: Column<RawBlock>,
+    pub slot_consistency_checkpoint: Column<SlotConsistencyCheckpoint>,
+    pub missed_slots_idx: Column<MissedSlotsIdx>,
+    missed_slots_last_seq: Arc<AtomicU64>,
     red_metrics: Arc<RequestErrorDurationMetrics>,
 }
 
 impl SlotStorage {
     pub fn new(db: Arc<DB>, red_metrics: Arc<RequestErrorDurationMetrics>) -> Self {
         let raw_blocks = Storage::column(db.clone(), red_metrics.clone());
-        Self { db, raw_blocks, red_metrics }
+        let slot_consistency_checkpoint = Storage::column(db.clone(), red_metrics.clone());
+        let missed_slots_idx = Storage::column(db.clone(), red_metrics.clone());
+        Self {
+            db,
+            raw_blocks,
+            slot_consistency_checkpoint,
+            missed_slots_idx,
+            missed_slots_last_seq: Arc::new(AtomicU64::new(0)),
+            red_metrics,
+        }
     }
 
     pub fn cf_names() -> Vec<&'static str> {
-        vec![RawBlock::NAME, MigrationVersions::NAME, OffChainDataDeprecated::NAME]
+        vec![
+            RawBlock::NAME,
+            MigrationVersions::NAME,
+            OffChainDataDeprecated::NAME,
+            SlotConsistencyCheckpoint::NAME,
+            MissedSlotsIdx::NAME,
+        ]
     }
 
     pub fn open<P>(db_path: P, red_metrics: Arc<RequestErrorDurationMetrics>) -> Result<Self>
@@ -129,6 +151,24 @@ impl SlotStorage {
         let db = Arc::new(Storage::open_readonly_with_cfs_only_db(db_path, Self::cf_names())?);
 
         Ok(Self::new(db, red_metrics))
+    }
+
+    pub fn next_missed_slots_seq(&self) -> Result<u64> {
+        if self.missed_slots_last_seq.load(Ordering::Relaxed) == 0 {
+            // If assets_update_next_seq is zero, fetch the last key from assets_update_idx
+            let mut iter = self.missed_slots_idx.iter_end(); // Assuming iter_end method fetches the last item
+
+            if let Some(pair) = iter.next() {
+                let (last_key, _) = pair?;
+                // Assuming the key is structured as (u64, ...)
+
+                let seq = u64::from_be_bytes(last_key[..std::mem::size_of::<u64>()].try_into()?);
+                self.missed_slots_last_seq.store(seq, Ordering::Relaxed);
+            }
+        }
+        // Increment and return the sequence number
+        let seq = self.missed_slots_last_seq.fetch_add(1, Ordering::Relaxed) + 1;
+        Ok(seq)
     }
 }
 

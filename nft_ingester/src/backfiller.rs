@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc, time};
 use async_trait::async_trait;
 use backfill_rpc::rpc::BackfillRPC;
 use entities::models::{RawBlock, RawBlockWithTransactions, TransactionInfo};
+use futures::future::Either;
 use interface::{
     error::{BlockConsumeError, StorageError, UsecaseError},
     signature_persistence::{BlockConsumer, BlockProducer},
@@ -11,14 +12,16 @@ use interface::{
 use metrics_utils::BackfillerMetricsConfig;
 use rocks_db::{
     column::TypedColumn,
-    columns::bubblegum_slots::ForceReingestableSlots,
+    columns::{
+        bubblegum_slots::ForceReingestableSlots, parameters::Parameter, raw_block::MissedSlotsIdx,
+    },
     transaction::{TransactionProcessor, TransactionResultPersister},
     SlotStorage, Storage,
 };
 use solana_program::pubkey::Pubkey;
 use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use usecase::{
     bigtable::{is_bubblegum_transaction_from_info, BigTableClient},
     slots_collector::SlotsGetter,
@@ -122,36 +125,54 @@ where
         DirectBlockParser { ingester, persister, metrics }
     }
 }
-pub async fn run_backfill_slots<C>(
+
+#[derive(Debug)]
+pub enum BackfillTarget {
+    RegularSlots,
+    MissedSlots,
+}
+
+pub async fn run_backfill<C>(
     cancellation_token: CancellationToken,
     db: Arc<Storage>,
     slot_db: Arc<SlotStorage>,
     consumer: Arc<C>,
     metrics: Arc<BackfillerMetricsConfig>,
+    target: BackfillTarget,
 ) where
     C: BlockConsumer,
 {
+    info!(?target, "Running backfill for the specified target");
+
     loop {
         if cancellation_token.is_cancelled() {
-            info!("Shutdown signal received, stopping run_backfill_slots");
+            info!("Shutdown signal received, stopping run_backfill");
             break;
         }
         let sleep = tokio::time::sleep(Duration::from_millis(400));
-        if let Err(e) = backfill_slots(
-            cancellation_token.child_token(),
-            db.clone(),
-            slot_db.clone(),
-            consumer.clone(),
-            metrics.clone(),
-        )
-        .await
-        {
+        let future = match target {
+            BackfillTarget::MissedSlots => Either::Left(backfill_missed(
+                cancellation_token.child_token(),
+                db.clone(),
+                slot_db.clone(),
+                consumer.clone(),
+                metrics.clone(),
+            )),
+            BackfillTarget::RegularSlots => Either::Right(backfill_slots(
+                cancellation_token.child_token(),
+                db.clone(),
+                slot_db.clone(),
+                consumer.clone(),
+                metrics.clone(),
+            )),
+        };
+        if let Err(e) = future.await {
             error!("Error while backfilling slots: {}", e);
         }
         tokio::select! {
             _ = sleep => {}
             _ = cancellation_token.cancelled() => {
-                info!("Shutdown signal received, stopping run_backfill_slots");
+                info!("Shutdown signal received, stopping run_backfill");
                 break;
             }
         }
@@ -168,9 +189,7 @@ pub async fn backfill_slots<C>(
 where
     C: BlockConsumer,
 {
-    let start_slot = db
-        .get_parameter::<u64>(rocks_db::columns::parameters::Parameter::LastBackfilledSlot)
-        .await?;
+    let start_slot = db.get_parameter::<u64>(Parameter::LastBackfilledSlot).await?;
     slot_db
         .db
         .try_catch_up_with_primary()
@@ -208,6 +227,64 @@ where
                 metrics.set_slot_delay_time("raw_slot_backfilled", dur);
             }
         }
+        it.next();
+    }
+    Ok(())
+}
+
+pub async fn backfill_missed<C>(
+    cancellation_token: CancellationToken,
+    db: Arc<Storage>,
+    slot_db: Arc<SlotStorage>,
+    consumer: Arc<C>,
+    metrics: Arc<BackfillerMetricsConfig>,
+) -> Result<(), IngesterError>
+where
+    C: BlockConsumer,
+{
+    let last_processed = db.get_parameter::<(u64, u64)>(Parameter::LastProcessedMissedSlot).await?;
+    if last_processed.is_none() {
+        db.put_parameter(Parameter::LastProcessedMissedSlot, (0u64, 0u64)).await?;
+    }
+    slot_db
+        .db
+        .try_catch_up_with_primary()
+        .map_err(|e| IngesterError::DatabaseError(e.to_string()))?;
+    let mut it = slot_db.db.raw_iterator_cf(&slot_db.db.cf_handle(MissedSlotsIdx::NAME).unwrap());
+    if let Some(last_processed) = last_processed {
+        it.seek(MissedSlotsIdx::encode_key(last_processed));
+        it.next();
+    } else {
+        it.seek_to_first();
+    }
+    while it.valid() {
+        if cancellation_token.is_cancelled() {
+            info!("Shutdown signal received, stopping backfill_missed");
+            break;
+        }
+        let (seq, slot) = MissedSlotsIdx::decode_key(it.key().unwrap().to_vec())?;
+        let raw_block = slot_db.raw_blocks.get_async(slot).await?;
+        if raw_block.is_none() {
+            warn!(%seq, %slot, "Could not get raw block at the specified seq/slot for missed slot processing");
+            // here, we must break to not advance the `LastProcessedMissedSlot` parameter
+            break;
+        }
+        let raw_block = raw_block.unwrap();
+
+        let block_time = raw_block.block.block_time;
+        if let Err(e) = consumer.consume_block(slot, raw_block.block).await {
+            error!("Error processing slot {}: {}", slot, e);
+        }
+        db.put_parameter(Parameter::LastProcessedMissedSlot, (seq, slot)).await?;
+
+        if let Some(block_time) = block_time {
+            let dur = time::SystemTime::now()
+                .duration_since(time::UNIX_EPOCH + Duration::from_secs(block_time))
+                .unwrap_or_default()
+                .as_millis() as f64;
+            metrics.set_slot_delay_time("missed_slot_backfilled", dur);
+        }
+
         it.next();
     }
     Ok(())

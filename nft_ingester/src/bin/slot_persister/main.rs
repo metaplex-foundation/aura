@@ -13,7 +13,11 @@ use nft_ingester::{
     config::{parse_json, BigTableConfig},
     inmemory_slots_dumper::InMemorySlotsDumper,
 };
-use rocks_db::{column::TypedColumn, SlotStorage};
+use rocks_db::{
+    column::TypedColumn,
+    columns::raw_block::{MissedSlotsIdx, SlotConsistencyCheckpoint},
+    SlotStorage,
+};
 use tokio::{sync::Semaphore, task::JoinSet};
 use tokio_retry::{strategy::ExponentialBackoff, RetryIf};
 use tokio_util::sync::CancellationToken;
@@ -30,8 +34,15 @@ const MAX_BATCH_RETRIES: usize = 5;
 const INITIAL_BATCH_DELAY_MS: u64 = 500;
 // Offset to start collecting slots from, approximately 2 minutes before the finalized slot, given the eventual consistency of the big table
 const SLOT_COLLECTION_OFFSET: u64 = 300;
+/// How often we perform the backfill check (6 hours by default)
+const DEFAULT_SLOT_BACKFILL_INTERVAL_SECS: u64 = 60 * 60 * 6;
+/// The gap around the checkpoint. If, for example, the last checkpointed slot is
+/// 200_000_000, we will verify slots from 200_000_000 to 201_000_000 (or the last available one).
+/// Then, if we find all the missing slots in this range, we will advance the checkpoint to the next
+/// inconsistent position.
+const DEFAULT_SLOT_BACKFILL_OFFSET: u64 = 1_000_000;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(
     author,
     version,
@@ -71,6 +82,12 @@ struct Args {
     /// Optional comma-separated list of slot numbers to check
     #[arg(long)]
     slots: Option<String>,
+
+    #[arg(long, env, help = "How often to check for missed slots (in seconds)", default_value_t = DEFAULT_SLOT_BACKFILL_INTERVAL_SECS)]
+    slot_backfill_interval: u64,
+
+    #[arg(long, env, help = "The number of slots by which to check & advance the next sequential slots", default_value_t = DEFAULT_SLOT_BACKFILL_OFFSET)]
+    slot_backfill_offset: u64,
 }
 
 pub fn get_last_persisted_slot(rocks_db: Arc<SlotStorage>) -> u64 {
@@ -80,6 +97,33 @@ pub fn get_last_persisted_slot(rocks_db: Arc<SlotStorage>) -> u64 {
         return 0;
     }
     it.key().map(|b| RawBlock::decode_key(b.to_vec()).unwrap_or_default()).unwrap_or_default()
+}
+
+pub fn get_checkpoint(rocks_db: &SlotStorage) -> u64 {
+    let mut checkpoint = None;
+    let mut it = rocks_db
+        .db
+        .raw_iterator_cf(&rocks_db.db.cf_handle(SlotConsistencyCheckpoint::NAME).unwrap());
+    it.seek_to_first();
+    if it.valid() {
+        checkpoint = Some(
+            it.key()
+                .map(|b| SlotConsistencyCheckpoint::decode_key(b.to_vec()).unwrap_or_default())
+                .unwrap_or_default(),
+        )
+    } else {
+        let mut it = rocks_db.db.raw_iterator_cf(&rocks_db.db.cf_handle(RawBlock::NAME).unwrap());
+        it.seek_to_first();
+        if it.valid() {
+            checkpoint = Some(
+                it.key()
+                    .map(|b| RawBlock::decode_key(b.to_vec()).unwrap_or_default())
+                    .unwrap_or_default(),
+            );
+        }
+    }
+
+    checkpoint.unwrap_or_default()
 }
 
 #[derive(Debug)]
@@ -189,6 +233,13 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arc::new(BackfillSource::Rpc(rpc_client.clone()))
         }
     };
+
+    usecase::executor::spawn(get_missed_slots(
+        backfill_source.clone(),
+        target_db.clone(),
+        args.clone(),
+        cancellation_token.child_token(),
+    ));
 
     let in_mem_dumper = Arc::new(InMemorySlotsDumper::new());
     let slots_collector = SlotsCollector::new(
@@ -495,5 +546,109 @@ async fn process_slots(
                 }
             }
         }
+    }
+}
+
+/// Runs a periodic process that reads from the last consistent offset, checks if
+/// the sequence of saved slots is consecutive, advances the consistency checkpoint if that is
+/// the case. If a missing slot is found, the checkpoint is stopped there, and the iteration
+/// continues up to the specified range, collecting any missed slots found. The process
+/// then downloads the slots to the slot database and puts the numbers of those slots
+/// into a column family called 'Missed Slots Index'. Ingester then will read from this
+/// cf and process any missed slots we found.
+async fn get_missed_slots(
+    backfill_source: Arc<BackfillSource>,
+    target_db: Arc<SlotStorage>,
+    args: Args,
+    cancellation_token: CancellationToken,
+) {
+    /// Get missed slots in range of last_checkpoint..(last_checkpoint + SLOT_BACKFILL_OFFSET)
+    /// Returns (last_checkpoint, next_checkpoint, missed_slots)
+    fn get_missed_slots(
+        target_db: Arc<SlotStorage>,
+        slot_backfill_offset: u64,
+    ) -> (u64, u64, Vec<u64>) {
+        let last_checkpoint = get_checkpoint(&target_db);
+        info!(%last_checkpoint, "Acquiring missed slots starting at last checkpoint");
+        let mut missed_slots = Vec::<u64>::new();
+        let mut prev_slot_key = last_checkpoint;
+        let mut last_valid_key = last_checkpoint;
+        let mut iter =
+            target_db.db.raw_iterator_cf(&target_db.db.cf_handle(RawBlock::NAME).unwrap());
+        iter.seek(last_checkpoint.to_be_bytes());
+        for _ in 0..slot_backfill_offset {
+            if !iter.valid() {
+                break;
+            }
+            iter.next();
+            let Some(next_key) = iter.key() else {
+                warn!("RawBlock iterator ended");
+                break;
+            };
+            let next_key = u64::from_be_bytes(
+                next_key.try_into().expect("could not decode rocksdb slot key to [u8; 8] (u64)"),
+            );
+            if prev_slot_key + 1 != next_key {
+                info!(%prev_slot_key, %next_key, "Found missed slots between keys");
+                missed_slots.extend((prev_slot_key + 1)..=next_key);
+            } else if missed_slots.is_empty() {
+                last_valid_key = next_key;
+            }
+            prev_slot_key = next_key;
+        }
+        (last_checkpoint, last_valid_key, missed_slots)
+    }
+
+    let slot_backfill_offset = args.slot_backfill_offset;
+    loop {
+        tokio::select! {
+            _ = cancellation_token.cancelled() => { break; }
+            _ = tokio::time::sleep(Duration::from_secs(args.slot_backfill_interval)) => {
+                info!("Starting slot backfill...");
+            }
+        };
+        let db = target_db.clone();
+        let (last_checkpoint, next_checkpoint, missed_slots) =
+            tokio::task::spawn_blocking(move || get_missed_slots(db, slot_backfill_offset))
+                .await
+                .expect("retrieval of missed slots must join");
+        if missed_slots.is_empty() {
+            continue;
+        }
+        debug!(?missed_slots, "Missed slots found");
+        info!(%last_checkpoint, %next_checkpoint, "Getting missed slots between checkpoints");
+        process_slots(
+            missed_slots.clone(),
+            backfill_source.clone(),
+            target_db.clone(),
+            &args,
+            cancellation_token.child_token(),
+        )
+        .await;
+        let missed_slots_map = missed_slots
+            .into_iter()
+            .map(|slot| {
+                let next_seq = target_db
+                    .next_missed_slots_seq()
+                    .expect("get next missed slots seq must not fail");
+                ((next_seq, slot), MissedSlotsIdx)
+            })
+            .collect();
+        debug!("Saving missed slots to the database");
+        target_db
+            .missed_slots_idx
+            .put_batch(missed_slots_map)
+            .await
+            .expect("must put batch of missed slots into ");
+        debug!(%last_checkpoint, "Deleting last consistency checkpoint");
+        target_db
+            .slot_consistency_checkpoint
+            .delete(last_checkpoint)
+            .expect("must delete the previous checkpoint after slot processing");
+        debug!(%next_checkpoint, "Setting the new checkpoint value");
+        target_db
+            .slot_consistency_checkpoint
+            .put(next_checkpoint, SlotConsistencyCheckpoint)
+            .expect("must update the new checkpoint after the slots are saved into storage");
     }
 }
