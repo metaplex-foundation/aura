@@ -68,7 +68,6 @@ impl<T: JsonPersister + Send + Sync + 'static> TasksPersister<T> {
                         error!("Could not get JSON data to save from the channel because it was closed");
                         break;
                     }
-                    sleep(Duration::from_secs(SLEEP_TIME_SECS)).await;
                 }
             }
         }

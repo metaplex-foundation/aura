@@ -321,7 +321,11 @@ pub async fn get_by_ids<
                     },
                     Ok(MetadataDownloadResult {
                         result: JsonDownloadResult::NotModified, ..
-                    }) => {},
+                    }) => {
+                        if let Some(data) = asset_selected_maps.offchain_data.get_mut(json_url) {
+                            data.last_read_at = last_read_at;
+                        }
+                    },
                     Err(_) => {},
                 }
             }

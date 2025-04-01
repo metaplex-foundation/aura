@@ -173,21 +173,20 @@ impl JsonDownloader for JsonWorker {
             ));
         }
 
-        let metadata_body = response.text().await;
-        if let Ok(metadata) = metadata_body {
-            // Attempt to parse the response as JSON
-            if serde_json::from_str::<Value>(&metadata).is_ok() {
-                return Ok(MetadataDownloadResult::new(
-                    etag,
-                    last_modified,
-                    cache_control,
-                    JsonDownloadResult::JsonContent(metadata),
-                ));
-            } else {
-                return Err(JsonDownloaderError::CouldNotDeserialize);
-            }
+        if let Ok(metadata) = response.text().await {
+            let json_metadata = serde_json::from_str::<Value>(&metadata).map_err(|e| {
+                self.red_metrics.observe_error("json_downloader", "download_file", host);
+                JsonDownloaderError::CouldNotDeserialize(e)
+            })?;
+
+            Ok(MetadataDownloadResult::new(
+                etag,
+                last_modified,
+                cache_control,
+                JsonDownloadResult::JsonContent(json_metadata.to_string()),
+            ))
         } else {
-            Err(JsonDownloaderError::CouldNotDeserialize)
+            Err(JsonDownloaderError::GotNoJsonFile)
         }
     }
 
@@ -216,10 +215,18 @@ impl JsonPersister for JsonWorker {
                 Ok(MetadataDownloadResult {
                     etag,
                     last_modified_at,
-                    cache_control: _,
+                    cache_control,
                     result: JsonDownloadResult::JsonContent(json_file),
                 }) => {
-                    let mutability: StorageMutability = metadata_url.as_str().into();
+                    let mutability = cache_control
+                        .as_ref()
+                        .and_then(|cc| cc.mutability)
+                        .map(|mutability| match mutability {
+                            OffchainDataMutability::Immutable => StorageMutability::Immutable,
+                            OffchainDataMutability::Mutable => StorageMutability::Mutable,
+                        })
+                        .unwrap_or_else(|| metadata_url.as_str().into());
+
                     rocks_updates.insert(
                         metadata_url.clone(),
                         OffChainData {
@@ -230,13 +237,16 @@ impl JsonPersister for JsonWorker {
                         },
                     );
 
-                    pg_updates.push(UpdatedTask {
-                        mutability: mutability.to_string(),
-                        status: TaskStatus::Success,
-                        metadata_url: metadata_url.clone(),
-                        etag,
-                        last_modified_at,
-                    });
+                    let task_for_updating = UpdatedTask::builder()
+                        .mutability(&mutability.to_string())
+                        .status(TaskStatus::Success)
+                        .metadata_url(&metadata_url)
+                        .etag(etag.as_deref())
+                        .last_modified_at(last_modified_at)
+                        .cache_control(cache_control)
+                        .build()
+                        .map_err(|e| JsonDownloaderError::CouldNotCreateTask(e.into()))?;
+                    pg_updates.push(task_for_updating);
 
                     self.metrics.inc_tasks("json", MetricStatus::SUCCESS);
                 },
@@ -244,7 +254,7 @@ impl JsonPersister for JsonWorker {
                     etag,
                     last_modified_at,
                     result: JsonDownloadResult::MediaUrlAndMimeType { url, mime_type },
-                    cache_control: _,
+                    cache_control,
                 }) => {
                     let mutability = StorageMutability::Immutable;
                     rocks_updates.insert(
@@ -259,80 +269,59 @@ impl JsonPersister for JsonWorker {
                             storage_mutability: mutability.clone(),
                         },
                     );
-                    pg_updates.push(UpdatedTask {
-                        status: TaskStatus::Success,
-                        etag,
-                        last_modified_at,
-                        metadata_url: metadata_url.clone(),
-                        mutability: mutability.to_string(),
-                    });
+                    let task_for_updating = UpdatedTask::builder()
+                        .mutability(&mutability.to_string())
+                        .status(TaskStatus::Success)
+                        .metadata_url(&metadata_url)
+                        .etag(etag.as_deref())
+                        .last_modified_at(last_modified_at)
+                        .cache_control(cache_control)
+                        .build()
+                        .map_err(|e| JsonDownloaderError::CouldNotCreateTask(e.into()))?;
+                    pg_updates.push(task_for_updating);
 
                     self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
                 },
-                Err(json_err) => match json_err {
-                    JsonDownloaderError::GotNoJsonFile => {
-                        pg_updates.push(UpdatedTask {
-                            status: TaskStatus::Failed,
-                            metadata_url: metadata_url.clone(),
-                            etag: None,
-                            last_modified_at: None,
-                            mutability: metadata_url.as_str().into(),
-                        });
-                        self.metrics.inc_tasks("media", MetricStatus::FAILURE);
-                    },
-                    JsonDownloaderError::CouldNotDeserialize => {
-                        pg_updates.push(UpdatedTask {
-                            status: TaskStatus::Failed,
-                            metadata_url: metadata_url.clone(),
-                            etag: None,
-                            last_modified_at: None,
-                            mutability: metadata_url.as_str().into(),
-                        });
-                        self.metrics.inc_tasks("json", MetricStatus::FAILURE);
-                    },
-                    JsonDownloaderError::CouldNotReadHeader => {
-                        pg_updates.push(UpdatedTask {
-                            status: TaskStatus::Failed,
-                            metadata_url: metadata_url.clone(),
-                            etag: None,
-                            last_modified_at: None,
-                            mutability: metadata_url.as_str().into(),
-                        });
-                        self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
-                    },
-                    //TODO: should we log the error status code?
-                    JsonDownloaderError::ErrorStatusCode(err) => {
-                        if err == reqwest::StatusCode::TOO_MANY_REQUESTS
-                            || err == reqwest::StatusCode::REQUEST_TIMEOUT
-                        {
-                            info!("Rate limited: {}", metadata_url);
-                        } else {
-                            pg_updates.push(UpdatedTask {
-                                status: TaskStatus::Failed,
-                                metadata_url: metadata_url.clone(),
-                                etag: None,
-                                last_modified_at: None,
-                                mutability: metadata_url.as_str().into(),
-                            });
-                        }
+                Err(json_err) => {
+                    let mutability = metadata_url.as_str().into();
+                    let task_for_updating = UpdatedTask::builder()
+                        .mutability(mutability)
+                        .metadata_url(&metadata_url)
+                        .status(TaskStatus::Failed)
+                        .error_message(Some(json_err.to_string()))
+                        .build()
+                        .map_err(|e| JsonDownloaderError::CouldNotCreateTask(e.into()))?;
+                    pg_updates.push(task_for_updating);
 
-                        self.metrics.inc_tasks("json", MetricStatus::FAILURE);
-                    },
-                    JsonDownloaderError::ErrorDownloading(err) => {
-                        if let JsonDownloadErrors::FailedToMakeRequest(err) = err {
-                            info!("Wasn't able to download: {:?}", err);
-                        } else {
-                            pg_updates.push(UpdatedTask {
-                                status: TaskStatus::Failed,
-                                metadata_url: metadata_url.clone(),
-                                etag: None,
-                                last_modified_at: None,
-                                mutability: metadata_url.as_str().into(),
-                            });
+                    match json_err {
+                        JsonDownloaderError::GotNoJsonFile => {
+                            self.metrics.inc_tasks("media", MetricStatus::FAILURE);
+                        },
+                        JsonDownloaderError::CouldNotDeserialize(_e) => {
+                            self.metrics.inc_tasks("json", MetricStatus::FAILURE);
+                        },
+                        JsonDownloaderError::CouldNotReadHeader => {
                             self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
-                        }
-                    },
-                    _ => {}, // No additional processing needed
+                        },
+                        //TODO: should we log the error status code?
+                        JsonDownloaderError::ErrorStatusCode(err) => {
+                            if err == reqwest::StatusCode::TOO_MANY_REQUESTS
+                                || err == reqwest::StatusCode::REQUEST_TIMEOUT
+                            {
+                                info!("Rate limited: {}", metadata_url);
+                            }
+
+                            self.metrics.inc_tasks("json", MetricStatus::FAILURE);
+                        },
+                        JsonDownloaderError::ErrorDownloading(err) => {
+                            if let JsonDownloadErrors::FailedToMakeRequest(err) = err {
+                                info!("Wasn't able to download: {:?}", err);
+                            } else {
+                                self.metrics.inc_tasks("unknown", MetricStatus::FAILURE);
+                            }
+                        },
+                        _ => {}, // No additional processing needed
+                    }
                 },
             }
         }
@@ -424,4 +413,79 @@ fn parse_cache_control_response(cache_control: &str) -> CacheControlResponse {
     }
 
     CacheControlResponse { publicity, max_age, mutability }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_cache_control_response_with_all_fields() {
+        let cache_control = "publicity=public,max-age=3600,mutability=immutable";
+        let response = parse_cache_control_response(cache_control);
+
+        assert_eq!(response.publicity, Some("public".to_string()));
+        assert_eq!(response.max_age, Some(3600));
+        assert_eq!(response.mutability, Some(OffchainDataMutability::Immutable));
+    }
+
+    #[test]
+    fn test_parse_cache_control_response_with_partial_fields() {
+        let cache_control = "max-age=7200,mutability=mutable";
+        let response = parse_cache_control_response(cache_control);
+
+        assert_eq!(response.publicity, None);
+        assert_eq!(response.max_age, Some(7200));
+        assert_eq!(response.mutability, Some(OffchainDataMutability::Mutable));
+    }
+
+    #[test]
+    fn test_parse_cache_control_response_with_invalid_fields() {
+        let cache_control = "publicity=private,max-age=abc,mutability=unknown";
+        let response = parse_cache_control_response(cache_control);
+
+        assert_eq!(response.publicity, Some("private".to_string()));
+        assert_eq!(response.max_age, None);
+        assert_eq!(response.mutability, None);
+    }
+
+    #[test]
+    fn test_parse_cache_control_response_with_empty_string() {
+        let cache_control = "";
+        let response = parse_cache_control_response(cache_control);
+
+        assert_eq!(response.publicity, None);
+        assert_eq!(response.max_age, None);
+        assert_eq!(response.mutability, None);
+    }
+
+    #[test]
+    fn test_parse_cache_control_response_with_extra_whitespace() {
+        let cache_control = "  publicity=public , max-age=3600 , mutability=immutable  ";
+        let response = parse_cache_control_response(cache_control);
+
+        assert_eq!(response.publicity, Some("public".to_string()));
+        assert_eq!(response.max_age, Some(3600));
+        assert_eq!(response.mutability, Some(OffchainDataMutability::Immutable));
+    }
+
+    #[test]
+    fn test_parse_cache_control_response_with_missing_values() {
+        let cache_control = "publicity=,max-age=,mutability=";
+        let response = parse_cache_control_response(cache_control);
+
+        assert_eq!(response.publicity, None);
+        assert_eq!(response.max_age, None);
+        assert_eq!(response.mutability, None);
+    }
+
+    #[test]
+    fn test_parse_cache_control_response_with_unexpected_format() {
+        let cache_control = "some-random-directive,another-directive=123";
+        let response = parse_cache_control_response(cache_control);
+
+        assert_eq!(response.publicity, None);
+        assert_eq!(response.max_age, None);
+        assert_eq!(response.mutability, None);
+    }
 }

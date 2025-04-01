@@ -7,7 +7,7 @@ use interface::{
 };
 use tokio::{
     sync::{
-        mpsc::{error::TryRecvError, Receiver, Sender},
+        mpsc::{Receiver, Sender},
         Mutex,
     },
     time::{Duration, Instant},
@@ -90,31 +90,18 @@ impl MetadataDownloader {
         )>,
         json_worker: Arc<JsonWorker>,
     ) {
-        loop {
-            match tasks_receiver.lock().await.try_recv() {
-                Ok(task) => {
-                    let begin_processing = Instant::now();
-                    let response = json_worker.download_file(&task, CLIENT_TIMEOUT).await;
-                    json_worker.metrics.set_latency_task_executed(
-                        "json_downloader",
-                        begin_processing.elapsed().as_millis() as f64,
-                    );
-                    if let Err(err) =
-                        metadata_to_persist_tx.send((task.metadata_url, response)).await
-                    {
-                        error!(
-                            "Error during sending JSON download result to the channel: {}",
-                            err.to_string()
-                        );
-                    }
-                },
-                Err(TryRecvError::Disconnected) => {
-                    break;
-                },
-                Err(TryRecvError::Empty) => {
-                    // Sleep a short duration to avoid busy-looping.
-                    tokio::time::sleep(Duration::from_millis(1)).await;
-                },
+        while let Some(task) = tasks_receiver.lock().await.recv().await {
+            let begin_processing = Instant::now();
+            let response = json_worker.download_file(&task, CLIENT_TIMEOUT).await;
+            json_worker.metrics.set_latency_task_executed(
+                "json_downloader",
+                begin_processing.elapsed().as_millis() as f64,
+            );
+            if let Err(err) = metadata_to_persist_tx.send((task.metadata_url, response)).await {
+                error!(
+                    "Error during sending JSON download result to the channel: {}",
+                    err.to_string()
+                );
             }
         }
     }

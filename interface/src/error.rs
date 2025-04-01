@@ -140,10 +140,12 @@ impl From<anchor_lang::error::Error> for IntegrityVerificationError {
 
 #[derive(Error, Debug)]
 pub enum JsonDownloaderError {
-    #[error("Didn't get a JSON file")]
+    #[error("Could not create task: {0}")]
+    CouldNotCreateTask(String),
+    #[error("Got a non JSON file")]
     GotNoJsonFile,
-    #[error("Could not deserialize JSON")]
-    CouldNotDeserialize,
+    #[error("Could not deserialize JSON: {0}")]
+    CouldNotDeserialize(serde_json::Error),
     #[error("Could not read header")]
     CouldNotReadHeader,
     #[error("Received {0} status code")]

@@ -14,6 +14,7 @@ CREATE TYPE mutability AS ENUM (
 
 ALTER TABLE tasks RENAME COLUMN tsk_id TO tasks_metadata_hash;
 ALTER TABLE tasks RENAME COLUMN tsk_metadata_url TO tasks_metadata_url;
+ALTER TABLE tasks RENAME COLUMN tsk_error TO tasks_error;
 
 ALTER TABLE tasks
     ADD COLUMN tasks_task_status task_status NOT NULL DEFAULT 'pending',
@@ -31,15 +32,16 @@ WHERE tasks_metadata_url = ''
    OR tasks_metadata_url LIKE 'https://www.arweave%';
 
 UPDATE tasks SET tasks_task_status = 'success' WHERE tsk_status = 'success';
-UPDATE tasks SET tasks_next_try_at = NOW() + INTERVAL '1 day', tasks_last_modified_at = TO_TIMESTAMP(0) WHERE tsk_status = 'success';
 
 ALTER TABLE tasks
     DROP COLUMN tsk_attempts,
     DROP COLUMN tsk_max_attempts,
-    DROP COLUMN tsk_error,
     DROP COLUMN tsk_status,
     DROP COLUMN tsk_locked_until;
 
 ALTER TABLE assets_v3 DROP CONSTRAINT assets_v3_ast_metadata_url_id_fkey;
-ALTER TABLE assets_v3 ADD FOREIGN KEY (ast_metadata_url_id) REFERENCES tasks(tasks_metadata_hash) ON DELETE CASCADE;
-   
+ALTER TABLE assets_v3
+    ADD CONSTRAINT assets_v3_ast_metadata_url_id_fkey
+    FOREIGN KEY (ast_metadata_url_id)
+    REFERENCES tasks(tasks_metadata_hash)
+    ON DELETE CASCADE;
