@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [0.6.1] - 2025-04-01
 [0.6.1]: https://github.com/metaplex-foundation/aura/compare/v0.6.1-dev...v0.6.1
 
+### Bug Fixes
+
+- Fix issues with receiving collection metadata (#464) ([91bb4504] (https://github.com/metaplex-foundation/aura/commit/91bb45043d2d6ba74dfabff3848111a3d25a13d8))
+
 ### Build Process & Auxiliary Tools
 
 - Bump version to 0.6.1 ([4d8ea34](https://github.com/metaplex-foundation/aura/commit/4d8ea34d85f09bb24316831c02e07ffb4325d079))
