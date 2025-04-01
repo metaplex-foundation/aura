@@ -1110,7 +1110,7 @@ dependencies = [
 
 [[package]]
 name = "backfill-rpc"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "async-trait",
  "entities",
@@ -1886,7 +1886,7 @@ dependencies = [
 
 [[package]]
 name = "consistency_check"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "bincode",
  "clap 4.5.32",
@@ -2562,7 +2562,7 @@ checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
 
 [[package]]
 name = "entities"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "base64 0.21.7",
  "blockbuster",
@@ -3119,7 +3119,7 @@ dependencies = [
 
 [[package]]
 name = "grpc"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "async-trait",
  "bincode",
@@ -3799,7 +3799,7 @@ dependencies = [
 
 [[package]]
 name = "integration_tests"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "borsh 0.10.3",
@@ -3839,7 +3839,7 @@ dependencies = [
 
 [[package]]
 name = "integrity-verification"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "anchor-lang 0.30.1",
  "assert-json-diff",
@@ -3872,7 +3872,7 @@ dependencies = [
 
 [[package]]
 name = "interface"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "anchor-lang 0.30.1",
  "async-trait",
@@ -4431,7 +4431,7 @@ dependencies = [
 
 [[package]]
 name = "metrics-utils"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "chrono",
  "hyper",
@@ -4730,7 +4730,7 @@ dependencies = [
 
 [[package]]
 name = "nft_ingester"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "anchor-lang 0.30.1",
  "arweave-rs",
@@ -5555,7 +5555,7 @@ dependencies = [
 
 [[package]]
 name = "postgre-client"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "async-trait",
  "base64 0.21.7",
@@ -6447,7 +6447,7 @@ dependencies = [
 
 [[package]]
 name = "rocks-db"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "Inflector",
  "async-channel 2.3.1",
@@ -7079,7 +7079,7 @@ dependencies = [
 
 [[package]]
 name = "setup"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "entities",
  "flatbuffers 24.12.23",
@@ -10224,7 +10224,7 @@ dependencies = [
 
 [[package]]
 name = "usecase"
-version = "0.6.1-dev"
+version = "0.6.1"
 dependencies = [
  "anchor-lang 0.30.1",
  "async-recursion 1.1.1",
