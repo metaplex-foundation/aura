@@ -218,10 +218,17 @@ fn extract_collection_metadata(
     offchain_data: &OffChainData,
 ) -> MetadataMap {
     let metadata = serde_json::from_str(&offchain_data.metadata.clone().unwrap_or_default())
-        .unwrap_or(Value::Null);
+        .unwrap_or_else(|e| {
+            warn!("Failed to parse offchain metadata: {:?}", e);
+            Value::Null
+        });
+
     let chain_data: Value =
         serde_json::from_str(asset_dynamic.onchain_data.as_ref().map_or("{}", |data| &data.value))
-            .unwrap_or(Value::Null);
+            .unwrap_or_else(|e| {
+                warn!("Failed to parse onchain data: {:?}", e);
+                Value::Null
+            });
 
     let mut selector_fn = jsonpath_lib::selector(&metadata);
     let mut chain_data_selector_fn = jsonpath_lib::selector(&chain_data);
@@ -667,6 +674,35 @@ mod tests {
             "image": "https://example.com/image.png",
             "external_url": "https://example.com",
             "description": "Test Description"
+        });
+
+        let result = extract_collection_metadata(&asset_dynamic, &offchain_data);
+
+        assert_json_eq!(result, expected_metadata);
+    }
+
+    #[test]
+    fn test_extract_collection_metadata_example_2() {
+        let asset_dynamic = AssetDynamicDetails {
+            url: Updated::new(12, None, "https://example.com".to_string()),
+            onchain_data: Some(Updated::new(
+                12,
+                None,
+                r#"{"name": "Test Asset", "symbol": "TST"}"#.to_string(),
+            )),
+            ..Default::default()
+        };
+        let offchain_data = OffChainData {
+            metadata: Some(r#"{"image":"https://arweave.net/IBwd9eXXM0oDAHAFG0AgaOPkcEjbDj8IanMvVekw7UQ","description":"This is an exclusory crate which can be opened via www.yourusdc.app","symbol":"","seller_fee_basis_points":500,"properties":{"ISSUED BY":"USDC Team","URL":"https://www.yourusdc.app","VERIFIED":"true"}}"#.to_string()),
+            ..Default::default()
+        };
+
+        let expected_metadata = json!({
+            "name": "Test Asset",
+            "image": "https://arweave.net/IBwd9eXXM0oDAHAFG0AgaOPkcEjbDj8IanMvVekw7UQ",
+            "description": "This is an exclusory crate which can be opened via www.yourusdc.app",
+            "symbol": "TST",
+            "external_url":"",
         });
 
         let result = extract_collection_metadata(&asset_dynamic, &offchain_data);

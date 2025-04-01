@@ -115,7 +115,7 @@ pub struct IngesterClapArgs {
     )]
     pub run_profiling: bool,
 
-    #[clap(long, env, value_parser = parse_json::<JsonMiddlewareConfig>,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json::<JsonMiddlewareConfig>, default_value = "{\"is_enabled\":true, \"max_urls_to_parse\":10}",  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ")]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
 
     // Group: Rocks DB Configuration
@@ -522,7 +522,7 @@ pub struct ApiClapArgs {
     #[clap(long, env, help = "#api Storage service base url")]
     pub storage_service_base_url: Option<String>,
 
-    #[clap(long, env, value_parser = parse_json::<Result<JsonMiddlewareConfig, String>>,  help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
+    #[clap(long, env, value_parser = parse_json::<JsonMiddlewareConfig>, default_value = "{\"is_enabled\":true, \"max_urls_to_parse\":10}", help = "Example: {'is_enabled':true, 'max_urls_to_parse':10} ",)]
     pub json_middleware_config: Option<JsonMiddlewareConfig>,
     #[clap(long, env, default_value = "100")]
     pub parallel_json_downloaders: i32,
