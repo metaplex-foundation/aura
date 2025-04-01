@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2025-04-01
+[0.6.1]: https://github.com/metaplex-foundation/aura/compare/v0.6.1-dev...v0.6.1
+
+### Build Process & Auxiliary Tools
+
+- Bump version to 0.6.1 ([4d8ea34](https://github.com/metaplex-foundation/aura/commit/4d8ea34d85f09bb24316831c02e07ffb4325d079))
+
+
+
 ## [0.6.0] - 2025-03-19
 [0.6.0]: https://github.com/metaplex-foundation/aura/compare/v0.5.0...v0.6.0
 
