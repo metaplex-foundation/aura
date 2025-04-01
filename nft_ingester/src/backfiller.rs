@@ -39,6 +39,7 @@ pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_ROCKSDB_OPERATION: u64 = 5;
 pub const DELETE_SLOT_RETRIES: u32 = 5;
 
+#[derive(Clone)]
 pub enum BackfillSource {
     Bigtable(Arc<BigTableClient>),
     Rpc(Arc<BackfillRPC>),

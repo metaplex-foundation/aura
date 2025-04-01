@@ -1,13 +1,20 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use backfill_rpc::rpc::BackfillRPC;
+use blockbuster::programs::bubblegum::ID as BUBBLEGUM_PROGRAM_ID;
 use clap::Parser;
 use entities::models::RawBlock;
 use futures::future::join_all;
 use interface::{
     error::StorageError, signature_persistence::BlockProducer, slot_getter::FinalizedSlotGetter,
 };
-use metrics_utils::{utils::start_metrics, MetricState, MetricsTrait};
+use metrics_utils::{utils::start_metrics, BackfillerMetricsConfig, MetricState, MetricsTrait};
 use nft_ingester::{
     backfiller::BackfillSource,
     config::{parse_json, BigTableConfig},
@@ -238,6 +245,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         backfill_source.clone(),
         target_db.clone(),
         args.clone(),
+        metrics_state.backfiller_metrics.clone(),
         cancellation_token.child_token(),
     ));
 
@@ -549,97 +557,218 @@ async fn process_slots(
     }
 }
 
-/// Runs a periodic process that reads from the last consistent offset, checks if
-/// the sequence of saved slots is consecutive, advances the consistency checkpoint if that is
-/// the case. If a missing slot is found, the checkpoint is stopped there, and the iteration
-/// continues up to the specified range, collecting any missed slots found. The process
-/// then downloads the slots to the slot database and puts the numbers of those slots
-/// into a column family called 'Missed Slots Index'. Ingester then will read from this
-/// cf and process any missed slots we found.
 async fn get_missed_slots(
     backfill_source: Arc<BackfillSource>,
     target_db: Arc<SlotStorage>,
     args: Args,
+    metrics: Arc<BackfillerMetricsConfig>,
     cancellation_token: CancellationToken,
 ) {
     /// Get missed slots in range of last_checkpoint..(last_checkpoint + SLOT_BACKFILL_OFFSET)
     /// Returns (last_checkpoint, next_checkpoint, missed_slots)
-    fn get_missed_slots(
+    async fn get_missed_slots(
+        in_mem_dumper: Arc<InMemorySlotsDumper>,
+        slots_collector: SlotsCollector<InMemorySlotsDumper, BackfillSource>,
         target_db: Arc<SlotStorage>,
         slot_backfill_offset: u64,
-    ) -> (u64, u64, Vec<u64>) {
+        cancellation_token: CancellationToken,
+    ) -> Option<(u64, u64, Vec<u64>)> {
         let last_checkpoint = get_checkpoint(&target_db);
-        info!(%last_checkpoint, "Acquiring missed slots starting at last checkpoint");
-        let mut missed_slots = Vec::<u64>::new();
-        let mut prev_slot_key = last_checkpoint;
         let mut last_valid_key = last_checkpoint;
-        let mut iter =
-            target_db.db.raw_iterator_cf(&target_db.db.cf_handle(RawBlock::NAME).unwrap());
-        iter.seek(last_checkpoint.to_be_bytes());
-        for _ in 0..slot_backfill_offset {
-            if !iter.valid() {
-                break;
-            }
-            iter.next();
-            let Some(next_key) = iter.key() else {
-                warn!("RawBlock iterator ended");
-                break;
-            };
-            let next_key = u64::from_be_bytes(
-                next_key.try_into().expect("could not decode rocksdb slot key to [u8; 8] (u64)"),
-            );
-            if prev_slot_key + 1 != next_key {
-                info!(%prev_slot_key, %next_key, "Found missed slots between keys");
-                missed_slots.extend((prev_slot_key + 1)..=next_key);
-            } else if missed_slots.is_empty() {
-                last_valid_key = next_key;
-            }
-            prev_slot_key = next_key;
+        info!(%last_checkpoint, "Acquiring missed slots starting at last checkpoint");
+
+        // Store missing slots
+        let missing_slots = Arc::new(Mutex::new(Vec::new()));
+
+        info!(
+            "Starting to collect slots from {} to {}",
+            last_checkpoint,
+            last_checkpoint + slot_backfill_offset
+        );
+
+        // Collect slots from last persisted slot down to 0
+        in_mem_dumper.clear().await;
+
+        // Start slot collection
+        let _ = slots_collector
+            .collect_slots(
+                &BUBBLEGUM_PROGRAM_ID,
+                last_checkpoint + slot_backfill_offset,
+                last_checkpoint,
+                cancellation_token.child_token(),
+            )
+            .await;
+
+        // Get the collected slots
+        let mut collected_slots = in_mem_dumper.get_sorted_keys().await;
+        in_mem_dumper.clear().await;
+        collected_slots.retain(|s| *s > last_checkpoint);
+
+        if cancellation_token.is_cancelled() {
+            info!("Shutdown signal received, stopping...");
+            return None;
         }
-        (last_checkpoint, last_valid_key, missed_slots)
+
+        let total_slots_to_check = collected_slots.len() as u64;
+
+        info!(
+            "Collected {} slots in range {} to {}",
+            total_slots_to_check,
+            last_checkpoint,
+            last_checkpoint + slot_backfill_offset
+        );
+        debug!(?collected_slots, "Collected slots");
+
+        if collected_slots.is_empty() {
+            return Some((last_checkpoint, last_checkpoint + slot_backfill_offset, Vec::new()));
+        }
+
+        // Prepare iterators for collected slots and RocksDB keys
+        let mut slots_iter = collected_slots.into_iter();
+        let mut next_slot = slots_iter.next();
+
+        let cf_handle = target_db.db.cf_handle(RawBlock::NAME).unwrap();
+        let mut db_iter = target_db.db.raw_iterator_cf(&cf_handle);
+        db_iter.seek(last_checkpoint.to_be_bytes());
+
+        let mut current_db_slot = if db_iter.valid() {
+            if let Some(key_bytes) = db_iter.key() {
+                RawBlock::decode_key(key_bytes.to_vec()).ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Verification loop
+        while let Some(slot) = next_slot {
+            if cancellation_token.is_cancelled() {
+                info!("Shutdown signal received, stopping...");
+                return None;
+            }
+
+            if let Some(db_slot) = current_db_slot {
+                debug!(%db_slot, %slot, "iterating...");
+                if slot < last_checkpoint {
+                    next_slot = slots_iter.next();
+                    db_iter.next();
+                    current_db_slot = if db_iter.valid() {
+                        if let Some(key_bytes) = db_iter.key() {
+                            RawBlock::decode_key(key_bytes.to_vec()).ok()
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                }
+                match slot.cmp(&db_slot) {
+                    Ordering::Equal => {
+                        // Slot exists in RocksDB
+                        // Advance both iterators
+                        {
+                            let missing_slots_lock = missing_slots.lock().unwrap();
+                            if missing_slots_lock.is_empty() {
+                                last_valid_key = db_slot;
+                            }
+                        }
+                        next_slot = slots_iter.next();
+                        db_iter.next();
+                        current_db_slot = if db_iter.valid() {
+                            if let Some(key_bytes) = db_iter.key() {
+                                RawBlock::decode_key(key_bytes.to_vec()).ok()
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+                    },
+                    Ordering::Less => {
+                        // Slot is missing in RocksDB
+                        {
+                            let mut missing_slots_lock = missing_slots.lock().unwrap();
+                            missing_slots_lock.push(slot);
+                        }
+                        // Advance slots iterator
+                        next_slot = slots_iter.next();
+                    },
+                    Ordering::Greater => {
+                        // slot > db_slot
+                        // Advance RocksDB iterator
+                        db_iter.next();
+                        current_db_slot = if db_iter.valid() {
+                            if let Some(key_bytes) = db_iter.key() {
+                                RawBlock::decode_key(key_bytes.to_vec()).ok()
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+                    },
+                }
+            } else {
+                // No more slots in RocksDB, remaining slots are missing
+                {
+                    let mut missing_slots_lock = missing_slots.lock().unwrap();
+                    missing_slots_lock.push(slot);
+                    missing_slots_lock.extend(slots_iter);
+                }
+                break;
+            }
+        }
+
+        // Print missing slots
+        let missing_slots = Arc::into_inner(missing_slots).unwrap().into_inner().unwrap();
+        Some((last_checkpoint, last_valid_key, missing_slots))
     }
 
+    let in_mem_dumper = Arc::new(InMemorySlotsDumper::new());
+    let slots_collector =
+        SlotsCollector::new(in_mem_dumper.clone(), backfill_source.clone(), metrics.clone());
     let slot_backfill_offset = args.slot_backfill_offset;
     loop {
-        tokio::select! {
-            _ = cancellation_token.cancelled() => { break; }
-            _ = tokio::time::sleep(Duration::from_secs(args.slot_backfill_interval)) => {
-                info!("Starting slot backfill...");
-            }
-        };
         let db = target_db.clone();
-        let (last_checkpoint, next_checkpoint, missed_slots) =
-            tokio::task::spawn_blocking(move || get_missed_slots(db, slot_backfill_offset))
-                .await
-                .expect("retrieval of missed slots must join");
-        if missed_slots.is_empty() {
-            continue;
-        }
-        debug!(?missed_slots, "Missed slots found");
-        info!(%last_checkpoint, %next_checkpoint, "Getting missed slots between checkpoints");
-        process_slots(
-            missed_slots.clone(),
-            backfill_source.clone(),
-            target_db.clone(),
-            &args,
+        let dumper = in_mem_dumper.clone();
+        let collector = slots_collector.clone();
+        let (last_checkpoint, next_checkpoint, missed_slots) = get_missed_slots(
+            dumper,
+            collector,
+            db,
+            slot_backfill_offset,
             cancellation_token.child_token(),
         )
-        .await;
-        let missed_slots_map = missed_slots
-            .into_iter()
-            .map(|slot| {
-                let next_seq = target_db
-                    .next_missed_slots_seq()
-                    .expect("get next missed slots seq must not fail");
-                ((next_seq, slot), MissedSlotsIdx)
-            })
-            .collect();
-        debug!("Saving missed slots to the database");
-        target_db
-            .missed_slots_idx
-            .put_batch(missed_slots_map)
-            .await
-            .expect("must put batch of missed slots into ");
+        .await
+        .expect("retrieval of missed slots must join");
+        if !missed_slots.is_empty() {
+            debug!(?missed_slots, "Missed slots found");
+            info!(%last_checkpoint, %next_checkpoint, "Getting missed slots between checkpoints");
+            process_slots(
+                missed_slots.clone(),
+                backfill_source.clone(),
+                target_db.clone(),
+                &args,
+                cancellation_token.child_token(),
+            )
+            .await;
+            let missed_slots_map = missed_slots
+                .into_iter()
+                .map(|slot| {
+                    let next_seq = target_db
+                        .next_missed_slots_seq()
+                        .expect("get next missed slots seq must not fail");
+                    ((next_seq, slot), MissedSlotsIdx)
+                })
+                .collect();
+            debug!("Saving missed slots to the database");
+            target_db
+                .missed_slots_idx
+                .put_batch(missed_slots_map)
+                .await
+                .expect("must put batch of missed slots into ");
+        }
         debug!(%last_checkpoint, "Deleting last consistency checkpoint");
         target_db
             .slot_consistency_checkpoint
@@ -650,5 +779,11 @@ async fn get_missed_slots(
             .slot_consistency_checkpoint
             .put(next_checkpoint, SlotConsistencyCheckpoint)
             .expect("must update the new checkpoint after the slots are saved into storage");
+        tokio::select! {
+            _ = cancellation_token.cancelled() => { break; }
+            _ = tokio::time::sleep(Duration::from_secs(args.slot_backfill_interval)) => {
+                info!("Starting slot backfill...");
+            }
+        };
     }
 }

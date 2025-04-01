@@ -36,6 +36,8 @@ use tokio_retry::{strategy::ExponentialBackoff, RetryIf};
 const MAX_SIGNATURES_LIMIT: usize = 50_000_000;
 const INITIAL_BACKOFF_DELAY_SECS: u64 = 2;
 pub(crate) const MAX_RPC_RETRIES: usize = 7;
+
+#[derive(Clone)]
 pub struct BackfillRPC {
     pub(crate) client: BackoffRpcClient,
 }
