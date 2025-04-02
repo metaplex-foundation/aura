@@ -178,7 +178,7 @@ impl PgClient {
                 tasks_etag = tmp.etag,
                 tasks_last_modified_at = tmp.last_modified_at,
                 tasks_mutability = tmp.mutability,
-                tasks_next_try_at = tmp.tasks_next_try_at
+                tasks_next_try_at = tmp.tasks_next_try_at,
                 tasks_error = tmp.tasks_error
                 FROM (
         ",
