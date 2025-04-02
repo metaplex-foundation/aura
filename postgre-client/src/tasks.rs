@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use chrono::{DateTime, Duration, Utc};
 use entities::{
-    enums::TaskStatus,
+    enums::{OffchainDataMutability, TaskStatus},
     models::{MetadataDownloadTask, Task, UrlWithStatus},
 };
 use interface::json_metadata::CacheControlResponse;
@@ -18,7 +18,7 @@ pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
 
 pub struct UpdatedTask {
     status: TaskStatus,
-    mutability: String,
+    mutability: OffchainDataMutability,
     metadata_url: String,
     etag: Option<String>,
     last_modified_at: Option<DateTime<Utc>>,
@@ -35,7 +35,7 @@ impl UpdatedTask {
 #[derive(Default)]
 pub struct UpdatedTaskBuilder {
     status: Option<TaskStatus>,
-    mutability: Option<String>,
+    mutability: Option<OffchainDataMutability>,
     metadata_url: Option<String>,
     etag: Option<String>,
     last_modified_at: Option<DateTime<Utc>>,
@@ -175,9 +175,9 @@ impl PgClient {
             UPDATE tasks
             SET
                 tasks_task_status = tmp.tasks_task_status,
-                tasks_etag = tmp.etag,
-                tasks_last_modified_at = tmp.last_modified_at,
-                tasks_mutability = tmp.mutability,
+                tasks_etag = tmp.tasks_etag,
+                tasks_last_modified_at = tmp.tasks_last_modified_at,
+                tasks_mutability = tmp.tasks_mutability,
                 tasks_next_try_at = tmp.tasks_next_try_at,
                 tasks_error = tmp.tasks_error
                 FROM (
@@ -193,8 +193,8 @@ impl PgClient {
             b.push_bind(task.last_modified_at);
             b.push_bind(task.mutability.clone());
 
-            let tasks_next_try_at = match &task.mutability[..] {
-                "mutable" => task
+            let tasks_next_try_at = match &task.mutability {
+                OffchainDataMutability::Mutable => task
                     .cache_control
                     .as_ref()
                     .and_then(|cc| {
@@ -209,7 +209,7 @@ impl PgClient {
             b.push_bind(task.error_message);
         });
 
-        query_builder.push(") as tmp (tasks_metadata_hash, tasks_metadata_url, task_status, etag, last_modified_at, mutability, tasks_next_try_at, tasks_error) WHERE tasks.tasks_metadata_hash = tmp.tasks_metadata_hash;");
+        query_builder.push(") as tmp (tasks_metadata_hash, tasks_metadata_url, tasks_task_status, tasks_etag, tasks_last_modified_at, tasks_mutability, tasks_next_try_at, tasks_error) WHERE tasks.tasks_metadata_hash = tmp.tasks_metadata_hash;");
 
         let query = query_builder.build();
         query.execute(&self.pool).await?;

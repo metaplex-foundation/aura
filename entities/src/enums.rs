@@ -127,6 +127,18 @@ pub enum OffchainDataMutability {
     Mutable,
 }
 
+impl From<&str> for OffchainDataMutability {
+    fn from(storage_mutability: &str) -> Self {
+        if storage_mutability == "immutable" {
+            OffchainDataMutability::Immutable
+        } else if storage_mutability == "mutable" {
+            OffchainDataMutability::Mutable
+        } else {
+            unreachable!()
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub enum Interface {
     #[serde(rename = "V1_NFT")]
