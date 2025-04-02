@@ -41,6 +41,9 @@ const MAX_BATCH_RETRIES: usize = 5;
 const INITIAL_BATCH_DELAY_MS: u64 = 500;
 // Offset to start collecting slots from, approximately 2 minutes before the finalized slot, given the eventual consistency of the big table
 const SLOT_COLLECTION_OFFSET: u64 = 300;
+// Offset to start collecting missed slots from. This exists to prevent concurrent collection of
+// later slots and marking of those as missed.
+const MISSED_SLOT_COLLECTION_OFFSET: u64 = 10 * SLOT_COLLECTION_OFFSET;
 /// How often we perform the backfill check (6 hours by default)
 const DEFAULT_SLOT_BACKFILL_INTERVAL_SECS: u64 = 60 * 60 * 6;
 /// The gap around the checkpoint. If, for example, the last checkpointed slot is
@@ -566,6 +569,27 @@ async fn get_missed_slots(
 ) {
     /// Get missed slots in range of last_checkpoint..(last_checkpoint + SLOT_BACKFILL_OFFSET)
     /// Returns (last_checkpoint, next_checkpoint, missed_slots)
+    ///
+    /// Below is an example of boundary calculations.
+    ///
+    /// # Examples
+    /// ```
+    /// const MISSED_SLOT_COLLECTION_OFFSET: u64 = 3000;
+    /// const MAX_SLOTS_TO_ADVANCE: u64 = 50_000;
+    /// let lower_slot_boundary: u64 = 10_000;
+    /// let higher_slot_boundary = 110_000u64 - MISSED_SLOT_COLLECTION_OFFSET;
+    /// let slot_count =
+    /// higher_slot_boundary.saturating_sub(lower_slot_boundary).min(MAX_SLOTS_TO_ADVANCE);
+    ///
+    /// assert_eq!(slot_count, 50_000u64);
+    ///
+    /// let lower_slot_boundary: u64 = 10_000;
+    /// let higher_slot_boundary = 20_000u64 - MISSED_SLOT_COLLECTION_OFFSET;
+    /// let slot_count =
+    /// higher_slot_boundary.saturating_sub(lower_slot_boundary).min(MAX_SLOTS_TO_ADVANCE);
+    ///
+    /// assert_eq!(slot_count, 7_000u64);
+    /// ```
     async fn get_missed_slots(
         in_mem_dumper: Arc<InMemorySlotsDumper>,
         slots_collector: SlotsCollector<InMemorySlotsDumper, BackfillSource>,
@@ -573,17 +597,21 @@ async fn get_missed_slots(
         slot_backfill_offset: u64,
         cancellation_token: CancellationToken,
     ) -> Option<(u64, u64, Vec<u64>)> {
-        let last_checkpoint = get_checkpoint(&target_db);
-        let mut last_valid_key = last_checkpoint;
-        info!(%last_checkpoint, "Acquiring missed slots starting at last checkpoint");
+        let lower_slot_boundary = get_checkpoint(&target_db);
+        let higher_slot_boundary = get_last_persisted_slot(target_db.clone())
+            .saturating_sub(MISSED_SLOT_COLLECTION_OFFSET);
+        let slot_backfill_offset =
+            higher_slot_boundary.saturating_sub(lower_slot_boundary).min(slot_backfill_offset);
+        let mut last_valid_key = lower_slot_boundary;
+        info!(%lower_slot_boundary, "Acquiring missed slots starting at last checkpoint");
 
         // Store missing slots
         let missing_slots = Arc::new(Mutex::new(Vec::new()));
 
         info!(
             "Starting to collect slots from {} to {}",
-            last_checkpoint,
-            last_checkpoint + slot_backfill_offset
+            lower_slot_boundary,
+            lower_slot_boundary + slot_backfill_offset
         );
 
         // Collect slots from last persisted slot down to 0
@@ -593,8 +621,8 @@ async fn get_missed_slots(
         let _ = slots_collector
             .collect_slots(
                 &BUBBLEGUM_PROGRAM_ID,
-                last_checkpoint + slot_backfill_offset,
-                last_checkpoint,
+                lower_slot_boundary + slot_backfill_offset,
+                lower_slot_boundary,
                 cancellation_token.child_token(),
             )
             .await;
@@ -602,7 +630,7 @@ async fn get_missed_slots(
         // Get the collected slots
         let mut collected_slots = in_mem_dumper.get_sorted_keys().await;
         in_mem_dumper.clear().await;
-        collected_slots.retain(|s| *s > last_checkpoint);
+        collected_slots.retain(|s| *s > lower_slot_boundary);
 
         if cancellation_token.is_cancelled() {
             info!("Shutdown signal received, stopping...");
@@ -614,13 +642,16 @@ async fn get_missed_slots(
         info!(
             "Collected {} slots in range {} to {}",
             total_slots_to_check,
-            last_checkpoint,
-            last_checkpoint + slot_backfill_offset
+            lower_slot_boundary,
+            lower_slot_boundary + slot_backfill_offset
         );
-        debug!(?collected_slots, "Collected slots");
 
         if collected_slots.is_empty() {
-            return Some((last_checkpoint, last_checkpoint + slot_backfill_offset, Vec::new()));
+            return Some((
+                lower_slot_boundary,
+                lower_slot_boundary + slot_backfill_offset,
+                Vec::new(),
+            ));
         }
 
         // Prepare iterators for collected slots and RocksDB keys
@@ -629,7 +660,7 @@ async fn get_missed_slots(
 
         let cf_handle = target_db.db.cf_handle(RawBlock::NAME).unwrap();
         let mut db_iter = target_db.db.raw_iterator_cf(&cf_handle);
-        db_iter.seek(last_checkpoint.to_be_bytes());
+        db_iter.seek(lower_slot_boundary.to_be_bytes());
 
         let mut current_db_slot = if db_iter.valid() {
             if let Some(key_bytes) = db_iter.key() {
@@ -649,8 +680,7 @@ async fn get_missed_slots(
             }
 
             if let Some(db_slot) = current_db_slot {
-                debug!(%db_slot, %slot, "iterating...");
-                if slot < last_checkpoint {
+                if slot < lower_slot_boundary {
                     next_slot = slots_iter.next();
                     db_iter.next();
                     current_db_slot = if db_iter.valid() {
@@ -722,7 +752,7 @@ async fn get_missed_slots(
 
         // Print missing slots
         let missing_slots = Arc::into_inner(missing_slots).unwrap().into_inner().unwrap();
-        Some((last_checkpoint, last_valid_key, missing_slots))
+        Some((lower_slot_boundary, last_valid_key, missing_slots))
     }
 
     let in_mem_dumper = Arc::new(InMemorySlotsDumper::new());
