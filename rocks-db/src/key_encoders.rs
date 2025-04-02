@@ -156,7 +156,7 @@ pub fn encode_pubkeyx3(ask: (Pubkey, Pubkey, Pubkey)) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::{bs58, pubkey::Pubkey};
 
     // Import functions from the parent module
     use super::*;
@@ -207,6 +207,20 @@ mod tests {
 
         assert_eq!(decoded.0, pubkey);
         assert_eq!(decoded.1, slot);
+    }
+
+    #[test]
+    fn test_encode_pubkey_u64_from_str() {
+        let key_str = "169iCHteiFuE3ksp4GGo2ZP1gB5tRPJfdeSTzPgrmynbKbWWcxzD2Y";
+        let key_bytes = bs58::decode(key_str).into_vec().unwrap();
+
+        let decoded = decode_pubkey_u64(key_bytes).unwrap();
+
+        assert_eq!(
+            decoded.0,
+            Pubkey::try_from("17ycUSjxhN3cXM922EQnzjcRjNGDngd9jPQaka7DmTQ").unwrap()
+        );
+        assert_eq!(decoded.1, 1);
     }
 
     #[test]

@@ -58,7 +58,7 @@ cargo build --release --bin explorer
 Run the compiled binary with the required arguments:
 
 ```bash
-../target/release/explorer --primary-db-path /path/to/your/primary/db 
+./target/release/explorer --primary-db-path /path/to/your/primary/db 
 ```
 ### Optional Arguments
 
@@ -96,7 +96,7 @@ The service accepts the following command-line arguments:
 
 #### Example Request:
 ```bash
-curl "http://localhost:8086/iterate_keys?cf_name=default&limit=5"
+curl "http://localhost:8086/iterate_keys?cf_name=ASSET_LEAF_V2&limit=5"
 ```
 
 ### Get Value
