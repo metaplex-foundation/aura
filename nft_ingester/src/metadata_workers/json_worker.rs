@@ -393,8 +393,8 @@ fn parse_cache_control_response(cache_control: &str) -> CacheControlResponse {
 
     for directive in cache_control.split(',') {
         let directive = directive.trim();
-        if directive.starts_with("publicity=") {
-            publicity = directive.trim_start_matches("publicity=").parse().ok();
+        if let Some(value) = directive.strip_prefix("publicity=") {
+            publicity = if value.is_empty() { None } else { Some(value.to_string()) };
         }
         if directive.starts_with("max-age=") {
             max_age = directive.trim_start_matches("max-age=").parse().ok();
