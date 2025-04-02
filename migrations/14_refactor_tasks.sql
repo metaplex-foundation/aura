@@ -32,6 +32,7 @@ WHERE tasks_metadata_url = ''
    OR tasks_metadata_url LIKE 'https://www.arweave%';
 
 UPDATE tasks SET tasks_task_status = 'success' WHERE tsk_status = 'success';
+UPDATE tasks SET tasks_next_try_at = NOW() WHERE tsk_status = 'success';
 
 ALTER TABLE tasks
     DROP COLUMN tsk_attempts,
