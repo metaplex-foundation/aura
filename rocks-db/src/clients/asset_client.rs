@@ -424,7 +424,7 @@ impl Storage {
 
         let master_edition_metadata = match master_edition_metadata? {
             Some(TokenMetadataEdition::MasterEdition(metadata)) => metadata,
-            _ => return Err(StorageError::Common("Expected MasterEdition".to_string())),
+            _ => return Err(StorageError::NotFound("Expected MasterEdition".to_string())),
         };
 
         let asset_edition_info_list: Vec<AssetEditionInfo> = asset_edition_child_assets?

@@ -6450,16 +6450,15 @@ name = "rocks-db"
 version = "0.6.1-dev"
 dependencies = [
  "Inflector",
- "async-channel 2.3.1",
  "async-trait",
  "base64 0.21.7",
  "bincode",
+ "bs58 0.4.0",
  "chrono",
  "clap 4.5.32",
  "criterion",
  "csv",
  "entities",
- "figment",
  "flatbuffers 24.12.23",
  "futures",
  "futures-util",
