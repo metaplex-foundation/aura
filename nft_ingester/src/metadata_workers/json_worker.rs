@@ -284,9 +284,8 @@ impl JsonPersister for JsonWorker {
                     self.metrics.inc_tasks("media", MetricStatus::SUCCESS);
                 },
                 Err(json_err) => {
-                    let mutability = metadata_url.as_str().into();
                     let task_for_updating = UpdatedTask::builder()
-                        .mutability(mutability)
+                        .mutability(&metadata_url)
                         .metadata_url(&metadata_url)
                         .status(TaskStatus::Failed)
                         .error_message(Some(json_err.to_string()))
