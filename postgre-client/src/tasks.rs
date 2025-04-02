@@ -280,7 +280,7 @@ impl PgClient {
             let metadata_url: String = row.get("tasks_metadata_url");
             let status: TaskStatus = row.get("tasks_task_status");
             let etag: Option<String> = row.get("tasks_etag");
-            let last_modified_at: Option<String> = row.get("tasks_last_modified_at");
+            let last_modified_at: Option<DateTime<Utc>> = row.get("tasks_last_modified_at");
 
             tasks.push(MetadataDownloadTask { metadata_url, status, etag, last_modified_at });
         }
@@ -320,7 +320,7 @@ impl PgClient {
             let metadata_url: String = row.get("tasks_metadata_url");
             let status: TaskStatus = row.get("tasks_task_status");
             let etag: Option<String> = row.get("tasks_etag");
-            let last_modified_at: Option<String> = row.get("tasks_last_modified_at");
+            let last_modified_at: Option<DateTime<Utc>> = row.get("tasks_last_modified_at");
 
             tasks.push(MetadataDownloadTask { metadata_url, status, etag, last_modified_at });
         }

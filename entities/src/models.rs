@@ -518,7 +518,7 @@ pub struct MetadataDownloadTask {
     pub metadata_url: String,
     pub status: TaskStatus,
     pub etag: Option<String>,
-    pub last_modified_at: Option<String>,
+    pub last_modified_at: Option<DateTime<Utc>>,
 }
 
 pub struct CoreFee {

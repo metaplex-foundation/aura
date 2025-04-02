@@ -112,7 +112,8 @@ impl JsonDownloader for JsonWorker {
             request_builder = request_builder.header(IF_NONE_MATCH, etag);
         };
         if let Some(last_modified_at) = &download_task.last_modified_at {
-            request_builder = request_builder.header(IF_MODIFIED_SINCE, last_modified_at);
+            request_builder =
+                request_builder.header(IF_MODIFIED_SINCE, last_modified_at.to_rfc2822());
         };
 
         let response = request_builder.send().await.map_err(|e| {
