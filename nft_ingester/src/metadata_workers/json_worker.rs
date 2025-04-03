@@ -287,7 +287,7 @@ impl JsonPersister for JsonWorker {
                 },
                 Err(json_err) => {
                     let task_for_updating = UpdatedTask::builder()
-                        .mutability(&metadata_url)
+                        .mutability(&StorageMutability::from_url(&metadata_url).to_string())
                         .map_err(|e| JsonDownloaderError::CouldNotCreateTask(e.into()))?
                         .metadata_url(&metadata_url)
                         .status(TaskStatus::Failed)
