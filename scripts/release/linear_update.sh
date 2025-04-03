@@ -15,6 +15,12 @@ if [ -z "$GITHUB_RELEASE_TAG" ]; then
   exit 1
 fi
 
+# Check if the .release_tasks file exists
+if [ ! -f .release_tasks ]; then
+    echo "Error: .release_tasks file not found"
+    exit 1
+fi
+
 # Check if jq is installed (required for parsing JSON responses)
 if ! command -v jq &> /dev/null; then
     echo "jq not found. Please install it using 'sudo apt install jq' (Linux) or 'brew install jq' (macOS)."
@@ -36,8 +42,8 @@ while read -r ISSUE_ID; do
     SUCCESS=$(echo "$RESPONSE" | jq -r '.data.commentCreate.success')
     if [ "$SUCCESS" != "true" ]; then
         echo "❌ Failed to add comment for $ISSUE_ID: $RESPONSE"
-        exit 1
+    else
+        echo "✅ Successfully updated $ISSUE_ID"
     fi
 
-    echo "✅ Successfully updated $ISSUE_ID"
 done < .release_tasks
