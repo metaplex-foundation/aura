@@ -157,7 +157,6 @@ pub async fn run_backfill<C>(
                 db.clone(),
                 slot_db.clone(),
                 consumer.clone(),
-                metrics.clone(),
             )),
             BackfillTarget::RegularSlots => Either::Right(backfill_slots(
                 cancellation_token.child_token(),
@@ -238,14 +237,14 @@ pub async fn backfill_missed<C>(
     db: Arc<Storage>,
     slot_db: Arc<SlotStorage>,
     consumer: Arc<C>,
-    metrics: Arc<BackfillerMetricsConfig>,
 ) -> Result<(), IngesterError>
 where
     C: BlockConsumer,
 {
-    let last_processed = db.get_parameter::<(u64, u64)>(Parameter::LastProcessedMissedSlot).await?;
+    let last_processed =
+        db.get_parameter::<(u64, u64)>(Parameter::LastProcessedMissedSlotKey).await?;
     if last_processed.is_none() {
-        db.put_parameter(Parameter::LastProcessedMissedSlot, (0u64, 0u64)).await?;
+        db.put_parameter(Parameter::LastProcessedMissedSlotKey, (0u64, 0u64)).await?;
     }
     slot_db
         .db
@@ -272,19 +271,10 @@ where
         }
         let raw_block = raw_block.unwrap();
 
-        let block_time = raw_block.block.block_time;
         if let Err(e) = consumer.consume_block(slot, raw_block.block).await {
             error!("Error processing slot {}: {}", slot, e);
         }
-        db.put_parameter(Parameter::LastProcessedMissedSlot, (seq, slot)).await?;
-
-        if let Some(block_time) = block_time {
-            let dur = time::SystemTime::now()
-                .duration_since(time::UNIX_EPOCH + Duration::from_secs(block_time))
-                .unwrap_or_default()
-                .as_millis() as f64;
-            metrics.set_slot_delay_time("missed_slot_backfilled", dur);
-        }
+        db.put_parameter(Parameter::LastProcessedMissedSlotKey, (seq, slot)).await?;
 
         it.next();
     }

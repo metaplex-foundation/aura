@@ -44,10 +44,11 @@ const SLOT_COLLECTION_OFFSET: u64 = 300;
 // Offset to start collecting missed slots from. This exists to prevent concurrent collection of
 // later slots and marking of those as missed.
 const MISSED_SLOT_COLLECTION_OFFSET: u64 = 10 * SLOT_COLLECTION_OFFSET;
-/// How often we perform the backfill check (6 hours by default)
-const DEFAULT_SLOT_BACKFILL_INTERVAL_SECS: u64 = 60 * 60 * 6;
+/// How often we perform the backfill check (2 minutes by default)
+const DEFAULT_SLOT_BACKFILL_INTERVAL_SECS: u64 = 2 * 60;
 /// The gap around the checkpoint. If, for example, the last checkpointed slot is
-/// 200_000_000, we will verify slots from 200_000_000 to 201_000_000 (or the last available one).
+/// 200_000_000, we will verify slots from 200_000_000 to 201_000_000 (or the last available one
+/// minus `MISSED_SLOT_COLLECTION_OFFSET`).
 /// Then, if we find all the missing slots in this range, we will advance the checkpoint to the next
 /// inconsistent position.
 const DEFAULT_SLOT_BACKFILL_OFFSET: u64 = 1_000_000;
@@ -61,11 +62,11 @@ const DEFAULT_SLOT_BACKFILL_OFFSET: u64 = 1_000_000;
 )]
 struct Args {
     /// Path to the target RocksDB instance with slots
-    #[arg(short, long, env = "SLOTS_DB_PRIMARY_PATH")]
+    #[arg(short, long, env = "ROCKS_SLOTS_DB_PATH")]
     target_db_path: PathBuf,
 
     /// RPC host
-    #[arg(short, long, env = "RPC_HOST")]
+    #[arg(short, long, env)]
     rpc_host: String,
 
     /// Optional starting slot number, this will override the last saved slot in the RocksDB
@@ -662,16 +663,8 @@ async fn get_missed_slots(
         let mut db_iter = target_db.db.raw_iterator_cf(&cf_handle);
         db_iter.seek(lower_slot_boundary.to_be_bytes());
 
-        let mut current_db_slot = if db_iter.valid() {
-            if let Some(key_bytes) = db_iter.key() {
-                RawBlock::decode_key(key_bytes.to_vec()).ok()
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
+        let mut current_db_slot =
+            db_iter.key().and_then(|key_bytes| RawBlock::decode_key(key_bytes.to_vec()).ok());
         // Verification loop
         while let Some(slot) = next_slot {
             if cancellation_token.is_cancelled() {
@@ -680,19 +673,6 @@ async fn get_missed_slots(
             }
 
             if let Some(db_slot) = current_db_slot {
-                if slot < lower_slot_boundary {
-                    next_slot = slots_iter.next();
-                    db_iter.next();
-                    current_db_slot = if db_iter.valid() {
-                        if let Some(key_bytes) = db_iter.key() {
-                            RawBlock::decode_key(key_bytes.to_vec()).ok()
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-                }
                 match slot.cmp(&db_slot) {
                     Ordering::Equal => {
                         // Slot exists in RocksDB
@@ -763,7 +743,7 @@ async fn get_missed_slots(
         let db = target_db.clone();
         let dumper = in_mem_dumper.clone();
         let collector = slots_collector.clone();
-        let (last_checkpoint, next_checkpoint, missed_slots) = get_missed_slots(
+        let Some((last_checkpoint, next_checkpoint, missed_slots)) = get_missed_slots(
             dumper,
             collector,
             db,
@@ -771,7 +751,11 @@ async fn get_missed_slots(
             cancellation_token.child_token(),
         )
         .await
-        .expect("retrieval of missed slots must join");
+        else {
+            warn!("Missed slot retrieval cancelled");
+            break;
+        };
+
         if !missed_slots.is_empty() {
             debug!(?missed_slots, "Missed slots found");
             info!(%last_checkpoint, %next_checkpoint, "Getting missed slots between checkpoints");

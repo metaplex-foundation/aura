@@ -51,6 +51,9 @@ impl TypedColumn for RawBlock {
 pub struct MissedSlotsIdx;
 
 impl TypedColumn for MissedSlotsIdx {
+    // a combination of (seq, slot), where the sequence number is an autoincrementing value
+    // used to decouple the order of missed slots written from their slot numbers, which might
+    // be out of order.
     type KeyType = (u64, u64);
 
     type ValueType = Self;

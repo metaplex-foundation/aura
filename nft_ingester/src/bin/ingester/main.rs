@@ -544,13 +544,15 @@ pub async fn main() -> Result<(), IngesterError> {
                     })?;
             }
 
+            let consumer = Arc::new(DirectBlockParser::new(
+                tx_ingester.clone(),
+                primary_rocks_storage.clone(),
+                metrics_state.backfiller_metrics.clone(),
+            ));
+
             usecase::executor::spawn({
                 let cancellation_token = cancellation_token.child_token();
-                let consumer = Arc::new(DirectBlockParser::new(
-                    tx_ingester.clone(),
-                    primary_rocks_storage.clone(),
-                    metrics_state.backfiller_metrics.clone(),
-                ));
+                let consumer = consumer.clone();
                 let db = primary_rocks_storage.clone();
                 let metrics: Arc<BackfillerMetricsConfig> =
                     metrics_state.backfiller_metrics.clone();
@@ -569,11 +571,7 @@ pub async fn main() -> Result<(), IngesterError> {
             });
             usecase::executor::spawn({
                 let cancellation_token = cancellation_token.child_token();
-                let consumer = Arc::new(DirectBlockParser::new(
-                    tx_ingester.clone(),
-                    primary_rocks_storage.clone(),
-                    metrics_state.backfiller_metrics.clone(),
-                ));
+                let consumer = consumer.clone();
                 let db = primary_rocks_storage.clone();
                 let metrics: Arc<BackfillerMetricsConfig> =
                     metrics_state.backfiller_metrics.clone();
