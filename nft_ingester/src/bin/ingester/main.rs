@@ -549,18 +549,41 @@ pub async fn main() -> Result<(), IngesterError> {
                 primary_rocks_storage.clone(),
                 metrics_state.backfiller_metrics.clone(),
             ));
-            let db = primary_rocks_storage.clone();
-            let metrics: Arc<BackfillerMetricsConfig> = metrics_state.backfiller_metrics.clone();
-            let slot_db = slot_db.clone();
+
             usecase::executor::spawn({
                 let cancellation_token = cancellation_token.child_token();
+                let consumer = consumer.clone();
+                let db = primary_rocks_storage.clone();
+                let metrics: Arc<BackfillerMetricsConfig> =
+                    metrics_state.backfiller_metrics.clone();
+                let slot_db = slot_db.clone();
                 async move {
-                    nft_ingester::backfiller::run_backfill_slots(
+                    nft_ingester::backfiller::run_backfill(
                         cancellation_token,
                         db,
                         slot_db,
                         consumer,
                         metrics,
+                        nft_ingester::backfiller::BackfillTarget::RegularSlots,
+                    )
+                    .await;
+                }
+            });
+            usecase::executor::spawn({
+                let cancellation_token = cancellation_token.child_token();
+                let consumer = consumer.clone();
+                let db = primary_rocks_storage.clone();
+                let metrics: Arc<BackfillerMetricsConfig> =
+                    metrics_state.backfiller_metrics.clone();
+                let slot_db = slot_db.clone();
+                async move {
+                    nft_ingester::backfiller::run_backfill(
+                        cancellation_token,
+                        db,
+                        slot_db,
+                        consumer,
+                        metrics,
+                        nft_ingester::backfiller::BackfillTarget::MissedSlots,
                     )
                     .await;
                 }

@@ -8,6 +8,7 @@ pub enum Parameter {
     LastBackfilledSlot,
     LastFetchedSlot,
     TopSeenSlot,
+    LastProcessedMissedSlotKey,
 }
 
 pub struct ParameterColumn<T> {

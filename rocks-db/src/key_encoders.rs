@@ -154,6 +154,17 @@ pub fn encode_pubkeyx3(ask: (Pubkey, Pubkey, Pubkey)) -> Vec<u8> {
     key
 }
 
+pub fn encode_u64x2(key: (u64, u64)) -> [u8; 16] {
+    let mut out = [0u8; std::mem::size_of::<u64>() * 2];
+    out[..8].copy_from_slice(&key.0.to_be_bytes());
+    out[8..].copy_from_slice(&key.1.to_be_bytes());
+    out
+}
+
+pub fn decode_u64x2(bytes: &[u8]) -> crate::Result<(u64, u64)> {
+    Ok((u64::from_be_bytes(bytes[..8].try_into()?), u64::from_be_bytes(bytes[8..].try_into()?)))
+}
+
 #[cfg(test)]
 mod tests {
     use solana_sdk::pubkey::Pubkey;

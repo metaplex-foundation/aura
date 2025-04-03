@@ -5,6 +5,7 @@ use entities::models::{RawBlock, RawBlockDeprecated, RawBlockWithTransactions};
 use interface::{
     error::StorageError as InterfaceStorageError, signature_persistence::BlockProducer,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{column::TypedColumn, errors::StorageError, key_encoders, SlotStorage};
 
@@ -43,6 +44,61 @@ impl TypedColumn for RawBlock {
 
     fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
         key_encoders::decode_u64(bytes)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct MissedSlotsIdx;
+
+impl TypedColumn for MissedSlotsIdx {
+    // a combination of (seq, slot), where the sequence number is an autoincrementing value
+    // used to decouple the order of missed slots written from their slot numbers, which might
+    // be out of order.
+    type KeyType = (u64, u64);
+
+    type ValueType = Self;
+    const NAME: &'static str = "MISSED_SLOTS_IDX";
+
+    fn encode_key((seq, slot): Self::KeyType) -> Vec<u8> {
+        key_encoders::encode_u64x2((seq, slot)).to_vec()
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
+        key_encoders::decode_u64x2(&bytes)
+    }
+
+    fn encode(_v: &Self::ValueType) -> crate::Result<Vec<u8>> {
+        Ok(Vec::new())
+    }
+
+    fn decode(_bytes: &[u8]) -> crate::Result<Self::ValueType> {
+        Ok(Self)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SlotConsistencyCheckpoint;
+
+impl TypedColumn for SlotConsistencyCheckpoint {
+    type KeyType = u64;
+
+    type ValueType = Self;
+    const NAME: &'static str = "SLOT_CONSISTENCY_CHECKPOINT";
+
+    fn encode_key(slot: Self::KeyType) -> Vec<u8> {
+        key_encoders::encode_u64(slot)
+    }
+
+    fn decode_key(bytes: Vec<u8>) -> crate::Result<Self::KeyType> {
+        key_encoders::decode_u64(bytes)
+    }
+
+    fn encode(_v: &Self::ValueType) -> crate::Result<Vec<u8>> {
+        Ok(Vec::new())
+    }
+
+    fn decode(_bytes: &[u8]) -> crate::Result<Self::ValueType> {
+        Ok(Self)
     }
 }
 

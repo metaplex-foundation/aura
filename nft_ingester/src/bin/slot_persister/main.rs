@@ -1,19 +1,30 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use backfill_rpc::rpc::BackfillRPC;
+use blockbuster::programs::bubblegum::ID as BUBBLEGUM_PROGRAM_ID;
 use clap::Parser;
 use entities::models::RawBlock;
 use futures::future::join_all;
 use interface::{
     error::StorageError, signature_persistence::BlockProducer, slot_getter::FinalizedSlotGetter,
 };
-use metrics_utils::{utils::start_metrics, MetricState, MetricsTrait};
+use metrics_utils::{utils::start_metrics, BackfillerMetricsConfig, MetricState, MetricsTrait};
 use nft_ingester::{
     backfiller::BackfillSource,
     config::{parse_json, BigTableConfig},
     inmemory_slots_dumper::InMemorySlotsDumper,
 };
-use rocks_db::{column::TypedColumn, SlotStorage};
+use rocks_db::{
+    column::TypedColumn,
+    columns::raw_block::{MissedSlotsIdx, SlotConsistencyCheckpoint},
+    SlotStorage,
+};
 use tokio::{sync::Semaphore, task::JoinSet};
 use tokio_retry::{strategy::ExponentialBackoff, RetryIf};
 use tokio_util::sync::CancellationToken;
@@ -30,8 +41,19 @@ const MAX_BATCH_RETRIES: usize = 5;
 const INITIAL_BATCH_DELAY_MS: u64 = 500;
 // Offset to start collecting slots from, approximately 2 minutes before the finalized slot, given the eventual consistency of the big table
 const SLOT_COLLECTION_OFFSET: u64 = 300;
+// Offset to start collecting missed slots from. This exists to prevent concurrent collection of
+// later slots and marking of those as missed.
+const MISSED_SLOT_COLLECTION_OFFSET: u64 = 10 * SLOT_COLLECTION_OFFSET;
+/// How often we perform the backfill check (2 minutes by default)
+const DEFAULT_SLOT_BACKFILL_INTERVAL_SECS: u64 = 2 * 60;
+/// The gap around the checkpoint. If, for example, the last checkpointed slot is
+/// 200_000_000, we will verify slots from 200_000_000 to 201_000_000 (or the last available one
+/// minus `MISSED_SLOT_COLLECTION_OFFSET`).
+/// Then, if we find all the missing slots in this range, we will advance the checkpoint to the next
+/// inconsistent position.
+const DEFAULT_SLOT_BACKFILL_OFFSET: u64 = 1_000_000;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(
     author,
     version,
@@ -40,11 +62,11 @@ const SLOT_COLLECTION_OFFSET: u64 = 300;
 )]
 struct Args {
     /// Path to the target RocksDB instance with slots
-    #[arg(short, long, env = "SLOTS_DB_PRIMARY_PATH")]
+    #[arg(short, long, env = "ROCKS_SLOTS_DB_PATH")]
     target_db_path: PathBuf,
 
     /// RPC host
-    #[arg(short, long, env = "RPC_HOST")]
+    #[arg(short, long, env)]
     rpc_host: String,
 
     /// Optional starting slot number, this will override the last saved slot in the RocksDB
@@ -71,6 +93,12 @@ struct Args {
     /// Optional comma-separated list of slot numbers to check
     #[arg(long)]
     slots: Option<String>,
+
+    #[arg(long, env, help = "How often to check for missed slots (in seconds)", default_value_t = DEFAULT_SLOT_BACKFILL_INTERVAL_SECS)]
+    slot_backfill_interval: u64,
+
+    #[arg(long, env, help = "The number of slots by which to check & advance the next sequential slots", default_value_t = DEFAULT_SLOT_BACKFILL_OFFSET)]
+    slot_backfill_offset: u64,
 }
 
 pub fn get_last_persisted_slot(rocks_db: Arc<SlotStorage>) -> u64 {
@@ -80,6 +108,33 @@ pub fn get_last_persisted_slot(rocks_db: Arc<SlotStorage>) -> u64 {
         return 0;
     }
     it.key().map(|b| RawBlock::decode_key(b.to_vec()).unwrap_or_default()).unwrap_or_default()
+}
+
+pub fn get_checkpoint(rocks_db: &SlotStorage) -> u64 {
+    let mut checkpoint = None;
+    let mut it = rocks_db
+        .db
+        .raw_iterator_cf(&rocks_db.db.cf_handle(SlotConsistencyCheckpoint::NAME).unwrap());
+    it.seek_to_first();
+    if it.valid() {
+        checkpoint = Some(
+            it.key()
+                .map(|b| SlotConsistencyCheckpoint::decode_key(b.to_vec()).unwrap_or_default())
+                .unwrap_or_default(),
+        )
+    } else {
+        let mut it = rocks_db.db.raw_iterator_cf(&rocks_db.db.cf_handle(RawBlock::NAME).unwrap());
+        it.seek_to_first();
+        if it.valid() {
+            checkpoint = Some(
+                it.key()
+                    .map(|b| RawBlock::decode_key(b.to_vec()).unwrap_or_default())
+                    .unwrap_or_default(),
+            );
+        }
+    }
+
+    checkpoint.unwrap_or_default()
 }
 
 #[derive(Debug)]
@@ -189,6 +244,14 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Arc::new(BackfillSource::Rpc(rpc_client.clone()))
         }
     };
+
+    usecase::executor::spawn(get_missed_slots(
+        backfill_source.clone(),
+        target_db.clone(),
+        args.clone(),
+        metrics_state.backfiller_metrics.clone(),
+        cancellation_token.child_token(),
+    ));
 
     let in_mem_dumper = Arc::new(InMemorySlotsDumper::new());
     let slots_collector = SlotsCollector::new(
@@ -495,5 +558,234 @@ async fn process_slots(
                 }
             }
         }
+    }
+}
+
+async fn get_missed_slots(
+    backfill_source: Arc<BackfillSource>,
+    target_db: Arc<SlotStorage>,
+    args: Args,
+    metrics: Arc<BackfillerMetricsConfig>,
+    cancellation_token: CancellationToken,
+) {
+    /// Get missed slots in range of last_checkpoint..(last_checkpoint + SLOT_BACKFILL_OFFSET)
+    /// Returns (last_checkpoint, next_checkpoint, missed_slots)
+    ///
+    /// Below is an example of boundary calculations.
+    ///
+    /// # Examples
+    /// ```
+    /// const MISSED_SLOT_COLLECTION_OFFSET: u64 = 3000;
+    /// const MAX_SLOTS_TO_ADVANCE: u64 = 50_000;
+    /// let lower_slot_boundary: u64 = 10_000;
+    /// let higher_slot_boundary = 110_000u64 - MISSED_SLOT_COLLECTION_OFFSET;
+    /// let slot_count =
+    /// higher_slot_boundary.saturating_sub(lower_slot_boundary).min(MAX_SLOTS_TO_ADVANCE);
+    ///
+    /// assert_eq!(slot_count, 50_000u64);
+    ///
+    /// let lower_slot_boundary: u64 = 10_000;
+    /// let higher_slot_boundary = 20_000u64 - MISSED_SLOT_COLLECTION_OFFSET;
+    /// let slot_count =
+    /// higher_slot_boundary.saturating_sub(lower_slot_boundary).min(MAX_SLOTS_TO_ADVANCE);
+    ///
+    /// assert_eq!(slot_count, 7_000u64);
+    /// ```
+    async fn get_missed_slots(
+        in_mem_dumper: Arc<InMemorySlotsDumper>,
+        slots_collector: SlotsCollector<InMemorySlotsDumper, BackfillSource>,
+        target_db: Arc<SlotStorage>,
+        slot_backfill_offset: u64,
+        cancellation_token: CancellationToken,
+    ) -> Option<(u64, u64, Vec<u64>)> {
+        let lower_slot_boundary = get_checkpoint(&target_db);
+        let higher_slot_boundary = get_last_persisted_slot(target_db.clone())
+            .saturating_sub(MISSED_SLOT_COLLECTION_OFFSET);
+        let slot_backfill_offset =
+            higher_slot_boundary.saturating_sub(lower_slot_boundary).min(slot_backfill_offset);
+        let mut last_valid_key = lower_slot_boundary;
+        info!(%lower_slot_boundary, "Acquiring missed slots starting at last checkpoint");
+
+        // Store missing slots
+        let missing_slots = Arc::new(Mutex::new(Vec::new()));
+
+        info!(
+            "Starting to collect slots from {} to {}",
+            lower_slot_boundary,
+            lower_slot_boundary + slot_backfill_offset
+        );
+
+        // Collect slots from last persisted slot down to 0
+        in_mem_dumper.clear().await;
+
+        // Start slot collection
+        let _ = slots_collector
+            .collect_slots(
+                &BUBBLEGUM_PROGRAM_ID,
+                lower_slot_boundary + slot_backfill_offset,
+                lower_slot_boundary,
+                cancellation_token.child_token(),
+            )
+            .await;
+
+        // Get the collected slots
+        let mut collected_slots = in_mem_dumper.get_sorted_keys().await;
+        in_mem_dumper.clear().await;
+        collected_slots.retain(|s| *s > lower_slot_boundary);
+
+        if cancellation_token.is_cancelled() {
+            info!("Shutdown signal received, stopping...");
+            return None;
+        }
+
+        let total_slots_to_check = collected_slots.len() as u64;
+
+        info!(
+            "Collected {} slots in range {} to {}",
+            total_slots_to_check,
+            lower_slot_boundary,
+            lower_slot_boundary + slot_backfill_offset
+        );
+
+        if collected_slots.is_empty() {
+            return Some((
+                lower_slot_boundary,
+                lower_slot_boundary + slot_backfill_offset,
+                Vec::new(),
+            ));
+        }
+
+        // Prepare iterators for collected slots and RocksDB keys
+        let mut slots_iter = collected_slots.into_iter();
+        let mut next_slot = slots_iter.next();
+
+        let cf_handle = target_db.db.cf_handle(RawBlock::NAME).unwrap();
+        let mut db_iter = target_db.db.raw_iterator_cf(&cf_handle);
+        db_iter.seek(lower_slot_boundary.to_be_bytes());
+
+        let mut current_db_slot =
+            db_iter.key().and_then(|key_bytes| RawBlock::decode_key(key_bytes.to_vec()).ok());
+        // Verification loop
+        while let Some(slot) = next_slot {
+            if cancellation_token.is_cancelled() {
+                info!("Shutdown signal received, stopping...");
+                return None;
+            }
+
+            if let Some(db_slot) = current_db_slot {
+                match slot.cmp(&db_slot) {
+                    Ordering::Equal => {
+                        // Slot exists in RocksDB
+                        // Advance both iterators
+                        {
+                            let missing_slots_lock = missing_slots.lock().unwrap();
+                            if missing_slots_lock.is_empty() {
+                                last_valid_key = db_slot;
+                            }
+                        }
+                        next_slot = slots_iter.next();
+                        db_iter.next();
+                        current_db_slot = db_iter
+                            .key()
+                            .and_then(|key_bytes| RawBlock::decode_key(key_bytes.to_vec()).ok())
+                    },
+                    Ordering::Less => {
+                        // Slot is missing in RocksDB
+                        {
+                            let mut missing_slots_lock = missing_slots.lock().unwrap();
+                            missing_slots_lock.push(slot);
+                        }
+                        // Advance slots iterator
+                        next_slot = slots_iter.next();
+                    },
+                    Ordering::Greater => {
+                        // slot > db_slot
+                        // Advance RocksDB iterator
+                        db_iter.next();
+                        current_db_slot = db_iter
+                            .key()
+                            .and_then(|key_bytes| RawBlock::decode_key(key_bytes.to_vec()).ok())
+                    },
+                }
+            } else {
+                // No more slots in RocksDB, remaining slots are missing
+                {
+                    let mut missing_slots_lock = missing_slots.lock().unwrap();
+                    missing_slots_lock.push(slot);
+                    missing_slots_lock.extend(slots_iter);
+                }
+                break;
+            }
+        }
+
+        // Print missing slots
+        let missing_slots = Arc::into_inner(missing_slots).unwrap().into_inner().unwrap();
+        Some((lower_slot_boundary, last_valid_key, missing_slots))
+    }
+
+    let in_mem_dumper = Arc::new(InMemorySlotsDumper::new());
+    let slots_collector =
+        SlotsCollector::new(in_mem_dumper.clone(), backfill_source.clone(), metrics.clone());
+    let slot_backfill_offset = args.slot_backfill_offset;
+    loop {
+        let db = target_db.clone();
+        let dumper = in_mem_dumper.clone();
+        let collector = slots_collector.clone();
+        let Some((last_checkpoint, next_checkpoint, missed_slots)) = get_missed_slots(
+            dumper,
+            collector,
+            db,
+            slot_backfill_offset,
+            cancellation_token.child_token(),
+        )
+        .await
+        else {
+            warn!("Missed slot retrieval cancelled");
+            break;
+        };
+
+        if !missed_slots.is_empty() {
+            debug!(?missed_slots, "Missed slots found");
+            info!(%last_checkpoint, %next_checkpoint, "Getting missed slots between checkpoints");
+            process_slots(
+                missed_slots.clone(),
+                backfill_source.clone(),
+                target_db.clone(),
+                &args,
+                cancellation_token.child_token(),
+            )
+            .await;
+            let missed_slots_map = missed_slots
+                .into_iter()
+                .map(|slot| {
+                    let next_seq = target_db
+                        .next_missed_slots_seq()
+                        .expect("get next missed slots seq must not fail");
+                    ((next_seq, slot), MissedSlotsIdx)
+                })
+                .collect();
+            debug!("Saving missed slots to the database");
+            target_db
+                .missed_slots_idx
+                .put_batch(missed_slots_map)
+                .await
+                .expect("must put batch of missed slots into ");
+        }
+        debug!(%last_checkpoint, "Deleting last consistency checkpoint");
+        target_db
+            .slot_consistency_checkpoint
+            .delete(last_checkpoint)
+            .expect("must delete the previous checkpoint after slot processing");
+        debug!(%next_checkpoint, "Setting the new checkpoint value");
+        target_db
+            .slot_consistency_checkpoint
+            .put(next_checkpoint, SlotConsistencyCheckpoint)
+            .expect("must update the new checkpoint after the slots are saved into storage");
+        tokio::select! {
+            _ = cancellation_token.cancelled() => { break; }
+            _ = tokio::time::sleep(Duration::from_secs(args.slot_backfill_interval)) => {
+                info!("Starting slot backfill...");
+            }
+        };
     }
 }
