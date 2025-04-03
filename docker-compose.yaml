@@ -55,9 +55,6 @@ services:
     restart: always
     env_file:
       - .env
-    environment:
-      SLOTS_DB_PRIMARY_PATH: ${ROCKS_SLOTS_DB_PATH}
-      METRICS_PORT: 9090
     network_mode: host
     volumes:
       - ${ROCKS_SLOTS_DB_PATH}:${ROCKS_SLOTS_DB_PATH}:rw

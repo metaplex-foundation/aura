@@ -685,15 +685,9 @@ async fn get_missed_slots(
                         }
                         next_slot = slots_iter.next();
                         db_iter.next();
-                        current_db_slot = if db_iter.valid() {
-                            if let Some(key_bytes) = db_iter.key() {
-                                RawBlock::decode_key(key_bytes.to_vec()).ok()
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        };
+                        current_db_slot = db_iter
+                            .key()
+                            .and_then(|key_bytes| RawBlock::decode_key(key_bytes.to_vec()).ok())
                     },
                     Ordering::Less => {
                         // Slot is missing in RocksDB
@@ -708,15 +702,9 @@ async fn get_missed_slots(
                         // slot > db_slot
                         // Advance RocksDB iterator
                         db_iter.next();
-                        current_db_slot = if db_iter.valid() {
-                            if let Some(key_bytes) = db_iter.key() {
-                                RawBlock::decode_key(key_bytes.to_vec()).ok()
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        };
+                        current_db_slot = db_iter
+                            .key()
+                            .and_then(|key_bytes| RawBlock::decode_key(key_bytes.to_vec()).ok())
                     },
                 }
             } else {
