@@ -1,0 +1,29 @@
+name: Linear update task information about release
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+  workflow_dispatch: # Enables manual trigger
+
+# Add permissions for GitHub operations
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  linear-update:
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Download release tasks artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-tasks
+          path: .
+
+      - name: Update all
+        run: ./scripts/release/linear_update.sh "${{ secrets.LINEAR_API_KEY }}" "${{ github.event.release.tag_name }}"
