@@ -127,14 +127,17 @@ pub enum OffchainDataMutability {
     Mutable,
 }
 
-impl From<&str> for OffchainDataMutability {
-    fn from(storage_mutability: &str) -> Self {
+impl TryFrom<&str> for OffchainDataMutability {
+    type Error = &'static str;
+
+    fn try_from(storage_mutability: &str) -> Result<Self, Self::Error> {
+        let storage_mutability = storage_mutability.to_lowercase();
         if storage_mutability == "immutable" {
-            OffchainDataMutability::Immutable
+            Ok(OffchainDataMutability::Immutable)
         } else if storage_mutability == "mutable" {
-            OffchainDataMutability::Mutable
+            Ok(OffchainDataMutability::Mutable)
         } else {
-            unreachable!()
+            Err("Invalid storage mutability")
         }
     }
 }

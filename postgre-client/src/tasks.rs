@@ -49,9 +49,9 @@ impl UpdatedTaskBuilder {
         self
     }
 
-    pub fn mutability(mut self, mutability: &str) -> Self {
-        self.mutability = Some(mutability.into());
-        self
+    pub fn mutability(mut self, mutability: &str) -> Result<Self, &'static str> {
+        self.mutability = Some(mutability.try_into()?);
+        Ok(self)
     }
 
     pub fn metadata_url(mut self, metadata_url: &str) -> Self {
@@ -191,7 +191,7 @@ impl PgClient {
             b.push_bind(task.status);
             b.push_bind(task.etag.clone());
             b.push_bind(task.last_modified_at);
-            b.push_bind(task.mutability.clone());
+            b.push_bind(task.mutability);
 
             let tasks_next_try_at = match &task.mutability {
                 OffchainDataMutability::Mutable => task

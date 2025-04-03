@@ -240,6 +240,7 @@ impl JsonPersister for JsonWorker {
 
                     let task_for_updating = UpdatedTask::builder()
                         .mutability(&mutability.to_string())
+                        .map_err(|e| JsonDownloaderError::CouldNotCreateTask(e.into()))?
                         .status(TaskStatus::Success)
                         .metadata_url(&metadata_url)
                         .etag(etag.as_deref())
@@ -272,6 +273,7 @@ impl JsonPersister for JsonWorker {
                     );
                     let task_for_updating = UpdatedTask::builder()
                         .mutability(&mutability.to_string())
+                        .map_err(|e| JsonDownloaderError::CouldNotCreateTask(e.into()))?
                         .status(TaskStatus::Success)
                         .metadata_url(&metadata_url)
                         .etag(etag.as_deref())
@@ -286,6 +288,7 @@ impl JsonPersister for JsonWorker {
                 Err(json_err) => {
                     let task_for_updating = UpdatedTask::builder()
                         .mutability(&metadata_url)
+                        .map_err(|e| JsonDownloaderError::CouldNotCreateTask(e.into()))?
                         .metadata_url(&metadata_url)
                         .status(TaskStatus::Failed)
                         .error_message(Some(json_err.to_string()))
