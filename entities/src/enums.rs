@@ -128,7 +128,7 @@ pub enum OffchainDataMutability {
 }
 
 impl TryFrom<&str> for OffchainDataMutability {
-    type Error = &'static str;
+    type Error = String;
 
     fn try_from(storage_mutability: &str) -> Result<Self, Self::Error> {
         let storage_mutability = storage_mutability.to_lowercase();
@@ -137,7 +137,7 @@ impl TryFrom<&str> for OffchainDataMutability {
         } else if storage_mutability == "mutable" {
             Ok(OffchainDataMutability::Mutable)
         } else {
-            Err("Invalid storage mutability")
+            Err(format!("Invalid storage mutability: {}", storage_mutability))
         }
     }
 }

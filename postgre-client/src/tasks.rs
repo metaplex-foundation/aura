@@ -49,7 +49,7 @@ impl UpdatedTaskBuilder {
         self
     }
 
-    pub fn mutability(mut self, mutability: &str) -> Result<Self, &'static str> {
+    pub fn mutability(mut self, mutability: &str) -> Result<Self, String> {
         self.mutability = Some(mutability.try_into()?);
         Ok(self)
     }

@@ -32,10 +32,8 @@ impl StorageMutability {
     pub fn is_mutable(&self) -> bool {
         self == &StorageMutability::Mutable
     }
-}
 
-impl From<&str> for StorageMutability {
-    fn from(storage_mutability: &str) -> Self {
+    pub fn from_url(storage_mutability: &str) -> Self {
         if storage_mutability.is_empty()
             || storage_mutability.starts_with("ipfs://")
             || storage_mutability.starts_with("https://ipfs")
@@ -82,7 +80,7 @@ impl From<fb::StorageMutability> for StorageMutability {
 
 impl From<OffChainDataGrpc> for OffChainData {
     fn from(off_chain_data: OffChainDataGrpc) -> Self {
-        let storage_mutability = StorageMutability::from(off_chain_data.url.as_str());
+        let storage_mutability = StorageMutability::from_url(off_chain_data.url.as_str());
         OffChainData {
             storage_mutability,
             url: Some(off_chain_data.url),

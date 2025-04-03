@@ -226,7 +226,7 @@ impl JsonPersister for JsonWorker {
                             OffchainDataMutability::Immutable => StorageMutability::Immutable,
                             OffchainDataMutability::Mutable => StorageMutability::Mutable,
                         })
-                        .unwrap_or_else(|| metadata_url.as_str().into());
+                        .unwrap_or_else(|| StorageMutability::from_url(&metadata_url));
 
                     rocks_updates.insert(
                         metadata_url.clone(),
@@ -240,7 +240,7 @@ impl JsonPersister for JsonWorker {
 
                     let task_for_updating = UpdatedTask::builder()
                         .mutability(&mutability.to_string())
-                        .map_err(|e| JsonDownloaderError::CouldNotCreateTask(e.into()))?
+                        .map_err(JsonDownloaderError::CouldNotCreateTask)?
                         .status(TaskStatus::Success)
                         .metadata_url(&metadata_url)
                         .etag(etag.as_deref())

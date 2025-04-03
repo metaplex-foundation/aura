@@ -297,7 +297,7 @@ pub async fn get_by_ids<
                             OffChainData {
                                 url: Some(json_url.clone()),
                                 metadata: Some(metadata.clone()),
-                                storage_mutability: StorageMutability::from(json_url.as_str()),
+                                storage_mutability: StorageMutability::from_url(json_url.as_str()),
                                 last_read_at,
                             },
                         );
@@ -314,7 +314,7 @@ pub async fn get_by_ids<
                                     format!("{{\"image\":\"{}\",\"type\":\"{}\"}}", url, mime_type)
                                         .to_string(),
                                 ),
-                                storage_mutability: StorageMutability::from(json_url.as_str()),
+                                storage_mutability: StorageMutability::from_url(json_url.as_str()),
                                 last_read_at,
                             },
                         );
