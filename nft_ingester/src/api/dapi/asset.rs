@@ -3,12 +3,12 @@ use std::{collections::HashMap, string::ToString, sync::Arc, time::Duration};
 use entities::{
     api_req_params::{AssetSortDirection, Options},
     enums::SpecificationAssetClass,
-    models::AssetSignatureWithPagination,
+    models::{AssetSignatureWithPagination, MetadataDownloadTask},
 };
 use futures::{stream, StreamExt};
 use interface::{
     asset_sigratures::AssetSignaturesGetter,
-    json::{JsonDownloadResult, JsonDownloader, JsonPersister},
+    json_metadata::{JsonDownloadResult, JsonDownloader, JsonPersister, MetadataDownloadResult},
     price_fetcher::TokenPriceFetcher,
     processing_possibility::ProcessingPossibilityChecker,
 };
@@ -266,9 +266,18 @@ pub async fn get_by_ids<
                 .map(|url| {
                     let json_downloader = json_downloader.clone();
 
+                    // TODO: get etag and last_modified_at from the database
+                    let metadata_download_task = MetadataDownloadTask {
+                        metadata_url: url.clone(),
+                        status: entities::enums::TaskStatus::Success,
+                        etag: None,
+                        last_modified_at: None,
+                    };
+
                     async move {
-                        let response =
-                            json_downloader.download_file(url.clone(), CLIENT_TIMEOUT).await;
+                        let response = json_downloader
+                            .download_file(&metadata_download_task, CLIENT_TIMEOUT)
+                            .await;
                         (url, response)
                     }
                 })
@@ -276,21 +285,27 @@ pub async fn get_by_ids<
                 .collect::<Vec<_>>()
                 .await;
 
-            for (json_url, res) in download_results.iter() {
+            for (json_url, download_result) in download_results.iter() {
                 let last_read_at = chrono::Utc::now().timestamp();
-                match res {
-                    Ok(JsonDownloadResult::JsonContent(metadata)) => {
+                match download_result {
+                    Ok(MetadataDownloadResult {
+                        result: JsonDownloadResult::JsonContent(metadata),
+                        ..
+                    }) => {
                         asset_selected_maps.offchain_data.insert(
                             json_url.clone(),
                             OffChainData {
                                 url: Some(json_url.clone()),
                                 metadata: Some(metadata.clone()),
-                                storage_mutability: StorageMutability::from(json_url.as_str()),
+                                storage_mutability: StorageMutability::from_url(json_url.as_str()),
                                 last_read_at,
                             },
                         );
                     },
-                    Ok(JsonDownloadResult::MediaUrlAndMimeType { url, mime_type }) => {
+                    Ok(MetadataDownloadResult {
+                        result: JsonDownloadResult::MediaUrlAndMimeType { url, mime_type },
+                        ..
+                    }) => {
                         asset_selected_maps.offchain_data.insert(
                             json_url.clone(),
                             OffChainData {
@@ -299,10 +314,17 @@ pub async fn get_by_ids<
                                     format!("{{\"image\":\"{}\",\"type\":\"{}\"}}", url, mime_type)
                                         .to_string(),
                                 ),
-                                storage_mutability: StorageMutability::from(json_url.as_str()),
+                                storage_mutability: StorageMutability::from_url(json_url.as_str()),
                                 last_read_at,
                             },
                         );
+                    },
+                    Ok(MetadataDownloadResult {
+                        result: JsonDownloadResult::NotModified, ..
+                    }) => {
+                        if let Some(data) = asset_selected_maps.offchain_data.get_mut(json_url) {
+                            data.last_read_at = last_read_at;
+                        }
                     },
                     Err(_) => {},
                 }

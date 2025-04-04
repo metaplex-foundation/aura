@@ -1,4 +1,7 @@
+use std::fmt::Display;
+
 use plerkle_serialization::error::PlerkleSerializationError;
+use reqwest::StatusCode;
 use solana_client::client_error::ClientError;
 use solana_program::pubkey::ParsePubkeyError;
 use solana_sdk::signature::ParseSignatureError;
@@ -135,15 +138,51 @@ impl From<anchor_lang::error::Error> for IntegrityVerificationError {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum JsonDownloaderError {
-    GotNotJsonFile,
-    CouldNotDeserialize,
+    #[error("Could not create task: {0}")]
+    CouldNotCreateTask(String),
+    #[error("Got a non JSON file")]
+    GotNoJsonFile,
+    #[error("Could not deserialize JSON: {0}")]
+    CouldNotDeserialize(serde_json::Error),
+    #[error("Could not read header")]
     CouldNotReadHeader,
-    ErrorStatusCode(String),
-    ErrorDownloading(String),
+    #[error("Received {0} status code")]
+    ErrorStatusCode(StatusCode),
+    #[error("Error downloading: {0}")]
+    ErrorDownloading(JsonDownloadErrors),
+    #[error("Index Storage Error happened: {0}")]
     IndexStorageError(String),
+    #[error("Main Storage Error happened: {0}")]
     MainStorageError(String),
+}
+
+#[derive(Debug)]
+pub enum JsonDownloadErrors {
+    FailedToCreateClient(reqwest::Error),
+    FailedToParseIpfsUrl(url::ParseError),
+    FailedToParseUrl(url::ParseError),
+    FailedToMakeRequest(reqwest_middleware::Error),
+}
+
+impl Display for JsonDownloadErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JsonDownloadErrors::FailedToCreateClient(e) => {
+                write!(f, "Failed to create client: {}", e)
+            },
+            JsonDownloadErrors::FailedToParseIpfsUrl(e) => {
+                write!(f, "Failed to parse IPFS URL: {}", e)
+            },
+            JsonDownloadErrors::FailedToParseUrl(e) => {
+                write!(f, "Failed to parse URL: {}", e)
+            },
+            JsonDownloadErrors::FailedToMakeRequest(e) => {
+                write!(f, "Failed to make request {}", e)
+            },
+        }
+    }
 }
 
 /// Errors that may occur during the block consuming.

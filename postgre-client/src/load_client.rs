@@ -359,7 +359,7 @@ impl PgClient {
             "assets_v3_authority_fk_constraint",
         )
         .await?;
-        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE assets_v3 ADD CONSTRAINT assets_v3_ast_metadata_url_id_fkey FOREIGN KEY (ast_metadata_url_id) REFERENCES tasks(tsk_id) ON DELETE RESTRICT ON UPDATE CASCADE NOT VALID;");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new("ALTER TABLE assets_v3 ADD CONSTRAINT assets_v3_ast_metadata_url_id_fkey FOREIGN KEY (ast_metadata_url_id) REFERENCES tasks(tasks_metadata_hash) ON DELETE RESTRICT ON UPDATE CASCADE NOT VALID;");
         self.execute_query_with_metrics(
             transaction,
             &mut query_builder,

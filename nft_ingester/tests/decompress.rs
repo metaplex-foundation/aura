@@ -27,7 +27,7 @@ mod tests {
         buffer::Buffer,
         config::{HealthCheckInfo, JsonMiddlewareConfig},
         consts::{wellknown_fungible_tokens_map, DEFAULT_MAXIMUM_HEALTHY_DESYNC},
-        json_worker::JsonWorker,
+        metadata_workers::json_worker::JsonWorker,
         processors::{
             account_based::{
                 mplx_updates_processor::MplxAccountsProcessor,

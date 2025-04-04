@@ -1,9 +1,11 @@
 use std::{collections::VecDeque, sync::Arc};
 
+use chrono::{DateTime, Duration, Utc};
 use entities::{
-    enums::TaskStatus,
-    models::{JsonDownloadTask, Task, UrlWithStatus},
+    enums::{OffchainDataMutability, TaskStatus},
+    models::{MetadataDownloadTask, Task, UrlWithStatus},
 };
+use interface::json_metadata::CacheControlResponse;
 use metrics_utils::IngesterMetricsConfig;
 use sqlx::{Postgres, QueryBuilder, Row};
 use tokio::sync::Mutex;
@@ -15,48 +17,122 @@ use crate::{error::IndexDbError, PgClient};
 pub const MAX_BUFFERED_TASKS_TO_TAKE: usize = 5000;
 
 pub struct UpdatedTask {
-    pub status: TaskStatus,
-    pub metadata_url: String,
-    pub error: String,
+    status: TaskStatus,
+    mutability: OffchainDataMutability,
+    metadata_url: String,
+    etag: Option<String>,
+    last_modified_at: Option<DateTime<Utc>>,
+    cache_control: Option<CacheControlResponse>,
+    error_message: Option<String>,
+}
+
+impl UpdatedTask {
+    pub fn builder() -> UpdatedTaskBuilder {
+        UpdatedTaskBuilder::default()
+    }
+}
+
+#[derive(Default)]
+pub struct UpdatedTaskBuilder {
+    status: Option<TaskStatus>,
+    mutability: Option<OffchainDataMutability>,
+    metadata_url: Option<String>,
+    etag: Option<String>,
+    last_modified_at: Option<DateTime<Utc>>,
+    cache_control: Option<CacheControlResponse>,
+    error_message: Option<String>,
+}
+
+impl UpdatedTaskBuilder {
+    pub fn status(mut self, status: TaskStatus) -> Self {
+        self.status = Some(status);
+        self
+    }
+
+    pub fn mutability(mut self, mutability: &str) -> Result<Self, String> {
+        self.mutability = Some(mutability.try_into()?);
+        Ok(self)
+    }
+
+    pub fn metadata_url(mut self, metadata_url: &str) -> Self {
+        self.metadata_url = Some(metadata_url.into());
+        self
+    }
+
+    pub fn etag(mut self, etag: Option<&str>) -> Self {
+        self.etag = etag.map(|s| s.to_string());
+        self
+    }
+
+    pub fn last_modified_at(mut self, last_modified_at: Option<DateTime<Utc>>) -> Self {
+        self.last_modified_at = last_modified_at;
+        self
+    }
+
+    pub fn cache_control(mut self, cache_control: Option<CacheControlResponse>) -> Self {
+        self.cache_control = cache_control;
+        self
+    }
+
+    pub fn error_message<T: Into<String>>(mut self, error_message: Option<T>) -> Self {
+        self.error_message = error_message.map(|s| s.into());
+        self
+    }
+
+    pub fn build(self) -> Result<UpdatedTask, &'static str> {
+        Ok(UpdatedTask {
+            status: self.status.ok_or("status is required")?,
+            mutability: self.mutability.ok_or("mutability is required")?,
+            metadata_url: self.metadata_url.ok_or("metadata_url is required")?,
+            etag: self.etag,
+            last_modified_at: self.last_modified_at,
+            cache_control: self.cache_control,
+            error_message: self.error_message,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct JsonTask {
-    pub tsk_id: Vec<u8>,
+    pub metadata_hash: Vec<u8>,
     pub metadata_url: String,
     pub status: TaskStatus,
 }
 
 impl PgClient {
-    async fn insert_new_tasks(&self, data: &mut Vec<Task>) -> Result<(), IndexDbError> {
-        data.sort_by(|a, b| a.ofd_metadata_url.cmp(&b.ofd_metadata_url));
+    pub async fn insert_new_tasks(&self, data: &mut Vec<Task>) -> Result<(), IndexDbError> {
+        data.sort_by(|a, b| a.metadata_url.cmp(&b.metadata_url));
 
         let mut query_builder = QueryBuilder::new(
             "INSERT INTO tasks (
-                tsk_id,
-                tsk_metadata_url,
-                tsk_locked_until,
-                tsk_attempts,
-                tsk_max_attempts,
-                tsk_error,
-                tsk_status
+                tasks_metadata_hash,
+                tasks_metadata_url,
+                tasks_etag,
+                tasks_last_modified_at,
+                tasks_mutability,
+                tasks_next_try_at,
+                tasks_task_status
             ) ",
         );
 
-        query_builder.push_values(data, |mut b, off_d| {
-            let tsk = UrlWithStatus::new(off_d.ofd_metadata_url.as_str(), false);
-            b.push_bind(tsk.get_metadata_id());
-            b.push_bind(tsk.metadata_url);
-            b.push_bind(off_d.ofd_locked_until);
-            b.push_bind(off_d.ofd_attempts);
-            b.push_bind(off_d.ofd_max_attempts);
-            b.push_bind(off_d.ofd_error.clone());
-            b.push_bind(off_d.ofd_status);
-        });
+        query_builder.push_values(
+            data,
+            |mut b: sqlx::query_builder::Separated<'_, '_, Postgres, &str>, task| {
+                let url_with_status = UrlWithStatus::new(task.metadata_url.as_str(), false);
+                b.push_bind(url_with_status.get_metadata_id());
+                b.push_bind(url_with_status.metadata_url);
+                b.push_bind(task.etag.clone());
+                b.push_bind(task.last_modified_at);
+                b.push_bind(task.mutability);
+                b.push_bind(task.next_try_at);
+                b.push_bind(task.status);
+            },
+        );
 
-        query_builder.push("ON CONFLICT (tsk_id) DO NOTHING;");
+        query_builder.push("ON CONFLICT DO NOTHING;");
 
         let query = query_builder.build();
+
         query.execute(&self.pool).await?;
 
         Ok(())
@@ -93,21 +169,47 @@ impl PgClient {
         }
     }
 
-    pub async fn update_tasks_and_attempts(
-        &self,
-        data: Vec<UpdatedTask>,
-    ) -> Result<(), IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("UPDATE tasks SET tsk_status = tmp.tsk_status, tsk_attempts = tsk_attempts+1, tsk_error = tmp.tsk_error FROM (");
+    pub async fn update_tasks(&self, data: Vec<UpdatedTask>) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "
+            UPDATE tasks
+            SET
+                tasks_task_status = tmp.tasks_task_status,
+                tasks_etag = tmp.tasks_etag,
+                tasks_last_modified_at = tmp.tasks_last_modified_at,
+                tasks_mutability = tmp.tasks_mutability,
+                tasks_next_try_at = tmp.tasks_next_try_at,
+                tasks_error = tmp.tasks_error
+                FROM (
+        ",
+        );
 
-        query_builder.push_values(data, |mut b, key| {
-            let tsk = UrlWithStatus::new(key.metadata_url.as_str(), false); // status is ignoring here
-            b.push_bind(tsk.metadata_url);
-            b.push_bind(key.status);
-            b.push_bind(key.error);
+        query_builder.push_values(data, |mut b, task| {
+            let url = UrlWithStatus::new(task.metadata_url.as_str(), false); // status is ignored here
+            b.push_bind(url.get_metadata_id());
+            b.push_bind(url.metadata_url);
+            b.push_bind(task.status);
+            b.push_bind(task.etag.clone());
+            b.push_bind(task.last_modified_at);
+            b.push_bind(task.mutability);
+
+            let tasks_next_try_at = match &task.mutability {
+                OffchainDataMutability::Mutable => task
+                    .cache_control
+                    .as_ref()
+                    .and_then(|cc| {
+                        cc.max_age.map(|max_age| {
+                            Utc::now() + Duration::seconds(max_age.try_into().unwrap())
+                        })
+                    })
+                    .or_else(|| Some(Utc::now() + Duration::days(1))),
+                _ => None,
+            };
+            b.push_bind(tasks_next_try_at);
+            b.push_bind(task.error_message);
         });
 
-        query_builder.push(") as tmp (tsk_metadata_url, tsk_status, tsk_error) WHERE tasks.tsk_metadata_url = tmp.tsk_metadata_url;");
+        query_builder.push(") as tmp (tasks_metadata_hash, tasks_metadata_url, tasks_task_status, tasks_etag, tasks_last_modified_at, tasks_mutability, tasks_next_try_at, tasks_error) WHERE tasks.tasks_metadata_hash = tmp.tasks_metadata_hash;");
 
         let query = query_builder.build();
         query.execute(&self.pool).await?;
@@ -115,29 +217,58 @@ impl PgClient {
         Ok(())
     }
 
-    pub async fn get_pending_tasks(
+    pub async fn update_tasks_attempt_time(&self, data: Vec<String>) -> Result<(), IndexDbError> {
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "
+            UPDATE tasks
+            SET
+                tasks_next_try_at = NOW() + INTERVAL '1 day'
+                WHERE tasks.tasks_metadata_url IN (
+        ",
+        );
+
+        query_builder.push_values(data, |mut b, task| {
+            let url = UrlWithStatus::new(task.as_str(), false); // status is ignored here
+            b.push_bind(url.metadata_url);
+        });
+
+        query_builder.push(");");
+
+        let query = query_builder.build();
+        query.execute(&self.pool).await?;
+
+        Ok(())
+    }
+
+    pub async fn get_pending_metadata_tasks(
         &self,
         tasks_count: i32,
-    ) -> Result<Vec<JsonDownloadTask>, IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("WITH cte AS (
-                                        SELECT tsk_id
-                                        FROM tasks
-                                        WHERE (tsk_status = 'running' OR tsk_status = 'pending') AND tsk_locked_until < NOW() AND tsk_attempts < tsk_max_attempts
-                                        LIMIT ");
-
+    ) -> Result<Vec<MetadataDownloadTask>, IndexDbError> {
+        // skip locked not to intersect with synchronizer work
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "WITH selected_tasks AS (
+                SELECT t.tasks_metadata_hash FROM tasks AS t
+                WHERE t.tasks_task_status = 'pending' AND NOW() > t.tasks_next_try_at
+                ORDER BY t.tasks_last_modified_at ASC
+                FOR UPDATE SKIP LOCKED
+                LIMIT ",
+        );
         query_builder.push_bind(tasks_count);
 
-        // skip locked not to intersect with synchronizer work
         query_builder.push(
-            " FOR UPDATE SKIP LOCKED
-            )
+            ")
             UPDATE tasks t
-            SET tsk_status = 'running',
-            tsk_locked_until = NOW() + INTERVAL '90 seconds'
-            FROM cte
-            WHERE t.tsk_id = cte.tsk_id
-            RETURNING t.tsk_metadata_url, t.tsk_status, t.tsk_attempts, t.tsk_max_attempts;",
+            SET
+                tasks_next_try_at = NOW() + INTERVAL '1 day'
+            FROM
+                selected_tasks
+            WHERE
+                t.tasks_metadata_hash = selected_tasks.tasks_metadata_hash
+            RETURNING
+                t.tasks_metadata_url,
+                t.tasks_task_status,
+                t.tasks_etag,
+                t.tasks_last_modified_at;",
         );
 
         let query = query_builder.build();
@@ -146,52 +277,55 @@ impl PgClient {
         let mut tasks = Vec::new();
 
         for row in rows {
-            let metadata_url: String = row.get("tsk_metadata_url");
-            let status: TaskStatus = row.get("tsk_status");
-            let attempts: i16 = row.get("tsk_attempts");
-            let max_attempts: i16 = row.get("tsk_max_attempts");
+            let metadata_url: String = row.get("tasks_metadata_url");
+            let status: TaskStatus = row.get("tasks_task_status");
+            let etag: Option<String> = row.get("tasks_etag");
+            let last_modified_at: Option<DateTime<Utc>> = row.get("tasks_last_modified_at");
 
-            tasks.push(JsonDownloadTask { metadata_url, status, attempts, max_attempts });
+            tasks.push(MetadataDownloadTask { metadata_url, status, etag, last_modified_at });
         }
 
         Ok(tasks)
     }
 
-    pub async fn insert_json_download_tasks(
+    pub async fn get_refresh_metadata_tasks(
         &self,
-        data: &mut Vec<Task>,
-    ) -> Result<(), IndexDbError> {
-        data.sort_by(|a, b| a.ofd_metadata_url.cmp(&b.ofd_metadata_url));
-
+        tasks_count: i32,
+    ) -> Result<Vec<MetadataDownloadTask>, IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
-            "INSERT INTO tasks (
-                tsk_id,
-                tsk_metadata_url,
-                tsk_locked_until,
-                tsk_attempts,
-                tsk_max_attempts,
-                tsk_error,
-                tsk_status
-            ) ",
+            "WITH selected_tasks AS (
+                                    SELECT t.tasks_metadata_hash FROM tasks AS t
+                                    WHERE t.tasks_task_status = 'success' AND NOW() > t.tasks_next_try_at AND t.tasks_mutability = 'mutable'
+                                    ORDER BY t.tasks_last_modified_at ASC
+                                    FOR UPDATE SKIP LOCKED
+                                    LIMIT ",
+        );
+        query_builder.push_bind(tasks_count);
+
+        query_builder.push(
+            ")
+            UPDATE tasks t
+            SET tasks_next_try_at = NOW() + INTERVAL '1 day'
+            FROM selected_tasks
+            WHERE t.tasks_metadata_hash = selected_tasks.tasks_metadata_hash
+            RETURNING t.tasks_metadata_url, t.tasks_task_status, t.tasks_etag, t.tasks_last_modified_at;",
         );
 
-        query_builder.push_values(data, |mut b, off_d| {
-            let tsk = UrlWithStatus::new(off_d.ofd_metadata_url.as_str(), false);
-            b.push_bind(tsk.get_metadata_id());
-            b.push_bind(tsk.metadata_url);
-            b.push_bind(off_d.ofd_locked_until);
-            b.push_bind(off_d.ofd_attempts);
-            b.push_bind(off_d.ofd_max_attempts);
-            b.push_bind(off_d.ofd_error.clone());
-            b.push_bind(off_d.ofd_status);
-        });
-
-        query_builder.push("ON CONFLICT (tsk_id) DO NOTHING;");
-
         let query = query_builder.build();
-        query.execute(&self.pool).await?;
+        let rows = query.fetch_all(&self.pool).await?;
 
-        Ok(())
+        let mut tasks = Vec::new();
+
+        for row in rows {
+            let metadata_url: String = row.get("tasks_metadata_url");
+            let status: TaskStatus = row.get("tasks_task_status");
+            let etag: Option<String> = row.get("tasks_etag");
+            let last_modified_at: Option<DateTime<Utc>> = row.get("tasks_last_modified_at");
+
+            tasks.push(MetadataDownloadTask { metadata_url, status, etag, last_modified_at });
+        }
+
+        Ok(tasks)
     }
 
     pub async fn get_tasks_count(&self) -> Result<i64, IndexDbError> {
@@ -206,15 +340,21 @@ impl PgClient {
         limit: i64,
         after: Option<Vec<u8>>,
     ) -> Result<Vec<JsonTask>, IndexDbError> {
-        let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("select tsk_id, tsk_metadata_url, tsk_status from tasks");
+        let mut query_builder: QueryBuilder<'_, Postgres> = QueryBuilder::new(
+            "
+            SELECT
+                tasks_metadata_hash,
+                tasks_metadata_url,
+                tasks_task_status
+            FROM tasks",
+        );
 
         if let Some(after) = after {
-            query_builder.push(" where tsk_id > ");
+            query_builder.push(" WHERE tasks_metadata_hash > ");
             query_builder.push_bind(after);
         }
 
-        query_builder.push(" order by tsk_id");
+        query_builder.push(" ORDER BY tasks_metadata_hash");
 
         query_builder.push(" limit ");
 
@@ -226,11 +366,11 @@ impl PgClient {
         let mut tasks = Vec::new();
 
         for row in rows {
-            let tsk_id: Vec<u8> = row.get("tsk_id");
-            let metadata_url: String = row.get("tsk_metadata_url");
-            let status: TaskStatus = row.get("tsk_status");
+            let metadata_hash: Vec<u8> = row.get("tasks_metadata_hash");
+            let metadata_url: String = row.get("tasks_metadata_url");
+            let status: TaskStatus = row.get("tasks_task_status");
 
-            tasks.push(JsonTask { tsk_id, metadata_url, status });
+            tasks.push(JsonTask { metadata_hash, metadata_url, status });
         }
 
         Ok(tasks)
@@ -242,9 +382,9 @@ impl PgClient {
         status_to_set: TaskStatus,
     ) -> Result<(), IndexDbError> {
         let mut query_builder: QueryBuilder<'_, Postgres> =
-            QueryBuilder::new("update tasks SET tsk_status = ");
+            QueryBuilder::new("update tasks SET tasks_task_status = ");
         query_builder.push_bind(status_to_set);
-        query_builder.push(" WHERE tsk_metadata_url IN (");
+        query_builder.push(" WHERE tasks_metadata_url IN (");
 
         let mut qb = query_builder.separated(", ");
         for url in tasks_urls {
