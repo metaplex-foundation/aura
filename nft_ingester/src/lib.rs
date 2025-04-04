@@ -1,5 +1,6 @@
 pub mod ack;
 pub mod api;
+pub mod asset_fixer;
 pub mod backfiller;
 pub mod batch_mint;
 pub mod buffer;
@@ -14,6 +15,7 @@ pub mod init;
 pub mod inmemory_slots_dumper;
 pub mod inscription_raw_parsing;
 pub mod json_worker;
+pub mod management_api;
 pub mod message_handler;
 pub mod message_parser;
 pub mod plerkle;
