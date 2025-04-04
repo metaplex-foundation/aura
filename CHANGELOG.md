@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.2] - 2025-04-04
+[0.6.2]: https://github.com/metaplex-foundation/aura/compare/v0.6.1...v0.6.2
+
+### Build Process & Auxiliary Tools
+
+- Bump version to 0.6.2 ([e089184](https://github.com/metaplex-foundation/aura/commit/e0891847d578558df84768423427249761553676))
+
+
+### Features
+
+- Add management API with account parsing capabilities ([417e4c7](https://github.com/metaplex-foundation/aura/commit/417e4c787ed80ce24177849f2dd51e6349d54150))
+
+
+
 ## [0.6.1] - 2025-04-01
 [0.6.1]: https://github.com/metaplex-foundation/aura/compare/v0.6.1-dev...v0.6.1
 
