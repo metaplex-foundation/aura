@@ -185,6 +185,8 @@ pub struct IngesterClapArgs {
     pub skip_check_tree_gaps: bool,
     #[clap(long, env = "INGESTER_SERVER_PORT", default_value = "9092", help = "#api Server port")]
     pub server_port: u16,
+    #[clap(long, env = "INGESTER_MANAGEMENT_API_PORT", help = "#management Management API port")]
+    pub management_api_port: Option<u16>,
     #[clap(long, env, default_value = "50", help = "#api Max page limit")]
     pub max_page_limit: usize,
     #[clap(

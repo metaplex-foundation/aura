@@ -93,6 +93,10 @@ pub async fn main() -> Result<(), IngesterError> {
     if args.run_api.unwrap_or(false) {
         info!("API port: localhost:{}", args.server_port);
     }
+    info!("Management API: {}", args.management_api_port.is_some());
+    if let Some(port) = args.management_api_port {
+        info!("Management API port: localhost:{}", port);
+    }
     info!("Back Filler: {}", args.run_backfiller.unwrap_or(false));
     info!("Bubblegum BackFiller: {}", args.run_bubblegum_backfiller.unwrap_or(false));
     info!("Gap Filler: {}", args.run_gapfiller);
@@ -468,6 +472,31 @@ pub async fn main() -> Result<(), IngesterError> {
                 )
                 .await
                 .inspect_err(|e| error!("Start API: {}", e))
+            }
+        });
+    }
+
+    // Start the management API if port is provided
+    if let Some(port) = args.management_api_port {
+        info!("Starting Management API...");
+        let cloned_rocks_storage = primary_rocks_storage.clone();
+        let cloned_rpc_client = rpc_client.clone();
+        let metrics = metrics_state.ingester_metrics.clone();
+        let postgre_client = index_pg_storage.clone();
+        let well_known_fungible_accounts = well_known_fungible_accounts.clone();
+        usecase::executor::spawn({
+            let cancellation_token = cancellation_token.child_token();
+            async move {
+                nft_ingester::management_api::start_management_api(
+                    cancellation_token,
+                    metrics,
+                    cloned_rocks_storage,
+                    postgre_client,
+                    cloned_rpc_client,
+                    well_known_fungible_accounts,
+                    port,
+                )
+                .await
             }
         });
     }
