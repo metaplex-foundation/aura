@@ -2,7 +2,7 @@
 edition = "2021"
 name = "integration_tests"
 publish = false
-version = "0.6.1"
+version = "0.6.2"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -32,7 +32,7 @@ rocksdb = { workspace = true }
 tempfile = {workspace = true}
 env_logger = { workspace = true }
 tracing-test = { workspace = true }
-
+reqwest = { workspace = true }
 nft_ingester = { path = "../nft_ingester" }
 postgre-client = { path = "../postgre-client", features = ["integration_tests"] }
 metrics-utils = { path = "../metrics_utils" }

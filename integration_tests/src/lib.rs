@@ -7,6 +7,8 @@ mod common;
 #[cfg(test)]
 mod general_scenario_tests;
 #[cfg(test)]
+mod management_api_tests;
+#[cfg(test)]
 mod mpl_core_tests;
 #[cfg(test)]
 mod regular_nft_tests;

@@ -5,10 +5,7 @@ use std::{
 };
 
 use chrono::Utc;
-use entities::{
-    enums::UnprocessedAccount,
-    models::{CoreAssetFee, UnprocessedAccountMessage},
-};
+use entities::models::{CoreAssetFee, UnprocessedAccountMessage};
 use interface::{
     error::{MessengerError, UsecaseError},
     unprocessed_data_getter::{AccountSource, UnprocessedAccountsGetter},
@@ -23,11 +20,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
 use uuid::Uuid;
 
-use super::account_based::{
-    inscriptions_processor::InscriptionsProcessor,
-    mpl_core_fee_indexing_processor::MplCoreFeeProcessor, mpl_core_processor::MplCoreProcessor,
-    mplx_updates_processor::MplxAccountsProcessor, token_updates_processor::TokenAccountsProcessor,
-};
+use super::processors_wrapper::ProcessorsWrapper;
 use crate::{error::IngesterError, redis_receiver::get_timestamp_from_id};
 
 // regular stream worker idle timeout
@@ -111,22 +104,16 @@ pub fn run_accounts_processor<AG: UnprocessedAccountsGetter + Sync + Send + 'sta
 pub struct AccountsProcessor<T: UnprocessedAccountsGetter> {
     fees_batch_size: usize,
     unprocessed_account_getter: Arc<T>,
-    mplx_accounts_processor: MplxAccountsProcessor,
-    token_accounts_processor: TokenAccountsProcessor,
-    mpl_core_processor: MplCoreProcessor,
-    inscription_processor: InscriptionsProcessor,
-    core_fees_processor: MplCoreFeeProcessor,
+    processors_wrapper: ProcessorsWrapper,
     metrics: Arc<IngesterMetricsConfig>,
     message_process_metrics: Option<Arc<MessageProcessMetricsConfig>>,
     processor_name: String,
-    wellknown_fungible_accounts: HashMap<String, String>,
 }
 
 // AccountsProcessor responsible for processing all account updates received
 // from Geyser plugin.
 // unprocessed_account_getter field represents a source of parsed accounts
 // It can be either Redis or Buffer filled by TCP-stream.
-// Each account is process by corresponding processor
 #[allow(clippy::too_many_arguments)]
 impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
     pub async fn build(
@@ -140,26 +127,22 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
         processor_name: Option<String>,
         wellknown_fungible_accounts: HashMap<String, String>,
     ) -> Result<Self, IngesterError> {
-        let mplx_accounts_processor = MplxAccountsProcessor::new(metrics.clone());
-        let token_accounts_processor = TokenAccountsProcessor::new(metrics.clone());
-        let mpl_core_processor = MplCoreProcessor::new(metrics.clone());
-        let inscription_processor = InscriptionsProcessor::new(metrics.clone());
-        let core_fees_processor =
-            MplCoreFeeProcessor::build(postgre_client, metrics.clone(), rpc_client).await?;
-        core_fees_processor.update_rent(cancellation_token.child_token());
+        let processors_wrapper = ProcessorsWrapper::build(
+            cancellation_token.child_token(),
+            metrics.clone(),
+            postgre_client,
+            rpc_client,
+            wellknown_fungible_accounts,
+        )
+        .await?;
 
         Ok(Self {
             fees_batch_size,
             unprocessed_account_getter,
-            mplx_accounts_processor,
-            token_accounts_processor,
-            mpl_core_processor,
-            inscription_processor,
-            core_fees_processor,
+            processors_wrapper,
             metrics,
             message_process_metrics,
             processor_name: processor_name.unwrap_or_else(|| Uuid::new_v4().to_string()),
-            wellknown_fungible_accounts,
         })
     }
 
@@ -209,7 +192,7 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                     },
                 _ = interval.tick() => {
                     self.flush(&mut batch_storage, &mut ack_ids, &mut interval, &mut batch_fill_instant, &source);
-                    self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
+                    self.processors_wrapper.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
                 }
                 _ = cancellation_token.cancelled() => { break; }
             }
@@ -221,7 +204,10 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
             &mut batch_fill_instant,
             &source,
         );
-        self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(&mut core_fees)).await;
+        self.processors_wrapper
+            .core_fees_processor
+            .store_mpl_assets_fee(&std::mem::take(&mut core_fees))
+            .await;
     }
 
     pub async fn process_account(
@@ -240,83 +226,11 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 &unprocessed_account.id, &unprocessed_account.account
             );
 
-            let processing_result = match &unprocessed_account.account {
-                UnprocessedAccount::MetadataInfo(metadata_info) => {
-                    self.mplx_accounts_processor.transform_and_store_metadata_account(
-                        batch_storage,
-                        unprocessed_account.key,
-                        metadata_info,
-                        &self.wellknown_fungible_accounts,
-                    )
-                },
-                UnprocessedAccount::Token(token_account) => {
-                    if self
-                        .wellknown_fungible_accounts
-                        .contains_key(&token_account.mint.to_string())
-                    {
-                        self.token_accounts_processor.transform_and_save_fungible_token_account(
-                            batch_storage,
-                            unprocessed_account.key,
-                            token_account,
-                        )
-                    } else {
-                        self.token_accounts_processor.transform_and_save_token_account(
-                            batch_storage,
-                            unprocessed_account.key,
-                            token_account,
-                        )
-                    }
-                },
-                UnprocessedAccount::Mint(mint) => {
-                    self.token_accounts_processor.transform_and_save_mint_account(
-                        batch_storage,
-                        mint,
-                        &self.wellknown_fungible_accounts,
-                    )
-                },
-                UnprocessedAccount::Edition(edition) => {
-                    self.mplx_accounts_processor.transform_and_store_edition_account(
-                        batch_storage,
-                        unprocessed_account.key,
-                        &edition.edition,
-                    )
-                },
-                UnprocessedAccount::BurnMetadata(burn_metadata) => {
-                    self.mplx_accounts_processor.transform_and_store_burnt_metadata(
-                        batch_storage,
-                        unprocessed_account.key,
-                        burn_metadata,
-                    )
-                },
-                UnprocessedAccount::BurnMplCore(burn_mpl_core) => {
-                    self.mpl_core_processor.transform_and_store_burnt_mpl_asset(
-                        batch_storage,
-                        unprocessed_account.key,
-                        burn_mpl_core,
-                    )
-                },
-                UnprocessedAccount::MplCore(mpl_core) => {
-                    self.mpl_core_processor.transform_and_store_mpl_asset(
-                        batch_storage,
-                        unprocessed_account.key,
-                        mpl_core,
-                    )
-                },
-                UnprocessedAccount::Inscription(inscription) => {
-                    self.inscription_processor.store_inscription(batch_storage, inscription)
-                },
-                UnprocessedAccount::InscriptionData(inscription_data) => {
-                    self.inscription_processor.store_inscription_data(
-                        batch_storage,
-                        unprocessed_account.key,
-                        inscription_data,
-                    )
-                },
-                UnprocessedAccount::MplCoreFee(core_fee) => {
-                    core_fees.insert(unprocessed_account.key, core_fee.clone());
-                    Ok(())
-                },
-            };
+            let processing_result = self.processors_wrapper.process_account_by_type(
+                batch_storage,
+                &unprocessed_account,
+                core_fees,
+            );
             if let Err(err) = processing_result {
                 error!("Processing account {}: {}", unprocessed_account.key, err);
                 continue;
@@ -339,7 +253,10 @@ impl<T: UnprocessedAccountsGetter> AccountsProcessor<T> {
                 self.flush(batch_storage, ack_ids, interval, batch_fill_instant, source);
             }
             if core_fees.len() > self.fees_batch_size {
-                self.core_fees_processor.store_mpl_assets_fee(&std::mem::take(core_fees)).await;
+                self.processors_wrapper
+                    .core_fees_processor
+                    .store_mpl_assets_fee(&std::mem::take(core_fees))
+                    .await;
             }
         }
     }

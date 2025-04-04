@@ -1,6 +1,6 @@
 [package]
 name = "nft_ingester"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 publish = false
 
@@ -25,6 +25,7 @@ solana-sdk = { workspace = true }
 spl-token = { workspace = true }
 solana-transaction-status = { workspace = true }
 solana-storage-bigtable = { workspace = true }
+solana-account-decoder = { workspace = true }
 stretto = { workspace = true }
 # is not used directly in this crate but stretto needs it and it's better to use exactly 2.3.1
 async-channel = { workspace = true }
