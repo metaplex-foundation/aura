@@ -98,6 +98,13 @@ impl MessageParser {
             .unwrap();
 
         let account_info: plerkle::AccountInfo = PlerkleAccountInfo(account_info).try_into()?;
+        self.parse_account_info(&account_info)
+    }
+
+    pub fn parse_account_info(
+        &self,
+        account_info: &plerkle::AccountInfo,
+    ) -> Result<Vec<UnprocessedAccountWithMetadata>, IngesterError> {
         let account_owner = account_info.owner;
 
         // do not use match expression
