@@ -20,7 +20,7 @@ tar = { workspace = true }
 reqwest = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
-metrics-utils = { path = "../metrics_utils" }
+metrics-utils = { workspace = true }
 tokio = { workspace = true }
 spl-account-compression = { workspace = true }
 chrono = { workspace = true }
@@ -29,8 +29,8 @@ mockall = { workspace = true }
 async-trait = { workspace = true }
 tokio-stream = { workspace = true }
 async-channel = { workspace = true }
-entities = { path = "../entities" }
-interface = { path = "../interface" }
+entities = { workspace = true }
+interface = { workspace = true }
 solana-transaction-status = { workspace = true }
 tracing = { workspace = true }
 serde_cbor = { workspace = true }
@@ -40,17 +40,17 @@ csv = { workspace = true }
 hex = { workspace = true }
 Inflector = { workspace = true }
 base64 = { workspace = true }
-usecase = { path = "../usecase" }
+usecase = { workspace = true }
 tempfile = { workspace = true }
 num-traits = { workspace = true }
 # using a different version of flatbuffer compared to the rest of the project as this one is compatible with generator used for AssetCompleteDetails structures
-flatbuffers = { version="24.3.25", features = ["serialize"]} 
+flatbuffers = { workspace = true, features = ["serialize"] } 
 indicatif = { workspace = true }
 tokio-util = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
-setup = { path = "../tests/setup" }
+setup = { workspace = true }
 criterion = { workspace = true }
 tracing-test = { workspace = true }
 itertools = { workspace = true }

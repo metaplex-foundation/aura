@@ -24,13 +24,13 @@ tokio-util = { version = "0.7", features = ["codec", "compat"] }
 tokio-retry = "0.3"
 
 
-# Serde ecosystem and seryalization tools
+# Serde ecosystem and serialization tools
 serde = "1.0.193"
 serde_derive = "1.0.190"
 serde_json = "1.0.81"
 serde_cbor = "0.11.2"
 serde_with = "3.7.0"
-flatbuffers = "23.1.21"
+flatbuffers = "24.3.25"
 plerkle_serialization = "1.9.0"
 plerkle_messenger = { version = "1.9.0", features = ['redis'] }
 borsh = "~0.10.3"
@@ -170,6 +170,22 @@ mpl-bubblegum = { version = "2.0.0-beta.5", features = ["serde"] }
 
 mpl-token-metadata = "4.1.1"
 libreplex_inscriptions = "0.5.1"
+assertables = "7"
+backfill-rpc = { path = "backfill_rpc" }
+entities = { path = "entities" }
+grpc = { path = "grpc" }
+interface = { path = "interface" }
+memmap2 = "0.9.0"
+metrics-utils = { path = "metrics_utils" }
+nft_ingester = { path = "nft_ingester" }
+num-bigint = "0.4"
+postgre-client = { path = "postgre-client" }
+rocks-db = { path = "rocks-db" }
+setup = { path = "tests/setup" }
+usecase = { path = "usecase" }
+utils = { version = "0.1.8", git = "https://github.com/extrnode/solana-geyser-zmq" }
+warp = "0.3.7"
+zstd = "0.12.4"
 
 
 [profile.release]

@@ -32,24 +32,24 @@ tokio-util = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true, features = ["env"] }
 bincode = { workspace = true }
-metrics-utils = { path = "../metrics_utils" }
-rocks-db = { path = "../rocks-db" }
-postgre-client = { path = "../postgre-client" }
+metrics-utils = { workspace = true }
+rocks-db = { workspace = true }
+postgre-client = { workspace = true }
 schemars = { workspace = true }
 jsonrpc-core = { workspace = true }
 jsonrpc-http-server = { workspace = true }
 libc = { workspace = true }
 mockall = { workspace = true }
-entities = { path = "../entities" }
-usecase = { path = "../usecase" }
-grpc = { path = "../grpc" }
+entities = { workspace = true }
+usecase = { workspace = true }
+grpc = { workspace = true }
 mpl-token-metadata = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
-interface = { path = "../interface" }
+interface = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
-backfill-rpc = { path = "../backfill_rpc" }
+backfill-rpc = { workspace = true }
 prometheus-client = { workspace = true }
 pprof = { workspace = true, optional = true }
 solana-program = { workspace = true }
@@ -77,16 +77,16 @@ indicatif = { workspace = true }
 tokio-retry = { workspace = true }
 axum = { workspace = true }
 rocksdb = { workspace = true }
-num-bigint = "0.4"
+num-bigint = { workspace = true }
 tracing-test = { workspace = true }
-assert-json-diff = "2.0"
+assert-json-diff = { workspace = true }
 
 [dev-dependencies]
-setup = { path = "../tests/setup" }
+setup = { workspace = true }
 testcontainers = { workspace = true }
 criterion = { workspace = true }
 zip-extract = { workspace = true }
-assertables = "7"
+assertables = { workspace = true }
 base64 = { workspace = true }
 spl-pod = { workspace = true }
 rand = { workspace = true }
@@ -109,10 +109,6 @@ integration_tests = []
 batch_mint_tests = []
 profiling = ["dep:pprof"]
 big_table_tests = []
-
-[dependencies.utils]
-version = "0.1.8"
-git = "https://github.com/extrnode/solana-geyser-zmq"
 
 [[bin]]
 name = "ingester"
