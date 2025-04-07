@@ -253,7 +253,9 @@ where
     let mut it = slot_db.db.raw_iterator_cf(&slot_db.db.cf_handle(MissedSlotsIdx::NAME).unwrap());
     if let Some(last_processed) = last_processed {
         it.seek(MissedSlotsIdx::encode_key(last_processed));
-        it.next();
+        if it.valid() {
+            it.next();
+        }
     } else {
         it.seek_to_first();
     }
