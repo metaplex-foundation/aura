@@ -17,8 +17,8 @@ use nft_ingester::{
     consts::DEFAULT_MAXIMUM_HEALTHY_DESYNC,
     index_synchronizer::Synchronizer,
     init::init_index_storage_with_migration,
-    json_worker::JsonWorker,
     message_parser::MessageParser,
+    metadata_workers::json_worker::JsonWorker,
     processors::{
         accounts_processor::AccountsProcessor,
         transaction_based::bubblegum_updates_processor::BubblegumTxProcessor,

@@ -22,7 +22,7 @@ use crate::{
         DasApi,
     },
     config::{HealthCheckInfo, JsonMiddlewareConfig},
-    json_worker::JsonWorker,
+    metadata_workers::json_worker::JsonWorker,
     raydium_price_fetcher::RaydiumTokenPriceFetcher,
 };
 
