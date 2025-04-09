@@ -652,57 +652,58 @@ pub async fn main() -> Result<(), IngesterError> {
             }
         });
 
-        let rocks_clone = primary_rocks_storage.clone();
-        let signature_fetcher = SignatureFetcher::new(
-            rocks_clone,
-            rpc_backfiller.clone(),
-            tx_ingester.clone(),
-            metrics_state.rpc_backfiller_metrics.clone(),
-        );
-        let metrics_clone = metrics_state.rpc_backfiller_metrics.clone();
+        if args.run_signature_fetcher {
+            let rocks_clone = primary_rocks_storage.clone();
+            let signature_fetcher = SignatureFetcher::new(
+                rocks_clone,
+                rpc_backfiller.clone(),
+                tx_ingester.clone(),
+                metrics_state.rpc_backfiller_metrics.clone(),
+            );
+            usecase::executor::spawn({
+                let metrics_clone = metrics_state.rpc_backfiller_metrics.clone();
+                let cancellation_token = cancellation_token.child_token();
+                async move {
+                    let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
+                    while !cancellation_token.is_cancelled() {
+                        match signature_fetcher
+                            .fetch_signatures(
+                                program_id,
+                                args.rpc_retry_interval_millis,
+                                cancellation_token.child_token(),
+                            )
+                            .await
+                        {
+                            Ok(_) => {
+                                metrics_clone.inc_run_fetch_signatures(
+                                    "fetch_signatures",
+                                    MetricStatus::SUCCESS,
+                                );
+                                info!(
+                                    "signatures sync finished successfully for program_id: {}",
+                                    program_id
+                                );
+                            },
+                            Err(e) => {
+                                metrics_clone.inc_run_fetch_signatures(
+                                    "fetch_signatures",
+                                    MetricStatus::FAILURE,
+                                );
+                                error!(
+                                    "signatures sync failed: {:?} for program_id: {}",
+                                    e, program_id
+                                );
+                            },
+                        }
 
-        usecase::executor::spawn({
-            let cancellation_token = cancellation_token.child_token();
-            async move {
-                let program_id = mpl_bubblegum::programs::MPL_BUBBLEGUM_ID;
-                while !cancellation_token.is_cancelled() {
-                    match signature_fetcher
-                        .fetch_signatures(
-                            program_id,
-                            args.rpc_retry_interval_millis,
-                            cancellation_token.child_token(),
-                        )
-                        .await
-                    {
-                        Ok(_) => {
-                            metrics_clone.inc_run_fetch_signatures(
-                                "fetch_signatures",
-                                MetricStatus::SUCCESS,
-                            );
-                            info!(
-                                "signatures sync finished successfully for program_id: {}",
-                                program_id
-                            );
-                        },
-                        Err(e) => {
-                            metrics_clone.inc_run_fetch_signatures(
-                                "fetch_signatures",
-                                MetricStatus::FAILURE,
-                            );
-                            error!(
-                                "signatures sync failed: {:?} for program_id: {}",
-                                e, program_id
-                            );
-                        },
-                    }
-
-                    tokio::select! {
-                        _ = cancellation_token.cancelled() => {}
-                        _ = tokio::time::sleep(Duration::from_secs(60)) => {}
+                        tokio::select! {
+                            _ = cancellation_token.cancelled() => {}
+                            _ = tokio::time::sleep(Duration::from_secs(60)) => {}
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
     }
 
     Scheduler::run_in_background(

@@ -275,6 +275,12 @@ pub struct IngesterClapArgs {
 
     #[clap(long, env, default_value = "info", help = "info|debug")]
     pub log_level: String,
+    #[clap(
+        long,
+        default_value = "false",
+        help = "#sig Run signature fetcher (default: false)"
+    )]
+    pub run_signature_fetcher: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -668,6 +674,7 @@ mod tests {
         assert_eq!(args.redis_account_backfill_parsing_workers, 5);
         assert_eq!(args.account_backfill_processor_buffer_size, 1000);
         assert_eq!(args.api_maximum_healthy_desync, 500_000);
+        assert_eq!(args.run_signature_fetcher, false);
     }
 
     #[test]
