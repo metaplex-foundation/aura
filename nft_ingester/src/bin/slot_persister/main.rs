@@ -53,6 +53,11 @@ const DEFAULT_SLOT_BACKFILL_INTERVAL_SECS: u64 = 2 * 60;
 /// inconsistent position.
 const DEFAULT_SLOT_BACKFILL_OFFSET: u64 = 1_000_000;
 
+/// Backward overlap for processing items before the checkpoint
+const fn get_slot_backfill_overlap(slot_backfill_offset: u64) -> u64 {
+    slot_backfill_offset / 5
+}
+
 #[derive(Parser, Debug, Clone)]
 #[command(
     author,
@@ -598,9 +603,17 @@ async fn get_missed_slots(
         slot_backfill_offset: u64,
         cancellation_token: CancellationToken,
     ) -> Option<(u64, u64, Vec<u64>)> {
-        let lower_slot_boundary = get_checkpoint(&target_db);
+        let checkpoint = get_checkpoint(&target_db);
         let higher_slot_boundary = get_last_persisted_slot(target_db.clone())
             .saturating_sub(MISSED_SLOT_COLLECTION_OFFSET);
+        // if we have to process more than the offset, we are not "finished" syncing and no overlap
+        // with the previous checkpoint is needed
+        let lower_slot_boundary =
+            if higher_slot_boundary.saturating_sub(checkpoint) < slot_backfill_offset {
+                checkpoint.saturating_sub(get_slot_backfill_overlap(slot_backfill_offset))
+            } else {
+                checkpoint
+            };
         let slot_backfill_offset =
             higher_slot_boundary.saturating_sub(lower_slot_boundary).min(slot_backfill_offset);
         let mut last_valid_key = lower_slot_boundary;
