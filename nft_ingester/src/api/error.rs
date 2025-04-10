@@ -24,6 +24,8 @@ pub enum DasApiError {
     PaginationEmptyError,
     #[error("Batch Size Error. Batch size should not be greater than {0}.")]
     BatchSizeError(usize),
+    #[error("Not Found: {0}")]
+    NotFound(String),
     #[error("RocksDB error: {0}")]
     RocksError(String),
     #[error("No data found.")]
@@ -54,6 +56,11 @@ impl From<DasApiError> for jsonrpc_core::Error {
             DasApiError::PubkeyValidationError(key) => jsonrpc_core::Error {
                 code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
                 message: format!("Pubkey Validation Error: {key} is invalid"),
+                data: None,
+            },
+            DasApiError::NotFound(message) => jsonrpc_core::Error {
+                code: ErrorCode::ServerError(STANDARD_ERROR_CODE),
+                message: format!("Not found: {message}"),
                 data: None,
             },
             DasApiError::PaginationError => jsonrpc_core::Error {
@@ -124,6 +131,7 @@ impl From<StorageError> for DasApiError {
         match value {
             StorageError::CannotServiceRequest => Self::CannotServiceRequest,
             StorageError::QueryTimedOut => Self::QueryTimedOut,
+            StorageError::NotFound(message) => Self::NotFound(message),
             e => Self::RocksError(e.to_string()),
         }
     }

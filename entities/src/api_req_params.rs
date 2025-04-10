@@ -176,7 +176,7 @@ pub struct GetAssetsByOwner {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GetNftEditions {
     pub mint: String,
     pub limit: Option<u32>,

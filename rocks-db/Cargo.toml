@@ -14,7 +14,6 @@ bincode = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 num_cpus = { workspace = true }
-figment = { workspace = true }
 lz4 = { workspace = true }
 tar = { workspace = true }
 reqwest = { workspace = true }
@@ -28,7 +27,6 @@ serde_json = { workspace = true }
 mockall = { workspace = true }
 async-trait = { workspace = true }
 tokio-stream = { workspace = true }
-async-channel = { workspace = true }
 entities = { path = "../entities" }
 interface = { path = "../interface" }
 solana-transaction-status = { workspace = true }
@@ -47,6 +45,7 @@ num-traits = { workspace = true }
 flatbuffers = { version="24.3.25", features = ["serialize"]} 
 indicatif = { workspace = true }
 tokio-util = { workspace = true }
+bs58 = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
