@@ -62,6 +62,7 @@ fn row_to_slot(prefix: &str, key: &str) -> Result<Slot, ParseIntError> {
     Slot::from_str_radix(&key[prefix.len()..], 16).map(|s| !s)
 }
 
+#[derive(Clone)]
 pub struct SlotsCollector<T, R>
 where
     T: SlotsDumper + Sync + Send,

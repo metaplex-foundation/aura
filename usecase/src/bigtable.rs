@@ -17,6 +17,7 @@ use tracing::{error, warn};
 pub const GET_DATA_FROM_BG_RETRIES: u32 = 5;
 pub const SECONDS_TO_RETRY_GET_DATA_FROM_BG: u64 = 2;
 
+#[derive(Clone)]
 pub struct BigTableClient {
     pub big_table_client: Arc<LedgerStorage>,
     pub big_table_inner_client: Arc<BigTableConnection>,

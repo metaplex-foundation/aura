@@ -1,24 +1,23 @@
 use std::{
     cmp::Ordering,
-    collections::{BTreeSet, HashSet},
+    collections::HashSet,
     path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 // For InMemorySlotsDumper
-use async_trait::async_trait;
 use blockbuster::programs::bubblegum::ID as BUBBLEGUM_PROGRAM_ID;
 use clap::Parser;
 use entities::models::RawBlock;
 use indicatif::{ProgressBar, ProgressStyle};
-use interface::slots_dumper::SlotsDumper;
 use metrics_utils::MetricState;
+use nft_ingester::inmemory_slots_dumper::InMemorySlotsDumper;
 use rocks_db::{
     column::TypedColumn, columns::offchain_data::OffChainDataDeprecated,
     migrator::MigrationVersions, Storage,
 };
-use tokio::{signal, sync::Mutex as AsyncMutex};
+use tokio::signal;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use usecase::{bigtable::BigTableClient, slots_collector::SlotsCollector};
@@ -47,45 +46,6 @@ struct Args {
     /// The first slot to ckeck from
     #[arg(short, long)]
     first_slot: Option<u64>,
-}
-
-pub struct InMemorySlotsDumper {
-    slots: AsyncMutex<BTreeSet<u64>>,
-}
-
-impl InMemorySlotsDumper {
-    /// Creates a new instance of `InMemorySlotsDumper`.
-    pub fn new() -> Self {
-        Self { slots: AsyncMutex::new(BTreeSet::new()) }
-    }
-
-    /// Retrieves the sorted keys in ascending order.
-    pub async fn get_sorted_keys(&self) -> Vec<u64> {
-        let slots = self.slots.lock().await;
-        slots.iter().cloned().collect()
-    }
-
-    /// Clears the internal storage to reuse it.
-    pub async fn clear(&self) {
-        let mut slots = self.slots.lock().await;
-        slots.clear();
-    }
-}
-
-impl Default for InMemorySlotsDumper {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait]
-impl SlotsDumper for InMemorySlotsDumper {
-    async fn dump_slots(&self, slots: &[u64]) {
-        let mut storage = self.slots.lock().await;
-        for &slot in slots {
-            storage.insert(slot);
-        }
-    }
 }
 
 // Function to get the last persisted slot from RocksDB
