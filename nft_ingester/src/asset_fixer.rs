@@ -138,7 +138,7 @@ impl AssetFixer {
                 },
             }
         }
-        batch_storage.flush().map_err(|e| FixError::Storage(e))?;
+        batch_storage.flush().map_err(FixError::Storage)?;
 
         Ok(FixResult { fixed_count, failed_pubkeys })
     }

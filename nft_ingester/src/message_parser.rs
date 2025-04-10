@@ -110,15 +110,15 @@ impl MessageParser {
         // do not use match expression
         // because match cases cannot contain function calls like spl_token::id()
         let accounts = if account_owner == spl_token::id() {
-            self.handle_spl_token_account(&account_info).into_iter().collect_vec()
+            self.handle_spl_token_account(account_info).into_iter().collect_vec()
         } else if account_owner == blockbuster::programs::token_metadata::token_metadata_id() {
-            self.handle_token_metadata_account(&account_info).into_iter().collect_vec()
+            self.handle_token_metadata_account(account_info).into_iter().collect_vec()
         } else if account_owner == self.mpl_core_parser.key() {
-            self.handle_mpl_core_account(&account_info)
+            self.handle_mpl_core_account(account_info)
         } else if account_owner == libreplex_inscriptions::id() {
-            self.handle_inscription_account(&account_info).into_iter().collect_vec()
+            self.handle_inscription_account(account_info).into_iter().collect_vec()
         } else if account_owner == spl_token_2022::id() {
-            self.parse_spl_2022_accounts(&account_info).into_iter().collect_vec()
+            self.parse_spl_2022_accounts(account_info).into_iter().collect_vec()
         } else {
             Vec::new()
         };
