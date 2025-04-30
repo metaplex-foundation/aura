@@ -116,3 +116,9 @@ jobs:
         with:
           name: changelog
           path: CHANGELOG.md
+
+      - name: Upload release tasks artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tasks
+          path: .release_tasks

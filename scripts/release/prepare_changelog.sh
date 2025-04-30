@@ -62,6 +62,9 @@ echo "Changelog verification passed!"
 echo "Extracting changelog section for PR description..."
 OUTPUT_FILE=".changelog_content"
 
+# Generate file with list of tasks included this release
+grep -o '[Mm][Tt][Gg]-[0-9]\{4\}' .changelog_content | sort -u | tr 'a-z' 'A-Z' > ".release_tasks"
+
 # Extract just the section for this version
 awk 'BEGIN{section=0; found=0} 
   /^## \[.*\]/{
