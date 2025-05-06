@@ -322,7 +322,18 @@ impl RocksTestEnvironmentSetup {
     pub fn dynamic_data(pubkeys: &[Pubkey], slot: u64) -> Vec<AssetDynamicDetails> {
         pubkeys
             .iter()
-            .map(|pubkey| create_test_dynamic_data(*pubkey, slot, DEFAULT_TEST_URL.to_owned()))
+            .map(|pubkey| {
+                create_test_dynamic_data(*pubkey, slot, DEFAULT_TEST_URL.to_owned(), false)
+            })
+            .collect()
+    }
+
+    pub fn dynamic_data_burnt(pubkeys: &[Pubkey], slot: u64) -> Vec<AssetDynamicDetails> {
+        pubkeys
+            .iter()
+            .map(|pubkey| {
+                create_test_dynamic_data(*pubkey, slot, DEFAULT_TEST_URL.to_owned(), true)
+            })
             .collect()
     }
 
@@ -350,7 +361,12 @@ impl RocksTestEnvironmentSetup {
 pub const DEFAULT_PUBKEY_OF_ONES: Pubkey = Pubkey::new_from_array([1u8; 32]);
 pub const PUBKEY_OF_TWOS: Pubkey = Pubkey::new_from_array([2u8; 32]);
 
-pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> AssetDynamicDetails {
+pub fn create_test_dynamic_data(
+    pubkey: Pubkey,
+    slot: u64,
+    url: String,
+    is_burnt: bool,
+) -> AssetDynamicDetails {
     AssetDynamicDetails {
         pubkey,
         is_compressible: Updated::new(slot, None, false),
@@ -358,7 +374,7 @@ pub fn create_test_dynamic_data(pubkey: Pubkey, slot: u64, url: String) -> Asset
         is_frozen: Updated::new(slot, None, false),
         supply: Some(Updated::new(slot, None, 1)),
         seq: None,
-        is_burnt: Updated::new(slot, None, false),
+        is_burnt: Updated::new(slot, None, is_burnt),
         was_decompressed: Some(Updated::new(slot, None, false)),
         onchain_data: None,
         creators: Updated::new(slot, None, vec![generate_test_creator()]),

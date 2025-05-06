@@ -13,7 +13,7 @@ fn bincode_decode_benchmark(c: &mut Criterion) {
     let slot = 100;
     let assets = pubkeys
         .iter()
-        .map(|pk| setup::rocks::create_test_dynamic_data(*pk, slot, "solana".to_string()))
+        .map(|pk| setup::rocks::create_test_dynamic_data(*pk, slot, "solana".to_string(), false))
         .map(|a| serialize(&a).unwrap())
         .collect::<Vec<_>>();
 
